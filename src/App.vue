@@ -98,7 +98,13 @@ const handleContentUpload = (content: string) => {
 
 // 处理日志内容
 const processLogContent = (content: string) => {
-  const entries = parser.parseFile(content)
+  let entries
+  try {
+    entries = parser.parseFile(content)
+  } catch (error) {
+    message.error(getErrorMessage(error), { duration: 5000 })
+    return
+  }
   
   if (entries.length === 0) {
     console.warn('未找到有效的日志记录')
