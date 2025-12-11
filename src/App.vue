@@ -248,8 +248,7 @@ const handleSelectOperation = (node: NodeInfo, opIndex: number) => {
           top: viewMode === 'split' ? '50%' : '0',
           left: 0,
           right: 0,
-          bottom: 0,
-          display: viewMode === 'search' || viewMode === 'split' ? 'block' : 'none'
+          bottom: 0
         }"
       >
         <text-search-view style="height: 100%" />
