@@ -15,6 +15,28 @@ onMounted(() => {
   updateThemeColor(isDark.value)
 })
 
+// 切换主题
+const toggleTheme = () => {
+  isDark.value = !isDark.value
+  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+  updateThemeColor(isDark.value)
+}
+
+// 主题配置
+const theme = computed(() => isDark.value ? darkTheme : null)
+</script>
+
+
+<template>
+  <n-config-provider :theme="theme" :theme-overrides="themeOverrides">
+    <n-message-provider>
+      <app :is-dark="isDark" @toggle-theme="toggleTheme" />
+    </n-message-provider>
+  </n-config-provider>
+</template>
+
+
+<script lang="ts">
 // 更新浏览器主题颜色
 const updateThemeColor = (dark: boolean) => {
   requestAnimationFrame(() => {
@@ -25,15 +47,6 @@ const updateThemeColor = (dark: boolean) => {
   })
 }
 
-// 切换主题
-const toggleTheme = () => {
-  isDark.value = !isDark.value
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
-  updateThemeColor(isDark.value)
-}
-
-// 主题配置
-const theme = computed(() => isDark.value ? darkTheme : null)
 const themeOverrides = {
   common: {
     primaryColor: '#63e2b7',
@@ -43,11 +56,3 @@ const themeOverrides = {
   }
 }
 </script>
-
-<template>
-  <n-config-provider :theme="theme" :theme-overrides="themeOverrides">
-    <n-message-provider>
-      <app :is-dark="isDark" @toggle-theme="toggleTheme" />
-    </n-message-provider>
-  </n-config-provider>
-</template>

@@ -5,6 +5,7 @@ import ProcessView from './views/ProcessView.vue'
 import DetailView from './views/DetailView.vue'
 import TextSearchView from './views/TextSearchView.vue'
 import { LogParser } from './utils/logParser'
+import { getErrorMessage } from './utils/errorHandler'
 import type { TaskInfo, NodeInfo } from './types'
 import { BulbOutlined, BulbFilled, FileSearchOutlined, BarChartOutlined, ColumnHeightOutlined, InfoCircleOutlined, GithubOutlined } from '@vicons/antd'
 
@@ -69,10 +70,6 @@ const message = useMessage()
 
 // 关于对话框
 const showAboutModal = ref(false)
-
-// check error type and get message
-const getErrorMessage = (err: unknown) => 
-  err instanceof Error ? err.message : String(err)
 
 // 处理文件上传
 const handleFileUpload = async (file: File) => {
