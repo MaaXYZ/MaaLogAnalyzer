@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, h } from 'vue'
-import { NSplit, NCard, NFlex, NButton, NIcon, NDropdown, NModal, NText, NDivider, NTag } from 'naive-ui'
+import { NSplit, NCard, NFlex, NButton, NIcon, NDropdown, NModal, NText, NDivider, NTag, useMessage } from 'naive-ui'
 import ProcessView from './views/ProcessView.vue'
 import DetailView from './views/DetailView.vue'
 import TextSearchView from './views/TextSearchView.vue'
@@ -64,6 +64,9 @@ const selectedNode = ref<NodeInfo | null>(null)
 const selectedOperationIndex = ref<number | null>(null)
 const loading = ref(false)
 
+// 消息提示
+const message = useMessage()
+
 // 关于对话框
 const showAboutModal = ref(false)
 
@@ -75,7 +78,7 @@ const handleFileUpload = async (file: File) => {
     processLogContent(content)
   } catch (error) {
     console.error(error)
-    alert(error)
+    message.error(String(error), { duration: 5000 })
   } finally {
     loading.value = false
   }
@@ -88,7 +91,7 @@ const handleContentUpload = (content: string) => {
     processLogContent(content)
   } catch (error) {
     console.error(error)
-    alert(error)
+    message.error(String(error), { duration: 5000 })
   } finally {
     loading.value = false
   }
