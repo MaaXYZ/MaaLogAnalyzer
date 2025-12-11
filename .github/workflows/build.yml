@@ -12,15 +12,8 @@ permissions:
 jobs:
   # 构建 Windows 版本
   build-windows:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: windows-latest
-    
-    runs-on: ${{ matrix.runner }}
-    
+    runs-on: windows-latest
+
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -43,45 +36,18 @@ jobs:
         run: pnpm install
 
       - name: 构建应用
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'MAA 日志分析器 ${{ github.ref_name }}'
-          releaseBody: |
-            ## 📦 下载说明
-            
-            - **Windows (x64)**: 下载 `.msi` 或 `.exe` 安装包
-            - **macOS (Intel)**: 下载 `x86_64.dmg` 文件
-            - **macOS (Apple Silicon)**: 下载 `aarch64.dmg` 文件
-            - **Linux (x64)**: 下载 `amd64.AppImage` 或 `.deb` 文件
-            - **Linux (ARM64)**: 下载 `arm64.AppImage` 或 `.deb` 文件
-            
-            ### 更新内容
-            请查看 [提交历史](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }})
-            
-            ---
-            
-            构建于: ${{ github.event.head_commit.timestamp }}
-          releaseDraft: false
-          prerelease: false
+        run: pnpm tauri build
 
-  # 构建 macOS 版本
-  build-macos:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: macos-13  # Intel-based macOS runner
-            target: x86_64-apple-darwin
-          - arch: aarch64
-            runner: macos-latest  # Apple Silicon macOS runner
-            target: aarch64-apple-darwin
-    
-    runs-on: ${{ matrix.runner }}
-    
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: src-tauri/target/release/bundle/
+
+  # 构建 macOS Intel 版本
+  build-macos-intel:
+    runs-on: macos-13
+
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -93,8 +59,6 @@ jobs:
 
       - name: 安装 Rust 稳定版
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
       - name: 安装 pnpm
         uses: pnpm/action-setup@v2
@@ -102,48 +66,56 @@ jobs:
           version: 8
           run_install: false
 
-      - name: Rust 缓存
-        uses: swatinem/rust-cache@v2
+      - name: 安装依赖
+        run: pnpm install
+
+      - name: 构建应用
+        run: pnpm tauri build
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
         with:
-          workspaces: './src-tauri -> target'
+          name: macos-intel-artifacts
+          path: src-tauri/target/release/bundle/
+
+  # 构建 macOS Apple Silicon 版本
+  build-macos-silicon:
+    runs-on: macos-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 安装 Rust 稳定版
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          run_install: false
 
       - name: 安装依赖
         run: pnpm install
 
       - name: 构建应用
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm tauri build
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'MAA 日志分析器 ${{ github.ref_name }}'
-          releaseBody: |
-            ## 📦 下载说明
-            
-            - **Windows (x64)**: 下载 `.msi` 或 `.exe` 安装包
-            - **macOS (Intel)**: 下载 `x86_64.dmg` 文件
-            - **macOS (Apple Silicon)**: 下载 `aarch64.dmg` 文件
-            - **Linux (x64)**: 下载 `amd64.AppImage` 或 `.deb` 文件
-            - **Linux (ARM64)**: 下载 `arm64.AppImage` 或 `.deb` 文件
-            
-            ### 更新内容
-            请查看 [提交历史](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }})
-            
-            ---
-            
-            构建于: ${{ github.event.head_commit.timestamp }}
-          releaseDraft: false
-          prerelease: false
-          args: --target ${{ matrix.target }}
+          name: macos-silicon-artifacts
+          path: src-tauri/target/release/bundle/
 
   # 构建 Linux 版本
   build-linux:
     runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, aarch64]
-    
+
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -155,86 +127,82 @@ jobs:
 
       - name: 安装 Rust 稳定版
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.arch == 'aarch64' && 'aarch64-unknown-linux-gnu' || 'x86_64-unknown-linux-gnu' }}
 
       - name: 安装 pnpm
         uses: pnpm/action-setup@v2
         with:
           version: 8
           run_install: false
-
-      - name: Rust 缓存
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
 
       - name: 安装系统依赖
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: 安装 ARM64 交叉编译工具
-        if: matrix.arch == 'aarch64'
-        run: |
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
       - name: 安装依赖
         run: pnpm install
 
-      - name: 构建应用 (x86_64)
-        if: matrix.arch == 'x86_64'
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'MAA 日志分析器 ${{ github.ref_name }}'
-          releaseBody: |
-            ## 📦 下载说明
-            
-            - **Windows (x64)**: 下载 `.msi` 或 `.exe` 安装包
-            - **macOS (Intel)**: 下载 `x86_64.dmg` 文件
-            - **macOS (Apple Silicon)**: 下载 `aarch64.dmg` 文件
-            - **Linux (x64)**: 下载 `amd64.AppImage` 或 `.deb` 文件
-            - **Linux (ARM64)**: 下载 `arm64.AppImage` 或 `.deb` 文件
-            
-            ### 更新内容
-            请查看 [提交历史](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }})
-            
-            ---
-            
-            构建于: ${{ github.event.head_commit.timestamp }}
-          releaseDraft: false
-          prerelease: false
+      - name: 构建应用
+        run: pnpm tauri build
 
-      - name: 构建应用 (aarch64)
-        if: matrix.arch == 'aarch64'
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PKG_CONFIG_SYSROOT_DIR: /usr/aarch64-linux-gnu
-          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
-          CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'MAA 日志分析器 ${{ github.ref_name }}'
-          releaseBody: |
+          name: linux-artifacts
+          path: src-tauri/target/release/bundle/
+
+  # 创建 GitHub Release
+  release:
+    needs: [build-windows, build-macos-intel, build-macos-silicon, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: 显示下载的文件
+        run: find artifacts/ -type f -name "*.deb" -o -name "*.AppImage" -o -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.app.tar.gz"
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 'MAALogAnalyzer-${{ github.ref_name }}'
+          body: |
             ## 📦 下载说明
-            
-            - **Windows (x64)**: 下载 `.msi` 或 `.exe` 安装包
-            - **macOS (Intel)**: 下载 `x86_64.dmg` 文件
-            - **macOS (Apple Silicon)**: 下载 `aarch64.dmg` 文件
-            - **Linux (x64)**: 下载 `amd64.AppImage` 或 `.deb` 文件
-            - **Linux (ARM64)**: 下载 `arm64.AppImage` 或 `.deb` 文件
-            
+
+            ### Windows (x64)
+            - 下载 `.msi` 或 `.exe` 安装包
+
+            ### macOS (Intel 芯片)
+            - 下载 `x86_64.dmg` 文件
+
+            ### macOS (Apple Silicon M1/M2/M3)
+            - 下载 `aarch64.dmg` 文件
+
+            ### Linux (x64)
+            - 下载 `amd64.AppImage` 或 `.deb` 文件
+
             ### 更新内容
             请查看 [提交历史](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }})
-            
+
             ---
-            
+
             构建于: ${{ github.event.head_commit.timestamp }}
-          releaseDraft: false
+          draft: false
           prerelease: false
-          args: --target aarch64-unknown-linux-gnu
+          files: |
+            artifacts/*/bundle/msi/*.msi
+            artifacts/*/bundle/msi/*.exe
+            artifacts/*/bundle/dmg/*.dmg
+            artifacts/*/bundle/macos/*.app.tar.gz
+            artifacts/*/bundle/deb/*.deb
+            artifacts/*/bundle/appimage/*.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
