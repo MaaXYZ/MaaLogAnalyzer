@@ -318,7 +318,7 @@ const handleSelectOperation = (node: NodeInfo, opIndex: number) => {
               <template #icon>
                 <n-icon><github-outlined /></n-icon>
               </template>
-              MaaFramework 项目
+              MAA Log Analyzer
             </n-button>
             <n-text depth="3" style="font-size: 12px">
               基于 MaaFramework 开发的日志分析工具
@@ -331,7 +331,7 @@ const handleSelectOperation = (node: NodeInfo, opIndex: number) => {
         <!-- 版本信息 -->
         <n-flex justify="space-between" align="center">
           <n-text depth="3" style="font-size: 12px">
-            Version 1.0.0
+            Version 1.1.0
           </n-text>
           <n-text depth="3" style="font-size: 12px">
             © 2025
