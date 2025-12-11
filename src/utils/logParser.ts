@@ -27,6 +27,11 @@ export class LogParser {
         entry._line = lineNum
         entries.push(entry)
       } catch (e) {
+        // 如果是第一行解析失败，直接抛出错误
+        if (lineNum === 1) {
+          console.error(`第 1 行解析失败: ${e instanceof Error ? e.message : String(e)}`)
+          throw new Error(`该文件不是格式化日志文件 (jsonl) 。普通日志请将日志分析功能改为文本搜索模式。`)
+        }
         console.warn(`解析第 ${lineNum} 行失败:`, e)
       }
     }
