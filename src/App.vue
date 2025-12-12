@@ -246,7 +246,7 @@ const handleSelectOperation = (node: NodeInfo, opIndex: number) => {
           bottom: 0
         }"
       >
-        <text-search-view style="height: 100%" />
+        <text-search-view :is-dark="isDark" style="height: 100%" />
       </div>
     </div>
     

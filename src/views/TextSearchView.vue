@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { 
@@ -17,9 +18,16 @@ import {
   NSplit,
   NScrollbar,
   NIcon,
-  NSpin
+  NSpin,
+  NVirtualList
 } from 'naive-ui'
+import { parseLogLine } from '../utils/logHighlighter'
 import { SearchOutlined, FileTextOutlined, CloseOutlined } from '@vicons/antd'
+
+// Props
+const props = defineProps<{
+  isDark?: boolean
+}>()
 
 const searchText = ref('')
 const fileContent = ref('')  // 保留用于小文件（<5MB）
@@ -480,20 +488,10 @@ const triggerFileSelect = () => {
 // 文件内容行数组（懒加载）
 const fileLines = computed(() => {
   if (!fileContent.value) return []
-  return fileContent.value.split('\n')
-})
-
-// 带行号的文件内容（用于显示）
-const fileContentWithLineNumbers = computed(() => {
-  if (!fileContent.value || !showFileContent.value) return ''
-  
-  const lines = fileLines.value
-  const numberedLines = lines.map((line, index) => {
-    const lineNum = (index + 1).toString().padStart(6, ' ')
-    return `${lineNum} | ${line}`
-  })
-  
-  return numberedLines.join('\n')
+  return fileContent.value.split('\n').map((line, index) => ({
+    key: index,
+    content: line
+  }))
 })
 
 // 跳转到指定行
@@ -512,29 +510,21 @@ const jumpToLine = async (lineNumber: number) => {
     showFileContent.value = true
   }
   
-  // 使用文本搜索定位
-  setTimeout(() => {
-    const textarea = document.getElementById('file-content-display') as HTMLTextAreaElement
-    if (textarea && fileContentWithLineNumbers.value) {
-      const lines = fileContentWithLineNumbers.value.split('\n')
-      const targetLineIndex = lineNumber - 1
-      
-      if (targetLineIndex >= 0 && targetLineIndex < lines.length) {
-        let charPos = 0
-        for (let i = 0; i < targetLineIndex; i++) {
-          charPos += lines[i].length + 1
-        }
-        
-        textarea.focus()
-        textarea.setSelectionRange(charPos, charPos + lines[targetLineIndex].length)
-        
-        const lineHeight = 20
-        const scrollTop = targetLineIndex * lineHeight - textarea.clientHeight / 2
-        textarea.scrollTop = Math.max(0, scrollTop)
-      }
+  // 使用虚拟列表定位
+  nextTick(() => {
+    const virtualList = document.querySelector('.n-virtual-list')
+    if (virtualList) {
+      // Naive UI Virtual List scrollTo implementation might vary, 
+      // but usually we can access the instance if we put a ref on it.
+      // For now, let's try to find the exposed method or use the index.
+      // Actually, NVirtualList exposes scrollTo. We need a ref.
+      virtualListRef.value?.scrollTo({ index: lineNumber - 1, behavior: 'auto' })
     }
-  }, 100)
+  })
 }
+
+const virtualListRef = ref<any>(null)
+
 
 // 加载指定行的上下文（大文件模式）
 const loadContextLines = async (targetLine: number) => {
@@ -861,7 +851,7 @@ const loadContextLines = async (targetLine: number) => {
                   </n-flex>
                 </div>
                 <n-scrollbar style="flex: 1">
-                  <div style="padding: 12px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 13px; line-height: 1.6">
+                  <div :class="{ 'dark-theme': props.isDark }" style="padding: 12px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 13px; line-height: 1.6">
                     <div 
                       v-for="(line, idx) in contextLines" 
                       :key="idx"
@@ -928,32 +918,146 @@ const loadContextLines = async (targetLine: number) => {
               </n-empty>
             </div>
             
-            <!-- 小文件：完整内容显示 -->
-            <textarea
-              v-else
-              id="file-content-display"
-              readonly
-              :value="fileContentWithLineNumbers"
-              style="
-                flex: 1;
-                width: 100%;
-                border: none;
-                outline: none;
-                resize: none;
-                padding: 12px;
-                font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-                font-size: 13px;
-                line-height: 1.6;
-                background-color: transparent;
-                color: inherit;
-                white-space: pre;
-                overflow-x: auto;
-                overflow-y: scroll;
-              "
-            />
+            <!-- 小文件：虚拟列表显示 -->
+            <div v-else style="flex: 1; height: 100%; overflow: hidden;">
+              <n-virtual-list
+                ref="virtualListRef"
+                :items="fileLines"
+                :item-size="22"
+                style="height: 100%; max-height: 100%; overflow-x: auto;"
+                :class="['log-virtual-list', { 'dark-theme': props.isDark }]"
+              >
+                <template #default="{ item, index }">
+                  <div 
+                    class="log-line"
+                    :class="{ 'selected-line': (index + 1) === selectedLine }"
+                    :data-line="index + 1"
+                    @click="selectedLine = index + 1"
+                  >
+                    <span class="line-number">{{ index + 1 }}</span>
+                    <span class="line-content">
+                      <span 
+                        v-for="(token, tIdx) in parseLogLine(item.content)" 
+                        :key="tIdx"
+                        :class="'token-' + token.type"
+                      >{{ token.content }}</span>
+                    </span>
+                  </div>
+                </template>
+              </n-virtual-list>
+            </div>
           </div>
         </n-card>
       </template>
     </n-split>
   </div>
 </template>
+
+<style scoped>
+.log-virtual-list {
+  /* Ensure the virtual list itself has a background for consistency */
+  background-color: var(--n-color); 
+}
+
+.log-line {
+  display: flex;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 22px;
+  white-space: pre;
+  cursor: text;
+  padding-right: 12px; /* Add some padding to the right */
+}
+
+.log-line:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.selected-line {
+  background-color: rgba(242, 201, 125, 0.2); /* var(--n-color-target) approx */
+}
+
+.line-number {
+  display: inline-block;
+  width: 50px;
+  text-align: right;
+  padding-right: 12px;
+  color: var(--n-text-color-disabled);
+  user-select: none;
+  border-right: 1px solid var(--n-border-color);
+  margin-right: 8px;
+  background-color: var(--n-color-modal);
+  flex-shrink: 0; /* Prevent line number from shrinking */
+}
+
+.line-content {
+  flex: 1;
+  white-space: nowrap; /* Keep line content on one line */
+}
+
+/* Syntax Highlighting Colors (VS Code Light Theme inspired) */
+.token-timestamp {
+  color: #098658; /* Green */
+}
+
+.token-level-info {
+  color: #0000ff; /* Blue */
+  font-weight: bold;
+}
+
+.token-level-warn {
+  color: #795e26; /* Yellow/Brown */
+  font-weight: bold;
+}
+
+.token-level-error {
+  color: #cd3131; /* Red */
+  font-weight: bold;
+}
+
+.token-level-debug {
+  color: #800080; /* Purple */
+}
+
+.token-string {
+  color: #a31515; /* Red/Brown */
+}
+
+.token-number {
+  color: #098658; /* Green */
+}
+
+.token-key {
+  color: #0451a5; /* Dark Blue */
+}
+
+.token-text {
+  color: #333;
+}
+
+/* Dark mode adjustments using class instead of media query */
+.dark-theme .log-line:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.dark-theme .line-number {
+  color: #666;
+  border-right-color: #333;
+  background-color: #1e1e1e;
+}
+
+.dark-theme .token-timestamp { color: #b5cea8; }
+.dark-theme .token-level-info { color: #569cd6; }
+.dark-theme .token-level-warn { color: #dcdcaa; }
+.dark-theme .token-level-error { color: #f44747; }
+.dark-theme .token-level-debug { color: #d16969; }
+.dark-theme .token-string { color: #ce9178; }
+.dark-theme .token-number { color: #b5cea8; }
+.dark-theme .token-key { color: #9cdcfe; }
+.dark-theme .token-text { color: #ffffffa2; }
+
+/* Also apply to context lines in large file mode */
+.dark-theme .context-line span:last-child {
+  color: #ffffffa2;
+}
+</style>
