@@ -522,14 +522,31 @@ const jumpToLine = async (lineNumber: number) => {
       if (targetLineIndex >= 0 && targetLineIndex < lines.length) {
         let charPos = 0
         for (let i = 0; i < targetLineIndex; i++) {
-          charPos += lines[i].length + 1
+          charPos += lines[i].length
         }
         
         textarea.focus()
         textarea.setSelectionRange(charPos, charPos + lines[targetLineIndex].length)
         
-        const lineHeight = 20
-        const scrollTop = targetLineIndex * lineHeight - textarea.clientHeight / 2
+        const style = window.getComputedStyle(textarea)
+        const paddingTop = parseFloat(style.paddingTop) || 12
+        const paddingBottom = parseFloat(style.paddingBottom) || 12
+        
+        // 优先使用 scrollHeight 计算平均行高，以消除累积误差
+        // 只有当行数较多时才使用此方法，避免小文件时的计算抖动
+        let lineHeight: number
+        if (lines.length > 100) {
+          const contentHeight = textarea.scrollHeight - paddingTop - paddingBottom
+          lineHeight = contentHeight / lines.length
+        } else {
+          lineHeight = parseFloat(style.lineHeight)
+          if (isNaN(lineHeight)) {
+            const fontSize = parseFloat(style.fontSize) || 13
+            lineHeight = fontSize * 1.6
+          }
+        }
+        
+        const scrollTop = targetLineIndex * lineHeight + paddingTop - textarea.clientHeight / 2
         textarea.scrollTop = Math.max(0, scrollTop)
       }
     }
