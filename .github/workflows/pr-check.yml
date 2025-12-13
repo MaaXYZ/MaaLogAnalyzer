@@ -20,9 +20,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-22.04, windows-latest]
+        include:
+          - platform: windows
+            arch: x86_64
+            runner: windows-latest
+          - platform: macos
+            arch: x86_64
+            runner: macos-15-intel
+          - platform: macos
+            arch: aarch64
+            runner: macos-latest
+          - platform: linux
+            arch: x86_64
+            runner: ubuntu-22.04
 
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: 检出代码
@@ -61,7 +73,7 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: 安装 Ubuntu 依赖
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
@@ -78,7 +90,7 @@ jobs:
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-build
+          name: ${{ matrix.platform }}-${{ matrix.arch }}-build
           path: src-tauri/target/release/bundle/
           if-no-files-found: warn
           retention-days: 7

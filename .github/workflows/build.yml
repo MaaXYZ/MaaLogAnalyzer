@@ -12,7 +12,15 @@ permissions:
 jobs:
   # 构建 Windows 版本
   build-windows:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: windows-latest
+          - arch: aarch64
+            runner: windows-11-arm
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: 检出代码
@@ -50,12 +58,20 @@ jobs:
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: windows-artifacts
+          name: windows-${{ matrix.arch }}-artifacts
           path: src-tauri/target/release/bundle/
 
-  # 构建 macOS Intel 版本
-  build-macos-intel:
-    runs-on: macos-15-intel
+  # 构建 macOS 版本
+  build-macos:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: macos-15-intel  # Intel-based macOS runner
+          - arch: aarch64
+            runner: macos-latest  # Apple Silicon macOS runner
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: 检出代码
@@ -93,55 +109,16 @@ jobs:
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: macos-intel-artifacts
-          path: src-tauri/target/release/bundle/
-
-  # 构建 macOS Apple Silicon 版本
-  build-macos-silicon:
-    runs-on: macos-latest
-
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-
-      - name: 安装 Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: 安装 Rust 稳定版
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: 安装 pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-          run_install: false
-
-      - name: 安装依赖
-        run: pnpm install
-
-      - name: 构建应用
-        run: pnpm tauri build
-
-      - name: 检查构建产物
-        run: |
-          if [ ! -d "src-tauri/target/release/bundle" ]; then
-            echo "构建产物目录不存在"
-            exit 1
-          fi
-          echo "构建产物目录存在，列出内容："
-          find src-tauri/target/release/bundle -type f | head -10
-
-      - name: 上传构建产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-silicon-artifacts
+          name: macos-${{ matrix.arch }}-artifacts
           path: src-tauri/target/release/bundle/
 
   # 构建 Linux 版本
   build-linux:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [aarch64, x86_64]
+      fail-fast: false
 
     steps:
       - name: 检出代码
@@ -185,7 +162,7 @@ jobs:
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: linux-artifacts
+          name: linux-${{ matrix.arch }}-artifacts
           path: src-tauri/target/release/bundle/
 
   # 生成 changelog
@@ -212,7 +189,7 @@ jobs:
 
   # 创建 GitHub Release
   release:
-    needs: [build-windows, build-macos-intel, build-macos-silicon, build-linux, changelog]
+    needs: [build-windows, build-macos, build-linux, changelog]
     runs-on: ubuntu-latest
 
     steps:
