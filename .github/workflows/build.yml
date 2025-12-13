@@ -34,6 +34,15 @@ jobs:
       - name: 安装 Rust 稳定版
         uses: dtolnay/rust-toolchain@stable
 
+      - name: 安装 WiX
+        run: |
+          $wixDir = "$env:TEMP\wix"
+          New-Item -ItemType Directory -Force -Path $wixDir
+          Invoke-WebRequest -Uri https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip -OutFile wix.zip
+          Expand-Archive -Path wix.zip -DestinationPath $wixDir -Force
+          echo "$wixDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "WIX=$wixDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: 安装 pnpm
         uses: pnpm/action-setup@v2
         with:
@@ -114,7 +123,7 @@ jobs:
 
   # 构建 Linux 版本
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         arch: [aarch64, x86_64]
@@ -141,7 +150,7 @@ jobs:
       - name: 安装系统依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf libsoup2.4-dev
           sudo apt-get install -y fuse libfuse2 wget file
 
       - name: 安装依赖
