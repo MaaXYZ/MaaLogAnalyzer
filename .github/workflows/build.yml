@@ -34,7 +34,7 @@ jobs:
       - name: 安装 Rust 稳定版
         uses: dtolnay/rust-toolchain@stable
 
-      - name: 安装 WiX (仅 ARM64)
+      - name: 安装 WiX
         run: dotnet tool install --global wix
 
       - name: 安装 pnpm
