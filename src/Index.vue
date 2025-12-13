@@ -32,12 +32,19 @@ onMounted(() => {
   })
 })
 
-// 更新浏览器主题颜色
+// 更新浏览器主题颜色和 body 类
 const updateThemeColor = (dark: boolean) => {
   requestAnimationFrame(() => {
     const metaThemeColor = document.querySelector('meta[name="theme-color"]')
     if (metaThemeColor) {
       metaThemeColor.setAttribute('content', dark ? '#18181c' : '#ffffff')
+    }
+    
+    // 添加/移除 body 类
+    document.body.classList.remove('force-light', 'force-dark')
+    if (localStorage.getItem('theme')) {
+      // 用户手动设置了主题
+      document.body.classList.add(dark ? 'force-dark' : 'force-light')
     }
   })
 }

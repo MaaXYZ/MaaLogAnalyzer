@@ -651,7 +651,7 @@ const loadContextLines = async (targetLine: number) => {
 </script>
 
 <template>
-  <div style="height: 100%; display: flex; flex-direction: column">
+  <div style="height: 100%; display: flex; flex-direction: column" :class="{ 'dark-theme': props.isDark }">
     <!-- 顶部工具栏 -->
     <n-card 
       size="small"
@@ -1015,6 +1015,19 @@ const loadContextLines = async (targetLine: number) => {
 </template>
 
 <style scoped>
+/* Fix Naive UI scrollbar container background in light mode */
+:deep(.n-scrollbar-container) {
+  background-color: transparent !important;
+}
+
+:deep(.n-scrollbar-content) {
+  background-color: transparent !important;
+}
+
+:deep(.n-card__content) {
+  background-color: transparent !important;
+}
+
 .log-virtual-list {
   /* Ensure the virtual list itself has a background for consistency */
   background-color: var(--n-color); 
@@ -1049,7 +1062,7 @@ const loadContextLines = async (targetLine: number) => {
   user-select: none;
   border-right: 1px solid var(--n-border-color);
   margin-right: 8px;
-  background-color: var(--n-color-modal);
+  background-color: #f5f5f5; /* Light mode background */
   flex-shrink: 0; /* Prevent line number from shrinking */
 }
 

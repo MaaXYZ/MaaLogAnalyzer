@@ -384,6 +384,19 @@ const formatNextName = (item: any) => {
 </template>
 
 <style scoped>
+/* Fix Naive UI scrollbar container background in light mode */
+:deep(.n-scrollbar-container) {
+  background-color: transparent !important;
+}
+
+:deep(.n-scrollbar-content) {
+  background-color: transparent !important;
+}
+
+:deep(.n-card__content) {
+  background-color: transparent !important;
+}
+
 .n-descriptions :deep(.n-descriptions-table-wrapper) {
   background: transparent;
 }
