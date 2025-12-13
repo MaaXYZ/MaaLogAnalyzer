@@ -331,7 +331,7 @@ const handleSelectOperation = (node: NodeInfo, opIndex: number) => {
         <!-- 版本信息 -->
         <n-flex justify="space-between" align="center">
           <n-text depth="3" style="font-size: 12px">
-            Version 1.1.0
+            Version 1.2.0
           </n-text>
           <n-text depth="3" style="font-size: 12px">
             © 2025

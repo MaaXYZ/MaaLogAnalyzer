@@ -1,6 +1,6 @@
 [package]
 name = "maa-log-analyzer"
-version = "1.1.0"
+version = "1.2.0"
 description = "MAA 日志分析器"
 authors = ["Windsland52"]
 license = "MIT"
