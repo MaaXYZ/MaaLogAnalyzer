@@ -2,6 +2,10 @@
 
 基于 Vue 3 + Naive UI + Tauri 的 MAAFramework 日志分析工具。
 
+🌍尝试网页版： [https://maaloganalyzer.maafw.xyz](https://maaloganalyzer.maafw.xyz)
+
+🚀下载到本地：[Release](https://github.com/Windsland52/MAALogAnalyzer/releases/latest)
+
 ## 📸 界面预览
 
 ### 主要功能界面
