@@ -271,22 +271,29 @@ export class LogParser {
         }
       } else if (message === 'Tasker.Task.Succeeded' || message === 'Tasker.Task.Failed') {
         const taskId = details.task_id
-        // 找到最近的匹配任务（从后往前找）
-        for (let j = tasks.length - 1; j >= 0; j--) {
-          const task = tasks[j]
-          if (task.task_id === taskId && !task.end_time) {
-            task.status = message === 'Tasker.Task.Succeeded' ? 'succeeded' : 'failed'
-            task.end_time = event.timestamp
-            task.events.push(event)
-            task._endEventIndex = i
+        const uuid = details.uuid
 
-            // 计算持续时间
-            if (task.start_time && task.end_time) {
-              const start = new Date(task.start_time).getTime()
-              const end = new Date(task.end_time).getTime()
-              task.duration = end - start
-            }
-            break
+        // 优先使用 uuid 匹配（如果存在且不为空），否则使用 task_id + FIFO
+        let matchedTask = null
+        if (uuid && uuid.trim() !== '') {
+          // 使用 uuid 精确匹配
+          matchedTask = tasks.find(t => t.uuid === uuid && !t.end_time)
+        } else {
+          // 使用 task_id + FIFO 匹配（找第一个未结束的匹配任务）
+          matchedTask = tasks.find(t => t.task_id === taskId && !t.end_time)
+        }
+
+        if (matchedTask) {
+          matchedTask.status = message === 'Tasker.Task.Succeeded' ? 'succeeded' : 'failed'
+          matchedTask.end_time = event.timestamp
+          matchedTask.events.push(event)
+          matchedTask._endEventIndex = i
+
+          // 计算持续时间
+          if (matchedTask.start_time && matchedTask.end_time) {
+            const start = new Date(matchedTask.start_time).getTime()
+            const end = new Date(matchedTask.end_time).getTime()
+            matchedTask.duration = end - start
           }
         }
       }
@@ -321,23 +328,19 @@ export class LogParser {
     const recognitionAttempts: any[] = []
     // 临时存储嵌套的 RecognitionNode 事件
     const nestedNodes: any[] = []
-    // 当前的 Next 列表（最近遇到的 NextList 事件）
+    // 临时存储当前节点的 NextList（在 PipelineNode.Starting 和 Succeeded 之间）
     let currentNextList: any[] = []
 
     // 遍历任务范围内的事件，提取节点信息和识别历史
     for (const event of taskEvents) {
       const { message, details } = event
 
-      // 收集 NextList 事件，更新当前的 Next 列表
+      // 收集 NextList 事件，存储为当前节点的 next_list
       if ((message === 'Node.NextList.Starting' || message === 'Node.NextList.Succeeded')
           && details.task_id === task.task_id) {
-        const list = details.list || []
-        // 使用 Succeeded 事件的数据优先，如果是 Starting 则暂存
-        if (message === 'Node.NextList.Succeeded') {
-          currentNextList = list
-        } else if (message === 'Node.NextList.Starting') {
-          // 如果还没有 Succeeded 事件，先使用 Starting 的数据
-          currentNextList = list
+        // NextList.Starting 提供当前节点要尝试识别的节点列表
+        if (message === 'Node.NextList.Starting') {
+          currentNextList = details.list || []
         }
       }
 
@@ -377,11 +380,9 @@ export class LogParser {
       // 当遇到 PipelineNode.Succeeded 或 Failed 时，创建节点并关联识别历史
       if ((message === 'Node.PipelineNode.Succeeded' || message === 'Node.PipelineNode.Failed')
           && details.task_id === task.task_id) {
-        // 使用 node_details.name 作为节点名称（当前执行的节点）
-        // details.name 是父节点/上下文节点的名称
-        const nodeName = details.node_details?.name || details.name || ''
-        // 使用当前的 Next 列表（最近遇到的 NextList 事件）
-        const nextList = currentNextList.slice()
+        // 使用 details.name 作为节点名称（上下文节点）
+        // 上下文节点包含 NextList，尝试识别候选节点，并执行匹配节点的动作
+        const nodeName = details.name || details.node_details?.name || ''
 
         // 获取自上一个 PipelineNode 以来收集的所有识别尝试
         // （包括常规 Recognition 事件和嵌套的 RecognitionNode 事件）
@@ -396,7 +397,7 @@ export class LogParser {
           reco_details: details.reco_details,
           action_details: details.action_details,
           focus: details.focus,
-          next_list: nextList.map((item: any) => ({
+          next_list: currentNextList.map((item: any) => ({
             name: item.name || '',
             anchor: item.anchor || false,
             jump_back: item.jump_back || false
@@ -406,7 +407,8 @@ export class LogParser {
         }
         nodes.push(node)
 
-        // 清空已使用的识别尝试
+        // 清空已使用的数据，准备处理下一个节点
+        currentNextList = []
         recognitionAttempts.length = 0
       }
     }
