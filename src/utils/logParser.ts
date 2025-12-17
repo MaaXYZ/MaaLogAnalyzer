@@ -246,16 +246,17 @@ export class LogParser {
    * 获取所有任务
    */
   getTasks(): TaskInfo[] {
-    const tasksMap = new Map<number, TaskInfo>()
+    const tasks: TaskInfo[] = []
 
     // 遍历所有事件，提取任务信息
-    for (const event of this.events) {
+    for (let i = 0; i < this.events.length; i++) {
+      const event = this.events[i]
       const { message, details } = event
 
       if (message === 'Tasker.Task.Starting') {
         const taskId = details.task_id
         if (taskId) {
-          tasksMap.set(taskId, {
+          tasks.push({
             task_id: taskId,
             entry: details.entry || '',
             hash: details.hash || '',
@@ -264,33 +265,39 @@ export class LogParser {
             status: 'running',
             nodes: [],
             events: [event],
-            duration: undefined
+            duration: undefined,
+            _startEventIndex: i
           })
         }
       } else if (message === 'Tasker.Task.Succeeded' || message === 'Tasker.Task.Failed') {
         const taskId = details.task_id
-        if (taskId && tasksMap.has(taskId)) {
-          const task = tasksMap.get(taskId)!
-          task.status = message === 'Tasker.Task.Succeeded' ? 'succeeded' : 'failed'
-          task.end_time = event.timestamp
-          task.events.push(event)
+        // 找到最近的匹配任务（从后往前找）
+        for (let j = tasks.length - 1; j >= 0; j--) {
+          const task = tasks[j]
+          if (task.task_id === taskId && !task.end_time) {
+            task.status = message === 'Tasker.Task.Succeeded' ? 'succeeded' : 'failed'
+            task.end_time = event.timestamp
+            task.events.push(event)
+            task._endEventIndex = i
 
-          // 计算持续时间
-          if (task.start_time && task.end_time) {
-            const start = new Date(task.start_time).getTime()
-            const end = new Date(task.end_time).getTime()
-            task.duration = end - start
+            // 计算持续时间
+            if (task.start_time && task.end_time) {
+              const start = new Date(task.start_time).getTime()
+              const end = new Date(task.end_time).getTime()
+              task.duration = end - start
+            }
+            break
           }
         }
       }
     }
 
     // 为每个任务提取节点信息
-    for (const task of tasksMap.values()) {
+    for (const task of tasks) {
       task.nodes = this.getTaskNodes(task)
     }
 
-    return Array.from(tasksMap.values())
+    return tasks
   }
 
   /**
@@ -299,29 +306,12 @@ export class LogParser {
   private getTaskNodes(task: TaskInfo): NodeInfo[] {
     const nodes: NodeInfo[] = []
 
-    // 找到任务的开始和结束事件索引，只处理任务范围内的事件
-    let taskStartIndex = -1
-    let taskEndIndex = -1
-
-    for (let i = 0; i < this.events.length; i++) {
-      const event = this.events[i]
-      if (event.message === 'Tasker.Task.Starting' && event.details.task_id === task.task_id) {
-        taskStartIndex = i
-      }
-      if ((event.message === 'Tasker.Task.Succeeded' || event.message === 'Tasker.Task.Failed')
-          && event.details.task_id === task.task_id) {
-        taskEndIndex = i
-        break
-      }
-    }
+    // 使用已记录的事件索引来确定任务范围
+    const taskStartIndex = task._startEventIndex ?? -1
+    const taskEndIndex = task._endEventIndex ?? this.events.length - 1
 
     if (taskStartIndex === -1) {
       return []
-    }
-
-    // 如果任务还没有结束，使用所有剩余的事件
-    if (taskEndIndex === -1) {
-      taskEndIndex = this.events.length - 1
     }
 
     // 只处理任务范围内的事件

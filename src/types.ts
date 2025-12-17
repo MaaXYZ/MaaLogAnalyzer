@@ -42,6 +42,8 @@ export interface TaskInfo {
   nodes: NodeInfo[]
   events: EventNotification[]
   duration?: number
+  _startEventIndex?: number  // 任务开始事件的索引（内部使用）
+  _endEventIndex?: number    // 任务结束事件的索引（内部使用）
 }
 
 // 识别尝试记录
