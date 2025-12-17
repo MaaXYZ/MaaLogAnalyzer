@@ -62,7 +62,8 @@ const parser = new LogParser()
 const tasks = ref<TaskInfo[]>([])
 const selectedTask = ref<TaskInfo | null>(null)
 const selectedNode = ref<NodeInfo | null>(null)
-const selectedOperationIndex = ref<number | null>(null)
+const selectedRecognitionIndex = ref<number | null>(null)
+const selectedNestedIndex = ref<number | null>(null)
 const loading = ref(false)
 
 // 消息提示
@@ -100,9 +101,8 @@ const handleContentUpload = (content: string) => {
 const processLogContent = (content: string) => {
   // 移除内部 try-catch，让错误抛出给调用方（handleFileUpload/handleContentUpload）统一处理
   const entries = parser.parseFile(content)
-  
+
   if (entries.length === 0) {
-    console.warn('未找到有效的日志记录')
     return
   }
 
@@ -110,27 +110,35 @@ const processLogContent = (content: string) => {
   if (tasks.value.length > 0) {
     selectedTask.value = tasks.value[0]
   }
-  
-  console.log(`成功加载 ${entries.length} 条日志记录`)
 }
 
 // 选择任务
 const handleSelectTask = (task: TaskInfo) => {
   selectedTask.value = task
   selectedNode.value = null
-  selectedOperationIndex.value = null
+  selectedRecognitionIndex.value = null
+  selectedNestedIndex.value = null
 }
 
 // 选择节点
 const handleSelectNode = (node: NodeInfo) => {
   selectedNode.value = node
-  selectedOperationIndex.value = null
+  selectedRecognitionIndex.value = null
+  selectedNestedIndex.value = null
 }
 
-// 选择操作
-const handleSelectOperation = (node: NodeInfo, opIndex: number) => {
+// 选择识别尝试
+const handleSelectRecognition = (node: NodeInfo, attemptIndex: number) => {
   selectedNode.value = node
-  selectedOperationIndex.value = opIndex
+  selectedRecognitionIndex.value = attemptIndex
+  selectedNestedIndex.value = null
+}
+
+// 选择嵌套节点
+const handleSelectNested = (node: NodeInfo, attemptIndex: number, nestedIndex: number) => {
+  selectedNode.value = node
+  selectedRecognitionIndex.value = attemptIndex
+  selectedNestedIndex.value = nestedIndex
 }
 </script>
 
@@ -222,14 +230,16 @@ const handleSelectOperation = (node: NodeInfo, opIndex: number) => {
               @upload-file="handleFileUpload"
               @upload-content="handleContentUpload"
               @select-node="handleSelectNode"
-              @select-operation="handleSelectOperation"
+              @select-recognition="handleSelectRecognition"
+              @select-nested="handleSelectNested"
             />
           </template>
           <template #2>
             <detail-view
               :selected-node="selectedNode"
               :selected-task="selectedTask"
-              :selected-operation-index="selectedOperationIndex"
+              :selected-recognition-index="selectedRecognitionIndex"
+              :selected-nested-index="selectedNestedIndex"
             />
           </template>
         </n-split>

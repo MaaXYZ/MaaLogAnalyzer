@@ -40,11 +40,9 @@ async function openLogFileWithTauri(): Promise<string | null> {
     
     if (selected && typeof selected === 'string') {
       const content = await readTextFile(selected)
-      console.log(`✅ 已加载文件: ${selected}`)
       return content
     }
   } catch (error) {
-    console.error('❌ Tauri 文件打开失败:', error)
     alert('打开文件失败: ' + error)
   }
   return null
@@ -57,17 +55,15 @@ async function openLogFileWithWeb(): Promise<string | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.log,.jsonl,.txt'
+    input.accept = '.log,.txt'
     
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (file) {
         try {
           const content = await file.text()
-          console.log(`✅ 已加载文件: ${file.name}`)
           resolve(content)
         } catch (error) {
-          console.error('❌ Web 文件读取失败:', error)
           alert('读取文件失败: ' + error)
           resolve(null)
         }
@@ -103,11 +99,9 @@ export async function saveFile(content: string, filename: string): Promise<boole
       
       if (filePath) {
         await writeTextFile(filePath, content)
-        console.log(`✅ 文件已保存: ${filePath}`)
         return true
       }
     } catch (error) {
-      console.error('❌ 保存文件失败:', error)
       alert('保存失败: ' + error)
     }
   } else {
@@ -135,7 +129,7 @@ export async function getAppInfo(): Promise<{ version: string; tauriVersion: str
       const tauriVersion = await getTauriVersion()
       return { version, tauriVersion }
     } catch (error) {
-      console.error('获取应用信息失败:', error)
+      // 忽略错误
     }
   }
   return null

@@ -2,6 +2,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { darkTheme, NConfigProvider, NMessageProvider } from 'naive-ui'
 import App from './App.vue'
+import hljs from 'highlight.js/lib/core'
+import json from 'highlight.js/lib/languages/json'
+
+// 注册 JSON 语言支持
+hljs.registerLanguage('json', json)
 
 // 主题管理 - 检测系统主题
 const getSystemTheme = () => {
@@ -70,7 +75,7 @@ const themeOverrides = {
 
 
 <template>
-  <n-config-provider :theme="theme" :theme-overrides="themeOverrides">
+  <n-config-provider :theme="theme" :theme-overrides="themeOverrides" :hljs="hljs">
     <n-message-provider>
       <app :is-dark="isDark" @toggle-theme="toggleTheme" />
     </n-message-provider>

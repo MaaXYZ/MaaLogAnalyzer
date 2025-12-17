@@ -90,7 +90,7 @@ onMounted(() => {
     try {
       searchHistory.value = JSON.parse(saved)
     } catch (e) {
-      console.error('加载搜索历史失败:', e)
+      // 忽略解析错误
     }
   }
 })
@@ -100,7 +100,7 @@ const saveSearchHistory = () => {
   try {
     localStorage.setItem('searchHistory', JSON.stringify(searchHistory.value))
   } catch (e) {
-    console.error('保存搜索历史失败:', e)
+    // 忽略保存错误
   }
 }
 
@@ -150,13 +150,11 @@ const performSearch = async () => {
   
   // 检查是否正在加载文件
   if (isLoadingFile.value) {
-    console.warn('⏳ 文件正在加载中，请稍候...')
     return
   }
-  
+
   // 检查是否有文件
   if (!fileName.value || (!fileContent.value && !fileHandle.value)) {
-    console.warn('❌ 请先加载文件')
     alert('请先选择文件')
     return
   }
@@ -177,7 +175,6 @@ const performSearch = async () => {
       addToHistory(searchText.value)
     }
   } catch (error) {
-    console.error('搜索失败:', error)
     alert('搜索失败: ' + error)
   } finally {
     isSearching.value = false
@@ -198,7 +195,6 @@ const performNormalSearch = async () => {
           try {
             searchPattern = new RegExp(searchText.value, caseSensitive.value ? 'g' : 'gi')
           } catch (e) {
-            console.error('正则表达式错误:', e)
             resolve()
             return
           }
@@ -234,30 +230,26 @@ const performNormalSearch = async () => {
 // 流式搜索（大文件）
 const performStreamSearch = async () => {
   if (!fileHandle.value) return
-  
-  console.log('🔍 开始流式搜索...')
-  
+
   const results: SearchResult[] = []
   const reader = fileHandle.value.stream().getReader()
   const decoder = new TextDecoder()
   let buffer = ''
   let lineNumber = 0
   let searchPattern: RegExp | null = null
-  
+
   // 编译正则表达式
   if (useRegex.value) {
     try {
       searchPattern = new RegExp(searchText.value, caseSensitive.value ? 'g' : 'gi')
     } catch (e) {
-      console.error('正则表达式错误:', e)
       return
     }
   }
-  
+
   try {
     while (true) {
       if (abortSearch) {
-        console.log('搜索已中断')
         break
       }
       
@@ -279,7 +271,6 @@ const performStreamSearch = async () => {
           reader.releaseLock()
           searchResults.value = results
           totalMatches.value = results.length
-          console.log(`✅ 达到最大结果数 ${maxResults}，停止搜索`)
           return
         }
         
@@ -317,7 +308,6 @@ const performStreamSearch = async () => {
   
   searchResults.value = results
   totalMatches.value = results.length
-  console.log(`✅ 搜索完成：找到 ${results.length} 个结果`)
 }
 
 // 在一行中查找匹配（统一逻辑）
@@ -364,31 +354,24 @@ const handleFileUpload = async (event: Event) => {
   try {
     fileName.value = file.name
     fileSizeInMB.value = file.size / 1024 / 1024
-    
-    console.log(`📂 正在加载文件: ${file.name} (${fileSizeInMB.value.toFixed(2)} MB)`)
-    
+
     // 策略选择
     if (fileSizeInMB.value < 5) {
       // 小文件：直接加载到内存
-      console.log('📄 小文件模式：直接加载')
       isLargeFile.value = false
       fileContent.value = await file.text()
       totalLines.value = fileContent.value.split('\n').length
       fileHandle.value = null
     } else {
       // 大文件：流式加载模式
-      console.log('📦 大文件模式：流式加载')
       isLargeFile.value = true
       fileContent.value = ''  // 不加载内容
       fileHandle.value = file
-      
+
       // 快速统计行数（不加载全部内容）
       totalLines.value = await countLinesInFile(file)
     }
-    
-    console.log(`✅ 文件加载完成：${totalLines.value} 行`)
   } catch (error) {
-    console.error('文件读取失败:', error)
     alert('文件读取失败: ' + error)
   } finally {
     isLoadingFile.value = false
@@ -447,25 +430,22 @@ const highlightMatch = (result: SearchResult) => {
 
 // 清除内容（激进模式 + 流式支持）
 const clearContent = () => {
-  console.log('🗑️ 开始清除内容（激进模式）...')
-  
   // 1. 立即中断所有操作
   abortSearch = true
   isSearching.value = false
-  
+
   // 2. 强制卸载所有组件
   contentKey.value++
-  console.log(`🔄 强制重新渲染 (key: ${contentKey.value})`)
-  
+
   // 3. 隐藏内容显示
   showFileContent.value = false
   selectedLine.value = null
-  
+
   // 4. 清空所有数组和对象
   searchResults.value = []
   totalMatches.value = 0
   searchText.value = ''
-  
+
   // 5. 清空流式加载相关
   isLargeFile.value = false
   fileHandle.value = null
@@ -473,35 +453,26 @@ const clearContent = () => {
   fileSizeInMB.value = 0
   contextLines.value = []
   contextStartLine.value = 0
-  
+
   // 6. 使用 nextTick 确保 Vue 完成更新
   nextTick(() => {
-    console.log('📝 清除文件内容...')
-    
-    const oldSize = fileSizeInMB.value
-    
     // 清除文件内容
     fileContent.value = ''
     fileName.value = ''
-    
+
     // 重置 file input
     if (fileInputRef.value) {
       fileInputRef.value.value = ''
     }
-    
-    console.log(`✅ 已清除 ${oldSize.toFixed(2)} MB 的内容`)
-    console.log('⏳ 等待浏览器 GC...（大文件模式：内存应立即释放）')
-    
+
     // 7. 尝试触发 GC
     if (typeof window !== 'undefined' && 'gc' in window) {
-      console.log('🧹 手动触发 GC...')
       ;(window as any).gc()
     }
-    
+
     // 8. 最终确认
     nextTick(() => {
-      console.log('💾 内存清理完成')
-      console.log('✨ 大文件模式下，内存占用应该大幅下降（不再保存文件内容）')
+      // 内存清理完成
     })
   })
 }
@@ -522,58 +493,49 @@ const fileLines = computed(() => {
 
 // 跳转到指定行
 const jumpToLine = async (lineNumber: number) => {
-  console.log(`🔍 jumpToLine 被调用: lineNumber=${lineNumber}`)
   selectedLine.value = lineNumber
-  
+
   // 大文件模式：读取上下文
   if (isLargeFile.value && fileHandle.value) {
-    console.log(`📍 读取行 ${lineNumber} 附近的内容...`)
     await loadContextLines(lineNumber)
     return
   }
-  
+
   // 小文件模式：显示文件内容
   const needsInitialRender = !showFileContent.value
-  console.log(`📄 小文件模式: needsInitialRender=${needsInitialRender}, showFileContent=${showFileContent.value}`)
-  
+
   if (needsInitialRender) {
     showFileContent.value = true
   }
-  
+
   // 使用虚拟列表定位
   const itemSize = 22 // 与模板中的 :item-size="22" 保持一致
   const topOffset = 3 // 让目标行距离顶部偏移 3 行，这样更容易看到上下文
-  
+
   const scrollToLine = () => {
-    console.log(`📜 scrollToLine: virtualListRef.value =`, virtualListRef.value)
     if (virtualListRef.value) {
       // 使用像素计算进行精确滚动
       // 目标：让选中行显示在距离顶部约 3 行的位置
       const targetIndex = Math.max(0, lineNumber - 1 - topOffset)
       const scrollTop = targetIndex * itemSize
-      
+
       // 尝试找到内部的滚动容器并直接设置 scrollTop
       const scrollContainer = virtualListRef.value.$el?.querySelector('.v-vl') as HTMLElement | null
       if (scrollContainer) {
         scrollContainer.scrollTop = scrollTop
-        console.log(`✅ 直接设置 scrollTop = ${scrollTop}`)
       } else {
         // 回退：使用 scrollTo 方法
         try {
           virtualListRef.value.scrollTo({ index: targetIndex, behavior: 'auto' })
-          console.log(`✅ scrollTo({ index: ${targetIndex} }) 调用成功`)
         } catch (e) {
-          console.error('scrollTo 失败:', e)
+          // 滚动失败
         }
       }
-    } else {
-      console.warn('⚠️ virtualListRef.value 为 null')
     }
   }
-  
+
   if (needsInitialRender) {
     // 新渲染需要等待更长时间
-    console.log('⏳ 等待虚拟列表初次渲染...')
     await nextTick()
     setTimeout(scrollToLine, 150)
   } else {
@@ -622,12 +584,11 @@ const loadContextLines = async (targetLine: number) => {
           reader.releaseLock()
           contextLines.value = lines
           contextStartLine.value = startLine
-          console.log(`✅ 已加载 ${lines.length} 行上下文 (${startLine}-${endLine})`)
           return
         }
       }
     }
-    
+
     // 处理最后一行
     if (buffer && currentLine < endLine) {
       currentLine++
@@ -635,15 +596,13 @@ const loadContextLines = async (targetLine: number) => {
         lines.push(buffer)
       }
     }
-    
+
     reader.releaseLock()
     contextLines.value = lines
     contextStartLine.value = startLine
-    console.log(`✅ 已加载 ${lines.length} 行上下文 (${startLine}-${endLine})，目标行: ${targetLine}`)
-    
+
     // 由于目标行在前3行，默认就显示在顶部，不需要额外滚动
   } catch (error) {
-    console.error('加载上下文失败:', error)
     alert('加载上下文失败: ' + error)
   }
 }
@@ -663,9 +622,10 @@ const loadContextLines = async (targetLine: number) => {
           <n-text strong style="font-size: 16px">📝 文本搜索</n-text>
           
           <input
+            id="text-search-file-input"
             ref="fileInputRef"
             type="file"
-            accept=".txt,.log,.json,.jsonl"
+            accept=".txt,.log"
             @change="handleFileUpload"
             style="display: none"
           />

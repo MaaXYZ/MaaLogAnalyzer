@@ -41,12 +41,21 @@
     // 在 Vue 加载前立即应用用户保存的主题，避免闪烁
     (function() {
       const savedTheme = localStorage.getItem('theme');
-      if (savedTheme === 'light') {
-        document.body.style.background = '#ffffff';
-        document.body.style.color = 'rgba(0, 0, 0, 0.82)';
-      } else if (savedTheme === 'dark') {
-        document.body.style.background = '#18181c';
-        document.body.style.color = 'rgba(255, 255, 255, 0.82)';
+      // 等待 DOM 加载后再应用主题
+      if (document.body) {
+        applyTheme();
+      } else {
+        document.addEventListener('DOMContentLoaded', applyTheme);
+      }
+
+      function applyTheme() {
+        if (savedTheme === 'light') {
+          document.body.style.background = '#ffffff';
+          document.body.style.color = 'rgba(0, 0, 0, 0.82)';
+        } else if (savedTheme === 'dark') {
+          document.body.style.background = '#18181c';
+          document.body.style.color = 'rgba(255, 255, 255, 0.82)';
+        }
       }
     })();
   </script>

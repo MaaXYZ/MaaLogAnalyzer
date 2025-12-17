@@ -1,285 +1,452 @@
-import type { LogEntry, TaskInfo, NodeInfo, Statistics } from '../types'
+import type { LogLine, EventNotification, TaskInfo, NodeInfo, Statistics } from '../types'
 
 export class LogParser {
-  private entries: LogEntry[] = []
+  private lines: LogLine[] = []
+  private events: EventNotification[] = []
 
-  parseFile(content: string): LogEntry[] {
-    const lines = content.split('\n')
-    const entries: LogEntry[] = []
+  /**
+   * 解析日志文件内容
+   */
+  parseFile(content: string): LogLine[] {
+    const rawLines = content.split('\n')
+    const lines: LogLine[] = []
+    const events: EventNotification[] = []
 
-    for (let lineNum = 1; lineNum <= lines.length; lineNum++) {
-      const line = lines[lineNum - 1].trim()
-      if (!line) continue
+    for (let lineNum = 1; lineNum <= rawLines.length; lineNum++) {
+      const rawLine = rawLines[lineNum - 1].trim()
+      if (!rawLine) continue
 
       try {
-        const entry = JSON.parse(line) as LogEntry
-        
-        // 标准化 sink_type
-        if (typeof entry.sink_type === 'object') {
-          entry.sink_type = (entry.sink_type as any).sink_type || 'unknown'
+        const parsed = this.parseLine(rawLine, lineNum)
+        if (parsed) {
+          lines.push(parsed)
+
+          // 检查是否是事件通知
+          if (rawLine.includes('!!!OnEventNotify!!!')) {
+            const event = this.parseEventNotification(parsed)
+            if (event) {
+              events.push(event)
+            }
+          }
         }
-        
-        // 确保必需字段
-        if (!entry.timestamp) entry.timestamp = 'unknown'
-        if (!entry.message) entry.message = 'unknown'
-        if (!entry.details) entry.details = {}
-        
-        entry._line = lineNum
-        entries.push(entry)
       } catch (e) {
-        // 如果是第一行解析失败，直接抛出错误
-        if (lineNum === 1) {
-          console.error(`第 1 行解析失败: ${e instanceof Error ? e.message : String(e)}`)
-          throw new Error(`该文件不是格式化日志文件 (jsonl) 。普通日志请将日志分析功能改为文本搜索模式。`)
-        }
         console.warn(`解析第 ${lineNum} 行失败:`, e)
       }
     }
 
-    this.entries = entries
-    return entries
+    this.lines = lines
+    this.events = events
+    return lines
   }
 
+  /**
+   * 解析单行日志
+   * 格式: [时间戳][级别][进程ID][线程ID][源文件][行号][函数名]消息 [参数] | 状态,耗时
+   */
+  private parseLine(line: string, lineNum: number): LogLine | null {
+    // 正则表达式匹配日志格式
+    const regex = /^\[([^\]]+)\]\[([^\]]+)\]\[([^\]]+)\]\[([^\]]+)\](?:\[([^\]]+)\])?(?:\[([^\]]+)\])?(?:\[([^\]]+)\])?\s*(.*)$/
+    const match = line.match(regex)
+
+    if (!match) {
+      return null
+    }
+
+    const [, timestamp, level, processId, threadId, part1, part2, part3, rest] = match
+
+    // 判断可选部分是源文件、行号还是函数名
+    let sourceFile: string | undefined
+    let lineNumber: string | undefined
+    let functionName: string | undefined
+    let message = rest
+
+    // 根据模式判断：
+    // 如果有3个可选部分，通常是 [源文件][行号][函数名]
+    // 如果只有1个可选部分，通常是 [模块名]
+    if (part3) {
+      sourceFile = part1
+      lineNumber = part2
+      functionName = part3
+    } else if (part1 && !part2) {
+      // 只有一个可选部分，可能是模块名或函数名
+      if (part1.includes('.cpp') || part1.includes('.h')) {
+        sourceFile = part1
+      } else {
+        functionName = part1
+      }
+    } else if (part1 && part2) {
+      sourceFile = part1
+      lineNumber = part2
+    }
+
+    // 解析消息和参数
+    const { message: cleanMessage, params, status, duration } = this.parseMessageAndParams(message)
+
+    return {
+      timestamp,
+      level: level as any,
+      processId,
+      threadId,
+      sourceFile,
+      lineNumber,
+      functionName,
+      message: cleanMessage,
+      params,
+      status,
+      duration,
+      _lineNumber: lineNum
+    }
+  }
+
+  /**
+   * 解析消息内容和参数
+   */
+  private parseMessageAndParams(message: string): {
+    message: string
+    params: Record<string, any>
+    status?: 'enter' | 'leave'
+    duration?: number
+  } {
+    const params: Record<string, any> = {}
+    let status: 'enter' | 'leave' | undefined
+    let duration: number | undefined
+
+    // 智能提取参数 [key=value] 或 [key]，考虑嵌套的方括号和花括号
+    const extractedParams: string[] = []
+    let i = 0
+    while (i < message.length) {
+      if (message[i] === '[') {
+        // 找到参数的开始
+        let depth = 1
+        let braceDepth = 0
+        let j = i + 1
+
+        // 跟踪嵌套的方括号和花括号
+        while (j < message.length && (depth > 0 || braceDepth > 0)) {
+          if (message[j] === '{') {
+            braceDepth++
+          } else if (message[j] === '}') {
+            braceDepth--
+          } else if (message[j] === '[' && braceDepth === 0) {
+            depth++
+          } else if (message[j] === ']' && braceDepth === 0) {
+            depth--
+          }
+          j++
+        }
+
+        if (depth === 0) {
+          // 找到匹配的右括号
+          const param = message.substring(i + 1, j - 1)
+          extractedParams.push(param)
+          i = j
+        } else {
+          i++
+        }
+      } else {
+        i++
+      }
+    }
+
+    // 解析提取的参数
+    for (const param of extractedParams) {
+      // 解析 key=value 格式
+      const kvMatch = param.match(/^([^=]+)=(.+)$/)
+      if (kvMatch) {
+        const [, key, value] = kvMatch
+        params[key.trim()] = this.parseValue(value.trim())
+      } else {
+        // 单独的标记
+        params[param.trim()] = true
+      }
+    }
+
+    // 移除参数部分，保留主消息
+    let cleanMessage = message
+    for (const param of extractedParams) {
+      cleanMessage = cleanMessage.replace(`[${param}]`, '')
+    }
+    cleanMessage = cleanMessage.trim()
+
+    // 检查是否有 | enter 或 | leave
+    const statusMatch = cleanMessage.match(/\|\s*(enter|leave)(?:,\s*(\d+)ms)?/)
+    if (statusMatch) {
+      status = statusMatch[1] as 'enter' | 'leave'
+      if (statusMatch[2]) {
+        duration = parseInt(statusMatch[2])
+      }
+      cleanMessage = cleanMessage.replace(/\|\s*(enter|leave).*$/, '').trim()
+    }
+
+    return { message: cleanMessage, params, status, duration }
+  }
+
+  /**
+   * 解析参数值
+   */
+  private parseValue(value: string): any {
+    // 尝试解析 JSON
+    if (value.startsWith('{') || value.startsWith('[')) {
+      try {
+        return JSON.parse(value)
+      } catch {
+        return value
+      }
+    }
+
+    // 尝试解析布尔值
+    if (value === 'true') return true
+    if (value === 'false') return false
+
+    // 尝试解析数字
+    if (/^-?\d+$/.test(value)) {
+      return parseInt(value)
+    }
+    if (/^-?\d+\.\d+$/.test(value)) {
+      return parseFloat(value)
+    }
+
+    // 移除引号
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      return value.slice(1, -1)
+    }
+
+    return value
+  }
+
+  /**
+   * 解析事件通知
+   */
+  private parseEventNotification(logLine: LogLine): EventNotification | null {
+    const { message, params } = logLine
+
+    if (!message.includes('!!!OnEventNotify!!!')) {
+      return null
+    }
+
+    // 提取 msg 和 details
+    const msg = params['msg']
+    const details = params['details']
+
+    if (!msg) {
+      return null
+    }
+
+    return {
+      timestamp: logLine.timestamp,
+      level: logLine.level,
+      message: msg,
+      details: details || {},
+      _lineNumber: logLine._lineNumber
+    }
+  }
+
+  /**
+   * 获取所有任务
+   */
   getTasks(): TaskInfo[] {
     const tasksMap = new Map<number, TaskInfo>()
-    const validTaskIds = new Set<number>()
 
-    // 第一遍：找出所有有 Task.Starting 的 task_id
-    for (const entry of this.entries) {
-      if (entry.message.includes('Task.Starting')) {
-        const taskId = entry.details?.task_id
+    // 遍历所有事件，提取任务信息
+    for (const event of this.events) {
+      const { message, details } = event
+
+      if (message === 'Tasker.Task.Starting') {
+        const taskId = details.task_id
         if (taskId) {
-          validTaskIds.add(taskId)
+          tasksMap.set(taskId, {
+            task_id: taskId,
+            entry: details.entry || '',
+            hash: details.hash || '',
+            uuid: details.uuid || '',
+            start_time: event.timestamp,
+            status: 'running',
+            nodes: [],
+            events: [event],
+            duration: undefined
+          })
+        }
+      } else if (message === 'Tasker.Task.Succeeded' || message === 'Tasker.Task.Failed') {
+        const taskId = details.task_id
+        if (taskId && tasksMap.has(taskId)) {
+          const task = tasksMap.get(taskId)!
+          task.status = message === 'Tasker.Task.Succeeded' ? 'succeeded' : 'failed'
+          task.end_time = event.timestamp
+          task.events.push(event)
+
+          // 计算持续时间
+          if (task.start_time && task.end_time) {
+            const start = new Date(task.start_time).getTime()
+            const end = new Date(task.end_time).getTime()
+            task.duration = end - start
+          }
         }
       }
     }
 
-    // 第二遍：只处理有效的任务
-    for (const entry of this.entries) {
-      const taskId = entry.details?.task_id
-      if (!taskId || !validTaskIds.has(taskId)) continue
-
-      if (!tasksMap.has(taskId)) {
-        tasksMap.set(taskId, {
-          task_id: taskId,
-          entry: '',
-          start_time: entry.timestamp,
-          status: 'running',
-          entries: []
-        })
-      }
-
-      const task = tasksMap.get(taskId)!
-      task.entries.push(entry)
-      task.end_time = entry.timestamp
-
-      // 更新任务信息
-      if (entry.message.includes('Task.Starting')) {
-        task.entry = entry.details.entry || 'Unknown'
-      } else if (entry.message.includes('Task.Succeeded')) {
-        task.status = 'succeeded'
-      } else if (entry.message.includes('Task.Failed')) {
-        task.status = 'failed'
-      }
+    // 为每个任务提取节点信息
+    for (const task of tasksMap.values()) {
+      task.nodes = this.getTaskNodes(task)
     }
 
     return Array.from(tasksMap.values())
   }
 
-  getTaskNodes(task: TaskInfo): NodeInfo[] {
+  /**
+   * 获取任务的所有节点
+   */
+  private getTaskNodes(task: TaskInfo): NodeInfo[] {
     const nodes: NodeInfo[] = []
-    let currentNode: Partial<NodeInfo> | null = null
 
-    // 第一步：扫描所有 NextList，建立节点名到属性的映射
-    const nodePropsMap = new Map<string, { jump_back: boolean; anchor: boolean }>()
-    for (const entry of task.entries) {
-      if (entry.message.includes('NextList.Starting') || entry.message.includes('NextList.Failed')) {
-        const list = entry.details.list || []
-        for (const item of list) {
-          const nodeName = item.name
-          if (nodeName && !nodePropsMap.has(nodeName)) {
-            nodePropsMap.set(nodeName, {
-              jump_back: item.jump_back || false,
-              anchor: item.anchor || false
-            })
-          }
-        }
+    // 找到任务的开始和结束事件索引，只处理任务范围内的事件
+    let taskStartIndex = -1
+    let taskEndIndex = -1
+
+    for (let i = 0; i < this.events.length; i++) {
+      const event = this.events[i]
+      if (event.message === 'Tasker.Task.Starting' && event.details.task_id === task.task_id) {
+        taskStartIndex = i
+      }
+      if ((event.message === 'Tasker.Task.Succeeded' || event.message === 'Tasker.Task.Failed')
+          && event.details.task_id === task.task_id) {
+        taskEndIndex = i
+        break
       }
     }
-    
-    // 调试：输出映射表
-    console.log('节点属性映射表:', Array.from(nodePropsMap.entries()).filter(([_, props]) => props.jump_back || props.anchor))
 
-    // 第二步：解析节点
-    for (const entry of task.entries) {
-      const msg = entry.message
-      const details = entry.details
-      const name = details.name || details.entry || ''
+    if (taskStartIndex === -1) {
+      return []
+    }
 
-      // 跳过 Tasker 级别的消息
-      if (msg.includes('Tasker.')) continue
+    // 如果任务还没有结束，使用所有剩余的事件
+    if (taskEndIndex === -1) {
+      taskEndIndex = this.events.length - 1
+    }
 
-      if (msg.includes('PipelineNode.Starting')) {
-        // 从映射表中查找节点属性
-        const props = nodePropsMap.get(name) || { jump_back: false, anchor: false }
-        
-        // 调试：输出有标记的节点
-        if (props.jump_back || props.anchor) {
-          console.log(`创建节点: ${name}, jump_back: ${props.jump_back}, anchor: ${props.anchor}`)
+    // 只处理任务范围内的事件
+    const taskEvents = this.events.slice(taskStartIndex, taskEndIndex + 1)
+
+    // 收集识别尝试历史
+    const recognitionAttempts: any[] = []
+    // 临时存储嵌套的 RecognitionNode 事件
+    const nestedNodes: any[] = []
+    // 当前的 Next 列表（最近遇到的 NextList 事件）
+    let currentNextList: any[] = []
+
+    // 遍历任务范围内的事件，提取节点信息和识别历史
+    for (const event of taskEvents) {
+      const { message, details } = event
+
+      // 收集 NextList 事件，更新当前的 Next 列表
+      if ((message === 'Node.NextList.Starting' || message === 'Node.NextList.Succeeded')
+          && details.task_id === task.task_id) {
+        const list = details.list || []
+        // 使用 Succeeded 事件的数据优先，如果是 Starting 则暂存
+        if (message === 'Node.NextList.Succeeded') {
+          currentNextList = list
+        } else if (message === 'Node.NextList.Starting') {
+          // 如果还没有 Succeeded 事件，先使用 Starting 的数据
+          currentNextList = list
         }
-        
-        currentNode = {
-          name,
-          timestamp: entry.timestamp,
-          status: 'running',
-          node_id: details.node_id,
-          actions: [],
-          next_list: [],
-          entries: [entry],  // 开始收集日志条目
-          jump_back: props.jump_back,
-          anchor: props.anchor
-        }
-      } else if (msg.includes('PipelineNode.Succeeded') && currentNode) {
-        currentNode.status = 'success'
-        currentNode.entries!.push(entry)
-        nodes.push(currentNode as NodeInfo)
-        currentNode = null
-      } else if (msg.includes('PipelineNode.Failed') && currentNode) {
-        currentNode.status = 'failed'
-        currentNode.entries!.push(entry)
-        nodes.push(currentNode as NodeInfo)
-        currentNode = null
       }
 
-      // 收集节点内的操作和日志
-      if (currentNode) {
-        // 添加日志条目
-        if (!msg.includes('PipelineNode.Starting')) {
-          currentNode.entries!.push(entry)
+      // 收集嵌套的 RecognitionNode 事件（这些节点有独立的 task_id）
+      if ((message === 'Node.RecognitionNode.Succeeded' || message === 'Node.RecognitionNode.Failed')) {
+        const nestedNode = {
+          reco_id: details.reco_details?.reco_id || details.node_id,
+          name: details.name || '',
+          timestamp: event.timestamp,
+          status: message === 'Node.RecognitionNode.Succeeded' ? 'success' : 'failed',
+          reco_details: details.reco_details
         }
+        nestedNodes.push(nestedNode)
+      }
 
-        if (msg.includes('Recognition.Succeeded')) {
-          currentNode.actions!.push({
-            type: 'recognition',
-            name,
-            status: 'success',
-            reco_id: details.reco_id,
-            details: details
-          })
-          // 提取增强的识别详情
-          if (!currentNode.recognitionDetails) currentNode.recognitionDetails = []
-          const recognition = details.recognition
-          if (recognition) {
-            currentNode.recognitionDetails.push({
-              reco_id: details.reco_id,
-              name: name,
-              algorithm: recognition.algorithm,
-              score: recognition.best_result?.score,
-              box: recognition.box,
-              text: recognition.best_result?.text,
-              raw_detail: recognition
-            })
-          }
-        } else if (msg.includes('Recognition.Failed')) {
-          currentNode.actions!.push({
-            type: 'recognition',
-            name,
-            status: 'failed',
-            reco_id: details.reco_id,
-            details: details
-          })
-          // 提取识别失败的详情（如果有）
-          if (!currentNode.recognitionDetails) currentNode.recognitionDetails = []
-          const recognition = details.recognition
-          if (recognition) {
-            currentNode.recognitionDetails.push({
-              reco_id: details.reco_id,
-              name: name,
-              algorithm: recognition.algorithm,
-              score: recognition.best_result?.score,
-              box: recognition.box,
-              text: recognition.best_result?.text,
-              raw_detail: recognition
-            })
-          }
-        } else if (msg.includes('Action.Succeeded')) {
-          currentNode.actions!.push({
-            type: 'action',
-            name,
-            status: 'success',
-            action_id: details.action_id,
-            details: details
-          })
-          // 提取增强的动作详情
-          if (!currentNode.actionDetails) currentNode.actionDetails = []
-          const action = details.action
-          if (action) {
-            currentNode.actionDetails.push({
-              action_id: details.action_id,
-              name: name,
-              action_type: action.action_type,
-              target_box: action.box,
-              success: action.success,
-              raw_detail: action
-            })
-          }
-        } else if (msg.includes('Action.Failed')) {
-          currentNode.actions!.push({
-            type: 'action',
-            name,
-            status: 'failed',
-            action_id: details.action_id,
-            details: details
-          })
-          // 提取动作失败的详情（如果有）
-          if (!currentNode.actionDetails) currentNode.actionDetails = []
-          const action = details.action
-          if (action) {
-            currentNode.actionDetails.push({
-              action_id: details.action_id,
-              name: name,
-              action_type: action.action_type,
-              target_box: action.box,
-              success: action.success,
-              raw_detail: action
-            })
-          }
-        } else if (msg.includes('NextList.Starting')) {
-          const nextList = details.list || []
-          currentNode.next_list = nextList.map((n: any) => ({
-            name: n.name || '',
-            anchor: n.anchor || false,
-            jump_back: n.jump_back || false
-          })).slice(0, 10)
+      // 收集识别事件（普通识别）
+      if ((message === 'Node.Recognition.Succeeded' || message === 'Node.Recognition.Failed')
+          && details.task_id === task.task_id) {
+        // 创建识别尝试，并附加之前收集的嵌套节点
+        const attempt = {
+          reco_id: details.reco_id,
+          name: details.name || '',
+          timestamp: event.timestamp,
+          status: message === 'Node.Recognition.Succeeded' ? 'success' : 'failed',
+          reco_details: details.reco_details,
+          nested_nodes: nestedNodes.length > 0 ? nestedNodes.slice() : undefined
         }
+        recognitionAttempts.push(attempt)
+        // 清空嵌套节点数组
+        nestedNodes.length = 0
+      }
+
+      // 当遇到 PipelineNode.Succeeded 时，创建节点并关联识别历史
+      if (message === 'Node.PipelineNode.Succeeded' && details.task_id === task.task_id) {
+        // 使用 node_details.name 作为节点名称（当前执行的节点）
+        // details.name 是父节点/上下文节点的名称
+        const nodeName = details.node_details?.name || details.name || ''
+        // 使用当前的 Next 列表（最近遇到的 NextList 事件）
+        const nextList = currentNextList.slice()
+
+        // 获取自上一个 PipelineNode 以来收集的所有识别尝试
+        // （包括常规 Recognition 事件和嵌套的 RecognitionNode 事件）
+        const nodeRecognitionAttempts = recognitionAttempts.slice()
+
+        const node: NodeInfo = {
+          node_id: details.node_id,
+          name: nodeName,
+          timestamp: event.timestamp,
+          status: 'success',
+          task_id: task.task_id,
+          reco_details: details.reco_details,
+          action_details: details.action_details,
+          focus: details.focus,
+          next_list: nextList.map((item: any) => ({
+            name: item.name || '',
+            anchor: item.anchor || false,
+            jump_back: item.jump_back || false
+          })),
+          recognition_attempts: nodeRecognitionAttempts,
+          node_details: details.node_details
+        }
+        nodes.push(node)
+
+        // 清空已使用的识别尝试
+        recognitionAttempts.length = 0
       }
     }
 
     return nodes
   }
 
+  /**
+   * 获取统计信息
+   */
   getStatistics(): Statistics {
-    const sinkTypes: Record<string, number> = {}
-    const messageTypes: Record<string, number> = {}
-    let failures = 0
+    const logLevels: Record<string, number> = {}
+    const eventTypes: Record<string, number> = {}
 
-    for (const entry of this.entries) {
-      sinkTypes[entry.sink_type] = (sinkTypes[entry.sink_type] || 0) + 1
-      messageTypes[entry.message] = (messageTypes[entry.message] || 0) + 1
-      
-      if (entry.message.includes('Failed')) {
-        failures++
-      }
+    // 统计日志级别
+    for (const line of this.lines) {
+      logLevels[line.level] = (logLevels[line.level] || 0) + 1
     }
 
-    const timestamps = this.entries.map(e => e.timestamp).filter(t => t !== 'unknown')
-    
+    // 统计事件类型
+    for (const event of this.events) {
+      eventTypes[event.message] = (eventTypes[event.message] || 0) + 1
+    }
+
+    // 获取时间范围
+    const timestamps = this.lines.map(l => l.timestamp).filter(t => t)
+    const tasks = this.getTasks()
+
     return {
-      totalEntries: this.entries.length,
-      sinkTypes,
-      messageTypes,
-      tasks: this.getTasks().length,
-      failures,
+      totalLines: this.lines.length,
+      totalEvents: this.events.length,
+      logLevels,
+      eventTypes,
+      tasks: tasks.length,
+      nodes: tasks.reduce((sum, task) => sum + task.nodes.length, 0),
       timeRange: {
         start: timestamps[0] || '',
         end: timestamps[timestamps.length - 1] || ''
@@ -287,4 +454,17 @@ export class LogParser {
     }
   }
 
+  /**
+   * 获取所有事件
+   */
+  getEvents(): EventNotification[] {
+    return this.events
+  }
+
+  /**
+   * 获取所有日志行
+   */
+  getLines(): LogLine[] {
+    return this.lines
+  }
 }

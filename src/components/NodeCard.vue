@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { NCard, NButton, NFlex, NTag, NCollapse, NCollapseItem, NText } from 'naive-ui'
+import { ref, computed } from 'vue'
+import { NCard, NButton, NFlex, NTag } from 'naive-ui'
 import { CheckCircleOutlined, CloseCircleOutlined } from '@vicons/antd'
 import type { NodeInfo } from '../types'
 
@@ -10,189 +10,187 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'select-node': [node: NodeInfo]
-  'select-operation': [node: NodeInfo, opIndex: number]
+  'select-recognition': [node: NodeInfo, attemptIndex: number]
+  'select-nested': [node: NodeInfo, attemptIndex: number, nestedIndex: number]
 }>()
+
+// 跟踪哪些识别尝试的嵌套节点是展开的
+const expandedAttempts = ref<Set<number>>(new Set())
 
 // 节点状态样式
 const cardClass = computed(() => {
   return `node-card node-card-${props.node.status}`
 })
 
-// 状态标签类型
-const statusType = computed(() => {
-  return props.node.status === 'success' ? 'success' : 
-         props.node.status === 'failed' ? 'error' : 'warning'
-})
-
-const statusText = computed(() => {
-  return props.node.status === 'success' ? '成功' :
-         props.node.status === 'failed' ? '失败' : '运行中'
-})
-
-// 合并识别和动作为操作
-const operations = computed(() => {
-  const recognitions = props.node.actions.filter(a => a.type === 'recognition')
-  const actions = props.node.actions.filter(a => a.type === 'action')
-  
-  const ops = []
-  // 识别和动作的配对逻辑：
-  // 1. 前面的失败识别是独立的操作（没有配对动作）→ 橙色
-  // 2. 最后一个成功的识别会配对一个动作 → 根据动作状态决定颜色
-  // 3. 如果所有识别都失败，则都是独立操作 → 橙色
-  
-  let actionIndex = 0
-  
-  for (let i = 0; i < recognitions.length; i++) {
-    const reco = recognitions[i]
-    let pairedAction = null
-    
-    // 如果这是成功的识别，且后面还有动作，则配对
-    if (reco.status === 'success' && actionIndex < actions.length) {
-      pairedAction = actions[actionIndex]
-      actionIndex++
-    }
-    
-    // 确定状态
-    let status = 'success'
-    if (pairedAction?.status === 'failed') {
-      // 动作失败 → 红色（error）
-      status = 'error'
-    } else if (reco.status === 'failed') {
-      // 识别失败（没有配对动作）→ 橙色（warning）
-      status = 'warning'
-    }
-    
-    ops.push({
-      name: formatOperationName(reco.name),
-      status
-    })
-  }
-  
-  // 处理剩余的动作（理论上不应该出现）
-  while (actionIndex < actions.length) {
-    const action = actions[actionIndex]
-    ops.push({
-      name: formatOperationName(action.name),
-      status: action.status === 'failed' ? 'error' : 'success'
-    })
-    actionIndex++
-  }
-  
-  return ops
-})
-
-// 点击节点标题
+// 点击节点
 const handleNodeClick = () => {
   emit('select-node', props.node)
 }
 
-// 点击操作按钮
-const handleOperationClick = (opIndex: number) => {
-  emit('select-operation', props.node, opIndex)
+// 点击识别尝试
+const handleRecognitionClick = (attemptIndex: number) => {
+  emit('select-recognition', props.node, attemptIndex)
 }
 
-// 格式化节点标题（带前缀）
-const nodeTitle = computed(() => {
-  let prefix = ''
-  if (props.node.jump_back) prefix += '[JumpBack]'
-  if (props.node.anchor) prefix += '[Anchor]'
-  const title = prefix ? `${prefix} ${props.node.name}` : props.node.name
-  
-  // 调试：输出有标记的节点
-  if (props.node.jump_back || props.node.anchor) {
-    console.log(`NodeCard 标题: ${title}, jump_back: ${props.node.jump_back}, anchor: ${props.node.anchor}`)
-  }
-  
-  return title
-})
+// 点击嵌套节点
+const handleNestedClick = (attemptIndex: number, nestedIndex: number) => {
+  emit('select-nested', props.node, attemptIndex, nestedIndex)
+}
 
-// 格式化操作名称（从 next_list 中查找属性）
-const formatOperationName = (name: string) => {
-  // 先从当前节点的 next_list 中查找
-  const nextItem = props.node.next_list?.find(item => item.name === name)
-  if (nextItem) {
-    let prefix = ''
-    if (nextItem.jump_back) prefix += '[JumpBack]'
-    if (nextItem.anchor) prefix += '[Anchor]'
-    return prefix ? `${prefix} ${name}` : name
+// 切换嵌套节点的显示/隐藏
+const toggleNestedNodes = (attemptIndex: number) => {
+  if (expandedAttempts.value.has(attemptIndex)) {
+    expandedAttempts.value.delete(attemptIndex)
+  } else {
+    expandedAttempts.value.add(attemptIndex)
   }
-  return name
 }
 
 // 格式化 Next 列表项名称
 const formatNextName = (item: any) => {
   let prefix = ''
-  if (item.jump_back) prefix += '[JumpBack]'
-  if (item.anchor) prefix += '[Anchor]'
-  return prefix ? `${prefix} ${item.name}` : item.name
+  if (item.jump_back) prefix += '[JumpBack] '
+  if (item.anchor) prefix += '[Anchor] '
+  return prefix + item.name
 }
+
+// 动作按钮类型
+const actionButtonType = computed(() => {
+  if (!props.node.action_details) return 'default'
+  return props.node.action_details.success ? 'success' : 'error'
+})
 </script>
 
 <template>
   <div :class="cardClass">
-    <n-card 
+    <n-card
       size="small"
       :bordered="true"
-      :content-style="{ padding: '16px' }"
     >
-      <!-- 卡片头部（可点击） -->
+      <!-- Header: 节点名称按钮 + task 标签 -->
       <template #header>
-        <n-flex justify="space-between" align="center" @click="handleNodeClick" style="cursor: pointer">
-          <div>
-            <div style="font-size: 16px; font-weight: 500">
-              {{ nodeTitle }}
-            </div>
-            <n-text depth="3" style="font-size: 12px; margin-top: 4px; display: block">
-              🕐 {{ node.timestamp.split(' ')[1] }}
-            </n-text>
-          </div>
-          <n-flex align="center" style="gap: 12px">
-            <n-tag size="small">PipelineNode</n-tag>
-            <n-tag :type="statusType" size="small">
-              {{ statusText }}
-            </n-tag>
-          </n-flex>
+        <n-flex justify="space-between" align="center">
+          <n-button
+            size="small"
+            @click="handleNodeClick"
+          >
+            {{ node.name }}
+          </n-button>
+          <n-tag size="small">task</n-tag>
         </n-flex>
       </template>
 
-      <!-- 操作列表 -->
+      <!-- Content: 识别尝试历史 + Next列表 -->
       <n-flex vertical style="gap: 8px">
-        <n-flex wrap style="gap: 8px">
-          <n-button
-            v-for="(op, idx) in operations"
-            :key="idx"
-            size="small"
-            :type="op.status as 'success' | 'error' | 'warning'"
-            ghost
-            @click.stop="handleOperationClick(idx)"
-          >
-            <template #icon>
-              <check-circle-outlined v-if="op.status === 'success'" />
-              <close-circle-outlined v-else-if="op.status === 'error'" />
-              <close-circle-outlined v-else />
+        <!-- 所有识别尝试（包括失败的） -->
+        <n-flex wrap style="gap: 8px 12px">
+          <template v-for="(attempt, idx) in node.recognition_attempts" :key="idx">
+            <!-- 没有嵌套节点的识别尝试：直接显示按钮 -->
+            <n-button
+              v-if="!attempt.nested_nodes || attempt.nested_nodes.length === 0"
+              size="small"
+              :type="attempt.status === 'success' ? 'success' : 'warning'"
+              ghost
+              @click="handleRecognitionClick(idx)"
+            >
+              <template #icon>
+                <check-circle-outlined v-if="attempt.status === 'success'" />
+                <close-circle-outlined v-else />
+              </template>
+              {{ attempt.name }}
+            </n-button>
+
+            <!-- 有嵌套节点的识别尝试：显示嵌套结构 -->
+            <template v-else>
+              <!-- 展开状态：显示 card -->
+              <n-card v-if="expandedAttempts.has(idx)" size="small">
+                <template #header>
+                  <n-flex align="center" style="gap: 8px">
+                    <n-button
+                      size="small"
+                      :type="attempt.status === 'success' ? 'success' : 'warning'"
+                      ghost
+                      @click="handleRecognitionClick(idx)"
+                    >
+                      <template #icon>
+                        <check-circle-outlined v-if="attempt.status === 'success'" />
+                        <close-circle-outlined v-else />
+                      </template>
+                      {{ attempt.name }}
+                    </n-button>
+                    <n-button size="small" @click="toggleNestedNodes(idx)">
+                      Hide
+                    </n-button>
+                  </n-flex>
+                </template>
+
+                <n-flex wrap style="gap: 8px 12px">
+                  <n-button
+                    v-for="(nested, nestedIdx) in attempt.nested_nodes"
+                    :key="`nested-${idx}-${nestedIdx}`"
+                    size="small"
+                    :type="nested.status === 'success' ? 'success' : 'warning'"
+                    ghost
+                    @click="handleNestedClick(idx, nestedIdx)"
+                  >
+                    <template #icon>
+                      <check-circle-outlined v-if="nested.status === 'success'" />
+                      <close-circle-outlined v-else />
+                    </template>
+                    {{ nested.name }}
+                  </n-button>
+                </n-flex>
+              </n-card>
+
+              <!-- 折叠状态：显示按钮 + Show 按钮 -->
+              <n-flex v-else wrap style="gap: 8px 12px">
+                <n-button
+                  size="small"
+                  :type="attempt.status === 'success' ? 'success' : 'warning'"
+                  ghost
+                  @click="handleRecognitionClick(idx)"
+                >
+                  <template #icon>
+                    <check-circle-outlined v-if="attempt.status === 'success'" />
+                    <close-circle-outlined v-else />
+                  </template>
+                  {{ attempt.name }}
+                </n-button>
+                <n-button size="small" @click="toggleNestedNodes(idx)">
+                  Show
+                </n-button>
+              </n-flex>
             </template>
-            {{ op.name }}
+          </template>
+
+          <!-- Next 列表按钮（禁用状态，显示候选节点） -->
+          <n-button
+            v-for="(nextNode, idx) in node.next_list"
+            :key="`next-${idx}`"
+            size="small"
+            ghost
+            disabled
+          >
+            {{ formatNextName(nextNode) }}
           </n-button>
         </n-flex>
-
-        <!-- Next 列表 -->
-        <div v-if="node.next_list.length > 0" style="margin-top: 8px">
-          <n-collapse>
-            <n-collapse-item title="→ Next 列表" name="next">
-              <n-flex wrap style="gap: 6px">
-                <n-tag
-                  v-for="(nextNode, idx) in node.next_list"
-                  :key="idx"
-                  size="small"
-                  :type="nextNode.anchor ? 'success' : nextNode.jump_back ? 'warning' : 'info'"
-                >
-                  {{ formatNextName(nextNode) }}
-                </n-tag>
-              </n-flex>
-            </n-collapse-item>
-          </n-collapse>
-        </div>
       </n-flex>
+
+      <!-- Footer: 动作按钮 -->
+      <template #footer v-if="node.action_details">
+        <n-button
+          size="small"
+          :type="actionButtonType"
+          ghost
+          @click="handleNodeClick"
+        >
+          <template #icon>
+            <check-circle-outlined v-if="node.action_details.success" />
+            <close-circle-outlined v-else />
+          </template>
+          {{ node.action_details.name }}
+        </n-button>
+      </template>
     </n-card>
   </div>
 </template>
@@ -224,23 +222,15 @@ const formatNextName = (item: any) => {
   background: #d03050;
 }
 
-.node-card-running::before {
-  background: #f2c97d;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: translateY(-50%) scale(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: translateY(-50%) scale(1.2);
-  }
-}
-
 .node-card:hover {
   transform: translateX(4px);
+}
+
+.node-card :deep(.n-card) {
+  transition: box-shadow 0.3s;
+}
+
+.node-card:hover :deep(.n-card) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 </style>

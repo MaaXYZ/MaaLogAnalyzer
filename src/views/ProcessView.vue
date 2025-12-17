@@ -22,7 +22,8 @@ const emit = defineEmits<{
   'upload-file': [file: File]
   'upload-content': [content: string]
   'select-node': [node: NodeInfo]
-  'select-operation': [node: NodeInfo, opIndex: number]
+  'select-recognition': [node: NodeInfo, attemptIndex: number]
+  'select-nested': [node: NodeInfo, attemptIndex: number, nestedIndex: number]
 }>()
 
 // 当前选中的任务索引
@@ -34,7 +35,7 @@ const isInTauri = ref(isTauri())
 // 当前任务的节点列表
 const currentNodes = computed<NodeInfo[]>(() => {
   if (!props.selectedTask) return []
-  return props.parser.getTaskNodes(props.selectedTask)
+  return props.selectedTask.nodes || []
 })
 
 // 切换任务
@@ -61,14 +62,19 @@ const handleTauriOpen = async () => {
   }
 }
 
-// 选择节点（点击标题）
+// 选择节点
 const handleNodeClick = (node: NodeInfo) => {
   emit('select-node', node)
 }
 
-// 选择操作（点击操作按钮）
-const handleOperationClick = (node: NodeInfo, opIndex: number) => {
-  emit('select-operation', node, opIndex)
+// 选择识别尝试
+const handleRecognitionClick = (node: NodeInfo, attemptIndex: number) => {
+  emit('select-recognition', node, attemptIndex)
+}
+
+// 选择嵌套节点
+const handleNestedClick = (node: NodeInfo, attemptIndex: number, nestedIndex: number) => {
+  emit('select-nested', node, attemptIndex, nestedIndex)
 }
 </script>
 
@@ -91,7 +97,7 @@ const handleOperationClick = (node: NodeInfo, opIndex: number) => {
             使用原生文件选择器
           </n-text>
           <n-text depth="3" style="font-size: 14px; display: block; margin-bottom: 8px">
-            支持 .log, .jsonl 格式
+            支持 maa.log 格式
           </n-text>
           <n-badge value="Tauri" type="success" style="margin-top: 4px" />
         </div>
@@ -119,7 +125,7 @@ const handleOperationClick = (node: NodeInfo, opIndex: number) => {
               点击或拖拽上传日志文件
             </n-text>
             <n-text depth="3" style="font-size: 14px">
-              支持 .log, .jsonl 格式
+              支持 maa.log 格式
             </n-text>
           </div>
         </n-upload-dragger>
@@ -186,7 +192,8 @@ const handleOperationClick = (node: NodeInfo, opIndex: number) => {
                 :key="idx"
                 :node="node"
                 @select-node="handleNodeClick"
-                @select-operation="handleOperationClick"
+                @select-recognition="handleRecognitionClick"
+                @select-nested="handleNestedClick"
               />
             </n-flex>
           </n-scrollbar>
