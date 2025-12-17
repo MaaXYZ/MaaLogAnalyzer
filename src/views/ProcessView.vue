@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   NCard, NButton, NUpload, NUploadDragger, NIcon, NText, NFlex,
   NScrollbar, NEmpty, NBadge, NTag, NSplit, NList, NListItem, type UploadFileInfo
@@ -107,16 +107,7 @@ watch([taskListCollapsed, () => props.detailViewCollapsed], ([taskCollapsed, det
   }
 })
 
-// 节点卡片引用
-const nodeScrollbar = ref<InstanceType<typeof NScrollbar> | null>(null)
-const nodeCardRefs = ref<any[]>([])
-
-// 设置节点卡片引用
-const setNodeCardRef = (el: any, index: number) => {
-  if (el) {
-    nodeCardRefs.value[index] = el
-  }
-}
+// 虚拟滚动不需要手动管理节点引用
 
 // 滚动到指定节点（虚拟滚动版本）
 const scrollToNode = (index: number) => {
