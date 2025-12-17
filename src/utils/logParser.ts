@@ -1,4 +1,4 @@
-import type { LogLine, EventNotification, TaskInfo, NodeInfo, Statistics } from '../types'
+import type { LogLine, EventNotification, TaskInfo, NodeInfo } from '../types'
 
 export class LogParser {
   private lines: LogLine[] = []
@@ -424,40 +424,6 @@ export class LogParser {
     return nodes
   }
 
-  /**
-   * 获取统计信息
-   */
-  getStatistics(): Statistics {
-    const logLevels: Record<string, number> = {}
-    const eventTypes: Record<string, number> = {}
-
-    // 统计日志级别
-    for (const line of this.lines) {
-      logLevels[line.level] = (logLevels[line.level] || 0) + 1
-    }
-
-    // 统计事件类型
-    for (const event of this.events) {
-      eventTypes[event.message] = (eventTypes[event.message] || 0) + 1
-    }
-
-    // 获取时间范围
-    const timestamps = this.lines.map(l => l.timestamp).filter(t => t)
-    const tasks = this.getTasks()
-
-    return {
-      totalLines: this.lines.length,
-      totalEvents: this.events.length,
-      logLevels,
-      eventTypes,
-      tasks: tasks.length,
-      nodes: tasks.reduce((sum, task) => sum + task.nodes.length, 0),
-      timeRange: {
-        start: timestamps[0] || '',
-        end: timestamps[timestamps.length - 1] || ''
-      }
-    }
-  }
 
   /**
    * 获取所有事件

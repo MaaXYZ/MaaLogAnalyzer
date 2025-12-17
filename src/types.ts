@@ -102,17 +102,3 @@ export interface OperationInfo {
   recognition?: RecognitionDetail | null
   action?: ActionDetail | null
 }
-
-// 统计信息
-export interface Statistics {
-  totalLines: number
-  totalEvents: number
-  logLevels: Record<string, number>
-  eventTypes: Record<string, number>
-  tasks: number
-  nodes: number
-  timeRange: {
-    start: string
-    end: string
-  }
-}
