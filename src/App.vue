@@ -67,6 +67,7 @@ const selectedNestedIndex = ref<number | null>(null)
 const loading = ref(false)
 const parseProgress = ref(0)
 const showParsingModal = ref(false)
+const showFileLoadingModal = ref(false)
 
 // DetailView 折叠控制
 const detailViewCollapsed = ref(false)
@@ -168,6 +169,16 @@ const handleSelectNested = (node: NodeInfo, attemptIndex: number, nestedIndex: n
   selectedNode.value = node
   selectedRecognitionIndex.value = attemptIndex
   selectedNestedIndex.value = nestedIndex
+}
+
+// 处理文件加载开始
+const handleFileLoadingStart = () => {
+  showFileLoadingModal.value = true
+}
+
+// 处理文件加载结束
+const handleFileLoadingEnd = () => {
+  showFileLoadingModal.value = false
 }
 
 // 临时调试函数 - 分析内存占用
@@ -294,6 +305,8 @@ if (typeof window !== 'undefined') {
               @select-node="handleSelectNode"
               @select-recognition="handleSelectRecognition"
               @select-nested="handleSelectNested"
+              @file-loading-start="handleFileLoadingStart"
+              @file-loading-end="handleFileLoadingEnd"
             />
           </template>
           <template #2>
@@ -362,6 +375,8 @@ if (typeof window !== 'undefined') {
                 @select-node="handleSelectNode"
                 @select-recognition="handleSelectRecognition"
                 @select-nested="handleSelectNested"
+                @file-loading-start="handleFileLoadingStart"
+                @file-loading-end="handleFileLoadingEnd"
               />
             </template>
             <template #2>
@@ -488,6 +503,35 @@ if (typeof window !== 'undefined') {
             © 2025
           </n-text>
         </n-flex>
+      </n-flex>
+    </n-modal>
+
+    <!-- 文件读取加载对话框 -->
+    <n-modal
+      v-model:show="showFileLoadingModal"
+      preset="card"
+      title="正在读取日志文件"
+      style="width: 500px"
+      :bordered="false"
+      :closable="false"
+      :mask-closable="false"
+      :close-on-esc="false"
+    >
+      <n-flex vertical style="gap: 20px; padding: 20px 0">
+        <n-text style="text-align: center; font-size: 16px">
+          正在读取文件内容...
+        </n-text>
+        <n-progress
+          type="line"
+          :percentage="100"
+          :show-indicator="false"
+          :height="24"
+          status="info"
+          processing
+        />
+        <n-text depth="3" style="text-align: center; font-size: 13px">
+          请稍候，文件读取完成后将开始解析
+        </n-text>
       </n-flex>
     </n-modal>
 

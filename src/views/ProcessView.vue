@@ -29,10 +29,15 @@ const emit = defineEmits<{
   'select-node': [node: NodeInfo]
   'select-recognition': [node: NodeInfo, attemptIndex: number]
   'select-nested': [node: NodeInfo, attemptIndex: number, nestedIndex: number]
+  'file-loading-start': []
+  'file-loading-end': []
 }>()
 
 // 当前选中的任务索引
 const activeTaskIndex = ref(0)
+
+// 文件读取加载状态
+const fileLoading = ref(false)
 
 // 是否在 Tauri 环境
 const isInTauri = ref(isTauri())
@@ -155,9 +160,42 @@ const handleFileChange = (options: { fileList: UploadFileInfo[] }) => {
 
 // 使用 Tauri 打开文件
 const handleTauriOpen = async () => {
-  const content = await openLogFileDialog()
-  if (content) {
-    emit('upload-content', content)
+  try {
+    // 动态导入 Tauri API
+    const { open } = await import('@tauri-apps/api/dialog')
+    const { readTextFile } = await import('@tauri-apps/api/fs')
+
+    // 打开文件选择对话框（不显示加载提示）
+    const selected = await open({
+      multiple: false,
+      filters: [{
+        name: 'Log Files',
+        extensions: ['log', 'jsonl', 'txt']
+      }],
+      directory: false,
+      title: '选择日志文件'
+    })
+
+    // 用户选择了文件后，才显示加载提示并读取文件
+    if (selected && typeof selected === 'string') {
+      try {
+        fileLoading.value = true
+        emit('file-loading-start')
+
+        const content = await readTextFile(selected)
+
+        if (content) {
+          emit('upload-content', content)
+        }
+      } finally {
+        fileLoading.value = false
+        emit('file-loading-end')
+      }
+    }
+  } catch (error) {
+    fileLoading.value = false
+    emit('file-loading-end')
+    alert('打开文件失败: ' + error)
   }
 }
 
