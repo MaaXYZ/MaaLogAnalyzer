@@ -173,6 +173,10 @@ const handleSelectNested = (node: NodeInfo, attemptIndex: number, nestedIndex: n
 
 // 处理文件加载开始
 const handleFileLoadingStart = () => {
+  // 移除当前焦点，避免 aria-hidden 警告
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
   showFileLoadingModal.value = true
 }
 

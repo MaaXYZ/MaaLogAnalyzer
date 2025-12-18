@@ -90,6 +90,7 @@ const actionButtonType = computed(() => {
             <!-- 没有嵌套节点的识别尝试：直接显示按钮 -->
             <n-button
               v-if="!attempt.nested_nodes || attempt.nested_nodes.length === 0"
+              :key="`attempt-btn-${idx}`"
               size="small"
               :type="attempt.status === 'success' ? 'success' : 'warning'"
               ghost
@@ -147,6 +148,7 @@ const actionButtonType = computed(() => {
               <!-- 折叠状态：显示按钮 + Show 按钮 -->
               <n-flex v-else :key="`collapsed-${idx}`" wrap style="gap: 8px 12px">
                 <n-button
+                  :key="`collapsed-btn-${idx}`"
                   size="small"
                   :type="attempt.status === 'success' ? 'success' : 'warning'"
                   ghost
@@ -158,7 +160,7 @@ const actionButtonType = computed(() => {
                   </template>
                   {{ attempt.name }}
                 </n-button>
-                <n-button size="small" @click="toggleNestedNodes(idx)">
+                <n-button :key="`show-btn-${idx}`" size="small" @click="toggleNestedNodes(idx)">
                   Show
                 </n-button>
               </n-flex>
