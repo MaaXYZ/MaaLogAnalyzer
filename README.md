@@ -1,16 +1,38 @@
-# MAA 日志工具
+<!-- markdownlint-disable MD033 MD041 -->
+<p align="center">
+  <img alt="LOGO" src="./public/logo.png" width="256" height="256" />
+</p>
 
-基于 Vue 3 + Naive UI + Tauri 的 MAAFramework 日志分析工具。
+<div align="center">
 
-🌍尝试网页版： [maaloganalyzer.maafw.xyz](https://maaloganalyzer.maafw.xyz)
+# MAALogAnalyzer
 
-🚀下载到本地：[Release](https://github.com/Windsland52/MAALogAnalyzer/releases/latest)
+_✨ 可视化分析基于 MAAFramework 开发应用的日志 ✨_</br>
+🔍 告别手翻百万行日志！用可视化+搜索的方式，高效定位、分析你的 Maa 应用运行问题 🔍
+
+</div>
+
+<p align="center">
+  <a href="https://vuejs.org/" target="_blank"><img alt="vue" src="https://img.shields.io/badge/Vue 3-4FC08D?logo=vue.js&logoColor=fff"></a>
+  <a href="https://www.typescriptlang.org/" target="_blank"><img alt="ts" src="https://img.shields.io/badge/TypeScript 5-3178C6?logo=typescript&logoColor=fff"></a>
+  <a href="https://www.naiveui.com/" target="_blank"><img alt="naive-ui" src="https://img.shields.io/badge/Naive UI-5FA04E?logo=vuedotjs&logoColor=fff"></a>
+  <a href="https://tauri.app/" target="_blank"><img alt="tauri" src="https://img.shields.io/badge/Tauri 2-FFC131?logo=tauri&logoColor=000"></a>
+  <br/>
+  <a href="https://github.com/Windsland52/MAALogAnalyzer/blob/main/LICENSE" target="_blank"><img alt="license" src="https://img.shields.io/github/license/Windsland52/MAALogAnalyzer"></a>
+  <a href="https://github.com/Windsland52/MAALogAnalyzer/stargazers" target="_blank"><img alt="stars" src="https://img.shields.io/github/stars/Windsland52/MAALogAnalyzer?style=social"></a>
+  <a href="https://github.com/Windsland52/MAALogAnalyzer/commits/main/" target="_blank"><img alt="commits" src="https://img.shields.io/github/commit-activity/m/Windsland52/MAALogAnalyzer?color=%23ff69b4"></a>
+</p>
+
+<div align="center">
+
+[🌍 在线体验](https://maaloganalyzer.maafw.xyz) | [🚀 本地下载](https://github.com/Windsland52/MAALogAnalyzer/releases/latest) | [📖 使用文档](#-使用方法)
+
+</div>
 
 ## 📸 界面预览
 
 ### 主要功能界面
 
-<!-- markdownlint-disable MD033 -->
 <div align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" type="image/webp" srcset="img/1.webp">
