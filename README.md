@@ -279,5 +279,20 @@ MIT License
 
 ## 🙏 致谢
 
-- [MaaFramework](https://github.com/MaaXYZ/MaaFramework)
-- [maa-support-extension](https://github.com/neko-para/maa-support-extension)
+### 灵感来源
+
+- [MaaFramework](https://github.com/MaaXYZ/MaaFramework) - 自动化框架
+- [maa-support-extension](https://github.com/neko-para/maa-support-extension) - 界面设计导师
+- [M9A](https://github.com/MAA1999/M9A) - 最佳实践
+
+### 开发者
+
+感谢以下开发者对 MaaLogAnalyzer 作出的贡献：
+
+[![贡献者](https://contrib.rocks/image?repo=Windsland52/MAALogAnalyzer&max=1000)](https://github.com/Windsland52/MAALogAnalyzer/graphs/contributors)
+
+## 沟通交流
+
+MaaFramework 开发交流 QQ 群：595990173
+
+欢迎开发者加入官方 QQ 群，交流集成与开发实践。群内仅讨论开发相关议题。
