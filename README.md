@@ -13,45 +13,55 @@
 <!-- markdownlint-disable MD033 -->
 <div align="center">
   <picture>
+    <source media="(prefers-color-scheme: dark)" type="image/webp" srcset="img/1.webp">
     <source media="(prefers-color-scheme: dark)" srcset="img/1.png">
+    <source media="(prefers-color-scheme: light)" type="image/webp" srcset="img/1-light.webp">
     <source media="(prefers-color-scheme: light)" srcset="img/1-light.png">
-    <img src="img/1.png" alt="日志分析界面" width="800"/>
+    <img src="img/1.png" alt="日志分析界面" width="800" loading="lazy"/>
   </picture>
   <p><em>日志分析界面</em></p>
 </div>
 
 <div align="center">
   <picture>
+    <source media="(prefers-color-scheme: dark)" type="image/webp" srcset="img/2.webp">
     <source media="(prefers-color-scheme: dark)" srcset="img/2.png">
+    <source media="(prefers-color-scheme: light)" type="image/webp" srcset="img/2-light.webp">
     <source media="(prefers-color-scheme: light)" srcset="img/2-light.png">
-    <img src="img/2.png" alt="可视化任务执行流程" width="800"/>
+    <img src="img/2.png" alt="可视化任务执行流程" width="800" loading="lazy"/>
   </picture>
   <p><em>日志分析 - 可视化任务执行流程</em></p>
 </div>
 
 <div align="center">
   <picture>
+    <source media="(prefers-color-scheme: dark)" type="image/webp" srcset="img/3.webp">
     <source media="(prefers-color-scheme: dark)" srcset="img/3.png">
+    <source media="(prefers-color-scheme: light)" type="image/webp" srcset="img/3-light.webp">
     <source media="(prefers-color-scheme: light)" srcset="img/3-light.png">
-    <img src="img/3.png" alt="文本搜索界面" width="800"/>
+    <img src="img/3.png" alt="文本搜索界面" width="800" loading="lazy"/>
   </picture>
   <p><em>文本搜索界面</em></p>
 </div>
 
 <div align="center">
   <picture>
+    <source media="(prefers-color-scheme: dark)" type="image/webp" srcset="img/4.webp">
     <source media="(prefers-color-scheme: dark)" srcset="img/4.png">
+    <source media="(prefers-color-scheme: light)" type="image/webp" srcset="img/4-light.webp">
     <source media="(prefers-color-scheme: light)" srcset="img/4-light.png">
-    <img src="img/4.png" alt="全文搜索功能" width="800"/>
+    <img src="img/4.png" alt="全文搜索功能" width="800" loading="lazy"/>
   </picture>
   <p><em>文本搜索 - 全文搜索功能</em></p>
 </div>
 
 <div align="center">
   <picture>
+    <source media="(prefers-color-scheme: dark)" type="image/webp" srcset="img/5.webp">
     <source media="(prefers-color-scheme: dark)" srcset="img/5.png">
+    <source media="(prefers-color-scheme: light)" type="image/webp" srcset="img/5-light.webp">
     <source media="(prefers-color-scheme: light)" srcset="img/5-light.png">
-    <img src="img/5.png" alt="分屏模式" width="800"/>
+    <img src="img/5.png" alt="分屏模式" width="800" loading="lazy"/>
   </picture>
   <p><em>分屏模式 - 同时分析和搜索</em></p>
 </div>
