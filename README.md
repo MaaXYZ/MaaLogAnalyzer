@@ -7,7 +7,7 @@
 
 # MAALogAnalyzer
 
-_✨ 可视化分析基于 MAAFramework 开发应用的日志 ✨_</br>
+_✨ 可视化分析基于 MaaFramework 开发应用的日志 ✨_</br>
 🔍 告别手翻百万行日志！用可视化+搜索的方式，高效定位、分析你的 Maa 应用运行问题 🔍
 
 </div>
