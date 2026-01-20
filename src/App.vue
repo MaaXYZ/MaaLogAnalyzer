@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, h } from 'vue'
-import { NSplit, NCard, NFlex, NButton, NIcon, NDropdown, NModal, NText, NDivider, NTag, NProgress, useMessage } from 'naive-ui'
+import { ref, computed, watch, h } from 'vue'
+import { NSplit, NCard, NFlex, NButton, NIcon, NDropdown, NModal, NText, NDivider, NTag, NProgress, NSelect, useMessage } from 'naive-ui'
 import ProcessView from './views/ProcessView.vue'
 import DetailView from './views/DetailView.vue'
 import TextSearchView from './views/TextSearchView.vue'
@@ -69,6 +69,12 @@ const parseProgress = ref(0)
 const showParsingModal = ref(false)
 const showFileLoadingModal = ref(false)
 
+// 过滤器状态
+const selectedProcessId = ref<string>('')
+const selectedThreadId = ref<string>('')
+const availableProcessIds = ref<string[]>([])
+const availableThreadIds = ref<string[]>([])
+
 // DetailView 折叠控制
 const detailViewCollapsed = ref(false)
 const detailViewSavedSize = ref(0.6)
@@ -132,6 +138,15 @@ const processLogContent = async (content: string) => {
 
     // 解析完成，获取任务
     tasks.value = parser.getTasks()
+
+    // 收集可用的进程和线程ID
+    availableProcessIds.value = parser.getProcessIds()
+    availableThreadIds.value = parser.getThreadIds()
+
+    // 清除过滤器
+    selectedProcessId.value = ''
+    selectedThreadId.value = ''
+
     if (tasks.value.length > 0) {
       selectedTask.value = tasks.value[0]
     }
@@ -170,6 +185,58 @@ const handleSelectNested = (node: NodeInfo, attemptIndex: number, nestedIndex: n
   selectedRecognitionIndex.value = attemptIndex
   selectedNestedIndex.value = nestedIndex
 }
+
+// 过滤任务列表
+const filteredTasks = computed(() => {
+  return tasks.value.filter(task => {
+    if (selectedProcessId.value !== '') {
+      const processId = parser.getTaskProcessId(task.task_id)
+      if (processId !== selectedProcessId.value) return false
+    }
+    if (selectedThreadId.value !== '') {
+      const threadId = parser.getTaskThreadId(task.task_id)
+      if (threadId !== selectedThreadId.value) return false
+    }
+    return true
+  })
+})
+
+// 清除过滤器
+const clearFilters = () => {
+  selectedProcessId.value = ''
+  selectedThreadId.value = ''
+}
+
+// 进程ID选项
+const processIdOptions = computed(() => [
+  { label: '全部进程', value: '' },
+  ...availableProcessIds.value.map(id => ({
+    label: `进程: ${id}`,
+    value: id
+  }))
+])
+
+// 线程ID选项
+const threadIdOptions = computed(() => [
+  { label: '全部线程', value: '' },
+  ...availableThreadIds.value.map(id => ({
+    label: `线程: ${id}`,
+    value: id
+  }))
+])
+
+// 监听过滤后的任务列表变化，处理选中任务的有效性
+watch(filteredTasks, (newTasks) => {
+  if (selectedTask.value && !newTasks.find(t => t.task_id === selectedTask.value!.task_id)) {
+    // 当前选中的任务被过滤掉了
+    if (newTasks.length > 0) {
+      handleSelectTask(newTasks[0])
+    } else {
+      selectedTask.value = null
+      selectedNode.value = null
+    }
+  }
+})
 
 // 处理文件加载开始
 const handleFileLoadingStart = () => {
@@ -255,6 +322,38 @@ if (typeof window !== 'undefined') {
               {{ currentViewLabel }}
             </n-button>
           </n-dropdown>
+
+          <!-- 进程过滤器 -->
+          <n-select
+            v-if="availableProcessIds.length > 0"
+            v-model:value="selectedProcessId"
+            :options="processIdOptions"
+            placeholder="选择进程"
+            clearable
+            size="small"
+            style="width: 150px"
+          />
+
+          <!-- 线程过滤器 -->
+          <n-select
+            v-if="availableThreadIds.length > 0"
+            v-model:value="selectedThreadId"
+            :options="threadIdOptions"
+            placeholder="选择线程"
+            clearable
+            size="small"
+            style="width: 150px"
+          />
+
+          <!-- 清除过滤按钮 -->
+          <n-button
+            v-if="selectedProcessId || selectedThreadId"
+            @click="clearFilters"
+            size="small"
+            secondary
+          >
+            清除过滤
+          </n-button>
         </n-flex>
         
         <!-- 右侧按钮组 -->
@@ -297,7 +396,7 @@ if (typeof window !== 'undefined') {
         >
           <template #1>
             <process-view
-              :tasks="tasks"
+              :tasks="filteredTasks"
               :selected-task="selectedTask"
               :loading="loading"
               :parser="parser"
@@ -365,7 +464,7 @@ if (typeof window !== 'undefined') {
           >
             <template #1>
               <process-view
-                :tasks="tasks"
+                :tasks="filteredTasks"
                 :selected-task="selectedTask"
                 :loading="loading"
                 :parser="parser"

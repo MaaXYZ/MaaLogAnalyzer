@@ -11,6 +11,10 @@ export interface ParseProgress {
 export class LogParser {
   private events: EventNotification[] = []
   private stringPool = new StringPool()
+  private processIds = new Set<string>()
+  private threadIds = new Set<string>()
+  private taskProcessMap = new Map<number, string>()
+  private taskThreadMap = new Map<number, string>()
 
   /**
    * 解析日志文件内容（异步分块处理）
@@ -19,6 +23,12 @@ export class LogParser {
     content: string,
     onProgress?: (progress: ParseProgress) => void
   ): Promise<void> {
+    // 清空集合，确保每次解析都是全新的状态
+    this.processIds.clear()
+    this.threadIds.clear()
+    this.taskProcessMap.clear()
+    this.taskThreadMap.clear()
+
     const rawLines = content.split('\n')
     const events: EventNotification[] = []
     const totalLines = rawLines.length
@@ -107,6 +117,10 @@ export class LogParser {
 
     // 解析消息和参数
     const { message: cleanMessage, params, status, duration } = this.parseMessageAndParams(message)
+
+    // 收集唯一的进程ID和线程ID
+    this.processIds.add(processId)
+    this.threadIds.add(threadId)
 
     return {
       timestamp,
@@ -245,7 +259,7 @@ export class LogParser {
    * 解析事件通知
    */
   private parseEventNotification(logLine: LogLine): EventNotification | null {
-    const { message, params } = logLine
+    const { message, params, processId, threadId } = logLine
 
     if (!message.includes('!!!OnEventNotify!!!')) {
       return null
@@ -257,6 +271,15 @@ export class LogParser {
 
     if (!msg) {
       return null
+    }
+
+    // 当解析到任务开始事件时，记录任务的进程和线程信息
+    // 只记录第一次遇到的任务，避免IPC事件覆盖主进程信息
+    if (msg === 'Tasker.Task.Starting' && details.task_id) {
+      if (!this.taskProcessMap.has(details.task_id)) {
+        this.taskProcessMap.set(details.task_id, processId)
+        this.taskThreadMap.set(details.task_id, threadId)
+      }
     }
 
     return {
@@ -273,6 +296,7 @@ export class LogParser {
    */
   getTasks(): TaskInfo[] {
     const tasks: TaskInfo[] = []
+    const taskMap = new Map<number, TaskInfo>() // 用于去重，避免IPC导致的重复任务
 
     // 遍历所有事件，提取任务信息
     for (let i = 0; i < this.events.length; i++) {
@@ -281,19 +305,22 @@ export class LogParser {
 
       if (message === 'Tasker.Task.Starting') {
         const taskId = details.task_id
-        if (taskId) {
-          tasks.push({
+        // 只在任务不存在时才创建，避免IPC事件导致重复
+        if (taskId && !taskMap.has(taskId)) {
+          const task = {
             task_id: taskId,
             entry: this.stringPool.intern(details.entry || ''),
             hash: this.stringPool.intern(details.hash || ''),
             uuid: this.stringPool.intern(details.uuid || ''),
             start_time: this.stringPool.intern(event.timestamp),
-            status: 'running',
+            status: 'running' as const,
             nodes: [],
             events: [], // 不再存储事件，节省内存
             duration: undefined,
             _startEventIndex: i
-          })
+          }
+          tasks.push(task)
+          taskMap.set(taskId, task)
         }
       } else if (message === 'Tasker.Task.Succeeded' || message === 'Tasker.Task.Failed') {
         const taskId = details.task_id
@@ -353,6 +380,7 @@ export class LogParser {
    */
   private getTaskNodes(task: TaskInfo): NodeInfo[] {
     const nodes: NodeInfo[] = []
+    const nodeIdSet = new Set<number>() // 用于去重，避免IPC导致的重复节点
 
     // 使用已记录的事件索引来确定任务范围
     const taskStartIndex = task._startEventIndex ?? -1
@@ -421,32 +449,38 @@ export class LogParser {
       // 当遇到 PipelineNode.Succeeded 或 Failed 时，创建节点并关联识别历史
       if ((message === 'Node.PipelineNode.Succeeded' || message === 'Node.PipelineNode.Failed')
           && details.task_id === task.task_id) {
-        // 优先使用 node_details.name（实际执行的节点名称）
-        // 如果没有，再使用 details.name（上下文节点名称）
-        const nodeName = details.node_details?.name || details.name || ''
+        const nodeId = details.node_id
 
-        // 获取自上一个 PipelineNode 以来收集的所有识别尝试
-        // （包括常规 Recognition 事件和嵌套的 RecognitionNode 事件）
-        const nodeRecognitionAttempts = recognitionAttempts.slice()
+        // 只在节点不存在时才创建，避免IPC事件导致重复
+        if (nodeId && !nodeIdSet.has(nodeId)) {
+          // 优先使用 node_details.name（实际执行的节点名称）
+          // 如果没有，再使用 details.name（上下文节点名称）
+          const nodeName = details.node_details?.name || details.name || ''
 
-        const node: NodeInfo = {
-          node_id: details.node_id,
-          name: this.stringPool.intern(nodeName),
-          timestamp: this.stringPool.intern(event.timestamp),
-          status: message === 'Node.PipelineNode.Succeeded' ? 'success' : 'failed',
-          task_id: task.task_id,
-          reco_details: details.reco_details ? markRaw(details.reco_details) : undefined,
-          action_details: details.action_details ? markRaw(details.action_details) : undefined,
-          focus: details.focus ? markRaw(details.focus) : undefined,
-          next_list: currentNextList.map((item: any) => ({
-            name: this.stringPool.intern(item.name || ''),
-            anchor: item.anchor || false,
-            jump_back: item.jump_back || false
-          })),
-          recognition_attempts: nodeRecognitionAttempts,
-          node_details: details.node_details ? markRaw(details.node_details) : undefined
+          // 获取自上一个 PipelineNode 以来收集的所有识别尝试
+          // （包括常规 Recognition 事件和嵌套的 RecognitionNode 事件）
+          const nodeRecognitionAttempts = recognitionAttempts.slice()
+
+          const node: NodeInfo = {
+            node_id: nodeId,
+            name: this.stringPool.intern(nodeName),
+            timestamp: this.stringPool.intern(event.timestamp),
+            status: message === 'Node.PipelineNode.Succeeded' ? 'success' : 'failed',
+            task_id: task.task_id,
+            reco_details: details.reco_details ? markRaw(details.reco_details) : undefined,
+            action_details: details.action_details ? markRaw(details.action_details) : undefined,
+            focus: details.focus ? markRaw(details.focus) : undefined,
+            next_list: currentNextList.map((item: any) => ({
+              name: this.stringPool.intern(item.name || ''),
+              anchor: item.anchor || false,
+              jump_back: item.jump_back || false
+            })),
+            recognition_attempts: nodeRecognitionAttempts,
+            node_details: details.node_details ? markRaw(details.node_details) : undefined
+          }
+          nodes.push(node)
+          nodeIdSet.add(nodeId)
         }
-        nodes.push(node)
 
         // 清空已使用的数据，准备处理下一个节点
         currentNextList = []
@@ -463,5 +497,33 @@ export class LogParser {
    */
   getEvents(): EventNotification[] {
     return this.events
+  }
+
+  /**
+   * 获取所有唯一的进程ID（已排序）
+   */
+  getProcessIds(): string[] {
+    return Array.from(this.processIds).sort()
+  }
+
+  /**
+   * 获取所有唯一的线程ID（已排序）
+   */
+  getThreadIds(): string[] {
+    return Array.from(this.threadIds).sort()
+  }
+
+  /**
+   * 获取指定任务的进程ID
+   */
+  getTaskProcessId(taskId: number): string | undefined {
+    return this.taskProcessMap.get(taskId)
+  }
+
+  /**
+   * 获取指定任务的线程ID
+   */
+  getTaskThreadId(taskId: number): string | undefined {
+    return this.taskThreadMap.get(taskId)
   }
 }
