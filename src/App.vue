@@ -603,7 +603,7 @@ if (typeof window !== 'undefined') {
         <!-- 版本信息 -->
         <n-flex justify="space-between" align="center">
           <n-text depth="3" style="font-size: 12px">
-            Version 2.0.0
+            Version 2.0.1
           </n-text>
           <n-text depth="3" style="font-size: 12px">
             © 2025
