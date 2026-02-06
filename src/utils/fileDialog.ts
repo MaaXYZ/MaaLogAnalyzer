@@ -25,9 +25,9 @@ export async function openLogFileDialog(): Promise<string | null> {
  */
 async function openLogFileWithTauri(): Promise<string | null> {
   try {
-    const { open } = await import('@tauri-apps/api/dialog')
-    const { readTextFile } = await import('@tauri-apps/api/fs')
-    
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const { readTextFile } = await import('@tauri-apps/plugin-fs')
+
     const selected = await open({
       multiple: false,
       filters: [{
@@ -37,7 +37,7 @@ async function openLogFileWithTauri(): Promise<string | null> {
       directory: false,
       title: '选择日志文件'
     })
-    
+
     if (selected && typeof selected === 'string') {
       const content = await readTextFile(selected)
       return content
@@ -56,7 +56,7 @@ async function openLogFileWithWeb(): Promise<string | null> {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = '.log,.txt'
-    
+
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (file) {
@@ -71,11 +71,11 @@ async function openLogFileWithWeb(): Promise<string | null> {
         resolve(null)
       }
     }
-    
+
     input.oncancel = () => {
       resolve(null)
     }
-    
+
     input.click()
   })
 }
@@ -86,9 +86,9 @@ async function openLogFileWithWeb(): Promise<string | null> {
 export async function saveFile(content: string, filename: string): Promise<boolean> {
   if (isTauri()) {
     try {
-      const { save } = await import('@tauri-apps/api/dialog')
-      const { writeTextFile } = await import('@tauri-apps/api/fs')
-      
+      const { save } = await import('@tauri-apps/plugin-dialog')
+      const { writeTextFile } = await import('@tauri-apps/plugin-fs')
+
       const filePath = await save({
         filters: [{
           name: 'Text Files',
@@ -96,7 +96,7 @@ export async function saveFile(content: string, filename: string): Promise<boole
         }],
         defaultPath: filename
       })
-      
+
       if (filePath) {
         await writeTextFile(filePath, content)
         return true

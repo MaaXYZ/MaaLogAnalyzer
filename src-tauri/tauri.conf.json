@@ -1,68 +1,41 @@
 {
-  "$schema": "https://schema.tauri.app/config/1",
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MaaLogAnalyzer",
+  "version": "2.0.1",
+  "identifier": "com.maa.log-analyzer",
   "build": {
     "beforeDevCommand": "pnpm run dev",
     "beforeBuildCommand": "pnpm run build",
-    "devPath": "http://localhost:5173",
-    "distDir": "../dist"
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
   },
-    "package": {
-    "productName": "MAALogAnalyzer",
-    "version": "2.0.1"
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "copyright": "Copyright © 2025 Windsland52",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "longDescription": "MAA Framework Sink log visualization analysis tool, providing task flow analysis, and failure diagnosis.",
+    "shortDescription": "Maa Log Analyzer",
+    "targets": ["msi", "dmg", "deb"],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": null
+    }
   },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "fs": {
-        "all": false,
-        "readFile": true,
-        "readDir": true,
-        "scope": ["**"]
-      },
-      "dialog": {
-        "all": true,
-        "open": true,
-        "save": true
-      },
-      "path": {
-        "all": true
-      },
-      "shell": {
-        "all": false,
-        "open": true
-      }
-    },
-    "bundle": {
-      "active": true,
-      "category": "DeveloperTool",
-      "copyright": "Copyright © 2025 Windsland52",
-      "externalBin": [],
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "identifier": "com.maa.log-analyzer",
-      "longDescription": "MAA Framework Sink log visualization analysis tool, providing task flow analysis, and failure diagnosis.",
-      "shortDescription": "MAA Log Analyzer",
-      "targets": ["msi", "dmg", "deb"],
-      "windows": {
-        "certificateThumbprint": null,
-        "digestAlgorithm": "sha256",
-        "timestampUrl": null
-      }
-    },
+  "app": {
     "security": {
       "csp": null
     },
-    "updater": {
-      "active": false
-    },
     "windows": [
       {
-        "title": "MAALogAnalyzer",
+        "title": "MaaLogAnalyzer",
         "width": 1400,
         "height": 900,
         "minWidth": 800,

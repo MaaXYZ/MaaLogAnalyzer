@@ -162,8 +162,8 @@ const handleFileChange = (options: { fileList: UploadFileInfo[] }) => {
 const handleTauriOpen = async () => {
   try {
     // 动态导入 Tauri API
-    const { open } = await import('@tauri-apps/api/dialog')
-    const { readTextFile } = await import('@tauri-apps/api/fs')
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const { readTextFile } = await import('@tauri-apps/plugin-fs')
 
     // 打开文件选择对话框（不显示加载提示）
     const selected = await open({
