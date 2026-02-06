@@ -9,6 +9,35 @@ export function isTauri(): boolean {
 }
 
 /**
+ * 解码文件内容，自动尝试多种编码
+ * @param bytes 文件的原始字节数组
+ * @returns 解码后的字符串
+ */
+function decodeFileContent(bytes: Uint8Array): string {
+  // 尝试的编码列表（按优先级）
+  const encodings = ['utf-8', 'gbk', 'gb18030', 'gb2312']
+
+  for (const encoding of encodings) {
+    try {
+      const decoder = new TextDecoder(encoding, { fatal: true })
+      const text = decoder.decode(bytes)
+      // 检查是否有大量替换字符（�），如果有说明编码不对
+      const replacementCount = (text.match(/�/g) || []).length
+      if (replacementCount < text.length * 0.01) { // 替换字符少于1%
+        return text
+      }
+    } catch (error) {
+      // 解码失败，尝试下一个编码
+      continue
+    }
+  }
+
+  // 如果所有编码都失败，使用 UTF-8 并忽略错误
+  const decoder = new TextDecoder('utf-8', { fatal: false })
+  return decoder.decode(bytes)
+}
+
+/**
  * 打开日志文件对话框
  * @returns 文件内容字符串，失败返回 null
  */
@@ -26,7 +55,7 @@ export async function openLogFileDialog(): Promise<string | null> {
 async function openLogFileWithTauri(): Promise<string | null> {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog')
-    const { readTextFile } = await import('@tauri-apps/plugin-fs')
+    const { readFile } = await import('@tauri-apps/plugin-fs')
 
     const selected = await open({
       multiple: false,
@@ -39,7 +68,8 @@ async function openLogFileWithTauri(): Promise<string | null> {
     })
 
     if (selected && typeof selected === 'string') {
-      const content = await readTextFile(selected)
+      const bytes = await readFile(selected)
+      const content = decodeFileContent(bytes)
       return content
     }
   } catch (error) {
