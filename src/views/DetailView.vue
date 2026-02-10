@@ -247,10 +247,6 @@ const copyToClipboard = (text: string) => {
               {{ selectedNode.node_details.node_id }}
             </n-descriptions-item>
 
-            <n-descriptions-item label="节点名称">
-              {{ selectedNode.node_details.name }}
-            </n-descriptions-item>
-
             <n-descriptions-item label="识别 ID">
               {{ selectedNode.node_details.reco_id }}
             </n-descriptions-item>
@@ -259,7 +255,7 @@ const copyToClipboard = (text: string) => {
               {{ selectedNode.node_details.action_id }}
             </n-descriptions-item>
 
-            <n-descriptions-item label="是否完成" :span="2">
+            <n-descriptions-item label="是否完成">
               <n-tag :type="selectedNode.node_details.completed ? 'success' : 'warning'" size="small">
                 {{ selectedNode.node_details.completed ? '已完成' : '未完成' }}
               </n-tag>

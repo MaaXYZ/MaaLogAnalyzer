@@ -532,9 +532,9 @@ export class LogParser {
 
         // 只在节点不存在时才创建，避免IPC事件导致重复
         if (nodeId && !nodeIdSet.has(nodeId)) {
-          // 优先使用 node_details.name（实际执行的节点名称）
-          // 如果没有，再使用 details.name（上下文节点名称）
-          const nodeName = details.node_details?.name || details.name || ''
+          // 使用上下文节点名称（details.name）
+          // 实际命中的节点会在识别部分显示
+          const nodeName = details.name || ''
 
           // 获取自上一个 PipelineNode 以来收集的所有识别尝试
           // （包括常规 Recognition 事件和嵌套的 RecognitionNode 事件）
