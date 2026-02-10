@@ -24,11 +24,11 @@ const expandedNestedRecognitions = ref<Map<number, boolean>>(new Map())
 const expandedNestedActions = ref<Map<number, boolean>>(new Map())
 
 // 监听node变化，清空展开状态
-watch(() => props.node.node_id, () => {
+watch(() => props.node?.node_id, () => {
   expandedAttempts.value.clear()
   expandedNestedRecognitions.value.clear()
   expandedNestedActions.value.clear()
-})
+}, { flush: 'sync' })
 
 // 节点状态样式
 const cardClass = computed(() => {
