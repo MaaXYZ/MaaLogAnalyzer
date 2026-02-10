@@ -372,7 +372,8 @@ export class LogParser {
     console.log(`字符串池统计: ${this.stringPool.size()} 个唯一字符串`)
     this.stringPool.clear()
 
-    return tasks
+    // 过滤掉系统任务 MaaTaskerPostStop
+    return tasks.filter(task => task.entry !== 'MaaTaskerPostStop')
   }
 
   /**
