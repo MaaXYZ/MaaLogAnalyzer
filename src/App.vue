@@ -207,23 +207,53 @@ const clearFilters = () => {
   selectedThreadId.value = ''
 }
 
-// 进程ID选项
-const processIdOptions = computed(() => [
-  { label: '全部进程', value: '' },
-  ...availableProcessIds.value.map(id => ({
-    label: `进程: ${id}`,
-    value: id
-  }))
-])
+// 进程ID选项（根据已选线程动态过滤）
+const processIdOptions = computed(() => {
+  let validProcessIds = availableProcessIds.value
 
-// 线程ID选项
-const threadIdOptions = computed(() => [
-  { label: '全部线程', value: '' },
-  ...availableThreadIds.value.map(id => ({
-    label: `线程: ${id}`,
-    value: id
-  }))
-])
+  // 如果选择了线程，只显示该线程下有任务的进程
+  if (selectedThreadId.value !== '') {
+    validProcessIds = validProcessIds.filter(processId => {
+      return tasks.value.some(task => {
+        const taskProcessId = parser.getTaskProcessId(task.task_id)
+        const taskThreadId = parser.getTaskThreadId(task.task_id)
+        return taskProcessId === processId && taskThreadId === selectedThreadId.value
+      })
+    })
+  }
+
+  return [
+    { label: '全部进程', value: '' },
+    ...validProcessIds.map(id => ({
+      label: `进程: ${id}`,
+      value: id
+    }))
+  ]
+})
+
+// 线程ID选项（根据已选进程动态过滤）
+const threadIdOptions = computed(() => {
+  let validThreadIds = availableThreadIds.value
+
+  // 如果选择了进程，只显示该进程下有任务的线程
+  if (selectedProcessId.value !== '') {
+    validThreadIds = validThreadIds.filter(threadId => {
+      return tasks.value.some(task => {
+        const taskProcessId = parser.getTaskProcessId(task.task_id)
+        const taskThreadId = parser.getTaskThreadId(task.task_id)
+        return taskThreadId === threadId && taskProcessId === selectedProcessId.value
+      })
+    })
+  }
+
+  return [
+    { label: '全部线程', value: '' },
+    ...validThreadIds.map(id => ({
+      label: `线程: ${id}`,
+      value: id
+    }))
+  ]
+})
 
 // 监听过滤后的任务列表变化，处理选中任务的有效性
 watch(filteredTasks, (newTasks) => {

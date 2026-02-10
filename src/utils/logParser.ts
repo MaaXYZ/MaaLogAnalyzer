@@ -584,14 +584,18 @@ export class LogParser {
    * 获取所有唯一的进程ID（已排序）
    */
   getProcessIds(): string[] {
-    return Array.from(this.processIds).sort()
+    // 只返回有任务的进程ID
+    const processIdsWithTasks = new Set(this.taskProcessMap.values())
+    return Array.from(processIdsWithTasks).sort()
   }
 
   /**
    * 获取所有唯一的线程ID（已排序）
    */
   getThreadIds(): string[] {
-    return Array.from(this.threadIds).sort()
+    // 只返回有任务的线程ID
+    const threadIdsWithTasks = new Set(this.taskThreadMap.values())
+    return Array.from(threadIdsWithTasks).sort()
   }
 
   /**
