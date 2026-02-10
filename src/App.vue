@@ -443,85 +443,83 @@ if (typeof window !== 'undefined') {
       </div>
 
       <!-- 文本搜索模式（独立显示，占据整个屏幕） -->
-      <div v-show="viewMode === 'search'" id="text-search-standalone" style="height: 100%"></div>
+      <div v-show="viewMode === 'search'" style="height: 100%">
+        <text-search-view :is-dark="isDark" style="height: 100%" />
+      </div>
 
       <!-- 分屏模式 -->
-      <n-split
-        v-show="viewMode === 'split'"
-        direction="vertical"
-        :default-size="0.5"
-        :min="0.2"
-        :max="0.8"
-        style="height: 100%"
-      >
-        <!-- 上半部分：日志分析 -->
-        <template #1>
-          <n-split
-            v-model:size="splitSize"
-            :max="1"
-            :min="0.4"
-            style="height: 100%"
-          >
-            <template #1>
-              <process-view
-                :tasks="filteredTasks"
-                :selected-task="selectedTask"
-                :loading="loading"
-                :parser="parser"
-                :detail-view-collapsed="detailViewCollapsed"
-                :on-expand-detail-view="toggleDetailView"
-                @select-task="handleSelectTask"
-                @upload-file="handleFileUpload"
-                @upload-content="handleContentUpload"
-                @select-node="handleSelectNode"
-                @select-recognition="handleSelectRecognition"
-                @select-nested="handleSelectNested"
-                @file-loading-start="handleFileLoadingStart"
-                @file-loading-end="handleFileLoadingEnd"
-              />
-            </template>
-            <template #2>
-              <n-card size="small" title="节点详情" style="height: 100%; display: flex; flex-direction: column; position: relative" content-style="padding: 0; flex: 1; min-height: 0; overflow: hidden">
-                <!-- 折叠按钮 - 左边缘中间 -->
-                <n-button
-                  circle
-                  size="small"
-                  @click="toggleDetailView"
-                  style="position: absolute; left: -12px; top: 50%; transform: translateY(-50%); z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15)"
-                >
-                  <template #icon>
-                    <n-icon>
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                        <!-- 展开时显示向右箭头，表示点击后向右折叠 -->
-                        <path fill="currentColor" d="M8.59 16.59L10 18l6-6l-6-6l-1.41 1.41L13.17 12z"/>
-                      </svg>
-                    </n-icon>
-                  </template>
-                </n-button>
-                <detail-view
-                  :selected-node="selectedNode"
+      <div v-show="viewMode === 'split'" style="height: 100%">
+        <n-split
+          direction="vertical"
+          :default-size="0.5"
+          :min="0.2"
+          :max="0.8"
+          style="height: 100%"
+        >
+          <!-- 上半部分：日志分析 -->
+          <template #1>
+            <n-split
+              v-model:size="splitSize"
+              :max="1"
+              :min="0.4"
+              style="height: 100%"
+            >
+              <template #1>
+                <process-view
+                  :tasks="filteredTasks"
                   :selected-task="selectedTask"
-                  :selected-recognition-index="selectedRecognitionIndex"
-                  :selected-nested-index="selectedNestedIndex"
-                  style="height: 100%"
+                  :loading="loading"
+                  :parser="parser"
+                  :detail-view-collapsed="detailViewCollapsed"
+                  :on-expand-detail-view="toggleDetailView"
+                  @select-task="handleSelectTask"
+                  @upload-file="handleFileUpload"
+                  @upload-content="handleContentUpload"
+                  @select-node="handleSelectNode"
+                  @select-recognition="handleSelectRecognition"
+                  @select-nested="handleSelectNested"
+                  @file-loading-start="handleFileLoadingStart"
+                  @file-loading-end="handleFileLoadingEnd"
                 />
-              </n-card>
-            </template>
-          </n-split>
-        </template>
+              </template>
+              <template #2>
+                <n-card size="small" title="节点详情" style="height: 100%; display: flex; flex-direction: column; position: relative" content-style="padding: 0; flex: 1; min-height: 0; overflow: hidden">
+                  <!-- 折叠按钮 - 左边缘中间 -->
+                  <n-button
+                    circle
+                    size="small"
+                    @click="toggleDetailView"
+                    style="position: absolute; left: -12px; top: 50%; transform: translateY(-50%); z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15)"
+                  >
+                    <template #icon>
+                      <n-icon>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                          <!-- 展开时显示向右箭头，表示点击后向右折叠 -->
+                          <path fill="currentColor" d="M8.59 16.59L10 18l6-6l-6-6l-1.41 1.41L13.17 12z"/>
+                        </svg>
+                      </n-icon>
+                    </template>
+                  </n-button>
+                  <detail-view
+                    :selected-node="selectedNode"
+                    :selected-task="selectedTask"
+                    :selected-recognition-index="selectedRecognitionIndex"
+                    :selected-nested-index="selectedNestedIndex"
+                    style="height: 100%"
+                  />
+                </n-card>
+              </template>
+            </n-split>
+          </template>
 
-        <!-- 下半部分：文本搜索容器 -->
-        <template #2>
-          <div id="text-search-split" style="height: 100%"></div>
-        </template>
-      </n-split>
+          <!-- 下半部分：文本搜索 -->
+          <template #2>
+            <text-search-view v-if="viewMode === 'split'" :is-dark="isDark" style="height: 100%" />
+          </template>
+        </n-split>
+      </div>
     </div>
 
-    <!-- 共享的文本搜索视图实例（使用 Teleport 传送到不同位置） -->
-    <Teleport :to="viewMode === 'search' ? '#text-search-standalone' : '#text-search-split'" :disabled="viewMode === 'analysis'">
-      <text-search-view v-if="viewMode === 'search' || viewMode === 'split'" :is-dark="isDark" style="height: 100%" />
-    </Teleport>
-    
     <!-- 关于对话框 -->
     <n-modal
       v-model:show="showAboutModal"
