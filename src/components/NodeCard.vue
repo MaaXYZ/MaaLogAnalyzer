@@ -110,279 +110,287 @@ const actionButtonType = computed(() => {
         </n-flex>
       </template>
 
-      <!-- Content: 识别尝试历史 + Next列表 -->
-      <n-flex vertical style="gap: 8px">
-        <!-- 所有识别尝试（包括失败的） -->
-        <n-flex wrap style="gap: 8px 12px">
-          <template v-for="(attempt, idx) in node.recognition_attempts" :key="`attempt-${idx}`">
-            <!-- 没有嵌套节点的识别尝试：直接显示按钮 -->
-            <n-button
-              v-if="!attempt.nested_nodes || attempt.nested_nodes.length === 0"
-              :key="`attempt-btn-${idx}`"
-              size="small"
-              :type="attempt.status === 'success' ? 'success' : 'warning'"
-              ghost
-              @click="handleRecognitionClick(idx)"
-            >
-              <template #icon>
-                <check-circle-outlined v-if="attempt.status === 'success'" />
-                <close-circle-outlined v-else />
-              </template>
-              {{ attempt.name }}
-            </n-button>
+      <!-- Content: 执行流程 Recognition → Action → Next List -->
+      <n-flex vertical style="gap: 12px">
+        <!-- Recognition 部分 -->
+        <n-card v-if="node.recognition_attempts && node.recognition_attempts.length > 0" size="small" title="Recognition">
+          <n-flex vertical style="gap: 8px">
+            <template v-for="(attempt, idx) in node.recognition_attempts" :key="`attempt-${idx}`">
+              <!-- 没有嵌套节点的识别尝试：直接显示按钮 -->
+              <n-button
+                v-if="!attempt.nested_nodes || attempt.nested_nodes.length === 0"
+                size="small"
+                :type="attempt.status === 'success' ? 'success' : 'warning'"
+                ghost
+                @click="handleRecognitionClick(idx)"
+                style="align-self: flex-start"
+              >
+                <template #icon>
+                  <check-circle-outlined v-if="attempt.status === 'success'" />
+                  <close-circle-outlined v-else />
+                </template>
+                {{ attempt.name }}
+              </n-button>
 
-            <!-- 有嵌套节点的识别尝试：显示嵌套结构 -->
-            <template v-else>
-              <!-- 展开状态：显示 card -->
-              <n-card v-if="isExpanded(idx)" :key="`expanded-${idx}`" size="small">
-                <template #header>
-                  <n-flex align="center" style="gap: 8px">
+              <!-- 有嵌套节点的识别尝试：显示嵌套结构 -->
+              <template v-else>
+                <!-- 展开状态 -->
+                <n-card v-if="isExpanded(idx)" size="small">
+                  <template #header>
+                    <n-flex align="center" style="gap: 8px">
+                      <n-button
+                        size="small"
+                        :type="attempt.status === 'success' ? 'success' : 'warning'"
+                        ghost
+                        @click="handleRecognitionClick(idx)"
+                      >
+                        <template #icon>
+                          <check-circle-outlined v-if="attempt.status === 'success'" />
+                          <close-circle-outlined v-else />
+                        </template>
+                        {{ attempt.name }}
+                      </n-button>
+                      <n-button size="small" @click="toggleNestedNodes(idx)">
+                        Hide
+                      </n-button>
+                    </n-flex>
+                  </template>
+
+                  <n-flex wrap style="gap: 8px 12px">
                     <n-button
+                      v-for="(nested, nestedIdx) in attempt.nested_nodes"
+                      :key="`nested-${idx}-${nestedIdx}`"
                       size="small"
-                      :type="attempt.status === 'success' ? 'success' : 'warning'"
+                      :type="nested.status === 'success' ? 'success' : 'warning'"
                       ghost
-                      @click="handleRecognitionClick(idx)"
+                      @click="handleNestedClick(idx, nestedIdx)"
                     >
                       <template #icon>
-                        <check-circle-outlined v-if="attempt.status === 'success'" />
+                        <check-circle-outlined v-if="nested.status === 'success'" />
                         <close-circle-outlined v-else />
                       </template>
-                      {{ attempt.name }}
-                    </n-button>
-                    <n-button size="small" @click="toggleNestedNodes(idx)">
-                      Hide
+                      {{ nested.name }}
                     </n-button>
                   </n-flex>
-                </template>
+                </n-card>
 
-                <n-flex wrap style="gap: 8px 12px">
+                <!-- 折叠状态 -->
+                <n-flex v-else align="center" style="gap: 8px">
                   <n-button
-                    v-for="(nested, nestedIdx) in attempt.nested_nodes"
-                    :key="`nested-${idx}-${nestedIdx}`"
                     size="small"
-                    :type="nested.status === 'success' ? 'success' : 'warning'"
+                    :type="attempt.status === 'success' ? 'success' : 'warning'"
                     ghost
-                    @click="handleNestedClick(idx, nestedIdx)"
+                    @click="handleRecognitionClick(idx)"
                   >
                     <template #icon>
-                      <check-circle-outlined v-if="nested.status === 'success'" />
+                      <check-circle-outlined v-if="attempt.status === 'success'" />
                       <close-circle-outlined v-else />
                     </template>
-                    {{ nested.name }}
+                    {{ attempt.name }}
+                  </n-button>
+                  <n-button size="small" @click="toggleNestedNodes(idx)">
+                    Show
                   </n-button>
                 </n-flex>
-              </n-card>
+              </template>
+            </template>
+          </n-flex>
+        </n-card>
 
-              <!-- 折叠状态：显示按钮 + Show 按钮 -->
-              <n-flex v-else :key="`collapsed-${idx}`" wrap style="gap: 8px 12px">
+        <!-- Action 部分 -->
+        <n-card v-if="node.action_details || (node.nested_recognition_in_action && node.nested_recognition_in_action.length > 0) || (node.nested_action_nodes && node.nested_action_nodes.length > 0)" size="small" title="Action">
+          <n-flex vertical style="gap: 8px">
+            <!-- Action 按钮 -->
+            <n-button
+              v-if="node.action_details"
+              size="small"
+              :type="actionButtonType"
+              ghost
+              @click="handleNodeClick"
+              style="align-self: flex-start"
+            >
+              <template #icon>
+                <check-circle-outlined v-if="node.action_details.success" />
+                <close-circle-outlined v-else />
+              </template>
+              {{ node.action_details.name }}
+            </n-button>
+
+            <!-- Custom Action 中的嵌套识别节点 -->
+            <template v-if="node.nested_recognition_in_action && node.nested_recognition_in_action.length > 0">
+              <template v-for="(nestedReco, idx) in node.nested_recognition_in_action" :key="`nested-reco-${idx}`">
+                <!-- 没有嵌套节点的识别：直接显示按钮 -->
                 <n-button
-                  :key="`collapsed-btn-${idx}`"
+                  v-if="!nestedReco.nested_nodes || nestedReco.nested_nodes.length === 0"
                   size="small"
-                  :type="attempt.status === 'success' ? 'success' : 'warning'"
+                  :type="nestedReco.status === 'success' ? 'success' : 'warning'"
                   ghost
-                  @click="handleRecognitionClick(idx)"
+                  style="align-self: flex-start"
                 >
                   <template #icon>
-                    <check-circle-outlined v-if="attempt.status === 'success'" />
+                    <check-circle-outlined v-if="nestedReco.status === 'success'" />
                     <close-circle-outlined v-else />
                   </template>
-                  {{ attempt.name }}
+                  {{ nestedReco.name }}
                 </n-button>
-                <n-button :key="`show-btn-${idx}`" size="small" @click="toggleNestedNodes(idx)">
-                  Show
-                </n-button>
-              </n-flex>
-            </template>
-          </template>
 
-          <!-- Next 列表按钮（禁用状态，显示候选节点） -->
-          <n-button
-            v-for="(nextNode, idx) in node.next_list"
-            :key="`next-${idx}`"
-            size="small"
-            ghost
-            disabled
-          >
-            {{ formatNextName(nextNode) }}
-          </n-button>
-        </n-flex>
+                <!-- 有嵌套节点的识别：显示嵌套结构 -->
+                <template v-else>
+                  <!-- 展开状态 -->
+                  <n-card v-if="isNestedRecognitionExpanded(idx)" size="small">
+                    <template #header>
+                      <n-flex align="center" style="gap: 8px">
+                        <n-button
+                          size="small"
+                          :type="nestedReco.status === 'success' ? 'success' : 'warning'"
+                          ghost
+                        >
+                          <template #icon>
+                            <check-circle-outlined v-if="nestedReco.status === 'success'" />
+                            <close-circle-outlined v-else />
+                          </template>
+                          {{ nestedReco.name }}
+                        </n-button>
+                        <n-button size="small" @click="toggleNestedRecognition(idx)">
+                          Hide
+                        </n-button>
+                      </n-flex>
+                    </template>
+
+                    <n-flex wrap style="gap: 8px 12px">
+                      <n-button
+                        v-for="(nested, nestedIdx) in nestedReco.nested_nodes"
+                        :key="`nested-reco-inner-${idx}-${nestedIdx}`"
+                        size="small"
+                        :type="nested.status === 'success' ? 'success' : 'warning'"
+                        ghost
+                      >
+                        <template #icon>
+                          <check-circle-outlined v-if="nested.status === 'success'" />
+                          <close-circle-outlined v-else />
+                        </template>
+                        {{ nested.name }}
+                      </n-button>
+                    </n-flex>
+                  </n-card>
+
+                  <!-- 折叠状态 -->
+                  <n-flex v-else align="center" style="gap: 8px">
+                    <n-button
+                      size="small"
+                      :type="nestedReco.status === 'success' ? 'success' : 'warning'"
+                      ghost
+                    >
+                      <template #icon>
+                        <check-circle-outlined v-if="nestedReco.status === 'success'" />
+                        <close-circle-outlined v-else />
+                      </template>
+                      {{ nestedReco.name }}
+                    </n-button>
+                    <n-button size="small" @click="toggleNestedRecognition(idx)">
+                      Show
+                    </n-button>
+                  </n-flex>
+                </template>
+              </template>
+            </template>
+
+            <!-- Custom Action 中的嵌套动作节点 -->
+            <template v-if="node.nested_action_nodes && node.nested_action_nodes.length > 0">
+              <template v-for="(nestedAction, idx) in node.nested_action_nodes" :key="`nested-action-${idx}`">
+                <!-- 没有嵌套节点的动作：直接显示按钮 -->
+                <n-button
+                  v-if="!nestedAction.nested_actions || nestedAction.nested_actions.length === 0"
+                  size="small"
+                  :type="nestedAction.status === 'success' ? 'success' : 'warning'"
+                  ghost
+                  style="align-self: flex-start"
+                >
+                  <template #icon>
+                    <check-circle-outlined v-if="nestedAction.status === 'success'" />
+                    <close-circle-outlined v-else />
+                  </template>
+                  {{ nestedAction.name }}
+                </n-button>
+
+                <!-- 有嵌套节点的动作：显示嵌套结构 -->
+                <template v-else>
+                  <!-- 展开状态 -->
+                  <n-card v-if="isNestedActionExpanded(idx)" size="small">
+                    <template #header>
+                      <n-flex align="center" style="gap: 8px">
+                        <n-button
+                          size="small"
+                          :type="nestedAction.status === 'success' ? 'success' : 'warning'"
+                          ghost
+                        >
+                          <template #icon>
+                            <check-circle-outlined v-if="nestedAction.status === 'success'" />
+                            <close-circle-outlined v-else />
+                          </template>
+                          {{ nestedAction.name }}
+                        </n-button>
+                        <n-button size="small" @click="toggleNestedAction(idx)">
+                          Hide
+                        </n-button>
+                      </n-flex>
+                    </template>
+
+                    <n-flex wrap style="gap: 8px 12px">
+                      <n-button
+                        v-for="(nested, nestedIdx) in nestedAction.nested_actions"
+                        :key="`nested-action-inner-${idx}-${nestedIdx}`"
+                        size="small"
+                        :type="nested.status === 'success' ? 'success' : 'warning'"
+                        ghost
+                      >
+                        <template #icon>
+                          <check-circle-outlined v-if="nested.status === 'success'" />
+                          <close-circle-outlined v-else />
+                        </template>
+                        {{ nested.name }}
+                      </n-button>
+                    </n-flex>
+                  </n-card>
+
+                  <!-- 折叠状态 -->
+                  <n-flex v-else align="center" style="gap: 8px">
+                    <n-button
+                      size="small"
+                      :type="nestedAction.status === 'success' ? 'success' : 'warning'"
+                      ghost
+                    >
+                      <template #icon>
+                        <check-circle-outlined v-if="nestedAction.status === 'success'" />
+                        <close-circle-outlined v-else />
+                      </template>
+                      {{ nestedAction.name }}
+                    </n-button>
+                    <n-button size="small" @click="toggleNestedAction(idx)">
+                      Show
+                    </n-button>
+                  </n-flex>
+                </template>
+              </template>
+            </template>
+          </n-flex>
+        </n-card>
+
+        <!-- Next List 部分 -->
+        <n-card v-if="node.next_list && node.next_list.length > 0" size="small" title="Next List">
+          <n-flex wrap style="gap: 8px 12px">
+            <n-button
+              v-for="(nextNode, idx) in node.next_list"
+              :key="`next-${idx}`"
+              size="small"
+              ghost
+              disabled
+            >
+              {{ formatNextName(nextNode) }}
+            </n-button>
+          </n-flex>
+        </n-card>
       </n-flex>
-
-      <!-- Footer: 动作按钮 + 嵌套节点 -->
-      <template #footer v-if="node.action_details || (node.nested_recognition_in_action && node.nested_recognition_in_action.length > 0) || (node.nested_action_nodes && node.nested_action_nodes.length > 0)">
-        <n-flex wrap style="gap: 8px 12px">
-          <!-- 动作按钮 -->
-          <n-button
-            v-if="node.action_details"
-            size="small"
-            :type="actionButtonType"
-            ghost
-            @click="handleNodeClick"
-          >
-            <template #icon>
-              <check-circle-outlined v-if="node.action_details.success" />
-              <close-circle-outlined v-else />
-            </template>
-            {{ node.action_details.name }}
-          </n-button>
-
-          <!-- Custom Action 中的嵌套识别节点 -->
-          <template v-if="node.nested_recognition_in_action && node.nested_recognition_in_action.length > 0">
-            <template v-for="(nestedReco, idx) in node.nested_recognition_in_action" :key="`nested-reco-${idx}`">
-              <!-- 没有嵌套节点的识别：直接显示按钮 -->
-              <n-button
-                v-if="!nestedReco.nested_nodes || nestedReco.nested_nodes.length === 0"
-                size="small"
-                :type="nestedReco.status === 'success' ? 'success' : 'warning'"
-                ghost
-              >
-                <template #icon>
-                  <check-circle-outlined v-if="nestedReco.status === 'success'" />
-                  <close-circle-outlined v-else />
-                </template>
-                {{ nestedReco.name }}
-              </n-button>
-
-              <!-- 有嵌套节点的识别：显示嵌套结构 -->
-              <template v-else>
-                <!-- 展开状态 -->
-                <n-card v-if="isNestedRecognitionExpanded(idx)" size="small" style="width: 100%">
-                  <template #header>
-                    <n-flex align="center" style="gap: 8px">
-                      <n-button
-                        size="small"
-                        :type="nestedReco.status === 'success' ? 'success' : 'warning'"
-                        ghost
-                      >
-                        <template #icon>
-                          <check-circle-outlined v-if="nestedReco.status === 'success'" />
-                          <close-circle-outlined v-else />
-                        </template>
-                        {{ nestedReco.name }}
-                      </n-button>
-                      <n-button size="small" @click="toggleNestedRecognition(idx)">
-                        Hide
-                      </n-button>
-                    </n-flex>
-                  </template>
-
-                  <n-flex wrap style="gap: 8px 12px">
-                    <n-button
-                      v-for="(nested, nestedIdx) in nestedReco.nested_nodes"
-                      :key="`nested-reco-inner-${idx}-${nestedIdx}`"
-                      size="small"
-                      :type="nested.status === 'success' ? 'success' : 'warning'"
-                      ghost
-                    >
-                      <template #icon>
-                        <check-circle-outlined v-if="nested.status === 'success'" />
-                        <close-circle-outlined v-else />
-                      </template>
-                      {{ nested.name }}
-                    </n-button>
-                  </n-flex>
-                </n-card>
-
-                <!-- 折叠状态 -->
-                <template v-else>
-                  <n-button
-                    size="small"
-                    :type="nestedReco.status === 'success' ? 'success' : 'warning'"
-                    ghost
-                  >
-                    <template #icon>
-                      <check-circle-outlined v-if="nestedReco.status === 'success'" />
-                      <close-circle-outlined v-else />
-                    </template>
-                    {{ nestedReco.name }}
-                  </n-button>
-                  <n-button size="small" @click="toggleNestedRecognition(idx)">
-                    Show
-                  </n-button>
-                </template>
-              </template>
-            </template>
-          </template>
-
-          <!-- Custom Action 中的嵌套动作节点 -->
-          <template v-if="node.nested_action_nodes && node.nested_action_nodes.length > 0">
-            <template v-for="(nestedAction, idx) in node.nested_action_nodes" :key="`nested-action-${idx}`">
-              <!-- 没有嵌套节点的动作：直接显示按钮 -->
-              <n-button
-                v-if="!nestedAction.nested_actions || nestedAction.nested_actions.length === 0"
-                size="small"
-                :type="nestedAction.status === 'success' ? 'success' : 'warning'"
-                ghost
-              >
-                <template #icon>
-                  <check-circle-outlined v-if="nestedAction.status === 'success'" />
-                  <close-circle-outlined v-else />
-                </template>
-                {{ nestedAction.name }}
-              </n-button>
-
-              <!-- 有嵌套节点的动作：显示嵌套结构 -->
-              <template v-else>
-                <!-- 展开状态 -->
-                <n-card v-if="isNestedActionExpanded(idx)" size="small" style="width: 100%">
-                  <template #header>
-                    <n-flex align="center" style="gap: 8px">
-                      <n-button
-                        size="small"
-                        :type="nestedAction.status === 'success' ? 'success' : 'warning'"
-                        ghost
-                      >
-                        <template #icon>
-                          <check-circle-outlined v-if="nestedAction.status === 'success'" />
-                          <close-circle-outlined v-else />
-                        </template>
-                        {{ nestedAction.name }}
-                      </n-button>
-                      <n-button size="small" @click="toggleNestedAction(idx)">
-                        Hide
-                      </n-button>
-                    </n-flex>
-                  </template>
-
-                  <n-flex wrap style="gap: 8px 12px">
-                    <n-button
-                      v-for="(nested, nestedIdx) in nestedAction.nested_actions"
-                      :key="`nested-action-inner-${idx}-${nestedIdx}`"
-                      size="small"
-                      :type="nested.status === 'success' ? 'success' : 'warning'"
-                      ghost
-                    >
-                      <template #icon>
-                        <check-circle-outlined v-if="nested.status === 'success'" />
-                        <close-circle-outlined v-else />
-                      </template>
-                      {{ nested.name }}
-                    </n-button>
-                  </n-flex>
-                </n-card>
-
-                <!-- 折叠状态 -->
-                <template v-else>
-                  <n-button
-                    size="small"
-                    :type="nestedAction.status === 'success' ? 'success' : 'warning'"
-                    ghost
-                  >
-                    <template #icon>
-                      <check-circle-outlined v-if="nestedAction.status === 'success'" />
-                      <close-circle-outlined v-else />
-                    </template>
-                    {{ nestedAction.name }}
-                  </n-button>
-                  <n-button size="small" @click="toggleNestedAction(idx)">
-                    Show
-                  </n-button>
-                </template>
-              </template>
-            </template>
-          </template>
-        </n-flex>
-      </template>
     </n-card>
   </div>
 </template>
