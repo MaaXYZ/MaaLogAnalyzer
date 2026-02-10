@@ -126,6 +126,17 @@ const handleContentUpload = async (content: string) => {
 
 // 处理日志内容
 const processLogContent = async (content: string) => {
+  // 清空所有状态，确保重新上传文件时不会显示旧数据
+  tasks.value = []
+  selectedTask.value = null
+  selectedNode.value = null
+  selectedRecognitionIndex.value = null
+  selectedNestedIndex.value = null
+  availableProcessIds.value = []
+  availableThreadIds.value = []
+  selectedProcessId.value = ''
+  selectedThreadId.value = ''
+
   // 显示解析进度模态框
   showParsingModal.value = true
   parseProgress.value = 0
