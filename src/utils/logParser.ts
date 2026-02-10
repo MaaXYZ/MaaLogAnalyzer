@@ -296,7 +296,7 @@ export class LogParser {
    */
   getTasks(): TaskInfo[] {
     const tasks: TaskInfo[] = []
-    const taskMap = new Map<number, TaskInfo>() // 用于去重，避免IPC导致的重复任务
+    const taskMap = new Map<string, TaskInfo>() // 用于去重，避免IPC导致的重复任务（使用uuid+task_id作为key）
 
     // 遍历所有事件，提取任务信息
     for (let i = 0; i < this.events.length; i++) {
@@ -305,13 +305,15 @@ export class LogParser {
 
       if (message === 'Tasker.Task.Starting') {
         const taskId = details.task_id
-        // 只在任务不存在时才创建，避免IPC事件导致重复
-        if (taskId && !taskMap.has(taskId)) {
+        const uuid = details.uuid || ''
+        // 使用uuid+task_id作为唯一标识，支持task_id在不同controller间重用
+        const taskKey = `${uuid}_${taskId}`
+        if (taskId && !taskMap.has(taskKey)) {
           const task = {
             task_id: taskId,
             entry: this.stringPool.intern(details.entry || ''),
             hash: this.stringPool.intern(details.hash || ''),
-            uuid: this.stringPool.intern(details.uuid || ''),
+            uuid: this.stringPool.intern(uuid),
             start_time: this.stringPool.intern(event.timestamp),
             status: 'running' as const,
             nodes: [],
@@ -320,7 +322,7 @@ export class LogParser {
             _startEventIndex: i
           }
           tasks.push(task)
-          taskMap.set(taskId, task)
+          taskMap.set(taskKey, task)
         }
       } else if (message === 'Tasker.Task.Succeeded' || message === 'Tasker.Task.Failed') {
         const taskId = details.task_id
