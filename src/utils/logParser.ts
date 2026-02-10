@@ -397,8 +397,14 @@ export class LogParser {
     const recognitionAttempts: any[] = []
     // 临时存储嵌套的 RecognitionNode 事件
     const nestedNodes: any[] = []
+    // 临时存储嵌套的 ActionNode 事件
+    const nestedActionNodes: any[] = []
     // 临时存储当前节点的 NextList（在 PipelineNode.Starting 和 Succeeded 之间）
     let currentNextList: any[] = []
+    // 存储每个 task_id 的 Recognition 事件（用于嵌套节点）
+    const recognitionsByTaskId = new Map<number, any[]>()
+    // 存储每个 task_id 的 Action 事件（用于嵌套节点）
+    const actionsByTaskId = new Map<number, any[]>()
 
     // 遍历任务范围内的事件，提取节点信息和识别历史
     for (const event of taskEvents) {
@@ -414,21 +420,61 @@ export class LogParser {
       }
 
       // 收集嵌套的 RecognitionNode 事件（这些节点有独立的 task_id）
+      // 只收集非当前任务的 RecognitionNode（即 custom recognition/action 产生的子任务）
       if ((message === 'Node.RecognitionNode.Succeeded' || message === 'Node.RecognitionNode.Failed')) {
-        const nestedNode = {
-          reco_id: details.reco_details?.reco_id || details.node_id,
-          name: this.stringPool.intern(details.name || ''),
-          timestamp: this.stringPool.intern(event.timestamp),
-          status: message === 'Node.RecognitionNode.Succeeded' ? 'success' : 'failed',
-          reco_details: details.reco_details ? markRaw(details.reco_details) : undefined
+        const taskId = details.task_id
+
+        // 只收集子任务的 RecognitionNode 事件
+        if (taskId !== task.task_id) {
+          // 获取该 task_id 的 Recognition 事件列表
+          const nestedRecognitions = recognitionsByTaskId.get(taskId) || []
+
+          const nestedNode = {
+            reco_id: details.reco_details?.reco_id || details.node_id,
+            name: this.stringPool.intern(details.name || ''),
+            timestamp: this.stringPool.intern(event.timestamp),
+            status: message === 'Node.RecognitionNode.Succeeded' ? 'success' : 'failed',
+            reco_details: details.reco_details ? markRaw(details.reco_details) : undefined,
+            nested_nodes: nestedRecognitions.length > 0 ? nestedRecognitions : undefined
+          }
+          nestedNodes.push(nestedNode)
+
+          // 清空该 task_id 的 Recognition 事件列表
+          recognitionsByTaskId.delete(taskId)
         }
-        nestedNodes.push(nestedNode)
       }
 
-      // 收集识别事件（普通识别）
+      // 收集嵌套的 ActionNode 事件（这些节点有独立的 task_id）
+      // 只收集非当前任务的 ActionNode（即 custom action 产生的子任务）
+      if ((message === 'Node.ActionNode.Succeeded' || message === 'Node.ActionNode.Failed')) {
+        const taskId = details.task_id
+
+        // 只收集子任务的 ActionNode 事件
+        if (taskId !== task.task_id) {
+          // 获取该 task_id 的 Action 事件列表
+          const nestedActions = actionsByTaskId.get(taskId) || []
+
+          const nestedActionNode = {
+            action_id: details.action_details?.action_id || details.node_id,
+            name: this.stringPool.intern(details.name || ''),
+            timestamp: this.stringPool.intern(event.timestamp),
+            status: message === 'Node.ActionNode.Succeeded' ? 'success' : 'failed',
+            action_details: details.action_details ? markRaw(details.action_details) : undefined,
+            nested_actions: nestedActions.length > 0 ? nestedActions : undefined
+          }
+          nestedActionNodes.push(nestedActionNode)
+
+          // 清空该 task_id 的 Action 事件列表
+          actionsByTaskId.delete(taskId)
+        }
+      }
+
+      // 收集识别事件（所有 task_id）
       if ((message === 'Node.Recognition.Succeeded' || message === 'Node.Recognition.Failed')) {
-        if (details.task_id === task.task_id) {
-          // 创建识别尝试，并附加之前收集的嵌套节点
+        const taskId = details.task_id
+
+        // 如果是当前任务的识别事件，附加嵌套节点并添加到 recognitionAttempts
+        if (taskId === task.task_id) {
           const attempt = {
             reco_id: details.reco_id,
             name: this.stringPool.intern(details.name || ''),
@@ -440,10 +486,40 @@ export class LogParser {
           recognitionAttempts.push(attempt)
           // 清空嵌套节点数组
           nestedNodes.length = 0
+        } else {
+          // 如果是子任务的识别事件，存储到对应的 task_id 列表中
+          const attempt = {
+            reco_id: details.reco_id,
+            name: this.stringPool.intern(details.name || ''),
+            timestamp: this.stringPool.intern(event.timestamp),
+            status: message === 'Node.Recognition.Succeeded' ? 'success' : 'failed',
+            reco_details: details.reco_details ? markRaw(details.reco_details) : undefined
+          }
+          if (!recognitionsByTaskId.has(taskId)) {
+            recognitionsByTaskId.set(taskId, [])
+          }
+          recognitionsByTaskId.get(taskId)!.push(attempt)
         }
-        // 注意:不要清空 nestedNodes!
-        // RecognitionNode 内部的 Recognition 事件 (不同 task_id) 不应该触发清空
-        // 只有当前任务的 Recognition 事件才会清空 nestedNodes
+      }
+
+      // 收集动作事件（所有 task_id）
+      if ((message === 'Node.Action.Succeeded' || message === 'Node.Action.Failed')) {
+        const taskId = details.task_id
+
+        // 如果是子任务的动作事件，存储到对应的 task_id 列表中
+        if (taskId !== task.task_id) {
+          const actionAttempt = {
+            action_id: details.action_id,
+            name: this.stringPool.intern(details.name || ''),
+            timestamp: this.stringPool.intern(event.timestamp),
+            status: message === 'Node.Action.Succeeded' ? 'success' : 'failed',
+            action_details: details.action_details ? markRaw(details.action_details) : undefined
+          }
+          if (!actionsByTaskId.has(taskId)) {
+            actionsByTaskId.set(taskId, [])
+          }
+          actionsByTaskId.get(taskId)!.push(actionAttempt)
+        }
       }
 
       // 当遇到 PipelineNode.Succeeded 或 Failed 时，创建节点并关联识别历史
@@ -476,6 +552,8 @@ export class LogParser {
               jump_back: item.jump_back || false
             })),
             recognition_attempts: nodeRecognitionAttempts,
+            nested_action_nodes: nestedActionNodes.length > 0 ? nestedActionNodes.slice() : undefined,
+            nested_recognition_in_action: nestedNodes.length > 0 ? nestedNodes.slice() : undefined,
             node_details: details.node_details ? markRaw(details.node_details) : undefined
           }
           nodes.push(node)
@@ -485,6 +563,8 @@ export class LogParser {
         // 清空已使用的数据，准备处理下一个节点
         currentNextList = []
         recognitionAttempts.length = 0
+        nestedActionNodes.length = 0
+        nestedNodes.length = 0
       }
     }
 
