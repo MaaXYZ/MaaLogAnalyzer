@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { NCard, NButton, NFlex, NTag } from 'naive-ui'
 import { CheckCircleOutlined, CloseCircleOutlined } from '@vicons/antd'
 import type { NodeInfo } from '../types'
@@ -22,6 +22,13 @@ const expandedNestedRecognitions = ref<Map<number, boolean>>(new Map())
 
 // 跟踪哪些 nested_action_nodes 的嵌套节点是展开的
 const expandedNestedActions = ref<Map<number, boolean>>(new Map())
+
+// 监听node变化，清空展开状态
+watch(() => props.node.node_id, () => {
+  expandedAttempts.value.clear()
+  expandedNestedRecognitions.value.clear()
+  expandedNestedActions.value.clear()
+})
 
 // 节点状态样式
 const cardClass = computed(() => {
