@@ -67,13 +67,6 @@ const recognitionActionChartDimension = ref<RecognitionActionChartDimension>('av
 // 搜索关键词
 const searchKeyword = ref('')
 
-// 清空本地数据
-const clearLocalData = () => {
-  localTasks.value = []
-  useLocalData.value = false
-  parseProgress.value = 0
-}
-
 // 处理文件上传
 const handleFileUpload = async (file: File) => {
   // 如果正在上传，忽略新的上传请求
@@ -433,18 +426,13 @@ const recognitionActionSummary = computed(() => {
   }
 })
 
-// 当前显示的摘要
-const summary = computed(() => {
-  return statMode.value === 'node' ? nodeSummary.value : recognitionActionSummary.value
-})
-
 // 节点统计饼图数据（根据选择的维度）
 const nodeChartOption = computed(() => {
   if (nodeStatistics.value.length === 0) return null
 
   const dimension = nodeChartDimension.value
   let title = ''
-  let formatter = ''
+  let formatter: string | ((params: any) => string) = ''
   let sortFn: (a: NodeStatistics, b: NodeStatistics) => number
   let valueFn: (item: NodeStatistics) => number
 
@@ -547,7 +535,7 @@ const recognitionActionChartOption = computed(() => {
 
   const dimension = recognitionActionChartDimension.value
   let title = ''
-  let formatter = ''
+  let formatter: string | ((params: any) => string) = ''
   let sortFn: (a: RecognitionActionStatistics, b: RecognitionActionStatistics) => number
   let valueFn: (item: RecognitionActionStatistics) => number
   let filterFn: (item: RecognitionActionStatistics) => boolean = () => true

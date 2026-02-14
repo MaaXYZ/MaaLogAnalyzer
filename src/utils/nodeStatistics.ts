@@ -1,4 +1,4 @@
-import type { TaskInfo, NodeInfo } from '../types'
+import type { TaskInfo } from '../types'
 
 /**
  * 节点统计信息
