@@ -296,7 +296,6 @@ export class LogParser {
    */
   getTasks(): TaskInfo[] {
     const tasks: TaskInfo[] = []
-    const taskMap = new Map<string, TaskInfo>() // 用于去重，避免IPC导致的重复任务（使用uuid+task_id作为key）
 
     // 遍历所有事件，提取任务信息
     for (let i = 0; i < this.events.length; i++) {
@@ -306,9 +305,16 @@ export class LogParser {
       if (message === 'Tasker.Task.Starting') {
         const taskId = details.task_id
         const uuid = details.uuid || ''
-        // 使用uuid+task_id作为唯一标识，支持task_id在不同controller间重用
-        const taskKey = `${uuid}_${taskId}`
-        if (taskId && !taskMap.has(taskKey)) {
+
+        // 检查是否是重复的任务（IPC导致的重复事件）
+        // 只有当存在相同uuid+task_id且未结束的任务时才认为是重复
+        const isDuplicate = tasks.some(t =>
+          t.uuid === uuid &&
+          t.task_id === taskId &&
+          !t.end_time
+        )
+
+        if (taskId && !isDuplicate) {
           const task = {
             task_id: taskId,
             entry: this.stringPool.intern(details.entry || ''),
@@ -322,7 +328,6 @@ export class LogParser {
             _startEventIndex: i
           }
           tasks.push(task)
-          taskMap.set(taskKey, task)
         }
       } else if (message === 'Tasker.Task.Succeeded' || message === 'Tasker.Task.Failed') {
         const taskId = details.task_id
