@@ -12,6 +12,21 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // 将 Vue 相关库单独打包
+          'vue-vendor': ['vue'],
+          // 将 Naive UI 单独打包
+          'naive-ui': ['naive-ui'],
+          // 将 ECharts 单独打包
+          'echarts': ['echarts', 'vue-echarts'],
+          // 将其他第三方库单独打包
+          'vendor': ['highlight.js', 'vue-virtual-scroller']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000
   }
 })
