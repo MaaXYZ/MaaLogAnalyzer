@@ -6,12 +6,20 @@ import {
   type DataTableColumns, type UploadFileInfo
 } from 'naive-ui'
 import { CloudUploadOutlined, FolderOpenOutlined } from '@vicons/antd'
+import VChart from 'vue-echarts'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { PieChart } from 'echarts/charts'
+import { TitleComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import type { TaskInfo } from '../types'
 import { NodeStatisticsAnalyzer, type NodeStatistics, type RecognitionActionStatistics } from '../utils/nodeStatistics'
 import { formatDuration } from '../utils/formatDuration'
 import { LogParser } from '../utils/logParser'
 import { getErrorMessage } from '../utils/errorHandler'
 import { isTauri, openLogFileDialog } from '../utils/fileDialog'
+
+// 注册 ECharts 组件
+use([CanvasRenderer, PieChart, TitleComponent, TooltipComponent, LegendComponent])
 
 const props = defineProps<{
   tasks: TaskInfo[]
@@ -49,6 +57,12 @@ const effectiveTasks = computed(() => {
 // 统计模式
 type StatMode = 'node' | 'recognition-action'
 const statMode = ref<StatMode>('node')
+
+// 饼图维度选择
+type NodeChartDimension = 'count' | 'totalDuration' | 'avgDuration' | 'maxDuration'
+type RecognitionActionChartDimension = 'avgRecognitionDuration' | 'maxRecognitionDuration' | 'avgActionDuration' | 'maxActionDuration' | 'avgRecognitionAttempts'
+const nodeChartDimension = ref<NodeChartDimension>('count')
+const recognitionActionChartDimension = ref<RecognitionActionChartDimension>('avgActionDuration')
 
 // 搜索关键词
 const searchKeyword = ref('')
@@ -423,6 +437,226 @@ const recognitionActionSummary = computed(() => {
 const summary = computed(() => {
   return statMode.value === 'node' ? nodeSummary.value : recognitionActionSummary.value
 })
+
+// 节点统计饼图数据（根据选择的维度）
+const nodeChartOption = computed(() => {
+  if (nodeStatistics.value.length === 0) return null
+
+  const dimension = nodeChartDimension.value
+  let title = ''
+  let formatter = ''
+  let sortFn: (a: NodeStatistics, b: NodeStatistics) => number
+  let valueFn: (item: NodeStatistics) => number
+
+  switch (dimension) {
+    case 'count':
+      title = '节点执行次数分布 (Top 10)'
+      formatter = '{b}: {c} 次 ({d}%)'
+      sortFn = (a, b) => b.count - a.count
+      valueFn = (item) => item.count
+      break
+    case 'totalDuration':
+      title = '节点总耗时分布 (Top 10)'
+      formatter = (params: any) => `${params.name}: ${formatDuration(params.value)} (${params.percent}%)`
+      sortFn = (a, b) => b.totalDuration - a.totalDuration
+      valueFn = (item) => item.totalDuration
+      break
+    case 'avgDuration':
+      title = '节点平均耗时分布 (Top 10)'
+      formatter = (params: any) => `${params.name}: ${formatDuration(params.value)} (${params.percent}%)`
+      sortFn = (a, b) => b.avgDuration - a.avgDuration
+      valueFn = (item) => item.avgDuration
+      break
+    case 'maxDuration':
+      title = '节点最大耗时分布 (Top 10)'
+      formatter = (params: any) => `${params.name}: ${formatDuration(params.value)} (${params.percent}%)`
+      sortFn = (a, b) => b.maxDuration - a.maxDuration
+      valueFn = (item) => item.maxDuration
+      break
+  }
+
+  const top10 = nodeStatistics.value
+    .slice()
+    .sort(sortFn)
+    .slice(0, 10)
+
+  return {
+    title: {
+      text: title,
+      left: 'center',
+      textStyle: {
+        fontSize: 14
+      }
+    },
+    tooltip: {
+      trigger: 'item',
+      formatter: formatter
+    },
+    legend: {
+      orient: 'vertical',
+      left: 'left',
+      top: 'middle',
+      textStyle: {
+        fontSize: 12
+      }
+    },
+    series: [
+      {
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['60%', '50%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          show: false,
+          position: 'center'
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: 16,
+            fontWeight: 'bold',
+            formatter: (params: any) => {
+              if (dimension === 'count') {
+                return `${params.name}\n${params.value} 次`
+              } else {
+                return `${params.name}\n${formatDuration(params.value)}`
+              }
+            }
+          }
+        },
+        labelLine: {
+          show: false
+        },
+        data: top10.map(item => ({
+          name: item.name,
+          value: valueFn(item)
+        }))
+      }
+    ]
+  }
+})
+
+// 识别/动作统计饼图数据（根据选择的维度）
+const recognitionActionChartOption = computed(() => {
+  if (recognitionActionStatistics.value.length === 0) return null
+
+  const dimension = recognitionActionChartDimension.value
+  let title = ''
+  let formatter = ''
+  let sortFn: (a: RecognitionActionStatistics, b: RecognitionActionStatistics) => number
+  let valueFn: (item: RecognitionActionStatistics) => number
+  let filterFn: (item: RecognitionActionStatistics) => boolean = () => true
+
+  switch (dimension) {
+    case 'avgRecognitionDuration':
+      title = '平均识别耗时分布 (Top 10)'
+      formatter = (params: any) => `${params.name}: ${formatDuration(params.value)} (${params.percent}%)`
+      sortFn = (a, b) => b.avgRecognitionDuration - a.avgRecognitionDuration
+      valueFn = (item) => item.avgRecognitionDuration
+      filterFn = (item) => item.recognitionCount > 0
+      break
+    case 'maxRecognitionDuration':
+      title = '最大识别耗时分布 (Top 10)'
+      formatter = (params: any) => `${params.name}: ${formatDuration(params.value)} (${params.percent}%)`
+      sortFn = (a, b) => b.maxRecognitionDuration - a.maxRecognitionDuration
+      valueFn = (item) => item.maxRecognitionDuration
+      filterFn = (item) => item.recognitionCount > 0
+      break
+    case 'avgActionDuration':
+      title = '平均动作耗时分布 (Top 10)'
+      formatter = (params: any) => `${params.name}: ${formatDuration(params.value)} (${params.percent}%)`
+      sortFn = (a, b) => b.avgActionDuration - a.avgActionDuration
+      valueFn = (item) => item.avgActionDuration
+      filterFn = (item) => item.actionCount > 0
+      break
+    case 'maxActionDuration':
+      title = '最大动作耗时分布 (Top 10)'
+      formatter = (params: any) => `${params.name}: ${formatDuration(params.value)} (${params.percent}%)`
+      sortFn = (a, b) => b.maxActionDuration - a.maxActionDuration
+      valueFn = (item) => item.maxActionDuration
+      filterFn = (item) => item.actionCount > 0
+      break
+    case 'avgRecognitionAttempts':
+      title = '平均识别尝试次数分布 (Top 10)'
+      formatter = '{b}: {c} 次 ({d}%)'
+      sortFn = (a, b) => b.avgRecognitionAttempts - a.avgRecognitionAttempts
+      valueFn = (item) => item.avgRecognitionAttempts
+      break
+  }
+
+  const top10 = recognitionActionStatistics.value
+    .slice()
+    .filter(filterFn)
+    .sort(sortFn)
+    .slice(0, 10)
+
+  if (top10.length === 0) return null
+
+  return {
+    title: {
+      text: title,
+      left: 'center',
+      textStyle: {
+        fontSize: 14
+      }
+    },
+    tooltip: {
+      trigger: 'item',
+      formatter: formatter
+    },
+    legend: {
+      orient: 'vertical',
+      left: 'left',
+      top: 'middle',
+      textStyle: {
+        fontSize: 12
+      }
+    },
+    series: [
+      {
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['60%', '50%'],
+        avoidLabelOverlap: false,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#fff',
+          borderWidth: 2
+        },
+        label: {
+          show: false,
+          position: 'center'
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: 16,
+            fontWeight: 'bold',
+            formatter: (params: any) => {
+              if (dimension === 'avgRecognitionAttempts') {
+                return `${params.name}\n${params.value.toFixed(1)} 次`
+              } else {
+                return `${params.name}\n${formatDuration(params.value)}`
+              }
+            }
+          }
+        },
+        labelLine: {
+          show: false
+        },
+        data: top10.map(item => ({
+          name: item.name,
+          value: valueFn(item)
+        }))
+      }
+    ]
+  }
+})
 </script>
 
 <template>
@@ -438,6 +672,36 @@ const summary = computed(() => {
           <n-radio-button value="node">节点统计</n-radio-button>
           <n-radio-button value="recognition-action">识别/动作统计</n-radio-button>
         </n-radio-group>
+
+        <!-- 节点统计维度选择 -->
+        <n-select
+          v-if="statMode === 'node'"
+          v-model:value="nodeChartDimension"
+          :options="[
+            { label: '执行次数', value: 'count' },
+            { label: '总耗时', value: 'totalDuration' },
+            { label: '平均耗时', value: 'avgDuration' },
+            { label: '最大耗时', value: 'maxDuration' }
+          ]"
+          size="small"
+          style="width: 120px"
+        />
+
+        <!-- 识别/动作统计维度选择 -->
+        <n-select
+          v-if="statMode === 'recognition-action'"
+          v-model:value="recognitionActionChartDimension"
+          :options="[
+            { label: '平均识别耗时', value: 'avgRecognitionDuration' },
+            { label: '最大识别耗时', value: 'maxRecognitionDuration' },
+            { label: '平均动作耗时', value: 'avgActionDuration' },
+            { label: '最大动作耗时', value: 'maxActionDuration' },
+            { label: '平均识别尝试', value: 'avgRecognitionAttempts' }
+          ]"
+          size="small"
+          style="width: 140px"
+        />
+
         <n-input
           v-model:value="searchKeyword"
           placeholder="搜索节点名称"
@@ -580,6 +844,30 @@ const summary = computed(() => {
           </n-text>
         </div>
       </n-flex>
+    </n-card>
+
+    <!-- 节点统计饼图 -->
+    <n-card
+      v-if="statMode === 'node' && nodeChartOption"
+      size="small"
+      style="margin-bottom: 16px"
+      :bordered="false"
+    >
+      <div style="width: 100%; height: 400px">
+        <v-chart :option="nodeChartOption" autoresize />
+      </div>
+    </n-card>
+
+    <!-- 识别/动作统计饼图 -->
+    <n-card
+      v-if="statMode === 'recognition-action' && recognitionActionChartOption"
+      size="small"
+      style="margin-bottom: 16px"
+      :bordered="false"
+    >
+      <div style="width: 100%; height: 400px">
+        <v-chart :option="recognitionActionChartOption" autoresize />
+      </div>
     </n-card>
 
     <!-- 数据表格 -->

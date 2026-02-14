@@ -23,9 +23,11 @@
         "@tauri-apps/plugin-dialog": "^2.0.0",
         "@tauri-apps/plugin-fs": "^2.0.0",
         "@vicons/antd": "^0.12.0",
+        "echarts": "^6.0.0",
         "highlight.js": "^11.11.1",
         "naive-ui": "^2.38.0",
         "vue": "^3.4.0",
+        "vue-echarts": "^8.0.1",
         "vue-virtual-scroller": "2.0.0-beta.8"
     },
     "devDependencies": {
