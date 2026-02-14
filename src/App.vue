@@ -4,10 +4,11 @@ import { NSplit, NCard, NFlex, NButton, NIcon, NDropdown, NModal, NText, NDivide
 import ProcessView from './views/ProcessView.vue'
 import DetailView from './views/DetailView.vue'
 import TextSearchView from './views/TextSearchView.vue'
+import NodeStatisticsView from './views/NodeStatisticsView.vue'
 import { LogParser } from './utils/logParser'
 import { getErrorMessage } from './utils/errorHandler'
 import type { TaskInfo, NodeInfo } from './types'
-import { BulbOutlined, BulbFilled, FileSearchOutlined, BarChartOutlined, ColumnHeightOutlined, InfoCircleOutlined, GithubOutlined } from '@vicons/antd'
+import { BulbOutlined, BulbFilled, FileSearchOutlined, BarChartOutlined, ColumnHeightOutlined, InfoCircleOutlined, GithubOutlined, DashboardOutlined } from '@vicons/antd'
 
 // Props
 interface Props {
@@ -24,7 +25,7 @@ const emit = defineEmits<{
 }>()
 
 // 视图模式
-type ViewMode = 'analysis' | 'search' | 'split'
+type ViewMode = 'analysis' | 'search' | 'statistics' | 'split'
 const viewMode = ref<ViewMode>('analysis')
 
 // 视图模式选项
@@ -38,6 +39,11 @@ const viewModeOptions = [
     label: '文本搜索',
     key: 'search' as ViewMode,
     icon: () => h(FileSearchOutlined)
+  },
+  {
+    label: '节点统计',
+    key: 'statistics' as ViewMode,
+    icon: () => h(DashboardOutlined)
   },
   {
     label: '分屏模式',
@@ -357,6 +363,7 @@ if (typeof window !== 'undefined') {
                 <n-icon>
                   <bar-chart-outlined v-if="viewMode === 'analysis'" />
                   <file-search-outlined v-else-if="viewMode === 'search'" />
+                  <dashboard-outlined v-else-if="viewMode === 'statistics'" />
                   <column-height-outlined v-else />
                 </n-icon>
               </template>
@@ -486,6 +493,11 @@ if (typeof window !== 'undefined') {
       <!-- 文本搜索模式（独立显示，占据整个屏幕） -->
       <div v-show="viewMode === 'search'" style="height: 100%">
         <text-search-view :is-dark="isDark" style="height: 100%" />
+      </div>
+
+      <!-- 节点统计模式（独立显示，占据整个屏幕） -->
+      <div v-show="viewMode === 'statistics'" style="height: 100%">
+        <node-statistics-view :tasks="tasks" style="height: 100%" />
       </div>
 
       <!-- 分屏模式 -->
