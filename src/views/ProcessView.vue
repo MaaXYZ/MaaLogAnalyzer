@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, h } from 'vue'
 import {
-  NCard, NButton, NUpload, NUploadDragger, NIcon, NText, NFlex,
-  NScrollbar, NEmpty, NBadge, NTag, NSplit, NList, NListItem, type UploadFileInfo
+  NCard, NButton, NIcon, NText, NFlex, NDropdown,
+  NScrollbar, NEmpty, NBadge, NTag, NSplit, NList, NListItem
 } from 'naive-ui'
-import { CloudUploadOutlined, FolderOpenOutlined } from '@vicons/antd'
+import { CloudUploadOutlined, FolderOpenOutlined, FileOutlined, FolderOutlined } from '@vicons/antd'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import NodeCard from '../components/NodeCard.vue'
@@ -168,11 +168,221 @@ watch(() => props.selectedTask, (newTask) => {
   }
 }, { immediate: true })
 
-// 处理文件上传（Web）
-const handleFileChange = (options: { fileList: UploadFileInfo[] }) => {
-  const file = options.fileList[0]?.file
+// 处理拖拽上传（支持文件和文件夹）
+const handleDrop = async (event: DragEvent) => {
+  event.preventDefault()
+  event.stopPropagation()
+  
+  const items = event.dataTransfer?.items
+  if (!items || items.length === 0) return
+
+  // 检查是否是文件夹
+  const firstItem = items[0]
+  const entry = firstItem.webkitGetAsEntry?.()
+  
+  if (entry?.isDirectory) {
+    // 处理文件夹
+    await handleDirectoryEntry(entry as FileSystemDirectoryEntry)
+  } else {
+    // 处理单个文件
+    const file = firstItem.getAsFile()
+    if (file) {
+      emit('upload-file', file)
+    }
+  }
+}
+
+// 处理文件夹条目
+const handleDirectoryEntry = async (dirEntry: FileSystemDirectoryEntry) => {
+  try {
+    fileLoading.value = true
+    emit('file-loading-start')
+
+    const files = await readDirectoryFiles(dirEntry)
+    
+    let bakLogFile: File | null = null
+    let mainLogFile: File | null = null
+
+    for (const file of files) {
+      const fileName = file.name.toLowerCase()
+      if (fileName === 'maa.bak.log') {
+        bakLogFile = file
+      } else if (fileName === 'maa.log') {
+        mainLogFile = file
+      }
+    }
+
+    if (!bakLogFile && !mainLogFile) {
+      alert('文件夹中未找到 maa.log 或 maa.bak.log 文件')
+      return
+    }
+
+    let combinedContent = ''
+    if (bakLogFile) {
+      combinedContent += await bakLogFile.text()
+    }
+    if (mainLogFile) {
+      if (combinedContent && !combinedContent.endsWith('\n')) {
+        combinedContent += '\n'
+      }
+      combinedContent += await mainLogFile.text()
+    }
+
+    if (combinedContent) {
+      emit('upload-content', combinedContent)
+    }
+  } catch (error) {
+    alert('读取文件夹失败: ' + error)
+  } finally {
+    fileLoading.value = false
+    emit('file-loading-end')
+  }
+}
+
+// 读取文件夹中的文件
+const readDirectoryFiles = (dirEntry: FileSystemDirectoryEntry): Promise<File[]> => {
+  return new Promise((resolve, reject) => {
+    const reader = dirEntry.createReader()
+    const files: File[] = []
+    
+    const readEntries = () => {
+      reader.readEntries(async (entries) => {
+        if (entries.length === 0) {
+          resolve(files)
+          return
+        }
+        
+        for (const entry of entries) {
+          if (entry.isFile) {
+            const file = await getFileFromEntry(entry as FileSystemFileEntry)
+            files.push(file)
+          }
+        }
+        
+        readEntries() // 继续读取（可能有多批）
+      }, reject)
+    }
+    
+    readEntries()
+  })
+}
+
+// 从 FileSystemFileEntry 获取 File 对象
+const getFileFromEntry = (fileEntry: FileSystemFileEntry): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    fileEntry.file(resolve, reject)
+  })
+}
+
+// 阻止默认拖拽行为
+const handleDragOver = (event: DragEvent) => {
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+// 处理文件夹上传（Web - 点击选择）
+const handleFolderChange = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const files = input.files
+  if (!files || files.length === 0) return
+
+  // 查找 maa.bak.log 和 maa.log
+  let bakLogFile: File | null = null
+  let mainLogFile: File | null = null
+
+  for (const file of files) {
+    const fileName = file.name.toLowerCase()
+    if (fileName === 'maa.bak.log') {
+      bakLogFile = file
+    } else if (fileName === 'maa.log') {
+      mainLogFile = file
+    }
+  }
+
+  if (!bakLogFile && !mainLogFile) {
+    alert('文件夹中未找到 maa.log 或 maa.bak.log 文件')
+    return
+  }
+
+  try {
+    fileLoading.value = true
+    emit('file-loading-start')
+
+    // 按顺序读取并合并内容：先 bak，后 main
+    let combinedContent = ''
+    if (bakLogFile) {
+      combinedContent += await bakLogFile.text()
+    }
+    if (mainLogFile) {
+      if (combinedContent && !combinedContent.endsWith('\n')) {
+        combinedContent += '\n'
+      }
+      combinedContent += await mainLogFile.text()
+    }
+
+    if (combinedContent) {
+      emit('upload-content', combinedContent)
+    }
+  } catch (error) {
+    alert('读取文件失败: ' + error)
+  } finally {
+    fileLoading.value = false
+    emit('file-loading-end')
+    // 清空 input 以便重复选择同一文件夹
+    input.value = ''
+  }
+}
+
+// 触发文件夹选择
+const folderInputRef = ref<HTMLInputElement | null>(null)
+const triggerFolderSelect = () => {
+  folderInputRef.value?.click()
+}
+
+// 触发文件选择
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const triggerFileSelect = () => {
+  fileInputRef.value?.click()
+}
+
+// 处理文件选择（用于重新加载下拉菜单）
+const handleFileInputChange = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
   if (file) {
-    emit('upload-file', file as File)
+    emit('upload-file', file)
+  }
+  input.value = ''
+}
+
+// 重新加载下拉菜单选项
+const reloadOptions = [
+  {
+    label: '选择文件',
+    key: 'file',
+    icon: () => h(FileOutlined)
+  },
+  {
+    label: '选择文件夹',
+    key: 'folder',
+    icon: () => h(FolderOutlined)
+  }
+]
+
+// 处理重新加载下拉菜单选择
+const handleReloadSelect = (key: string) => {
+  if (isInTauri.value) {
+    if (key === 'file') {
+      handleTauriOpen()
+    } else if (key === 'folder') {
+      handleTauriOpenFolder()
+    }
+  } else {
+    if (key === 'file') {
+      triggerFileSelect()
+    } else if (key === 'folder') {
+      triggerFolderSelect()
+    }
   }
 }
 
@@ -217,6 +427,63 @@ const handleTauriOpen = async () => {
   }
 }
 
+// 使用 Tauri 打开文件夹
+const handleTauriOpenFolder = async () => {
+  try {
+    // 动态导入 Tauri API
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const { readTextFile, exists } = await import('@tauri-apps/plugin-fs')
+
+    // 打开文件夹选择对话框
+    const selected = await open({
+      multiple: false,
+      directory: true,
+      title: '选择日志文件夹'
+    })
+
+    if (selected && typeof selected === 'string') {
+      try {
+        fileLoading.value = true
+        emit('file-loading-start')
+
+        const folderPath = selected
+        const bakLogPath = `${folderPath}\\maa.bak.log`
+        const mainLogPath = `${folderPath}\\maa.log`
+
+        // 检查文件是否存在并读取
+        let combinedContent = ''
+
+        const bakExists = await exists(bakLogPath)
+        if (bakExists) {
+          combinedContent += await readTextFile(bakLogPath)
+        }
+
+        const mainExists = await exists(mainLogPath)
+        if (mainExists) {
+          if (combinedContent && !combinedContent.endsWith('\n')) {
+            combinedContent += '\n'
+          }
+          combinedContent += await readTextFile(mainLogPath)
+        }
+
+        if (!combinedContent) {
+          alert('文件夹中未找到 maa.log 或 maa.bak.log 文件')
+          return
+        }
+
+        emit('upload-content', combinedContent)
+      } finally {
+        fileLoading.value = false
+        emit('file-loading-end')
+      }
+    }
+  } catch (error) {
+    fileLoading.value = false
+    emit('file-loading-end')
+    alert('打开文件夹失败: ' + error)
+  }
+}
+
 // 选择节点
 const handleNodeClick = (node: NodeInfo) => {
   emit('select-node', node)
@@ -252,39 +519,54 @@ const handleNestedClick = (node: NodeInfo, attemptIndex: number, nestedIndex: nu
             使用原生文件选择器
           </n-text>
           <n-text depth="3" style="font-size: 14px; display: block; margin-bottom: 8px">
-            支持 maa.log 格式
+            支持 maa.log 格式，或选择包含日志的文件夹
           </n-text>
           <n-badge value="Tauri" type="success" style="margin-top: 4px" />
         </div>
-        <n-button type="primary" size="large" @click="handleTauriOpen">
-          <template #icon>
-            <n-icon><folder-open-outlined /></n-icon>
-          </template>
-          选择日志文件
-        </n-button>
+        <n-flex justify="center" style="gap: 12px">
+          <n-button type="primary" size="large" @click="handleTauriOpen">
+            <template #icon>
+              <n-icon><folder-open-outlined /></n-icon>
+            </template>
+            选择日志文件
+          </n-button>
+          <n-button size="large" @click="handleTauriOpenFolder">
+            <template #icon>
+              <n-icon><folder-open-outlined /></n-icon>
+            </template>
+            选择文件夹
+          </n-button>
+        </n-flex>
       </div>
       
-      <!-- Web 环境：使用拖拽上传 -->
-      <n-upload
+      <!-- Web 环境：自定义拖拽区域，支持文件和文件夹 -->
+      <div
         v-else
-        :show-file-list="false"
-        :custom-request="() => {}"
-        @change="handleFileChange"
+        class="drop-zone"
+        @drop="handleDrop"
+        @dragover="handleDragOver"
+        @dragenter="handleDragOver"
       >
-        <n-upload-dragger>
-          <div style="padding: 20px">
-            <n-icon size="48" :depth="3">
-              <cloud-upload-outlined />
-            </n-icon>
-            <n-text style="font-size: 16px">
-              点击或拖拽上传日志文件
-            </n-text>
-            <n-text depth="3" style="font-size: 14px">
-              支持 maa.log 格式
-            </n-text>
-          </div>
-        </n-upload-dragger>
-      </n-upload>
+        <div style="padding: 40px 20px; text-align: center">
+          <n-icon size="48" :depth="3">
+            <cloud-upload-outlined />
+          </n-icon>
+          <n-text style="font-size: 16px; display: block; margin-top: 12px">
+            拖拽日志文件/文件夹到此处，或点击下方按钮选择
+          </n-text>
+          <n-text depth="3" style="font-size: 14px; display: block; margin-bottom: 12px">
+            支持 maa.log 格式，文件夹需包含 maa.log 或 maa.bak.log
+          </n-text>
+          <n-dropdown :options="reloadOptions" @select="handleReloadSelect">
+            <n-button type="primary" size="large">
+              <template #icon>
+                <n-icon><folder-open-outlined /></n-icon>
+              </template>
+              选择文件/文件夹
+            </n-button>
+          </n-dropdown>
+        </div>
+      </div>
     </div>
 
     <!-- 任务列表 -->
@@ -292,27 +574,24 @@ const handleNestedClick = (node: NodeInfo, attemptIndex: number, nestedIndex: nu
       <!-- 操作按钮 -->
       <n-flex>
         <!-- Tauri 环境 -->
-        <n-button v-if="isInTauri" @click="handleTauriOpen">
-          <template #icon>
-            <n-icon><folder-open-outlined /></n-icon>
-          </template>
-          重新打开
-        </n-button>
+        <n-dropdown v-if="isInTauri" :options="reloadOptions" @select="handleReloadSelect">
+          <n-button>
+            <template #icon>
+              <n-icon><folder-open-outlined /></n-icon>
+            </template>
+            重新加载
+          </n-button>
+        </n-dropdown>
 
         <!-- Web 环境 -->
-        <n-upload
-          v-else
-          :show-file-list="false"
-          :custom-request="() => {}"
-          @change="handleFileChange"
-        >
+        <n-dropdown v-else :options="reloadOptions" @select="handleReloadSelect">
           <n-button>
             <template #icon>
               <n-icon><cloud-upload-outlined /></n-icon>
             </template>
-            重新上传
+            重新加载
           </n-button>
-        </n-upload>
+        </n-dropdown>
       </n-flex>
 
       <!-- 左右分栏布局 -->
@@ -545,10 +824,41 @@ const handleNestedClick = (node: NodeInfo, attemptIndex: number, nestedIndex: nu
         </template>
       </n-split>
     </template>
+
+    <!-- Web 环境下的全局隐藏文件选择输入框 -->
+    <input
+      v-if="!isInTauri"
+      ref="fileInputRef"
+      type="file"
+      accept=".log,.txt,.jsonl"
+      style="display: none"
+      @change="handleFileInputChange"
+    />
+    <input
+      v-if="!isInTauri"
+      ref="folderInputRef"
+      type="file"
+      webkitdirectory
+      style="display: none"
+      @change="handleFolderChange"
+    />
   </n-card>
 </template>
 
 <style scoped>
+/* 拖拽区域样式 */
+.drop-zone {
+  border: 2px dashed var(--n-border-color);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.drop-zone:hover {
+  border-color: var(--n-color-target);
+  background-color: var(--n-color-target-hover);
+}
+
 /* Fix Naive UI scrollbar container background in light mode */
 :deep(.n-scrollbar-container) {
   background-color: transparent !important;
