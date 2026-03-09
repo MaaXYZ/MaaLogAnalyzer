@@ -70,7 +70,7 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
 
   // 处理来自 Webview 的消息
   currentPanel.webview.onDidReceiveMessage(
-    async (message) => {
+    async (message: any) => {
       switch (message.type) {
         case 'openFile':
           // 打开文件选择对话框

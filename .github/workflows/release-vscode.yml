@@ -46,6 +46,10 @@ jobs:
       - name: Build webview
         run: pnpm build:vscode
 
+      - name: Install extension dependencies
+        working-directory: src-vscode
+        run: npm install
+
       - name: Build extension
         working-directory: src-vscode
         run: |
