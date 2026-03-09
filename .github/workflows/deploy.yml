@@ -40,7 +40,7 @@ jobs:
 
       - name: 更新版本号
         run: |
-          ver=$(git describe --tags --always --match "v*" 2>/dev/null || echo "v0.0.1")
+          ver=$(git describe --tags --long --match "v*" 2>/dev/null || echo "v0.0.1-0-g$(git rev-parse --short HEAD)")
           ver=${ver#v}
           echo "Setting version to ${ver}"
           npm pkg set version=${ver}
