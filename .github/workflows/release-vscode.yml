@@ -4,7 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -23,10 +28,14 @@ jobs:
         run: pnpm i
 
       - name: Update version
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          ver=${{ github.ref_name }}
-          ver=${ver:1}
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            ver=${{ github.ref_name }}
+            ver=${ver:1}
+          else
+            ver=$(git describe --tags --always --match "v*" 2>/dev/null || echo "v0.0.1")
+            ver=${ver#v}
+          fi
           echo "Setting version to ${ver}"
           npm pkg set version=${ver}
           npm --prefix src-vscode pkg set version=${ver}

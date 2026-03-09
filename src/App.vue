@@ -9,6 +9,7 @@ import { LogParser } from './utils/logParser'
 import { getErrorMessage } from './utils/errorHandler'
 import type { TaskInfo, NodeInfo } from './types'
 import { BulbOutlined, BulbFilled, FileSearchOutlined, BarChartOutlined, ColumnHeightOutlined, InfoCircleOutlined, GithubOutlined, DashboardOutlined } from '@vicons/antd'
+import { version } from '../package.json'
 
 // Props
 interface Props {
@@ -654,7 +655,7 @@ if (typeof window !== 'undefined') {
         <!-- 版本信息 -->
         <n-flex justify="space-between" align="center">
           <n-text depth="3" style="font-size: 12px">
-            Version 2.1.0
+            Version {{ version }}
           </n-text>
           <n-text depth="3" style="font-size: 12px">
             © 2025

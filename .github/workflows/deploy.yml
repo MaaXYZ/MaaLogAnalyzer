@@ -38,6 +38,13 @@ jobs:
       - name: 安装依赖
         run: pnpm install
 
+      - name: 更新版本号
+        run: |
+          ver=$(git describe --tags --always --match "v*" 2>/dev/null || echo "v0.0.1")
+          ver=${ver#v}
+          echo "Setting version to ${ver}"
+          npm pkg set version=${ver}
+
       - name: 构建
         run: pnpm run build
 
