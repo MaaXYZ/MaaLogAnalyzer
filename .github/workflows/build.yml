@@ -228,7 +228,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
-          name: 'MAALogAnalyzer-${{ github.ref_name }}'
+          name: 'MaaLogAnalyzer-${{ github.ref_name }}'
           body: |
             ## 📦 下载说明
 
