@@ -126,6 +126,8 @@ const getButtonType = (status: string): ButtonType => {
 // 动作按钮类型
 const actionButtonType = computed<ButtonType>(() => {
   if (!props.node.action_details) return 'default'
+  // 如果嵌套动作组中有失败的，整体显示为失败
+  if (props.node.nested_action_nodes?.some(g => g.status === 'failed')) return 'error'
   return props.node.action_details.success ? 'success' : 'error'
 })
 </script>

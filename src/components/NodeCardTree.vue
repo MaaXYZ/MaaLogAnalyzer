@@ -32,6 +32,13 @@ const checkExpanded = (attemptIndex: number) => {
 const isRecognitionExpanded = computed(() => props.recognitionExpanded ?? true)
 const isActionExpanded = computed(() => props.actionExpanded ?? true)
 
+// action 是否整体失败（含嵌套动作组失败）
+const isActionFailed = computed(() => {
+  if (props.node.nested_action_nodes?.some(g => g.status === 'failed')) return true
+  if (props.node.action_details && !props.node.action_details.success) return true
+  return false
+})
+
 // 扁平化的 nested action 节点列表
 const flatNestedActions = computed(() => {
   const result: Array<{ groupIdx: number; nestedIdx: number; name: string; status: string }> = []
@@ -147,11 +154,11 @@ const flatNestedActions = computed(() => {
           <n-button
             text
             size="tiny"
-            :type="node.action_details.success ? 'success' : 'error'"
+            :type="isActionFailed ? 'error' : 'success'"
             @click="emit('select-action', node)"
           >
             <template #icon>
-              <check-circle-outlined v-if="node.action_details.success" />
+              <check-circle-outlined v-if="!isActionFailed" />
               <close-circle-outlined v-else />
             </template>
             {{ node.action_details.name }}

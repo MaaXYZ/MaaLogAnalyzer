@@ -172,7 +172,7 @@ const emit = defineEmits<{
           style="align-self: flex-start"
         >
           <template #icon>
-            <check-circle-outlined v-if="node.action_details.success" />
+            <check-circle-outlined v-if="actionButtonType === 'success'" />
             <close-circle-outlined v-else />
           </template>
           {{ node.action_details.name }}

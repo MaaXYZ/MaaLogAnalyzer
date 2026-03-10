@@ -340,6 +340,11 @@ export class LogParser {
             nodes.push(node)
             nodeIdSet.add(nodeId)
 
+            // 如果嵌套动作组中有失败的，节点整体标记为失败
+            if (node.status === 'success' && node.nested_action_nodes?.some(g => g.status === 'failed')) {
+              node.status = 'failed'
+            }
+
             // 重置当前节点状态
             currentNextList = []
             recognitionAttempts.length = 0
