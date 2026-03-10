@@ -3,7 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { NCard, NButton, NFlex, NTag, NImage } from 'naive-ui'
 import { CheckCircleOutlined, CloseCircleOutlined } from '@vicons/antd'
 import type { NodeInfo } from '../types'
-import { isTauri } from '../utils/fileDialog'
+import { isTauri } from '../utils/platform'
 
 // 转换文件路径为可访问的 URL
 const convertFileSrc = (filePath: string) => {

@@ -16,7 +16,7 @@ import { NodeStatisticsAnalyzer, type NodeStatistics, type RecognitionActionStat
 import { formatDuration } from '../utils/formatDuration'
 import { LogParser } from '../utils/logParser'
 import { getErrorMessage } from '../utils/errorHandler'
-import { isTauri, openLogFileDialog } from '../utils/fileDialog'
+import { isTauri } from '../utils/platform'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, PieChart, TitleComponent, TooltipComponent, LegendComponent])
@@ -161,6 +161,7 @@ const handleTauriFileSelect = async () => {
   showFileLoadingModal.value = true
 
   try {
+    const { openLogFileDialog } = await import('../utils/fileDialog')
     const content = await openLogFileDialog()
     if (content) {
       showFileLoadingModal.value = false

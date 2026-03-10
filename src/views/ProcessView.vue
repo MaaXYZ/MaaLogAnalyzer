@@ -10,7 +10,7 @@ import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import NodeCard from '../components/NodeCard.vue'
 import type { TaskInfo, NodeInfo } from '../types'
 import type { LogParser } from '../utils/logParser'
-import { isTauri, isVSCode } from '../utils/fileDialog'
+import { isTauri, isVSCode } from '../utils/platform'
 import { formatDuration } from '../utils/formatDuration'
 
 const props = defineProps<{

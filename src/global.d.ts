@@ -16,6 +16,11 @@ declare global {
   }
   // 构建时定义的常量
   const __VSCODE__: boolean | undefined
+
+  // 扩展 File System Access API 类型定义
+  interface FileSystemDirectoryHandle {
+    values(): AsyncIterableIterator<FileSystemHandle>
+  }
 }
 
 export {}
