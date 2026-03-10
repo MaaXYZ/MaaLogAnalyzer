@@ -7,9 +7,9 @@ import type { NodeInfo, MergedRecognitionItem } from '../types'
 const props = defineProps<{
   node: NodeInfo
   mergedRecognitionList: MergedRecognitionItem[]
-  recognitionExpanded: boolean
-  actionExpanded: boolean
-  isExpanded: (attemptIndex: number) => boolean
+  recognitionExpanded?: boolean
+  actionExpanded?: boolean
+  isExpanded?: (attemptIndex: number) => boolean
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +22,15 @@ const emit = defineEmits<{
   'toggle-action': []
   'toggle-nested': [attemptIndex: number]
 }>()
+
+// 安全访问 isExpanded，提供默认值
+const checkExpanded = (attemptIndex: number) => {
+  return props.isExpanded ? props.isExpanded(attemptIndex) : true
+}
+
+// 安全访问折叠状态
+const isRecognitionExpanded = computed(() => props.recognitionExpanded ?? true)
+const isActionExpanded = computed(() => props.actionExpanded ?? true)
 
 // 扁平化的 nested action 节点列表
 const flatNestedActions = computed(() => {
@@ -46,12 +55,12 @@ const flatNestedActions = computed(() => {
       <n-flex align="center" style="gap: 4px; margin-bottom: 2px">
         <span
           class="tree-toggle"
-          :class="{ 'tree-toggle-collapsed': !recognitionExpanded }"
+          :class="{ 'tree-toggle-collapsed': !isRecognitionExpanded }"
           @click="emit('toggle-recognition')"
         />
         <n-text depth="3" style="font-size: 12px; cursor: pointer" @click="emit('toggle-recognition')">Recognition</n-text>
       </n-flex>
-      <ul v-if="recognitionExpanded" class="tree-list">
+      <ul v-if="isRecognitionExpanded" class="tree-list">
         <li
           v-for="(item, idx) in mergedRecognitionList"
           :key="`tree-reco-${idx}`"
@@ -81,7 +90,7 @@ const flatNestedActions = computed(() => {
             <n-flex align="center" style="gap: 4px">
               <span
                 class="tree-toggle"
-                :class="{ 'tree-toggle-collapsed': !isExpanded(item.attemptIndex!) }"
+                :class="{ 'tree-toggle-collapsed': !checkExpanded(item.attemptIndex!) }"
                 @click="emit('toggle-nested', item.attemptIndex!)"
               />
               <n-button
@@ -99,7 +108,7 @@ const flatNestedActions = computed(() => {
             </n-flex>
 
             <!-- 嵌套识别 -->
-            <ul v-if="isExpanded(item.attemptIndex!)" class="tree-list">
+            <ul v-if="checkExpanded(item.attemptIndex!)" class="tree-list">
               <li
                 v-for="(nested, nestedIdx) in item.attempt!.nested_nodes"
                 :key="`tree-nested-${idx}-${nestedIdx}`"
@@ -131,7 +140,7 @@ const flatNestedActions = computed(() => {
           <span
             v-if="flatNestedActions.length > 0"
             class="tree-toggle"
-            :class="{ 'tree-toggle-collapsed': !actionExpanded }"
+            :class="{ 'tree-toggle-collapsed': !isActionExpanded }"
             @click="emit('toggle-action')"
           />
           <n-text depth="3" style="font-size: 12px">Action: </n-text>
@@ -151,7 +160,7 @@ const flatNestedActions = computed(() => {
       </div>
 
       <!-- 嵌套 action 节点 -->
-      <ul v-if="actionExpanded && flatNestedActions.length > 0" class="tree-list">
+      <ul v-if="isActionExpanded && flatNestedActions.length > 0" class="tree-list">
         <li
           v-for="(item, idx) in flatNestedActions"
           :key="`tree-action-${idx}`"
