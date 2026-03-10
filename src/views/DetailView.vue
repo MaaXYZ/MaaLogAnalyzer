@@ -240,8 +240,8 @@ const copyToClipboard = (text: string) => {
           </n-collapse>
         </n-card>
 
-        <!-- 动作详情 (仅在点击动作按钮时显示) -->
-        <n-card title="⚡ 动作详情" v-if="hasAction && isActionOnlyView">
+        <!-- 动作详情 (仅在点击动作按钮或嵌套动作节点时显示) -->
+        <n-card title="⚡ 动作详情" v-if="hasAction && (isActionOnlyView || (selectedActionIndex !== null && selectedNestedActionIndex !== null))">
           <n-descriptions :column="2" size="small" label-placement="left" bordered>
             <n-descriptions-item label="动作 ID">
               {{ currentActionDetails?.action_id }}

@@ -222,6 +222,7 @@ const handleSelectRecognition = (node: NodeInfo, attemptIndex: number) => {
   selectedNestedIndex.value = null
   selectedActionIndex.value = null
   selectedNestedActionIndex.value = null
+  isActionOnlyView.value = false
 }
 
 // 选择嵌套节点
@@ -231,6 +232,7 @@ const handleSelectNested = (node: NodeInfo, attemptIndex: number, nestedIndex: n
   selectedNestedIndex.value = nestedIndex
   selectedActionIndex.value = null
   selectedNestedActionIndex.value = null
+  isActionOnlyView.value = false
 }
 
 // 选择嵌套动作节点
@@ -240,6 +242,7 @@ const handleSelectNestedAction = (node: NodeInfo, actionIndex: number, nestedInd
   selectedNestedIndex.value = null
   selectedActionIndex.value = actionIndex
   selectedNestedActionIndex.value = nestedIndex
+  isActionOnlyView.value = false
 }
 
 // 过滤任务列表
