@@ -342,46 +342,6 @@ const handleFileLoadingStart = () => {
 const handleFileLoadingEnd = () => {
   showFileLoadingModal.value = false
 }
-
-// 临时调试函数 - 分析内存占用
-const analyzeMemory = () => {
-  console.log('=== 数据统计 ===')
-  console.log('任务数量:', tasks.value.length)
-
-  const totalNodes = tasks.value.reduce((sum, t) => sum + t.nodes.length, 0)
-  console.log('总节点数:', totalNodes)
-
-  const totalAttempts = tasks.value.reduce((sum, t) =>
-    sum + t.nodes.reduce((s, n) => s + (n.recognition_attempts?.length || 0), 0), 0)
-  console.log('总识别尝试数:', totalAttempts)
-
-  // 检查字符串重复
-  const nodeNames = new Set()
-  const timestamps = new Set()
-  tasks.value.forEach(t => {
-    t.nodes.forEach(n => {
-      nodeNames.add(n.name)
-      timestamps.add(n.timestamp)
-      n.recognition_attempts?.forEach(a => {
-        nodeNames.add(a.name)
-        timestamps.add(a.timestamp)
-      })
-    })
-  })
-  console.log('唯一节点名称数:', nodeNames.size)
-  console.log('唯一时间戳数:', timestamps.size)
-  console.log('字符串重复率:', ((totalNodes + totalAttempts - nodeNames.size) / (totalNodes + totalAttempts) * 100).toFixed(1) + '%')
-
-  // 采样
-  console.log('\n=== 采样数据 ===')
-  console.log('第一个任务:', tasks.value[0])
-  console.log('第一个节点:', tasks.value[0]?.nodes[0])
-}
-
-// 暴露到 window 以便在控制台调用
-if (typeof window !== 'undefined') {
-  (window as any).analyzeMemory = analyzeMemory
-}
 </script>
 
 <template>
@@ -537,7 +497,6 @@ if (typeof window !== 'undefined') {
               </n-button>
               <detail-view
                 :selected-node="selectedNode"
-                :selected-task="selectedTask"
                 :selected-recognition-index="selectedRecognitionIndex"
                 :selected-nested-index="selectedNestedIndex"
                 :selected-action-index="selectedActionIndex"
@@ -589,8 +548,10 @@ if (typeof window !== 'undefined') {
                   @upload-file="handleFileUpload"
                   @upload-content="handleContentUpload"
                   @select-node="handleSelectNode"
+                  @select-action="handleSelectAction"
                   @select-recognition="handleSelectRecognition"
                   @select-nested="handleSelectNested"
+                  @select-nested-action="handleSelectNestedAction"
                   @file-loading-start="handleFileLoadingStart"
                   @file-loading-end="handleFileLoadingEnd"
                 />

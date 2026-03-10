@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { NCard, NButton, NFlex, NTag, NImage } from 'naive-ui'
 import { CheckCircleOutlined, CloseCircleOutlined } from '@vicons/antd'
-import type { NodeInfo } from '../types'
+import type { NodeInfo, RecognitionAttempt } from '../types'
 import { isTauri } from '../utils/platform'
 import { getSettings } from '../utils/settings'
 import { extractTime } from '../utils/formatDuration'
@@ -85,35 +85,41 @@ interface MergedRecognitionItem {
   name: string
   status: 'success' | 'failed' | 'not-recognized'
   attemptIndex?: number  // 在 recognition_attempts 中的索引
-  attempt?: any  // 原始 attempt 对象
+  attempt?: RecognitionAttempt  // 原始 attempt 对象
   hasNestedNodes?: boolean
 }
 
 const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
   const result: MergedRecognitionItem[] = []
-  
-  // 构建识别尝试的 Map，按名称索引
-  const attemptMap = new Map<string, { attempt: any, index: number }>()
+
+  // 构建识别尝试的 Map，按名称索引（保留所有同名尝试）
+  const attemptMap = new Map<string, Array<{ attempt: RecognitionAttempt, index: number }>>()
   if (props.node.recognition_attempts) {
     props.node.recognition_attempts.forEach((attempt, idx) => {
-      // 如果同名节点有多次识别，保留最后一次（通常是成功的那次）
-      attemptMap.set(attempt.name, { attempt, index: idx })
+      const entries = attemptMap.get(attempt.name)
+      if (entries) {
+        entries.push({ attempt, index: idx })
+      } else {
+        attemptMap.set(attempt.name, [{ attempt, index: idx }])
+      }
     })
   }
-  
+
   // 以 next_list 的顺序为基准
   if (props.node.next_list && props.node.next_list.length > 0) {
     props.node.next_list.forEach((nextItem) => {
-      const attemptInfo = attemptMap.get(nextItem.name)
-      if (attemptInfo) {
-        // 有识别记录
-        result.push({
-          name: nextItem.name,
-          status: attemptInfo.attempt.status,
-          attemptIndex: attemptInfo.index,
-          attempt: attemptInfo.attempt,
-          hasNestedNodes: attemptInfo.attempt.nested_nodes && attemptInfo.attempt.nested_nodes.length > 0
-        })
+      const entries = attemptMap.get(nextItem.name)
+      if (entries) {
+        // 有识别记录 - 添加所有同名尝试
+        for (const attemptInfo of entries) {
+          result.push({
+            name: nextItem.name,
+            status: attemptInfo.attempt.status,
+            attemptIndex: attemptInfo.index,
+            attempt: attemptInfo.attempt,
+            hasNestedNodes: attemptInfo.attempt.nested_nodes && attemptInfo.attempt.nested_nodes.length > 0
+          })
+        }
       } else {
         // 无识别记录
         result.push({
@@ -136,7 +142,7 @@ const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
       })
     }
   }
-  
+
   return result
 })
 
@@ -258,7 +264,7 @@ const actionButtonType = computed(() => {
                     />
                     <n-flex wrap style="gap: 8px 12px">
                       <n-button
-                        v-for="(nested, nestedIdx) in item.attempt.nested_nodes"
+                        v-for="(nested, nestedIdx) in item.attempt!.nested_nodes"
                         :key="`nested-${item.attemptIndex}-${nestedIdx}`"
                         size="small"
                         :type="nested.status === 'success' ? 'success' : 'warning'"

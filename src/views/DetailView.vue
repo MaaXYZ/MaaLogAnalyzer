@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 import {
   NCard, NFlex, NScrollbar, NDescriptions, NDescriptionsItem,
   NTag, NEmpty, NCode, NButton, NIcon, NText, NCollapse, NCollapseItem
 } from 'naive-ui'
 import { CheckCircleOutlined, CloseCircleOutlined, CopyOutlined } from '@vicons/antd'
-import type { NodeInfo, TaskInfo } from '../types'
+import type { NodeInfo } from '../types'
 import { isTauri } from '../utils/platform'
 
 // 转换文件路径为 Tauri 可访问的 URL
@@ -17,7 +17,6 @@ const convertFileSrc = (filePath: string) => {
 
 const props = defineProps<{
   selectedNode: NodeInfo | null
-  selectedTask?: TaskInfo | null
   selectedRecognitionIndex?: number | null
   selectedNestedIndex?: number | null
   selectedActionIndex?: number | null
@@ -25,11 +24,9 @@ const props = defineProps<{
   isActionOnlyView?: boolean
 }>()
 
-// 调试：监听节点变化
-watch(() => props.selectedNode, (node) => {
-  if (node) {
-    console.log('[DetailView] 选中节点:', node.name, '截图:', node.error_image)
-  }
+// 是否选中了嵌套动作节点
+const isNestedActionSelected = computed(() => {
+  return props.selectedActionIndex != null && props.selectedNestedActionIndex != null
 })
 
 // 节点状态标签类型
@@ -53,18 +50,17 @@ const currentAttempt = computed(() => {
   if (!props.selectedNode) return null
 
   // 如果选中了嵌套动作节点
-  if (props.selectedActionIndex !== null && props.selectedActionIndex !== undefined &&
-      props.selectedNestedActionIndex !== null && props.selectedNestedActionIndex !== undefined) {
-    const nestedActionGroup = props.selectedNode.nested_action_nodes?.[props.selectedActionIndex]
-    const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex]
+  if (isNestedActionSelected.value) {
+    const nestedActionGroup = props.selectedNode.nested_action_nodes?.[props.selectedActionIndex!]
+    const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex!]
     return nestedAction || null
   }
 
-  if (props.selectedRecognitionIndex === null || props.selectedRecognitionIndex === undefined) return null
+  if (props.selectedRecognitionIndex == null) return null
 
   const attempt = props.selectedNode.recognition_attempts[props.selectedRecognitionIndex]
 
-  if (props.selectedNestedIndex !== null && props.selectedNestedIndex !== undefined) {
+  if (props.selectedNestedIndex != null) {
     return attempt?.nested_nodes?.[props.selectedNestedIndex] || null
   }
 
@@ -76,19 +72,18 @@ const currentRecognition = computed(() => {
   if (!props.selectedNode) return null
 
   // 如果选中了嵌套动作节点
-  if (props.selectedActionIndex !== null && props.selectedActionIndex !== undefined &&
-      props.selectedNestedActionIndex !== null && props.selectedNestedActionIndex !== undefined) {
-    const nestedActionGroup = props.selectedNode.nested_action_nodes?.[props.selectedActionIndex]
-    const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex]
+  if (isNestedActionSelected.value) {
+    const nestedActionGroup = props.selectedNode.nested_action_nodes?.[props.selectedActionIndex!]
+    const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex!]
     return nestedAction?.reco_details || null
   }
 
   // 如果选中了特定的识别尝试
-  if (props.selectedRecognitionIndex !== null && props.selectedRecognitionIndex !== undefined) {
+  if (props.selectedRecognitionIndex != null) {
     const attempt = props.selectedNode.recognition_attempts[props.selectedRecognitionIndex]
 
     // 如果选中了嵌套节点，显示嵌套节点的详情
-    if (props.selectedNestedIndex !== null && props.selectedNestedIndex !== undefined) {
+    if (props.selectedNestedIndex != null) {
       const nested = attempt?.nested_nodes?.[props.selectedNestedIndex]
       return nested?.reco_details || null
     }
@@ -109,10 +104,9 @@ const hasRecognition = computed(() => {
 // 是否有动作详情（节点最终动作，与当前识别尝试解耦）
 const hasAction = computed(() => {
   // 如果选中了嵌套动作节点，检查是否有动作详情
-  if (props.selectedActionIndex !== null && props.selectedActionIndex !== undefined &&
-      props.selectedNestedActionIndex !== null && props.selectedNestedActionIndex !== undefined) {
-    const nestedActionGroup = props.selectedNode?.nested_action_nodes?.[props.selectedActionIndex]
-    const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex]
+  if (isNestedActionSelected.value) {
+    const nestedActionGroup = props.selectedNode?.nested_action_nodes?.[props.selectedActionIndex!]
+    const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex!]
     return !!nestedAction?.action_details
   }
   return !!props.selectedNode?.action_details
@@ -123,10 +117,9 @@ const currentActionDetails = computed(() => {
   if (!props.selectedNode) return null
 
   // 如果选中了嵌套动作节点，返回嵌套动作的动作详情
-  if (props.selectedActionIndex !== null && props.selectedActionIndex !== undefined &&
-      props.selectedNestedActionIndex !== null && props.selectedNestedActionIndex !== undefined) {
-    const nestedActionGroup = props.selectedNode.nested_action_nodes?.[props.selectedActionIndex]
-    const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex]
+  if (isNestedActionSelected.value) {
+    const nestedActionGroup = props.selectedNode.nested_action_nodes?.[props.selectedActionIndex!]
+    const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex!]
     return nestedAction?.action_details || null
   }
 
@@ -135,9 +128,7 @@ const currentActionDetails = computed(() => {
 
 // 是否选中了特定的识别尝试或嵌套动作节点
 const isRecognitionAttemptSelected = computed(() => {
-  return (props.selectedRecognitionIndex !== null && props.selectedRecognitionIndex !== undefined) ||
-         (props.selectedActionIndex !== null && props.selectedActionIndex !== undefined &&
-          props.selectedNestedActionIndex !== null && props.selectedNestedActionIndex !== undefined)
+  return props.selectedRecognitionIndex != null || isNestedActionSelected.value
 })
 
 // 格式化 JSON

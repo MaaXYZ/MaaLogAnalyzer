@@ -159,7 +159,7 @@ export class NodeStatisticsAnalyzer {
    */
   static getTopFrequent(tasks: TaskInfo[], topN: number = 10): NodeStatistics[] {
     const allStats = this.analyze(tasks)
-    return allStats.sort((a, b) => b.count - a.count).slice(0, topN)
+    return [...allStats].sort((a, b) => b.count - a.count).slice(0, topN)
   }
 
   /**
@@ -167,7 +167,7 @@ export class NodeStatisticsAnalyzer {
    */
   static getTopFailed(tasks: TaskInfo[], topN: number = 10): NodeStatistics[] {
     const allStats = this.analyze(tasks)
-    return allStats
+    return [...allStats]
       .filter(s => s.failCount > 0)
       .sort((a, b) => (b.failCount / b.count) - (a.failCount / a.count))
       .slice(0, topN)

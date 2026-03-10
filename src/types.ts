@@ -9,8 +9,6 @@ export interface LogLine {
   functionName?: string
   message: string
   params: Record<string, any>
-  status?: 'enter' | 'leave'
-  duration?: number
   _lineNumber?: number  // 文件中的行号
 }
 
@@ -118,13 +116,4 @@ export interface ActionDetail {
   detail: any
   name: string
   success: boolean
-}
-
-// 合并后的操作信息（识别 + 动作）
-export interface OperationInfo {
-  index: number
-  name: string
-  status: 'success' | 'warning' | 'error'
-  recognition?: RecognitionDetail | null
-  action?: ActionDetail | null
 }
