@@ -5,6 +5,7 @@ import { CheckCircleOutlined, CloseCircleOutlined } from '@vicons/antd'
 import type { NodeInfo } from '../types'
 import { isTauri } from '../utils/platform'
 import { getSettings } from '../utils/settings'
+import { extractTime } from '../utils/formatDuration'
 
 // 读取设置
 const settings = getSettings()
@@ -154,14 +155,19 @@ const actionButtonType = computed(() => {
       size="small"
       :bordered="true"
     >
-      <!-- Header: 节点名称按钮 -->
+      <!-- Header: 节点名称按钮 + 时间 -->
       <template #header>
-        <n-button
-          size="small"
-          @click="handleNodeClick"
-        >
-          {{ node.name }}
-        </n-button>
+        <n-flex align="center" style="gap: 8px">
+          <n-button
+            size="small"
+            @click="handleNodeClick"
+          >
+            {{ node.name }}
+          </n-button>
+          <n-text depth="3" style="font-size: 12px">
+            {{ extractTime(node.timestamp) }}
+          </n-text>
+        </n-flex>
       </template>
 
       <!-- Content: 执行流程 Recognition → Action → Next List -->

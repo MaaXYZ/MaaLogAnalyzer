@@ -11,7 +11,7 @@ import NodeCard from '../components/NodeCard.vue'
 import type { TaskInfo, NodeInfo } from '../types'
 import type { LogParser } from '../utils/logParser'
 import { isTauri, isVSCode } from '../utils/platform'
-import { formatDuration } from '../utils/formatDuration'
+import { formatDuration, extractTime } from '../utils/formatDuration'
 
 const props = defineProps<{
   tasks: TaskInfo[]
@@ -825,7 +825,12 @@ const handleNestedActionClick = (node: NodeInfo, actionIndex: number, nestedInde
                         }"
                       >
                         <n-flex vertical style="gap: 4px">
-                          <n-text strong style="font-size: 13px">{{ node.name || '未命名节点' }}</n-text>
+                          <n-flex align="center" style="gap: 8px">
+                            <n-text strong style="font-size: 13px">{{ node.name || '未命名节点' }}</n-text>
+                            <n-text depth="3" style="font-size: 11px">
+                              {{ extractTime(node.timestamp) }}
+                            </n-text>
+                          </n-flex>
                           <n-flex align="center" style="gap: 8px">
                             <n-tag size="small" :type="node.status === 'success' ? 'success' : 'error'">
                               {{ node.status === 'success' ? '成功' : '失败' }}

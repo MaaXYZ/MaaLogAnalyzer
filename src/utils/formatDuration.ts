@@ -40,3 +40,13 @@ export function formatDuration(durationMs: number | undefined): string {
   }
   return `${hours}h ${remainingMinutes}m`
 }
+
+/**
+ * 从时间戳中提取时分秒
+ * @param timestamp 时间戳字符串
+ * @returns HH:MM:SS 格式的时间字符串
+ */
+export function extractTime(timestamp: string): string {
+  const match = timestamp.match(/(\d{2}:\d{2}:\d{2})/)
+  return match ? match[1] : ''
+}
