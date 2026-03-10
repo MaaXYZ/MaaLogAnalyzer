@@ -584,18 +584,25 @@ export class LogParser {
 
         // 如果是子任务的节点，按task_id分组收集
         if (taskId !== task.task_id) {
+          // 获取该task_id的识别尝试
+          const taskRecognitions = recognitionsByTaskId.get(taskId) || []
+
           const subNode = {
             node_id: details.node_id,
             name: this.stringPool.intern(details.reco_details?.name || details.action_details?.name || details.name || ''),
             timestamp: this.stringPool.intern(event.timestamp),
             status: message === 'Node.PipelineNode.Succeeded' ? 'success' : 'failed',
             reco_details: details.reco_details ? markRaw(details.reco_details) : undefined,
-            action_details: details.action_details ? markRaw(details.action_details) : undefined
+            action_details: details.action_details ? markRaw(details.action_details) : undefined,
+            recognition_attempts: taskRecognitions.length > 0 ? taskRecognitions.slice() : undefined
           }
           if (!subTaskNodesByTaskId.has(taskId)) {
             subTaskNodesByTaskId.set(taskId, [])
           }
           subTaskNodesByTaskId.get(taskId)!.push(subNode)
+
+          // 清空该task_id的识别尝试
+          recognitionsByTaskId.delete(taskId)
         }
       }
 
@@ -639,7 +646,6 @@ export class LogParser {
             })),
             recognition_attempts: nodeRecognitionAttempts,
             nested_action_nodes: subTaskActionNodes.length > 0 ? subTaskActionNodes.slice() : (nestedActionNodes.length > 0 ? nestedActionNodes.slice() : undefined),
-            nested_recognition_in_action: nestedNodes.length > 0 ? nestedNodes.slice() : undefined,
             node_details: details.node_details ? markRaw(details.node_details) : undefined,
             error_image: this.findErrorImage(event.timestamp, nodeName)
           }

@@ -57,14 +57,24 @@ export interface RecognitionAttempt {
   error_image?: string
 }
 
-// 动作尝试记录（用于嵌套的 ActionNode）
-export interface ActionAttempt {
-  action_id: number
+// 嵌套动作节点组（custom action 产生的子任务）
+export interface NestedActionGroup {
+  task_id: number
   name: string
   timestamp: string
   status: 'success' | 'failed'
+  nested_actions: NestedActionNode[]
+}
+
+// 嵌套动作节点（子任务中的节点）
+export interface NestedActionNode {
+  node_id: number
+  name: string
+  timestamp: string
+  status: 'success' | 'failed'
+  reco_details?: RecognitionDetail
   action_details?: ActionDetail
-  nested_actions?: ActionAttempt[]  // 嵌套的 Action 事件
+  recognition_attempts?: RecognitionAttempt[]
 }
 
 // 节点信息
@@ -79,7 +89,7 @@ export interface NodeInfo {
   focus?: any
   next_list: NextListItem[]  // Next 列表
   recognition_attempts: RecognitionAttempt[]  // 识别尝试历史（包括失败的）
-  nested_action_nodes?: ActionAttempt[]  // 嵌套的 ActionNode 事件（custom action）
+  nested_action_nodes?: NestedActionGroup[]  // 嵌套的 ActionNode 事件（custom action）
   nested_recognition_in_action?: RecognitionAttempt[]  // 在 custom action 中产生的 RecognitionNode
   node_details?: {
     action_id: number
