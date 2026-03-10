@@ -139,6 +139,28 @@ const isRecognitionAttemptSelected = computed(() => {
   return props.selectedRecognitionIndex != null || isNestedActionSelected.value
 })
 
+// 当前选中的嵌套动作节点（用于 fallback 显示）
+const currentNestedAction = computed(() => {
+  if (!isNestedActionSelected.value || !props.selectedNode) return null
+  const group = props.selectedNode.nested_action_nodes?.[props.selectedActionIndex!]
+  return group?.nested_actions?.[props.selectedNestedActionIndex!] || null
+})
+
+// 嵌套动作节点选中但无识别/动作详情时的 fallback
+const showNestedActionFallback = computed(() => {
+  return isNestedActionSelected.value && !hasRecognition.value && !hasAction.value && currentNestedAction.value != null
+})
+
+// 嵌套动作节点中带 error_image 的识别尝试
+const nestedActionErrorImage = computed(() => {
+  const action = currentNestedAction.value
+  if (!action?.recognition_attempts) return null
+  for (const attempt of action.recognition_attempts) {
+    if (attempt.error_image) return attempt.error_image
+  }
+  return null
+})
+
 // 格式化 JSON
 const formatJson = (obj: any) => {
   return JSON.stringify(obj, null, 2)
@@ -271,6 +293,61 @@ const copyToClipboard = (text: string) => {
                 language="json"
                 :word-wrap="true"
                 style="max-height: 400px; overflow: auto; max-width: 100%"
+              />
+            </n-collapse-item>
+          </n-collapse>
+        </n-card>
+
+        <!-- 嵌套动作节点 fallback（无识别/动作详情时显示基本信息） -->
+        <n-card title="📍 嵌套动作节点" v-if="showNestedActionFallback">
+          <n-descriptions :column="1" label-placement="left">
+            <n-descriptions-item label="节点名称">
+              <n-flex align="center" style="gap: 8px">
+                <span style="font-weight: 500; font-size: 15px">
+                  {{ currentNestedAction!.name }}
+                </span>
+                <n-tag :type="currentNestedAction!.status === 'success' ? 'success' : 'error'" size="small">
+                  {{ currentNestedAction!.status === 'success' ? '成功' : '失败' }}
+                </n-tag>
+              </n-flex>
+            </n-descriptions-item>
+
+            <n-descriptions-item label="执行时间">
+              {{ currentNestedAction!.timestamp }}
+            </n-descriptions-item>
+
+            <n-descriptions-item label="节点 ID">
+              {{ currentNestedAction!.node_id }}
+            </n-descriptions-item>
+
+            <n-descriptions-item label="识别尝试">
+              {{ currentNestedAction!.recognition_attempts?.length || 0 }} 次
+            </n-descriptions-item>
+
+            <n-descriptions-item label="错误截图" v-if="nestedActionErrorImage" :span="2">
+              <img :src="convertFileSrc(nestedActionErrorImage)" style="max-width: 100%; border-radius: 4px; margin-top: 8px" alt="错误截图" />
+            </n-descriptions-item>
+          </n-descriptions>
+
+          <!-- 原始数据 -->
+          <n-collapse style="margin-top: 16px" :default-expanded-names="rawJsonDefaultExpanded">
+            <n-collapse-item title="原始 JSON 数据" name="node-json">
+              <template #header-extra>
+                <n-button
+                  size="tiny"
+                  @click.stop="copyToClipboard(formatJson(currentNestedAction))"
+                >
+                  <template #icon>
+                    <n-icon><copy-outlined /></n-icon>
+                  </template>
+                  复制
+                </n-button>
+              </template>
+              <n-code
+                :code="formatJson(currentNestedAction)"
+                language="json"
+                :word-wrap="true"
+                style="max-height: 500px; overflow: auto; max-width: 100%"
               />
             </n-collapse-item>
           </n-collapse>

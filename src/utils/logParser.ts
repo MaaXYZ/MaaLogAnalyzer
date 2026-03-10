@@ -446,14 +446,21 @@ export class LogParser {
   }
 
   /**
-   * 查找错误截图
+   * 查找错误截图（匹配到秒级别 + 节点名）
    */
   private findErrorImage(timestamp: string, nodeName: string): string | undefined {
     if (this.errorImages.size === 0) return undefined
 
-    // 2026-03-08 13:12:30.216 -> 2026.03.08-13.12.30.216
-    const converted = timestamp.replace(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\.(\d{3})/, '$1.$2.$3-$4.$5.$6.$7')
-    return this.errorImages.get(`${converted}_${nodeName}`)
+    // 2026-03-08 13:12:30.216 -> 2026.03.08-13.12.30
+    const secondsOnly = timestamp.replace(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\..*/, '$1.$2.$3-$4.$5.$6')
+    const suffix = `_${nodeName}`
+
+    for (const [key, path] of this.errorImages.entries()) {
+      if (key.includes(`${secondsOnly}.`) && key.endsWith(suffix)) {
+        return path
+      }
+    }
+    return undefined
   }
 
   /**
