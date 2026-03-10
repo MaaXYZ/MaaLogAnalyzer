@@ -65,7 +65,7 @@ const handleViewModeSelect = (key: string) => {
   viewMode.value = key as ViewMode
 }
 
-const splitSize = ref(0.6)
+const splitSize = ref(0.65)
 const parser = new LogParser()
 const tasks = ref<TaskInfo[]>([])
 const selectedTask = ref<TaskInfo | null>(null)
