@@ -22,6 +22,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'select-node': [node: NodeInfo]
+  'select-action': [node: NodeInfo]
   'select-recognition': [node: NodeInfo, attemptIndex: number]
   'select-nested': [node: NodeInfo, attemptIndex: number, nestedIndex: number]
   'select-nested-action': [node: NodeInfo, actionIndex: number, nestedIndex: number]
@@ -51,6 +52,10 @@ const cardClass = computed(() => {
 // 点击节点
 const handleNodeClick = () => {
   emit('select-node', props.node)
+}
+
+const handleActionClick = () => {
+  emit('select-action', props.node)
 }
 
 // 点击识别尝试
@@ -310,7 +315,7 @@ const actionButtonType = computed(() => {
                 size="small"
                 :type="actionButtonType"
                 ghost
-                @click="handleNodeClick"
+                @click="handleActionClick"
                 style="align-self: flex-start"
               >
                 <template #icon>

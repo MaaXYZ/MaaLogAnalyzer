@@ -22,6 +22,7 @@ const props = defineProps<{
   selectedNestedIndex?: number | null
   selectedActionIndex?: number | null
   selectedNestedActionIndex?: number | null
+  isActionOnlyView?: boolean
 }>()
 
 // 调试：监听节点变化
@@ -239,8 +240,8 @@ const copyToClipboard = (text: string) => {
           </n-collapse>
         </n-card>
 
-        <!-- 动作详情 (仅在点击成功的识别尝试时显示) -->
-        <n-card title="⚡ 动作详情" v-if="hasAction && isRecognitionAttemptSelected && isCurrentRecognitionSuccess">
+        <!-- 动作详情 (仅在点击动作按钮时显示) -->
+        <n-card title="⚡ 动作详情" v-if="hasAction && isActionOnlyView">
           <n-descriptions :column="2" size="small" label-placement="left" bordered>
             <n-descriptions-item label="动作 ID">
               {{ currentActionDetails?.action_id }}
@@ -298,7 +299,7 @@ const copyToClipboard = (text: string) => {
         </n-card>
 
         <!-- 节点详情 (仅在点击节点名称时显示) -->
-        <n-card title="📍 节点详情" v-if="!isRecognitionAttemptSelected">
+        <n-card title="📍 节点详情" v-if="!isRecognitionAttemptSelected && !isActionOnlyView">
           <n-descriptions :column="1" label-placement="left">
             <n-descriptions-item label="节点名称">
               <n-flex align="center" style="gap: 8px">
@@ -329,7 +330,7 @@ const copyToClipboard = (text: string) => {
         </n-card>
 
         <!-- 节点详细信息 (仅在点击节点名称时显示) -->
-        <n-card title="📋 节点详细信息" v-if="!isRecognitionAttemptSelected && selectedNode.node_details">
+        <n-card title="📋 节点详细信息" v-if="!isRecognitionAttemptSelected && !isActionOnlyView && selectedNode.node_details">
           <n-descriptions :column="2" size="small" label-placement="left" bordered>
             <n-descriptions-item label="节点 ID">
               {{ selectedNode.node_details.node_id }}
@@ -352,7 +353,7 @@ const copyToClipboard = (text: string) => {
         </n-card>
 
         <!-- 完整节点数据 (仅在点击节点名称时显示) -->
-        <n-card title="📄 完整节点数据" v-if="!isRecognitionAttemptSelected">
+        <n-card title="📄 完整节点数据" v-if="!isRecognitionAttemptSelected && !isActionOnlyView">
           <n-collapse>
             <n-collapse-item title="原始 JSON 数据" name="node-json">
               <template #header-extra>

@@ -27,6 +27,7 @@ const emit = defineEmits<{
   'upload-file': [file: File]
   'upload-content': [content: string, errorImages?: Map<string, string>]
   'select-node': [node: NodeInfo]
+  'select-action': [node: NodeInfo]
   'select-recognition': [node: NodeInfo, attemptIndex: number]
   'select-nested': [node: NodeInfo, attemptIndex: number, nestedIndex: number]
   'select-nested-action': [node: NodeInfo, actionIndex: number, nestedIndex: number]
@@ -524,6 +525,11 @@ const handleNodeClick = (node: NodeInfo) => {
   emit('select-node', node)
 }
 
+// 选择动作
+const handleActionClick = (node: NodeInfo) => {
+  emit('select-action', node)
+}
+
 // 选择识别尝试
 const handleRecognitionClick = (node: NodeInfo, attemptIndex: number) => {
   emit('select-recognition', node, attemptIndex)
@@ -895,6 +901,7 @@ const handleNestedActionClick = (node: NodeInfo, actionIndex: number, nestedInde
                           <node-card
                             :node="item"
                             @select-node="handleNodeClick"
+                            @select-action="handleActionClick"
                             @select-recognition="handleRecognitionClick"
                             @select-nested="handleNestedClick"
                             @select-nested-action="handleNestedActionClick"

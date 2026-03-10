@@ -74,6 +74,7 @@ const selectedRecognitionIndex = ref<number | null>(null)
 const selectedNestedIndex = ref<number | null>(null)
 const selectedActionIndex = ref<number | null>(null)
 const selectedNestedActionIndex = ref<number | null>(null)
+const isActionOnlyView = ref(false)
 const loading = ref(false)
 const parseProgress = ref(0)
 const showParsingModal = ref(false)
@@ -201,6 +202,17 @@ const handleSelectNode = (node: NodeInfo) => {
   selectedNestedIndex.value = null
   selectedActionIndex.value = null
   selectedNestedActionIndex.value = null
+  isActionOnlyView.value = false
+}
+
+// 选择动作
+const handleSelectAction = (node: NodeInfo) => {
+  selectedNode.value = node
+  selectedRecognitionIndex.value = null
+  selectedNestedIndex.value = null
+  selectedActionIndex.value = null
+  selectedNestedActionIndex.value = null
+  isActionOnlyView.value = true
 }
 
 // 选择识别尝试
@@ -492,6 +504,7 @@ if (typeof window !== 'undefined') {
               @upload-file="handleFileUpload"
               @upload-content="handleContentUpload"
               @select-node="handleSelectNode"
+              @select-action="handleSelectAction"
               @select-recognition="handleSelectRecognition"
               @select-nested="handleSelectNested"
               @select-nested-action="handleSelectNestedAction"
@@ -524,6 +537,7 @@ if (typeof window !== 'undefined') {
                 :selected-nested-index="selectedNestedIndex"
                 :selected-action-index="selectedActionIndex"
                 :selected-nested-action-index="selectedNestedActionIndex"
+                :is-action-only-view="isActionOnlyView"
                 style="height: 100%"
               />
             </n-card>
@@ -599,6 +613,9 @@ if (typeof window !== 'undefined') {
                     :selected-task="selectedTask"
                     :selected-recognition-index="selectedRecognitionIndex"
                     :selected-nested-index="selectedNestedIndex"
+                    :selected-action-index="selectedActionIndex"
+                    :selected-nested-action-index="selectedNestedActionIndex"
+                    :is-action-only-view="isActionOnlyView"
                     style="height: 100%"
                   />
                 </n-card>
