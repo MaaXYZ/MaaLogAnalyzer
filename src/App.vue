@@ -142,7 +142,7 @@ const handleFileUpload = async (file: File) => {
       const { extractZipContent } = await import('./utils/zipExtractor')
       const result = await extractZipContent(file)
       if (result) {
-        await processLogContent(result.content, result.errorImages, result.visionImages)
+        await processLogContent(result.content, result.errorImages, result.visionImages, result.waitFreezesImages)
       } else {
         message.warning('ZIP 文件中未找到有效的日志文件')
       }
@@ -158,10 +158,10 @@ const handleFileUpload = async (file: File) => {
 }
 
 // 处理文件内容
-const handleContentUpload = async (content: string, errorImages?: Map<string, string>, visionImages?: Map<string, string>) => {
+const handleContentUpload = async (content: string, errorImages?: Map<string, string>, visionImages?: Map<string, string>, waitFreezesImages?: Map<string, string>) => {
   loading.value = true
   try {
-    await processLogContent(content, errorImages, visionImages)
+    await processLogContent(content, errorImages, visionImages, waitFreezesImages)
   } catch (error) {
     message.error(getErrorMessage(error), { duration: 5000 })
   } finally {
@@ -170,7 +170,7 @@ const handleContentUpload = async (content: string, errorImages?: Map<string, st
 }
 
 // 处理文件内容
-const processLogContent = async (content: string, errorImages?: Map<string, string>, visionImages?: Map<string, string>) => {
+const processLogContent = async (content: string, errorImages?: Map<string, string>, visionImages?: Map<string, string>, waitFreezesImages?: Map<string, string>) => {
   // 清空所有状态，确保重新上传文件时不会显示旧数据
   tasks.value = []
   selectedTask.value = null
@@ -195,6 +195,11 @@ const processLogContent = async (content: string, errorImages?: Map<string, stri
     // 设置 vision 调试截图
     if (visionImages) {
       parser.setVisionImages(visionImages)
+    }
+
+    // 设置 wait_freezes 调试截图
+    if (waitFreezesImages) {
+      parser.setWaitFreezesImages(waitFreezesImages)
     }
 
     // 异步解析，带进度回调

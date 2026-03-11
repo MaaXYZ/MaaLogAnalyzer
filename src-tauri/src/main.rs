@@ -14,6 +14,7 @@ struct ZipExtractResult {
     content: String,
     error_images: HashMap<String, Vec<u8>>,
     vision_images: HashMap<String, Vec<u8>>,
+    wait_freezes_images: HashMap<String, Vec<u8>>,
 }
 
 #[tauri::command]
@@ -37,6 +38,7 @@ fn extract_zip_log(path: String) -> Result<ZipExtractResult, String> {
     let mut content = String::new();
     let mut error_images: HashMap<String, Vec<u8>> = HashMap::new();
     let mut vision_images: HashMap<String, Vec<u8>> = HashMap::new();
+    let mut wait_freezes_images: HashMap<String, Vec<u8>> = HashMap::new();
 
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| format!("读取条目失败: {e}"))?;
@@ -64,7 +66,11 @@ fn extract_zip_log(path: String) -> Result<ZipExtractResult, String> {
             }
         } else if lower.starts_with(&vision_prefix.to_lowercase()) && lower.ends_with(".jpg") {
             let file_name = name.rsplit('/').next().unwrap_or("");
-            if let Some(key) = parse_vision_image_key(file_name) {
+            if let Some(key) = parse_wait_freezes_key(file_name) {
+                let mut buf = Vec::new();
+                entry.read_to_end(&mut buf).map_err(|e| format!("读取截图失败: {e}"))?;
+                wait_freezes_images.insert(key, buf);
+            } else if let Some(key) = parse_vision_image_key(file_name) {
                 let mut buf = Vec::new();
                 entry.read_to_end(&mut buf).map_err(|e| format!("读取截图失败: {e}"))?;
                 // 同一 key 覆盖（取最后出现的文件）
@@ -81,6 +87,7 @@ fn extract_zip_log(path: String) -> Result<ZipExtractResult, String> {
         content,
         error_images,
         vision_images,
+        wait_freezes_images,
     })
 }
 
@@ -133,6 +140,33 @@ fn parse_error_image_key(file_name: &str) -> Option<String> {
     let base_ts = &timestamp_part[..dot_pos];
 
     Some(format!("{base_ts}.{padded_ms}_{node_name}"))
+}
+
+/// Parse wait_freezes image filename into a normalized key
+/// e.g. "2026.03.11-06.30.46.881_AwardBox_wait_freezes.jpg" -> "2026.03.11-06.30.46.881_AwardBox_wait_freezes"
+fn parse_wait_freezes_key(file_name: &str) -> Option<String> {
+    let name = file_name.strip_suffix(".jpg").or_else(|| file_name.strip_suffix(".JPG"))?;
+
+    // Must end with _wait_freezes
+    if !name.ends_with("_wait_freezes") {
+        return None;
+    }
+
+    // Find the first underscore after the timestamp
+    let first_underscore = name.find('_')?;
+    let timestamp_part = &name[..first_underscore];
+
+    // Validate timestamp and pad ms
+    let dot_pos = timestamp_part.rfind('.')?;
+    let ms = &timestamp_part[dot_pos + 1..];
+    if ms.is_empty() || ms.len() > 3 || !ms.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let padded_ms = format!("{:0<3}", ms);
+    let base_ts = &timestamp_part[..dot_pos];
+
+    let rest = &name[first_underscore..]; // _NodeName_wait_freezes
+    Some(format!("{base_ts}.{padded_ms}{rest}"))
 }
 
 /// Parse vision image filename into a normalized key

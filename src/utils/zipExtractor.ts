@@ -28,7 +28,7 @@ function isNeededFile(path: string): boolean {
  */
 export async function extractZipContent(
   file: File,
-): Promise<{ content: string; errorImages: Map<string, string>; visionImages: Map<string, string> } | null> {
+): Promise<{ content: string; errorImages: Map<string, string>; visionImages: Map<string, string>; waitFreezesImages: Map<string, string> } | null> {
   const buffer = await file.arrayBuffer()
   const zipData = new Uint8Array(buffer)
 
@@ -75,7 +75,10 @@ export async function extractZipContent(
   // 读取 vision 调试截图
   const visionImages = extractVisionImages(files, paths, basePath)
 
-  return { content, errorImages, visionImages }
+  // 读取 wait_freezes 调试截图
+  const waitFreezesImages = extractWaitFreezesImages(files, paths, basePath)
+
+  return { content, errorImages, visionImages, waitFreezesImages }
 }
 
 /**
@@ -198,6 +201,52 @@ function extractVisionImages(
         // 同一 key 覆盖（释放前一个 blob URL）
         const prev = imageMap.get(key)
         if (prev) URL.revokeObjectURL(prev)
+        imageMap.set(key, url)
+      }
+    }
+  }
+
+  return imageMap
+}
+
+/**
+ * 解析 wait_freezes 文件名为标准化 key
+ * 格式: YYYY.MM.DD-HH.MM.SS.ms_NodeName_wait_freezes.jpg
+ * 返回: YYYY.MM.DD-HH.MM.SS.ms_NodeName_wait_freezes（毫秒补齐3位）
+ */
+function parseWaitFreezesKey(fileName: string): string | null {
+  const match = fileName.match(
+    /^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+_wait_freezes)\.jpg$/i,
+  )
+  if (!match) return null
+  const [, timestamp, ms, rest] = match
+  const paddedMs = ms.padEnd(3, '0')
+  return `${timestamp}.${paddedMs}_${rest}`
+}
+
+/**
+ * 提取 vision 目录下的 wait_freezes JPG 调试截图
+ * key 格式: YYYY.MM.DD-HH.MM.SS.ms_NodeName_wait_freezes
+ */
+function extractWaitFreezesImages(
+  files: Record<string, Uint8Array>,
+  paths: string[],
+  basePath: string,
+): Map<string, string> {
+  const imageMap = new Map<string, string>()
+  const visionPrefix = joinPath(basePath, 'vision/').toLowerCase()
+
+  for (const p of paths) {
+    const normalized = p.replace(/\\/g, '/')
+    const lower = normalized.toLowerCase()
+    if (lower.startsWith(visionPrefix) && lower.endsWith('.jpg')) {
+      const fileName = normalized.substring(normalized.lastIndexOf('/') + 1)
+      const key = parseWaitFreezesKey(fileName)
+      if (key != null) {
+        const data = files[p]
+        const url = URL.createObjectURL(
+          new Blob([data.slice().buffer as ArrayBuffer], { type: 'image/jpeg' }),
+        )
         imageMap.set(key, url)
       }
     }

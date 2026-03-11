@@ -90,6 +90,7 @@ export class LogParser {
   private taskThreadMap = new Map<number, string>()
   private errorImages = new Map<string, string>()
   private visionImages = new Map<string, string>()
+  private waitFreezesImages = new Map<string, string>()
 
   /**
    * 设置错误截图映射
@@ -104,6 +105,14 @@ export class LogParser {
    */
   setVisionImages(images: Map<string, string>): void {
     this.visionImages = images
+  }
+
+  /**
+   * 设置 wait_freezes 调试截图映射
+   * key 格式: YYYY.MM.DD-HH.MM.SS.ms_NodeName_wait_freezes
+   */
+  setWaitFreezesImages(images: Map<string, string>): void {
+    this.waitFreezesImages = images
   }
 
   /**
@@ -345,7 +354,8 @@ export class LogParser {
                 ? subTaskActionGroups
                 : (nestedActionNodes.length > 0 ? nestedActionNodes.slice() : undefined),
               node_details: details.node_details ? markRaw(details.node_details) : undefined,
-              error_image: this.findErrorImage(event.timestamp, nodeName)
+              error_image: this.findErrorImage(event.timestamp, nodeName),
+              wait_freezes_images: this.findWaitFreezesImages(event.timestamp, details.action_details?.name || details.node_details?.name || nodeName)
             }
             nodes.push(node)
             nodeIdSet.add(nodeId)
@@ -497,6 +507,40 @@ export class LogParser {
       }
     }
     return undefined
+  }
+
+  /**
+   * 查找 action 的 wait_freezes 调试截图（按节点名匹配，返回所有匹配的图片）
+   * key 格式: YYYY.MM.DD-HH.MM.SS.ms_NodeName_wait_freezes
+   * 匹配逻辑：节点名一致，且时间戳在节点完成前（同分钟或前几分钟）
+   */
+  private findWaitFreezesImages(nodeTimestamp: string, actionName: string): string[] | undefined {
+    if (this.waitFreezesImages.size === 0) return undefined
+
+    const suffix = `_${actionName}_wait_freezes`
+    const results: string[] = []
+
+    // 节点完成时间（毫秒）
+    const nodeTime = new Date(nodeTimestamp).getTime()
+    if (isNaN(nodeTime)) return undefined
+
+    for (const [key, path] of this.waitFreezesImages.entries()) {
+      if (!key.endsWith(suffix)) continue
+
+      // 从 key 中提取时间戳: 2026.03.11-06.22.54.365_NodeName_wait_freezes
+      // -> 2026-03-11 06:22:54.365
+      const tsMatch = key.match(/^(\d{4})\.(\d{2})\.(\d{2})-(\d{2})\.(\d{2})\.(\d{2})\.(\d{1,3})_/)
+      if (!tsMatch) continue
+      const [, y, mo, d, h, mi, s, ms] = tsMatch
+      const imgTime = new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}.${ms.padEnd(3, '0')}`).getTime()
+
+      // wait_freezes 截图应该在节点完成前、且不超过60秒
+      if (!isNaN(imgTime) && imgTime <= nodeTime && nodeTime - imgTime < 60000) {
+        results.push(path)
+      }
+    }
+
+    return results.length > 0 ? results : undefined
   }
 
   /**

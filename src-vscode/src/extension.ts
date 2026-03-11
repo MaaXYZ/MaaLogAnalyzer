@@ -235,6 +235,17 @@ function parseVisionImageKey(fileName: string): string | null {
   return `${timestamp}.${paddedMs}_${rest}`
 }
 
+/** 解析 wait_freezes 截图文件名为标准化 key */
+function parseWaitFreezesKey(fileName: string): string | null {
+  const match = fileName.match(
+    /^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+_wait_freezes)\.jpg$/i,
+  )
+  if (!match) return null
+  const [, timestamp, ms, rest] = match
+  const paddedMs = ms.padEnd(3, '0')
+  return `${timestamp}.${paddedMs}_${rest}`
+}
+
 /** 处理 ZIP 文件：Node.js 侧解压 */
 async function handleZipFile(uri: vscode.Uri): Promise<void> {
   try {
@@ -288,6 +299,9 @@ async function handleZipFile(uri: vscode.Uri): Promise<void> {
     const visionImages: { key: string; base64: string }[] = []
     const visionPrefix = joinZipPath(basePath, 'vision/').toLowerCase()
 
+    // 提取 wait_freezes 调试截图转为 base64
+    const waitFreezesImages: { key: string; base64: string }[] = []
+
     for (const p of paths) {
       const normalized = p.replace(/\\/g, '/')
       const lower = normalized.toLowerCase()
@@ -300,15 +314,21 @@ async function handleZipFile(uri: vscode.Uri): Promise<void> {
         }
       } else if (lower.startsWith(visionPrefix) && lower.endsWith('.jpg')) {
         const fileName = normalized.substring(normalized.lastIndexOf('/') + 1)
-        const key = parseVisionImageKey(fileName)
-        if (key) {
+        const wfKey = parseWaitFreezesKey(fileName)
+        if (wfKey) {
           const base64 = Buffer.from(files[p]).toString('base64')
-          // 同一 key 覆盖（取最后出现的）
-          const existing = visionImages.findIndex(v => v.key === key)
-          if (existing >= 0) {
-            visionImages[existing].base64 = base64
-          } else {
-            visionImages.push({ key, base64 })
+          waitFreezesImages.push({ key: wfKey, base64 })
+        } else {
+          const key = parseVisionImageKey(fileName)
+          if (key) {
+            const base64 = Buffer.from(files[p]).toString('base64')
+            // 同一 key 覆盖（取最后出现的）
+            const existing = visionImages.findIndex(v => v.key === key)
+            if (existing >= 0) {
+              visionImages[existing].base64 = base64
+            } else {
+              visionImages.push({ key, base64 })
+            }
           }
         }
       }
@@ -318,7 +338,8 @@ async function handleZipFile(uri: vscode.Uri): Promise<void> {
       type: 'loadZipFile',
       content,
       errorImages,
-      visionImages
+      visionImages,
+      waitFreezesImages
     })
   } catch (error) {
     vscode.window.showErrorMessage(`解压 ZIP 文件失败: ${error}`)

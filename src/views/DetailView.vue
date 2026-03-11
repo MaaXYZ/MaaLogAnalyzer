@@ -286,6 +286,20 @@ const copyToClipboard = (text: string) => {
             </n-descriptions-item>
           </n-descriptions>
 
+          <!-- wait_freezes 调试截图 -->
+          <div v-if="selectedNode?.wait_freezes_images?.length && (isActionOnlyView || (selectedActionIndex !== null && selectedNestedActionIndex !== null))" style="margin-top: 12px">
+            <n-text depth="3" style="font-size: 13px; display: block; margin-bottom: 8px">Wait Freezes 截图 ({{ selectedNode.wait_freezes_images.length }})</n-text>
+            <n-flex vertical style="gap: 8px">
+              <img
+                v-for="(img, idx) in selectedNode.wait_freezes_images"
+                :key="idx"
+                :src="convertFileSrc(img)"
+                style="max-width: 100%; border-radius: 4px"
+                :alt="`Wait Freezes 截图 ${idx + 1}`"
+              />
+            </n-flex>
+          </div>
+
           <!-- 原始动作数据 (折叠) -->
           <n-collapse style="margin-top: 16px" :default-expanded-names="rawJsonDefaultExpanded">
             <n-collapse-item title="原始动作数据" name="action-json">

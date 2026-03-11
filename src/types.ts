@@ -98,6 +98,7 @@ export interface NodeInfo {
     reco_id: number
   }
   error_image?: string  // 节点截图路径
+  wait_freezes_images?: string[]  // action wait_freezes 调试截图
 }
 
 // 识别详情

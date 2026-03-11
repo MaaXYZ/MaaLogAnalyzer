@@ -29,7 +29,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'select-task': [task: TaskInfo]
   'upload-file': [file: File]
-  'upload-content': [content: string, errorImages?: Map<string, string>, visionImages?: Map<string, string>]
+  'upload-content': [content: string, errorImages?: Map<string, string>, visionImages?: Map<string, string>, waitFreezesImages?: Map<string, string>]
   'select-node': [node: NodeInfo]
   'select-action': [node: NodeInfo]
   'select-recognition': [node: NodeInfo, attemptIndex: number]
@@ -377,7 +377,7 @@ const triggerFolderSelect = async () => {
     const result = await openFolderDialog()
 
     if (result) {
-      emit('upload-content', result.content, result.errorImages, result.visionImages)
+      emit('upload-content', result.content, result.errorImages, result.visionImages, result.waitFreezesImages)
     }
   } catch (error) {
     alert('打开文件夹失败: ' + error)
@@ -466,7 +466,7 @@ const handleTauriOpen = async () => {
         if (selected.toLowerCase().endsWith('.zip')) {
           // ZIP 文件：使用 Rust 侧原生解压
           const { invoke } = await import('@tauri-apps/api/core')
-          const result = await invoke<{ content: string; error_images: Record<string, number[]>; vision_images: Record<string, number[]> }>('extract_zip_log', { path: selected })
+          const result = await invoke<{ content: string; error_images: Record<string, number[]>; vision_images: Record<string, number[]>; wait_freezes_images: Record<string, number[]> }>('extract_zip_log', { path: selected })
 
           // 将 error_images 字节数组转为 blob URL
           const errorImages = new Map<string, string>()
@@ -482,7 +482,14 @@ const handleTauriOpen = async () => {
             visionImages.set(key, URL.createObjectURL(blob))
           }
 
-          emit('upload-content', result.content, errorImages, visionImages)
+          // 将 wait_freezes_images 字节数组转为 blob URL
+          const waitFreezesImages = new Map<string, string>()
+          for (const [key, bytes] of Object.entries(result.wait_freezes_images)) {
+            const blob = new Blob([new Uint8Array(bytes)], { type: 'image/jpeg' })
+            waitFreezesImages.set(key, URL.createObjectURL(blob))
+          }
+
+          emit('upload-content', result.content, errorImages, visionImages, waitFreezesImages)
         } else {
           const { readTextFile } = await import('@tauri-apps/plugin-fs')
           const content = await readTextFile(selected)
@@ -514,7 +521,7 @@ const handleTauriOpenFolder = async () => {
     const result = await openFolderDialog()
 
     if (result) {
-      emit('upload-content', result.content, result.errorImages, result.visionImages)
+      emit('upload-content', result.content, result.errorImages, result.visionImages, result.waitFreezesImages)
     }
   } catch (error) {
     alert('打开文件夹失败: ' + error)
@@ -580,7 +587,20 @@ const handleVSCodeMessage = (event: MessageEvent) => {
         visionImages.set(key, URL.createObjectURL(blob))
       }
     }
-    emit('upload-content', message.content, errorImages, visionImages)
+    // 将 wait_freezes base64 图片转 blob URL
+    const waitFreezesImages = new Map<string, string>()
+    if (message.waitFreezesImages && Array.isArray(message.waitFreezesImages)) {
+      for (const { key, base64 } of message.waitFreezesImages) {
+        const binaryStr = atob(base64)
+        const bytes = new Uint8Array(binaryStr.length)
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i)
+        }
+        const blob = new Blob([bytes], { type: 'image/jpeg' })
+        waitFreezesImages.set(key, URL.createObjectURL(blob))
+      }
+    }
+    emit('upload-content', message.content, errorImages, visionImages, waitFreezesImages)
     emit('file-loading-end')
   }
 }
