@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@dagrejs/dagre':
-        specifier: ^2.0.4
-        version: 2.0.4
       '@tauri-apps/api':
         specifier: ^2.0.0
         version: 2.10.1
@@ -29,6 +26,9 @@ importers:
       echarts:
         specifier: ^6.0.0
         version: 6.0.0
+      elkjs:
+        specifier: ^0.11.1
+        version: 0.11.1
       fflate:
         specifier: ^0.8.2
         version: 0.8.2
@@ -95,12 +95,6 @@ packages:
     resolution: {integrity: sha512-//8027GSbxE9n3QlD73xFY6z4ZbHbvrOVB7AO6hsmrEzGbg+h2A09HboUyDgu+xsmj7JnvJD39Irt+2D0+iV8g==}
     peerDependencies:
       vue: ^3.0.11
-
-  '@dagrejs/dagre@2.0.4':
-    resolution: {integrity: sha512-J6vCWTNpicHF4zFlZG1cS5DkGzMr9941gddYkakjrg3ZNev4bbqEgLHFTWiFrcJm7UCRu7olO3K6IRDd9gSGhA==}
-
-  '@dagrejs/graphlib@3.0.4':
-    resolution: {integrity: sha512-HxZ7fCvAwTLCWCO0WjDkzAFQze8LdC6iOpKbetDKHIuDfIgMlIzYzqZ4nxwLlclQX+3ZVeZ1K2OuaOE2WWcyOg==}
 
   '@emotion/hash@0.8.0':
     resolution: {integrity: sha512-kBJtf7PH6aWwZ6fka3zQ0p6SBYzx4fl1LoZXE2RrnYST9Xljm7WfKJrU4g/Xr3Beg72MLrp1AWNUmuYJTL7Cow==}
@@ -618,6 +612,9 @@ packages:
   echarts@6.0.0:
     resolution: {integrity: sha512-Tte/grDQRiETQP4xz3iZWSvoHrkCQtwqd6hs+mifXcjrCuo2iKWbajFObuLJVBlDIJlOzgQPd1hsaKt/3+OMkQ==}
 
+  elkjs@0.11.1:
+    resolution: {integrity: sha512-zxxR9k+rx5ktMwT/FwyLdPCrq7xN6e4VGGHH8hA01vVYKjTFik7nHOxBnAYtrgYUB1RpAiLvA1/U2YraWxyKKg==}
+
   entities@7.0.1:
     resolution: {integrity: sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==}
     engines: {node: '>=0.12'}
@@ -834,12 +831,6 @@ snapshots:
   '@css-render/vue3-ssr@0.15.14(vue@3.5.27(typescript@5.9.3))':
     dependencies:
       vue: 3.5.27(typescript@5.9.3)
-
-  '@dagrejs/dagre@2.0.4':
-    dependencies:
-      '@dagrejs/graphlib': 3.0.4
-
-  '@dagrejs/graphlib@3.0.4': {}
 
   '@emotion/hash@0.8.0': {}
 
@@ -1252,6 +1243,8 @@ snapshots:
     dependencies:
       tslib: 2.3.0
       zrender: 6.0.0
+
+  elkjs@0.11.1: {}
 
   entities@7.0.1: {}
 

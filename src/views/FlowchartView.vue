@@ -251,6 +251,7 @@ const { fitView, getNode, setCenter } = useVueFlow('flowchart')
 
 const flowNodes = ref<any[]>([])
 const flowEdges = ref<any[]>([])
+const layoutRunId = ref(0)
 
 // Navigation panel
 const selectedTimelineIndex = ref<number | null>(null)
@@ -438,7 +439,8 @@ function scrollNavToIndex(index: number) {
 }
 
 // Build graph when task changes
-watch(selectedTask, (task) => {
+watch(selectedTask, async (task) => {
+  const runId = ++layoutRunId.value
   closePopover()
   selectedTimelineIndex.value = null
   if (!task) {
@@ -447,7 +449,8 @@ watch(selectedTask, (task) => {
     return
   }
 
-  const { nodes, edges } = buildFlowchartData(task)
+  const { nodes, edges } = await buildFlowchartData(task)
+  if (runId !== layoutRunId.value) return
 
   // Apply edge styles
   edges.forEach(edge => {

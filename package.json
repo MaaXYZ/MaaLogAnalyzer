@@ -20,13 +20,13 @@
         "version": "node scripts/bump-version.js"
     },
     "dependencies": {
-        "@dagrejs/dagre": "^2.0.4",
         "@tauri-apps/api": "^2.0.0",
         "@tauri-apps/plugin-dialog": "^2.0.0",
         "@tauri-apps/plugin-fs": "^2.0.0",
         "@vicons/antd": "^0.12.0",
         "@vue-flow/core": "^1.48.2",
         "echarts": "^6.0.0",
+        "elkjs": "^0.11.1",
         "fflate": "^0.8.2",
         "highlight.js": "^11.11.1",
         "naive-ui": "^2.38.0",

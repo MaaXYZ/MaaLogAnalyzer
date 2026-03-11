@@ -1,5 +1,5 @@
 import type { Node, Edge } from '@vue-flow/core'
-import dagre from '@dagrejs/dagre'
+import ELK from 'elkjs/lib/elk.bundled.js'
 import type { TaskInfo, NodeInfo } from '../types'
 
 export interface FlowNodeData {
@@ -19,7 +19,26 @@ export interface FlowEdgeData {
 const NODE_WIDTH = 180
 const NODE_HEIGHT = 60
 
-export function buildFlowchartData(task: TaskInfo): { nodes: Node[]; edges: Edge[] } {
+const elk = new ELK()
+
+interface ElkLayoutNode {
+  id: string
+  width?: number
+  height?: number
+  x?: number
+  y?: number
+  children?: ElkLayoutNode[]
+  edges?: ElkLayoutEdge[]
+  layoutOptions?: Record<string, string>
+}
+
+interface ElkLayoutEdge {
+  id: string
+  sources: string[]
+  targets: string[]
+}
+
+export async function buildFlowchartData(task: TaskInfo): Promise<{ nodes: Node[]; edges: Edge[] }> {
   // 1. Collect executed node names with order and info
   const executedNodeMap = new Map<string, { order: number[]; infos: NodeInfo[] }>()
   task.nodes.forEach((node, index) => {
@@ -120,27 +139,40 @@ export function buildFlowchartData(task: TaskInfo): { nodes: Node[]; edges: Edge
     }
   }
 
-  // 5. Dagre layout
-  const g = new dagre.graphlib.Graph()
-  g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: 'TB', nodesep: 50, ranksep: 80 })
+  // 5. ELK layout (layout calculation only)
+  const elkGraph: ElkLayoutNode = {
+    id: 'root',
+    layoutOptions: {
+      'elk.algorithm': 'layered',
+      'elk.direction': 'DOWN',
+      'elk.spacing.nodeNode': '50',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '80',
+      'elk.edgeRouting': 'ORTHOGONAL',
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+    },
+    children: flowNodes.map(node => ({
+      id: node.id,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+    })),
+    edges: flowEdges.map(edge => ({
+      id: edge.id,
+      sources: [edge.source],
+      targets: [edge.target],
+    })),
+  }
 
+  const layouted = await elk.layout(elkGraph)
+
+  // Apply positions; fallback keeps previous zero positions if ELK omits a node
+  const positionedMap = new Map((layouted.children ?? []).map(n => [n.id, n]))
   flowNodes.forEach(node => {
-    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
-  })
-
-  flowEdges.forEach(edge => {
-    g.setEdge(edge.source, edge.target)
-  })
-
-  dagre.layout(g)
-
-  // Apply positions
-  flowNodes.forEach(node => {
-    const dagreNode = g.node(node.id)
-    node.position = {
-      x: dagreNode.x - NODE_WIDTH / 2,
-      y: dagreNode.y - NODE_HEIGHT / 2,
+    const positioned = positionedMap.get(node.id)
+    if (positioned && typeof positioned.x === 'number' && typeof positioned.y === 'number') {
+      node.position = {
+        x: positioned.x,
+        y: positioned.y,
+      }
     }
   })
 
