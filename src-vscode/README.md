@@ -1,57 +1,71 @@
-# Maa Log Analyzer - VS Code 扩展
+﻿# Maa Log Analyzer
 
-VS Code 扩展版本的 MAA 日志分析器。
+MAA Log Analyzer is a VS Code extension for analyzing MaaFramework logs.
 
-## 构建步骤
+Maa 日志分析器是一个用于分析 MaaFramework 日志的 VS Code 扩展。
 
-### 1. 构建 Webview 资源
+## Maa Support / 功能说明
 
-在项目根目录执行：
+### 中文
+
+针对 MaaFramework 日志分析，当前扩展提供以下功能：
+
+- 多视图分析：日志分析、文本搜索、节点统计、流程图、分屏模式
+- 日志输入方式：
+  - 选择日志文件（`.log`）
+  - 选择日志压缩包（`.zip`）
+  - 选择日志目录（自动查找并合并 `maa.log` 与 `maa.bak.log`）
+- VS Code 集成：
+  - 侧边栏入口（活动栏 `MAA`）
+  - 资源管理器右键菜单（日志文件、文件夹）
+  - 编辑器右键菜单（`.log` 文件）
+- Windows 文件管理器右键菜单（可选安装）：
+  - 支持 `.log`、`.zip`、文件夹、文件夹空白处
+- ZIP 调试资源支持：
+  - 自动读取 `on_error`、`vision`、`wait_freezes` 截图并关联显示
+
+日志解析基于 MaaFramework v5.3+ 常见日志格式。
+
+### English
+
+This extension currently provides the following capabilities for MaaFramework log analysis:
+
+- Multi-view analysis: Log Analysis, Text Search, Node Statistics, Flowchart, Split View
+- Log input methods:
+  - Select log files (`.log`)
+  - Select log archives (`.zip`)
+  - Select log folders (auto-discover and merge `maa.log` + `maa.bak.log`)
+- VS Code integration:
+  - Sidebar entry (Activity Bar `MAA`)
+  - Explorer context menu (log files and folders)
+  - Editor context menu (`.log` files)
+- Optional Windows Explorer context menu installation:
+  - Supports `.log`, `.zip`, folders, and folder background
+- ZIP debug assets support:
+  - Auto-loads and maps `on_error`, `vision`, and `wait_freezes` screenshots
+
+Log parsing targets common MaaFramework v5.3+ log formats.
+
+## Commands / 命令
+
+Open Command Palette (`Ctrl+Shift+P`, macOS: `Cmd+Shift+P`) and search:
+
+- `Maa: 打开日志分析器`
+- `Maa: 选择文件/文件夹并分析`
+- `Maa: 分析此日志文件`
+- `Maa: 安装 Windows 右键菜单` (Windows only)
+- `Maa: 卸载 Windows 右键菜单` (Windows only)
+
+## Build / 开发与打包
 
 ```bash
+# In repository root
 pnpm build:vscode
-```
 
-这会将 Vue 应用构建到 `src-vscode/webview/` 目录。
-
-### 2. 构建扩展
-
-```bash
-cd src-vscode
+# In src-vscode
 npm install
 npm run compile
-```
-
-### 3. 打包扩展
-
-```bash
 npm run package
 ```
 
-这会生成 `.vsix` 文件，可以直接安装到 VS Code。
-
-## 开发调试
-
-1. 在 VS Code 中打开 `src-vscode` 目录
-2. 按 `F5` 启动调试
-3. 在调试窗口中运行命令 `MAA: 打开日志分析器`
-
-## 功能
-
-- 命令面板：`MAA: 打开日志分析器` - 打开分析器面板
-- 右键菜单：在 `.log` 文件上右键选择 `MAA: 分析此日志文件`
-
-## 目录结构
-
-```
-src-vscode/
-├── package.json        # 扩展配置
-├── tsconfig.json       # TypeScript 配置
-├── vite.config.ts      # Webview 构建配置
-├── .vscodeignore       # 打包忽略文件
-├── src/
-│   └── extension.ts    # 扩展入口
-└── webview/            # 构建产物（Vue 应用）
-```
-
-## Windows 文件管理器右键菜单（文件夹）`r`n`r`n推荐直接在扩展里执行命令（无需手动跑脚本）：`r`n`r`n1. `Maa: 安装 Windows 右键菜单``r`n2. 在资源管理器中右键文件夹，点击“用 MAA Log Analyzer 分析”`r`n3. 如需移除，执行 `Maa: 卸载 Windows 右键菜单``r`n`r`n备用方式（手动脚本）：`r`n`r`n```powershell`r`npowershell -ExecutionPolicy Bypass -File .\scripts\windows\install-context-menu.ps1`r`n```
+`npm run package` generates a `.vsix` package that can be installed directly in VS Code.
