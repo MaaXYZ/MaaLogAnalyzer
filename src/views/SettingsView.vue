@@ -1,9 +1,7 @@
-<script setup lang="ts">
-import { NCard, NForm, NFormItem, NSwitch, NButton, NFlex, NRadioGroup, NRadioButton, NText, useMessage } from 'naive-ui'
+﻿<script setup lang="ts">
+import { NCard, NSwitch, NButton, NFlex, NRadioGroup, NRadioButton, NText, useMessage } from 'naive-ui'
 import { getSettings, saveSettings } from '../utils/settings'
-import { useIsMobile } from '../composables/useIsMobile'
 
-const { isMobile } = useIsMobile()
 const message = useMessage()
 const settings = getSettings()
 
@@ -27,35 +25,44 @@ const handleReset = () => {
 
 <template>
   <n-card style="height: 100%">
-    <n-text strong style="font-size: 16px; display: block; margin-bottom: 16px">显示</n-text>
+    <n-card size="small" :bordered="true" style="margin-bottom: 12px">
+      <n-text strong style="font-size: 16px; display: block; margin-bottom: 16px">日志分析</n-text>
 
-    <n-form :label-placement="isMobile ? 'top' : 'left'" :label-width="isMobile ? undefined : 200">
-      <n-form-item label="节点显示模式">
-        <n-radio-group v-model:value="settings.displayMode">
-          <n-radio-button value="detailed">详细</n-radio-button>
-          <n-radio-button value="compact">紧凑</n-radio-button>
-          <n-radio-button value="tree">树形</n-radio-button>
-        </n-radio-group>
-      </n-form-item>
+      <table class="settings-grid" role="presentation">
+        <tbody>
+          <tr>
+            <td>节点显示模式</td>
+            <td>
+              <n-radio-group v-model:value="settings.displayMode">
+                <n-radio-button value="detailed">详细</n-radio-button>
+                <n-radio-button value="compact">紧凑</n-radio-button>
+                <n-radio-button value="tree">树形</n-radio-button>
+              </n-radio-group>
+            </td>
+          </tr>
 
-      <template v-if="settings.displayMode === 'detailed' || settings.displayMode === 'tree'">
-        <n-form-item label="默认折叠根部识别列表">
-          <n-switch v-model:value="settings.defaultCollapseRecognition" />
-        </n-form-item>
+          <tr v-if="settings.displayMode === 'detailed' || settings.displayMode === 'tree'">
+            <td>默认折叠根部识别列表</td>
+            <td><n-switch v-model:value="settings.defaultCollapseRecognition" /></td>
+          </tr>
 
-        <n-form-item label="默认折叠嵌套识别节点">
-          <n-switch v-model:value="settings.defaultCollapseNestedRecognition" />
-        </n-form-item>
+          <tr v-if="settings.displayMode === 'detailed' || settings.displayMode === 'tree'">
+            <td>默认折叠嵌套识别节点</td>
+            <td><n-switch v-model:value="settings.defaultCollapseNestedRecognition" /></td>
+          </tr>
 
-        <n-form-item label="默认折叠动作部分">
-          <n-switch v-model:value="settings.defaultCollapseAction" />
-        </n-form-item>
-      </template>
+          <tr v-if="settings.displayMode === 'detailed' || settings.displayMode === 'tree'">
+            <td>默认折叠动作部分</td>
+            <td><n-switch v-model:value="settings.defaultCollapseAction" /></td>
+          </tr>
 
-      <n-form-item label="默认展开原始 JSON 数据">
-        <n-switch v-model:value="settings.defaultExpandRawJson" />
-      </n-form-item>
-    </n-form>
+          <tr>
+            <td>默认展开原始 JSON 数据</td>
+            <td><n-switch v-model:value="settings.defaultExpandRawJson" /></td>
+          </tr>
+        </tbody>
+      </table>
+    </n-card>
 
     <n-flex style="margin-top: 24px; gap: 12px">
       <n-button type="primary" @click="handleSave">保存设置</n-button>
@@ -63,3 +70,39 @@ const handleReset = () => {
     </n-flex>
   </n-card>
 </template>
+
+<style scoped>
+.settings-grid {
+  --settings-border-color: var(--n-border-color, #5a5a5a);
+  position: relative;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 1px solid var(--settings-border-color);
+}
+
+.settings-grid td {
+  width: 50%;
+  text-align: center;
+  vertical-align: middle;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--settings-border-color);
+}
+
+.settings-grid tr:last-child td {
+  border-bottom: none;
+}
+
+.settings-grid::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-0.5px);
+  border-left: 1px solid var(--settings-border-color);
+  pointer-events: none;
+}
+</style>
+
+
