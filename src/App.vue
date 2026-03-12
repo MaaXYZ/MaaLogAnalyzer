@@ -1,6 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch, h, defineAsyncComponent, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { NSplit, NCard, NFlex, NButton, NIcon, NDropdown, NModal, NText, NDivider, NTag, NProgress, NSelect, NDrawer, NDrawerContent, NScrollbar, NList, NListItem, useMessage } from 'naive-ui'
+import { NSplit, NCard, NFlex, NButton, NIcon, NDropdown, NModal, NText, NTag, NProgress, NSelect, NDrawer, NDrawerContent, NScrollbar, NList, NListItem, useMessage } from 'naive-ui'
 import ProcessView from './views/ProcessView.vue'
 import DetailView from './views/DetailView.vue'
 import { LogParser } from './utils/logParser'
@@ -395,8 +395,9 @@ const startTour = async (auto = false) => {
   }
 }
 
-const openTutorial = () => {
-  void startTour(false)
+const openTutorialFromAbout = () => {
+  showAboutModal.value = false
+  void nextTick().then(() => startTour(false))
 }
 
 const handleTourPrev = async () => {
@@ -710,7 +711,6 @@ const mobileMenuOptions = computed(() => [
     icon: opt.icon
   })),
   { type: 'divider' as const, key: 'd1' },
-  { label: '新手教程', key: 'tutorial', icon: () => h(InfoCircleOutlined) },
   { label: '设置', key: 'settings', icon: () => h(SettingOutlined) },
   { label: '关于', key: 'about', icon: () => h(InfoCircleOutlined) },
   { label: props.isDark ? '浅色模式' : '深色模式', key: 'theme', icon: () => h(props.isDark ? BulbOutlined : BulbFilled) }
@@ -722,8 +722,6 @@ const isDark = computed(() => props.isDark)
 const handleMobileMenuSelect = (key: string) => {
   if (key.startsWith('view-')) {
     handleViewModeSelect(key.replace('view-', ''))
-  } else if (key === 'tutorial') {
-    openTutorial()
   } else if (key === 'settings') {
     showSettingsModal.value = true
   } else if (key === 'about') {
@@ -853,16 +851,6 @@ onBeforeUnmount(() => {
 
         <!-- 右侧按钮组 -->
         <n-flex align="center" style="gap: 8px">
-          <n-button
-            size="small"
-            secondary
-            :loading="tutorialLoadingSample"
-            data-tour="header-tutorial-button"
-            @click="openTutorial"
-          >
-            新手教程
-          </n-button>
-
           <!-- 设置按钮 -->
           <n-button
             text
@@ -1197,88 +1185,57 @@ onBeforeUnmount(() => {
     <n-modal
       v-model:show="showAboutModal"
       preset="card"
-      title="关于 MAA 日志工具"
+      title="关于"
       :style="{ width: modalWidth }"
       :bordered="false"
     >
-      <n-flex vertical style="gap: 20px">
-        <!-- 项目信息 -->
-        <div style="text-align: center">
-          <n-text strong style="font-size: 24px; display: block; margin-bottom: 8px">
-            📊 MAA 日志工具
-          </n-text>
-          <n-text depth="3" style="font-size: 14px">
-            MaaFramework 日志分析与文本搜索工具
-          </n-text>
-        </div>
-        
-        <n-divider />
-        
-        <!-- 功能特性 -->
-        <div>
-          <n-text strong style="font-size: 16px; display: block; margin-bottom: 12px">
-            ✨ 主要功能
-          </n-text>
-          <n-flex vertical style="gap: 8px">
-            <n-text depth="2">📋 日志分析 - 可视化任务执行流程</n-text>
-            <n-text depth="2">🔍 文本搜索 - 支持大文件流式搜索</n-text>
-            <n-text depth="2">⬍ 分屏模式 - 同时查看两个功能</n-text>
-            <n-text depth="2">🌓 主题切换 - 深色/浅色模式</n-text>
+      <n-flex vertical style="gap: 14px">
+        <n-card size="small" :bordered="true">
+          <n-flex vertical style="gap: 10px">
+            <n-text strong style="font-size: 18px">MAA 日志分析工具 | MaaLogAnalyzer</n-text>
+            <n-text depth="3">MaaFramework 日志分析与可视化工具，觉得好用可以点点 star！</n-text>
           </n-flex>
-        </div>
-        
-        <n-divider />
-        
-        <!-- 技术栈 -->
-        <div>
-          <n-text strong style="font-size: 16px; display: block; margin-bottom: 12px">
-            🛠️ 技术栈
-          </n-text>
-          <n-flex wrap style="gap: 8px">
-            <n-tag type="info">Vue 3</n-tag>
-            <n-tag type="info">TypeScript</n-tag>
-            <n-tag type="info">Naive UI</n-tag>
-            <n-tag type="info">Vite</n-tag>
-            <n-tag type="info">Tauri</n-tag>
-          </n-flex>
-        </div>
-        
-        <n-divider />
-        
-        <!-- 项目链接 -->
-        <div>
-          <n-text strong style="font-size: 16px; display: block; margin-bottom: 12px">
-            🔗 项目链接
-          </n-text>
-          <n-flex vertical style="gap: 8px">
-            <n-button 
-              text 
-              tag="a" 
-              href="https://github.com/MaaXYZ/MaaLogAnalyzer" 
+        </n-card>
+
+        <n-card size="small" :bordered="true">
+          <n-flex vertical style="gap: 10px">
+            <n-text strong>项目与技术栈</n-text>
+            <n-flex wrap style="gap: 8px">
+              <n-tag type="info">Vue 3</n-tag>
+              <n-tag type="info">TypeScript</n-tag>
+              <n-tag type="info">Naive UI</n-tag>
+              <n-tag type="info">Vite</n-tag>
+              <n-tag type="info">Tauri</n-tag>
+            </n-flex>
+            <n-button
+              text
+              tag="a"
+              href="https://github.com/MaaXYZ/MaaLogAnalyzer"
               target="_blank"
               type="primary"
+              style="padding: 0; justify-content: flex-start"
             >
               <template #icon>
                 <n-icon><github-outlined /></n-icon>
               </template>
-              Maa Log Analyzer
+              GitHub: Maa Log Analyzer
             </n-button>
-            <n-text depth="3" style="font-size: 12px">
-              基于 MaaFramework 开发的日志分析工具
-            </n-text>
           </n-flex>
-        </div>
-        
-        <n-divider />
-        
-        <!-- 版本信息 -->
-        <n-flex justify="space-between" align="center">
-          <n-text depth="3" style="font-size: 12px">
-            Version {{ version }}
-          </n-text>
-          <n-text depth="3" style="font-size: 12px">
-            © 2025
-          </n-text>
+        </n-card>
+
+        <n-card size="small" :bordered="true">
+          <n-flex vertical style="gap: 10px">
+            <n-text strong>快速开始</n-text>
+            <n-text depth="3" style="font-size: 13px">首次使用建议先跑一遍新手教程，了解大致功能。</n-text>
+            <n-button type="primary" :loading="tutorialLoadingSample" @click="openTutorialFromAbout">
+              开始新手教程
+            </n-button>
+          </n-flex>
+        </n-card>
+
+        <n-flex justify="space-between" align="center" style="padding: 0 4px">
+          <n-text depth="3" style="font-size: 12px">Version {{ version }}</n-text>
+          <n-text depth="3" style="font-size: 12px">© 2025 MaaXYZ</n-text>
         </n-flex>
       </n-flex>
     </n-modal>
@@ -1341,3 +1298,5 @@ onBeforeUnmount(() => {
     </n-modal>
   </div>
 </template>
+
+
