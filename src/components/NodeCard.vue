@@ -79,11 +79,16 @@ const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
 
   if (props.node.next_list && props.node.next_list.length > 0) {
     props.node.next_list.forEach((nextItem) => {
+      const prefixes: string[] = []
+      if (nextItem.anchor) prefixes.push('[Anchor]')
+      if (nextItem.jump_back) prefixes.push('[JumpBack]')
+      const displayName = prefixes.length > 0 ? `${prefixes.join('')} ${nextItem.name}` : nextItem.name
+
       const entries = attemptMap.get(nextItem.name)
       if (entries) {
         for (const attemptInfo of entries) {
           result.push({
-            name: nextItem.name,
+            name: displayName,
             status: attemptInfo.attempt.status,
             attemptIndex: attemptInfo.index,
             attempt: attemptInfo.attempt,
@@ -92,7 +97,7 @@ const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
         }
       } else {
         result.push({
-          name: nextItem.name,
+          name: displayName,
           status: 'not-recognized'
         })
       }
@@ -130,6 +135,7 @@ const actionButtonType = computed<ButtonType>(() => {
   if (props.node.nested_action_nodes?.some(g => g.status === 'failed')) return 'error'
   return props.node.action_details.success ? 'success' : 'error'
 })
+
 </script>
 
 <template>
