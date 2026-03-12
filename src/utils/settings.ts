@@ -5,6 +5,7 @@
 import { reactive } from 'vue'
 
 export type DisplayMode = 'detailed' | 'compact' | 'tree'
+export type FlowchartEdgeStyle = 'orthogonal' | 'default'
 
 export interface AppSettings {
   // 默认折叠根部识别列表
@@ -17,6 +18,13 @@ export interface AppSettings {
   defaultExpandRawJson: boolean
   // 节点显示模式
   displayMode: DisplayMode
+
+  // 流程图连线样式
+  flowchartEdgeStyle: FlowchartEdgeStyle
+  // 流程图顺序回放速度（ms）
+  flowchartPlaybackIntervalMs: number
+  // 流程图聚焦缩放
+  flowchartFocusZoom: number
 }
 
 const SETTINGS_KEY = 'maa-log-analyzer-settings'
@@ -26,7 +34,11 @@ const defaultSettings: AppSettings = {
   defaultCollapseNestedRecognition: false,
   defaultCollapseAction: false,
   defaultExpandRawJson: false,
-  displayMode: 'tree'
+  displayMode: 'tree',
+
+  flowchartEdgeStyle: 'default',
+  flowchartPlaybackIntervalMs: 900,
+  flowchartFocusZoom: 1.0,
 }
 
 let settingsInstance: AppSettings | null = null

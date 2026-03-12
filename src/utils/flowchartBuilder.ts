@@ -1,4 +1,4 @@
-import type { Node, Edge } from '@vue-flow/core'
+﻿import type { Node, Edge } from '@vue-flow/core'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import type { TaskInfo, NodeInfo } from '../types'
 
@@ -14,6 +14,7 @@ export interface FlowEdgeData {
   anchor: boolean
   jump_back: boolean
   edgeStatus: 'success' | 'failed' | 'topology'
+  routePoints?: Array<{ x: number; y: number }>
 }
 
 const NODE_WIDTH = 180
@@ -147,7 +148,9 @@ export async function buildFlowchartData(task: TaskInfo): Promise<{ nodes: Node[
       'elk.direction': 'DOWN',
       'elk.spacing.nodeNode': '50',
       'elk.layered.spacing.nodeNodeBetweenLayers': '80',
+      'elk.spacing.edgeNode': '25',
       'elk.edgeRouting': 'ORTHOGONAL',
+      'elk.layered.unnecessaryBendpoints': 'false',
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
     },
     children: flowNodes.map(node => ({
@@ -176,5 +179,39 @@ export async function buildFlowchartData(task: TaskInfo): Promise<{ nodes: Node[
     }
   })
 
+  // Apply ELK orthogonal edge route points
+  const edgeMap = new Map<string, any>((layouted.edges ?? []).map((e: any) => [e.id, e]))
+  flowEdges.forEach(edge => {
+    const layoutEdge = edgeMap.get(edge.id)
+    const section = layoutEdge?.sections?.[0]
+    if (!section) return
+
+    const points: Array<{ x: number; y: number }> = []
+    if (section.startPoint && typeof section.startPoint.x === 'number' && typeof section.startPoint.y === 'number') {
+      points.push({ x: section.startPoint.x, y: section.startPoint.y })
+    }
+    if (Array.isArray(section.bendPoints)) {
+      section.bendPoints.forEach((p: { x?: unknown; y?: unknown }) => {
+        if (typeof p.x === 'number' && typeof p.y === 'number') {
+          points.push({ x: p.x, y: p.y })
+        }
+      })
+    }
+    if (section.endPoint && typeof section.endPoint.x === 'number' && typeof section.endPoint.y === 'number') {
+      points.push({ x: section.endPoint.x, y: section.endPoint.y })
+    }
+
+    if (points.length >= 2) {
+      // Remove consecutive duplicate points to avoid zero-length segments.
+      const deduped = points.filter((p, i) => i === 0 || p.x !== points[i - 1].x || p.y !== points[i - 1].y)
+      edge.data = {
+        ...(edge.data as FlowEdgeData),
+        routePoints: deduped,
+      } satisfies FlowEdgeData
+      edge.type = 'orthogonalEdge'
+    }
+  })
+
   return { nodes: flowNodes, edges: flowEdges }
 }
+

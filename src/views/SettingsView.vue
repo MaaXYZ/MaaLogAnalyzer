@@ -1,9 +1,24 @@
-﻿<script setup lang="ts">
-import { NCard, NSwitch, NButton, NFlex, NRadioGroup, NRadioButton, NText, useMessage } from 'naive-ui'
+<script setup lang="ts">
+import { NCard, NSwitch, NButton, NFlex, NText, NSelect, NRadioGroup, NRadioButton, useMessage } from 'naive-ui'
 import { getSettings, saveSettings } from '../utils/settings'
 
 const message = useMessage()
 const settings = getSettings()
+
+const playbackSpeedOptions = [
+  { label: '慢速 1500ms', value: 1500 },
+  { label: '标准 900ms', value: 900 },
+  { label: '快速 600ms', value: 600 },
+  { label: '极速 350ms', value: 350 },
+]
+
+const focusZoomOptions = [
+  { label: '0.8x', value: 0.8 },
+  { label: '1.0x', value: 1.0 },
+  { label: '1.2x', value: 1.2 },
+  { label: '1.4x', value: 1.4 },
+  { label: '1.6x', value: 1.6 },
+]
 
 const handleSave = () => {
   saveSettings(settings)
@@ -16,7 +31,11 @@ const handleReset = () => {
     defaultCollapseNestedRecognition: true,
     defaultCollapseAction: true,
     defaultExpandRawJson: true,
-    displayMode: 'tree'
+    displayMode: 'tree',
+
+    flowchartEdgeStyle: 'default',
+    flowchartPlaybackIntervalMs: 900,
+    flowchartFocusZoom: 1.0,
   })
   saveSettings(settings)
   message.success('已恢复默认设置')
@@ -64,6 +83,46 @@ const handleReset = () => {
       </table>
     </n-card>
 
+    <n-card size="small" :bordered="true" style="margin-bottom: 12px">
+      <n-text strong style="font-size: 16px; display: block; margin-bottom: 16px">流程图</n-text>
+
+      <table class="settings-grid" role="presentation">
+        <tbody>
+          <tr>
+            <td>连线方式</td>
+            <td>
+              <n-radio-group v-model:value="settings.flowchartEdgeStyle">
+                <n-radio-button value="default">默认连线</n-radio-button>
+                <n-radio-button value="orthogonal">避障折线</n-radio-button>
+              </n-radio-group>
+            </td>
+          </tr>
+
+          <tr>
+            <td>回放速度</td>
+            <td>
+              <n-select
+                v-model:value="settings.flowchartPlaybackIntervalMs"
+                :options="playbackSpeedOptions"
+                style="width: 180px; margin: 0 auto"
+              />
+            </td>
+          </tr>
+
+          <tr>
+            <td>聚焦缩放</td>
+            <td>
+              <n-select
+                v-model:value="settings.flowchartFocusZoom"
+                :options="focusZoomOptions"
+                style="width: 180px; margin: 0 auto"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </n-card>
+
     <n-flex style="margin-top: 24px; gap: 12px">
       <n-button type="primary" @click="handleSave">保存设置</n-button>
       <n-button @click="handleReset">恢复默认</n-button>
@@ -104,5 +163,3 @@ const handleReset = () => {
   pointer-events: none;
 }
 </style>
-
-

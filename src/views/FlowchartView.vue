@@ -5,12 +5,14 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { NSelect, NCard, NFlex, NText, NScrollbar, NTag, NDrawer, NDrawerContent, NButton, NDropdown } from 'naive-ui'
 import FlowchartNode from '../components/FlowchartNode.vue'
+import FlowchartOrthogonalEdge from '../components/FlowchartOrthogonalEdge.vue'
 import { buildFlowchartData } from '../utils/flowchartBuilder'
 import type { FlowNodeData, FlowEdgeData } from '../utils/flowchartBuilder'
 import type { TaskInfo, NodeInfo } from '../types'
 import type { LogParser } from '../utils/logParser'
 import { useIsMobile } from '../composables/useIsMobile'
 import { isTauri } from '../utils/platform'
+import { getSettings, saveSettings } from '../utils/settings'
 
 const convertFileSrc = (filePath: string) => {
   if (!isTauri()) return filePath
@@ -31,36 +33,10 @@ const emit = defineEmits<{
 }>()
 
 const { isMobile } = useIsMobile()
+const settings = getSettings()
 
 const isMainLogFileName = (name: string) => name === 'maa.log' || name === 'maafw.log'
 const isBakLogFileName = (name: string) => name === 'maa.bak.log' || name === 'maafw.bak.log'
-
-const FLOWCHART_PLAYBACK_SETTINGS_KEY = 'maa-log-analyzer-flowchart-playback-settings'
-
-function loadFlowchartPlaybackSettings(): { playbackIntervalMs: number; focusZoom: number } {
-  try {
-    const raw = localStorage.getItem(FLOWCHART_PLAYBACK_SETTINGS_KEY)
-    if (!raw) return { playbackIntervalMs: 900, focusZoom: 1.0 }
-    const parsed = JSON.parse(raw) as Partial<{ playbackIntervalMs: number; focusZoom: number }>
-    const speed = typeof parsed.playbackIntervalMs === 'number' && parsed.playbackIntervalMs > 0
-      ? parsed.playbackIntervalMs
-      : 900
-    const zoom = typeof parsed.focusZoom === 'number' && parsed.focusZoom > 0
-      ? parsed.focusZoom
-      : 1.0
-    return { playbackIntervalMs: speed, focusZoom: zoom }
-  } catch {
-    return { playbackIntervalMs: 900, focusZoom: 1.0 }
-  }
-}
-
-function saveFlowchartPlaybackSettings(playbackIntervalMs: number, focusZoom: number) {
-  try {
-    localStorage.setItem(FLOWCHART_PLAYBACK_SETTINGS_KEY, JSON.stringify({ playbackIntervalMs, focusZoom }))
-  } catch (error) {
-    console.warn('Failed to save flowchart playback settings:', error)
-  }
-}
 
 // Task selector
 const selectedTaskIndex = ref<number | null>(null)
@@ -285,9 +261,14 @@ const layoutRunId = ref(0)
 const focusedNodeId = ref<string | null>(null)
 const isPlaying = ref(false)
 const playbackTimer = ref<number | null>(null)
-const initialPlaybackSettings = loadFlowchartPlaybackSettings()
-const playbackIntervalMs = ref<number>(initialPlaybackSettings.playbackIntervalMs)
-const focusZoom = ref<number>(initialPlaybackSettings.focusZoom)
+const playbackIntervalMs = computed<number>({
+  get: () => (typeof settings.flowchartPlaybackIntervalMs === 'number' && settings.flowchartPlaybackIntervalMs > 0 ? settings.flowchartPlaybackIntervalMs : 900),
+  set: (v) => { settings.flowchartPlaybackIntervalMs = v },
+})
+const focusZoom = computed<number>({
+  get: () => (typeof settings.flowchartFocusZoom === 'number' && settings.flowchartFocusZoom > 0 ? settings.flowchartFocusZoom : 1.0),
+  set: (v) => { settings.flowchartFocusZoom = v },
+})
 
 const playbackSpeedOptions = [
   { label: '\u6162\u901f 1500ms', value: 1500 },
@@ -456,6 +437,19 @@ function closePopover() {
   popoverNodeId.value = null
 }
 
+function getEdgeRenderType(edge: any): string | undefined {
+  const routePoints = (edge.data as FlowEdgeData | undefined)?.routePoints
+  const hasRoutePoints = Array.isArray(routePoints) && routePoints.length >= 2
+  return settings.flowchartEdgeStyle === 'orthogonal' && hasRoutePoints ? 'orthogonalEdge' : undefined
+}
+
+function applyEdgeRenderTypes() {
+  flowEdges.value = flowEdges.value.map((edge: any) => ({
+    ...edge,
+    type: getEdgeRenderType(edge),
+  }))
+}
+
 function getBaseEdgeStyle(d: FlowEdgeData) {
   if (!d.executed) {
     const style: Record<string, string | number> = { stroke: '#999', strokeWidth: 1, opacity: 0.5 }
@@ -589,11 +583,13 @@ function togglePlayback() {
 function handlePlaybackSpeedChange(v: number | null) {
   if (v == null) return
   playbackIntervalMs.value = v
+  saveSettings(settings)
 }
 
 function handleFocusZoomChange(v: number | null) {
   if (v == null) return
   focusZoom.value = v
+  saveSettings(settings)
 }
 
 // Select a timeline item: center canvas + open popover
@@ -629,6 +625,7 @@ watch(selectedTask, async (task) => {
   edges.forEach(edge => {
     const d = edge.data as FlowEdgeData
     edge.style = getBaseEdgeStyle(d)
+    edge.type = getEdgeRenderType(edge)
     edge.animated = false
   })
 
@@ -647,14 +644,19 @@ watch(focusedNodeId, () => {
 })
 
 watch(playbackIntervalMs, () => {
-  saveFlowchartPlaybackSettings(playbackIntervalMs.value, focusZoom.value)
+  saveSettings(settings)
   if (isPlaying.value) {
     startPlayback()
   }
 })
 
 watch(focusZoom, () => {
-  saveFlowchartPlaybackSettings(playbackIntervalMs.value, focusZoom.value)
+  saveSettings(settings)
+})
+
+watch(() => settings.flowchartEdgeStyle, () => {
+  applyEdgeRenderTypes()
+  applyFocusStyles()
 })
 
 onBeforeUnmount(() => {
@@ -799,6 +801,9 @@ const onPaneClick = () => {
               :is-start="nodeProps.id === executionTimeline[0]?.name"
               :dimmed="highlightedNodeIds != null && !highlightedNodeIds.has(nodeProps.id)"
             />
+          </template>
+          <template #edge-orthogonalEdge="edgeProps">
+            <FlowchartOrthogonalEdge v-bind="edgeProps" />
           </template>
         </VueFlow>
 
