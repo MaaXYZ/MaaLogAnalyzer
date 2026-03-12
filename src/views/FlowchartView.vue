@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, h } from 'vue'
+import { ref, computed, watch, nextTick, h, onBeforeUnmount } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -31,6 +31,33 @@ const emit = defineEmits<{
 }>()
 
 const { isMobile } = useIsMobile()
+
+const FLOWCHART_PLAYBACK_SETTINGS_KEY = 'maa-log-analyzer-flowchart-playback-settings'
+
+function loadFlowchartPlaybackSettings(): { playbackIntervalMs: number; focusZoom: number } {
+  try {
+    const raw = localStorage.getItem(FLOWCHART_PLAYBACK_SETTINGS_KEY)
+    if (!raw) return { playbackIntervalMs: 900, focusZoom: 1.0 }
+    const parsed = JSON.parse(raw) as Partial<{ playbackIntervalMs: number; focusZoom: number }>
+    const speed = typeof parsed.playbackIntervalMs === 'number' && parsed.playbackIntervalMs > 0
+      ? parsed.playbackIntervalMs
+      : 900
+    const zoom = typeof parsed.focusZoom === 'number' && parsed.focusZoom > 0
+      ? parsed.focusZoom
+      : 1.0
+    return { playbackIntervalMs: speed, focusZoom: zoom }
+  } catch {
+    return { playbackIntervalMs: 900, focusZoom: 1.0 }
+  }
+}
+
+function saveFlowchartPlaybackSettings(playbackIntervalMs: number, focusZoom: number) {
+  try {
+    localStorage.setItem(FLOWCHART_PLAYBACK_SETTINGS_KEY, JSON.stringify({ playbackIntervalMs, focusZoom }))
+  } catch (error) {
+    console.warn('Failed to save flowchart playback settings:', error)
+  }
+}
 
 // Task selector
 const selectedTaskIndex = ref<number | null>(null)
@@ -253,6 +280,26 @@ const flowNodes = ref<any[]>([])
 const flowEdges = ref<any[]>([])
 const layoutRunId = ref(0)
 const focusedNodeId = ref<string | null>(null)
+const isPlaying = ref(false)
+const playbackTimer = ref<number | null>(null)
+const initialPlaybackSettings = loadFlowchartPlaybackSettings()
+const playbackIntervalMs = ref<number>(initialPlaybackSettings.playbackIntervalMs)
+const focusZoom = ref<number>(initialPlaybackSettings.focusZoom)
+
+const playbackSpeedOptions = [
+  { label: '\u6162\u901f 1500ms', value: 1500 },
+  { label: '\u6807\u51c6 900ms', value: 900 },
+  { label: '\u5feb\u901f 600ms', value: 600 },
+  { label: '\u6781\u901f 350ms', value: 350 },
+]
+
+const focusZoomOptions = [
+  { label: '0.8x', value: 0.8 },
+  { label: '1.0x', value: 1.0 },
+  { label: '1.2x', value: 1.2 },
+  { label: '1.4x', value: 1.4 },
+  { label: '1.6x', value: 1.6 },
+]
 
 // Navigation panel
 const selectedTimelineIndex = ref<number | null>(null)
@@ -465,31 +512,91 @@ function applyFocusStyles() {
 }
 
 
-// Select a timeline item: center canvas + open popover
-function selectTimelineItem(index: number) {
-  selectedTimelineIndex.value = index
+function clearPlaybackTimer() {
+  if (playbackTimer.value != null) {
+    window.clearInterval(playbackTimer.value)
+    playbackTimer.value = null
+  }
+}
+
+function stopPlayback() {
+  isPlaying.value = false
+  clearPlaybackTimer()
+}
+
+function focusTimelineItem(index: number, options?: { openPopover?: boolean; center?: boolean; closeDrawer?: boolean }) {
   const item = executionTimeline.value[index]
   if (!item) return
 
+  selectedTimelineIndex.value = index
   focusedNodeId.value = item.name
 
-  // Center canvas on the node
-  const flowNode = getNode.value(item.name)
-  if (flowNode) {
-    setCenter(flowNode.position.x + 90, flowNode.position.y + 30, { zoom: 1.2, duration: 300 })
+  if (options?.center !== false) {
+    const flowNode = getNode.value(item.name)
+    if (flowNode) {
+      setCenter(flowNode.position.x + 90, flowNode.position.y + 30, { zoom: focusZoom.value, duration: 300 })
+    }
   }
 
-  // Open popover after center animation finishes
-  popoverNodeId.value = item.name
-  setTimeout(() => {
-    updatePopoverPosition()
-    requestAnimationFrame(updatePopoverPosition)
-  }, 320)
+  if (options?.openPopover) {
+    popoverNodeId.value = item.name
+    setTimeout(() => {
+      updatePopoverPosition()
+      requestAnimationFrame(updatePopoverPosition)
+    }, 320)
+  } else {
+    closePopover()
+  }
 
-  // Close mobile nav drawer
-  if (isMobile.value) {
+  if (options?.closeDrawer !== false && isMobile.value) {
     showNavDrawer.value = false
   }
+
+  scrollNavToIndex(index)
+}
+
+function startPlayback() {
+  if (executionTimeline.value.length === 0) return
+
+  const startIndex = selectedTimelineIndex.value == null ? 0 : selectedTimelineIndex.value
+  focusTimelineItem(startIndex, { openPopover: false, center: true })
+
+  isPlaying.value = true
+  clearPlaybackTimer()
+
+  playbackTimer.value = window.setInterval(() => {
+    const current = selectedTimelineIndex.value ?? -1
+    const next = current + 1
+    if (next >= executionTimeline.value.length) {
+      stopPlayback()
+      return
+    }
+    focusTimelineItem(next, { openPopover: false, center: true })
+  }, playbackIntervalMs.value)
+}
+
+function togglePlayback() {
+  if (isPlaying.value) {
+    stopPlayback()
+    return
+  }
+  startPlayback()
+}
+
+function handlePlaybackSpeedChange(v: number | null) {
+  if (v == null) return
+  playbackIntervalMs.value = v
+}
+
+function handleFocusZoomChange(v: number | null) {
+  if (v == null) return
+  focusZoom.value = v
+}
+
+// Select a timeline item: center canvas + open popover
+function selectTimelineItem(index: number) {
+  stopPlayback()
+  focusTimelineItem(index, { openPopover: true, center: true })
 }
 
 // Scroll nav list to active item
@@ -503,6 +610,7 @@ function scrollNavToIndex(index: number) {
 // Build graph when task changes
 watch(selectedTask, async (task) => {
   const runId = ++layoutRunId.value
+  stopPlayback()
   closePopover()
   selectedTimelineIndex.value = null
   if (!task) {
@@ -535,12 +643,29 @@ watch(focusedNodeId, () => {
   applyFocusStyles()
 })
 
+watch(playbackIntervalMs, () => {
+  saveFlowchartPlaybackSettings(playbackIntervalMs.value, focusZoom.value)
+  if (isPlaying.value) {
+    startPlayback()
+  }
+})
+
+watch(focusZoom, () => {
+  saveFlowchartPlaybackSettings(playbackIntervalMs.value, focusZoom.value)
+})
+
+onBeforeUnmount(() => {
+  stopPlayback()
+})
+
 // Handle node click
 const onNodeClick = (event: { node: { id: string; data: FlowNodeData } }) => {
   const data = event.node.data
   if (data.nodeInfos.length === 0) return
 
   // Toggle popover: click same node again closes it
+  stopPlayback()
+
   if (popoverNodeId.value === event.node.id) {
     focusedNodeId.value = null
     closePopover()
@@ -565,6 +690,7 @@ const onNodeClick = (event: { node: { id: string; data: FlowNodeData } }) => {
 
 // Close popover on pane click (clicking empty canvas area)
 const onPaneClick = () => {
+  stopPlayback()
   focusedNodeId.value = null
   closePopover()
 }
@@ -585,6 +711,23 @@ const onPaneClick = () => {
           style="min-width: 125px; flex: 1; max-width: 250px"
           @update:value="handleUserTaskSelect"
         />
+        <n-select
+          :value="playbackIntervalMs"
+          :options="playbackSpeedOptions"
+          size="small"
+          style="width: 120px"
+          @update:value="handlePlaybackSpeedChange"
+        />
+        <n-select
+          :value="focusZoom"
+          :options="focusZoomOptions"
+          size="small"
+          style="width: 90px"
+          @update:value="handleFocusZoomChange"
+        />
+        <n-button size="small" secondary :disabled="executionTimeline.length === 0" @click="togglePlayback">
+          {{ isPlaying ? '\u6682\u505c\u56de\u653e' : '\u987a\u5e8f\u56de\u653e' }}
+        </n-button>
         <n-dropdown :options="uploadOptions" @select="handleUploadSelect" trigger="click">
           <n-button size="small" secondary>打开</n-button>
         </n-dropdown>
