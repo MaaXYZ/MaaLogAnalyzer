@@ -1,5 +1,5 @@
 ﻿import type { EventNotification, TaskInfo } from '../types'
-import { searchKnowledge } from './knowledge'
+import { maaKnowledgePack, searchKnowledge } from './knowledge'
 
 export interface AiLoadedTarget {
   id: string
@@ -15,6 +15,7 @@ export interface BuildAiContextInput {
   loadedTargets?: AiLoadedTarget[]
   loadedDefaultTargetId?: string
   includeKnowledgePack: boolean
+  includeKnowledgeBootstrap?: boolean
   includeSignalLines: boolean
 }
 
@@ -129,6 +130,15 @@ const collectSignalLines = (target: AiLoadedTarget, maxHits = 24, maxOutput = 60
   return output
 }
 
+const buildKnowledgeBootstrap = () => {
+  return maaKnowledgePack.cards.map(card => ({
+    id: card.id,
+    topic: card.topic,
+    title: card.title,
+    rule: card.rule,
+  }))
+}
+
 const buildKnowledgeDigest = (question: string, task: TaskInfo | null) => {
   const tokens = [question]
   if (task) {
@@ -196,7 +206,11 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
       }
     : null
 
-  const knowledge = input.includeKnowledgePack ? buildKnowledgeDigest(input.question, selectedTask) : []
+  const knowledge = !input.includeKnowledgePack
+    ? []
+    : input.includeKnowledgeBootstrap
+      ? buildKnowledgeBootstrap()
+      : buildKnowledgeDigest(input.question, selectedTask)
 
   return {
     generatedAt: new Date().toISOString(),

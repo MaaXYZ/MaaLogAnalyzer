@@ -125,11 +125,12 @@ const buildFullContextPrompt = () => {
     loadedTargets: props.loadedTargets,
     loadedDefaultTargetId: props.loadedDefaultTargetId,
     includeKnowledgePack: settings.includeKnowledgePack,
+    includeKnowledgeBootstrap: true,
     includeSignalLines: settings.includeSignalLines,
   })
 
   return [
-    '这是首轮或上下文变化后的分析，请基于完整上下文回答。',
+    '这是首轮或上下文变化后的分析，请基于完整上下文回答。若开启知识包，则本轮包含全量知识卡片。',
     `问题: ${question.value}`,
     '',
     '完整上下文 JSON:',
