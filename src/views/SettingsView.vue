@@ -33,7 +33,7 @@ const handleReset = () => {
     defaultExpandRawJson: true,
     displayMode: 'tree',
 
-    flowchartEdgeStyle: 'default',
+    flowchartEdgeStyle: 'orthogonal',
     flowchartPlaybackIntervalMs: 900,
     flowchartFocusZoom: 1.0,
   })
@@ -92,8 +92,8 @@ const handleReset = () => {
             <td>连线方式</td>
             <td>
               <n-radio-group v-model:value="settings.flowchartEdgeStyle">
-                <n-radio-button value="default">默认连线</n-radio-button>
                 <n-radio-button value="orthogonal">避障折线</n-radio-button>
+                <n-radio-button value="default">平滑曲线</n-radio-button>
               </n-radio-group>
             </td>
           </tr>

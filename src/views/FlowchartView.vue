@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, watch, nextTick, h, onBeforeUnmount } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
@@ -270,20 +270,6 @@ const focusZoom = computed<number>({
   set: (v) => { settings.flowchartFocusZoom = v },
 })
 
-const playbackSpeedOptions = [
-  { label: '\u6162\u901f 1500ms', value: 1500 },
-  { label: '\u6807\u51c6 900ms', value: 900 },
-  { label: '\u5feb\u901f 600ms', value: 600 },
-  { label: '\u6781\u901f 350ms', value: 350 },
-]
-
-const focusZoomOptions = [
-  { label: '0.8x', value: 0.8 },
-  { label: '1.0x', value: 1.0 },
-  { label: '1.2x', value: 1.2 },
-  { label: '1.4x', value: 1.4 },
-  { label: '1.6x', value: 1.6 },
-]
 
 // Navigation panel
 const selectedTimelineIndex = ref<number | null>(null)
@@ -580,17 +566,6 @@ function togglePlayback() {
   startPlayback()
 }
 
-function handlePlaybackSpeedChange(v: number | null) {
-  if (v == null) return
-  playbackIntervalMs.value = v
-  saveSettings(settings)
-}
-
-function handleFocusZoomChange(v: number | null) {
-  if (v == null) return
-  focusZoom.value = v
-  saveSettings(settings)
-}
 
 // Select a timeline item: center canvas + open popover
 function selectTimelineItem(index: number) {
@@ -715,20 +690,6 @@ const onPaneClick = () => {
           size="small"
           style="min-width: 125px; flex: 1; max-width: 250px"
           @update:value="handleUserTaskSelect"
-        />
-        <n-select
-          :value="playbackIntervalMs"
-          :options="playbackSpeedOptions"
-          size="small"
-          style="width: 120px"
-          @update:value="handlePlaybackSpeedChange"
-        />
-        <n-select
-          :value="focusZoom"
-          :options="focusZoomOptions"
-          size="small"
-          style="width: 90px"
-          @update:value="handleFocusZoomChange"
         />
         <n-button size="small" secondary :disabled="executionTimeline.length === 0" @click="togglePlayback">
           {{ isPlaying ? '\u6682\u505c\u56de\u653e' : '\u987a\u5e8f\u56de\u653e' }}

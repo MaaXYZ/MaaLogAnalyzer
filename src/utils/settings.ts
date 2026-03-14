@@ -36,7 +36,7 @@ const defaultSettings: AppSettings = {
   defaultExpandRawJson: false,
   displayMode: 'tree',
 
-  flowchartEdgeStyle: 'default',
+  flowchartEdgeStyle: 'orthogonal',
   flowchartPlaybackIntervalMs: 900,
   flowchartFocusZoom: 1.0,
 }
