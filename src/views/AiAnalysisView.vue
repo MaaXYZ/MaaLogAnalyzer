@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { NAlert, NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NInputNumber, NScrollbar, NText, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NInputNumber, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
 import type { TaskInfo } from '../types'
 import { requestChatCompletion } from '../ai/client'
 import { buildAiAnalysisContext, type AiLoadedTarget } from '../ai/contextBuilder'
@@ -13,6 +13,18 @@ interface Props {
   loadedDefaultTargetId: string
 }
 
+interface MemoryState {
+  summary: string
+  contextKey: string
+  turns: number
+  updatedAt: number
+}
+
+interface StructuredAiOutput {
+  answer: string
+  memory_update: string
+}
+
 const props = defineProps<Props>()
 
 const message = useMessage()
@@ -23,6 +35,10 @@ const analyzing = ref(false)
 const testing = ref(false)
 const resultText = ref('')
 const usageText = ref('')
+
+const memoryModeEnabled = ref(true)
+const memoryState = ref<MemoryState | null>(null)
+const lastRequestUsedMemory = ref(false)
 
 const selectedTaskTitle = computed(() => {
   if (!props.selectedTask) return '未选择任务'
@@ -42,6 +58,37 @@ watch(apiKey, (value) => {
   setSessionApiKey(value)
 })
 
+const buildContextKey = (): string => {
+  const task = props.selectedTask
+  const source = sourceLabel.value
+
+  if (!task) {
+    return `none|tasks:${props.tasks.length}|source:${source}`
+  }
+
+  const tailNode = task.nodes.length > 0 ? task.nodes[task.nodes.length - 1] : null
+  return [
+    `task:${task.task_id}`,
+    `status:${task.status}`,
+    `nodes:${task.nodes.length}`,
+    `tailNode:${tailNode?.node_id ?? -1}`,
+    `tailTs:${tailNode?.timestamp ?? task.end_time ?? task.start_time}`,
+    `source:${source}`,
+  ].join('|')
+}
+
+const memoryApplicable = computed(() => {
+  if (!memoryModeEnabled.value || !memoryState.value) return false
+  return memoryState.value.contextKey === buildContextKey()
+})
+
+const memoryStatusText = computed(() => {
+  if (!memoryModeEnabled.value) return '记忆模式：关闭'
+  if (!memoryState.value) return '记忆模式：未建立'
+  if (memoryApplicable.value) return `记忆模式：可复用（${memoryState.value.turns} 轮）`
+  return '记忆模式：上下文已变化，下一次将重建'
+})
+
 const saveConfig = () => {
   saveAiSettings(settings)
   message.success('AI 配置已保存（不含 API Key）')
@@ -53,20 +100,24 @@ const clearApiKey = () => {
   message.success('已清空会话 API Key')
 }
 
+const clearMemory = () => {
+  memoryState.value = null
+  lastRequestUsedMemory.value = false
+  message.success('已清空上下文记忆')
+}
+
 const getSystemPrompt = () => {
   return [
     '你是 MaaFramework 日志分析助手。',
     '你必须只根据给定上下文回答，不允许编造。',
-    '输出结构固定为：',
-    '1. 结论',
-    '2. 证据（逐条引用字段）',
-    '3. 不确定项',
-    '4. 建议操作（按优先级）',
-    '如果证据不足，明确说“证据不足”。',
+    '必须返回 JSON 对象，格式为：',
+    '{"answer":"...","memory_update":"..."}',
+    '其中 memory_update 是可供后续追问复用的高密度摘要。',
+    '如果证据不足，请在 answer 中明确写“证据不足”。',
   ].join('\n')
 }
 
-const buildUserPrompt = () => {
+const buildFullContextPrompt = () => {
   const context = buildAiAnalysisContext({
     tasks: props.tasks,
     selectedTask: props.selectedTask,
@@ -78,11 +129,75 @@ const buildUserPrompt = () => {
   })
 
   return [
+    '这是首轮或上下文变化后的分析，请基于完整上下文回答。',
     `问题: ${question.value}`,
     '',
-    '上下文 JSON:',
+    '完整上下文 JSON:',
     JSON.stringify(context, null, 2),
   ].join('\n')
+}
+
+const buildMemoryPrompt = (memory: MemoryState) => {
+  return [
+    '这是同一上下文下的追问，请优先基于已有记忆回答。',
+    `问题: ${question.value}`,
+    '',
+    `上下文指纹: ${memory.contextKey}`,
+    '会话记忆:',
+    memory.summary,
+  ].join('\n')
+}
+
+const normalizeJsonCandidate = (text: string): string => {
+  const trimmed = text.trim()
+  if (!trimmed) return ''
+
+  if (trimmed.startsWith('```')) {
+    const cleaned = trimmed
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```$/i, '')
+      .trim()
+    return cleaned
+  }
+
+  return trimmed
+}
+
+const tryParseStructuredOutput = (text: string): StructuredAiOutput | null => {
+  const candidates: string[] = []
+  const normalized = normalizeJsonCandidate(text)
+  if (normalized) candidates.push(normalized)
+
+  const firstBrace = normalized.indexOf('{')
+  const lastBrace = normalized.lastIndexOf('}')
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(normalized.slice(firstBrace, lastBrace + 1))
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as Record<string, unknown>
+      const answer = typeof parsed.answer === 'string' ? parsed.answer.trim() : ''
+      const memoryUpdate = typeof parsed.memory_update === 'string' ? parsed.memory_update.trim() : ''
+      if (answer || memoryUpdate) {
+        return {
+          answer: answer || '证据不足',
+          memory_update: memoryUpdate,
+        }
+      }
+    } catch {
+      // ignore parse error
+    }
+  }
+
+  return null
+}
+
+const buildFallbackMemory = (answer: string, questionText: string): string => {
+  const compact = answer.replace(/\s+/g, ' ').trim()
+  const capped = compact.length > 900 ? `${compact.slice(0, 900)}...` : compact
+  return `最近问题: ${questionText}\n最近结论: ${capped}`
 }
 
 const runRequest = async (mode: 'test' | 'analyze') => {
@@ -97,9 +212,15 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     return
   }
 
+  const contextKey = buildContextKey()
+  const useMemoryForThisRound = mode === 'analyze' && memoryModeEnabled.value && !!memoryState.value && memoryState.value.contextKey === contextKey
+  lastRequestUsedMemory.value = useMemoryForThisRound
+
   const userContent = mode === 'test'
     ? '请只输出：连接正常'
-    : buildUserPrompt()
+    : useMemoryForThisRound
+      ? buildMemoryPrompt(memoryState.value as MemoryState)
+      : buildFullContextPrompt()
 
   const response = await requestChatCompletion({
     baseUrl: settings.baseUrl,
@@ -114,13 +235,34 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     ],
   })
 
+  const usageModeText = mode === 'analyze'
+    ? (useMemoryForThisRound ? '记忆上下文' : '全量上下文')
+    : '连接测试'
+
   if (response.usage?.totalTokens != null) {
-    usageText.value = `Token 使用: ${response.usage.totalTokens} (prompt ${response.usage.promptTokens ?? '-'} / completion ${response.usage.completionTokens ?? '-'})`
+    usageText.value = `Token 使用: ${response.usage.totalTokens} (prompt ${response.usage.promptTokens ?? '-'} / completion ${response.usage.completionTokens ?? '-'}) | ${usageModeText}`
   } else {
-    usageText.value = ''
+    usageText.value = `上下文模式: ${usageModeText}`
   }
 
-  resultText.value = response.text
+  if (mode === 'test') {
+    resultText.value = response.text
+    return
+  }
+
+  const parsed = tryParseStructuredOutput(response.text)
+  const answerText = parsed?.answer?.trim() || response.text
+  resultText.value = answerText
+
+  if (!memoryModeEnabled.value) return
+
+  const nextMemorySummary = parsed?.memory_update?.trim() || buildFallbackMemory(answerText, question.value)
+  memoryState.value = {
+    summary: nextMemorySummary,
+    contextKey,
+    turns: (memoryState.value?.contextKey === contextKey ? memoryState.value.turns : 0) + 1,
+    updatedAt: Date.now(),
+  }
 }
 
 const handleTest = async () => {
@@ -187,6 +329,12 @@ const handleAnalyze = async () => {
           <n-flex vertical style="gap: 6px">
             <n-checkbox v-model:checked="settings.includeKnowledgePack">注入 Maa 领域知识包</n-checkbox>
             <n-checkbox v-model:checked="settings.includeSignalLines">注入日志中的 [WRN]/[ERR] 片段</n-checkbox>
+            <n-checkbox v-model:checked="memoryModeEnabled">启用上下文记忆模式（追问时不重复发送全量 JSON）</n-checkbox>
+          </n-flex>
+
+          <n-flex align="center" style="gap: 8px; flex-wrap: wrap">
+            <n-tag :type="memoryApplicable ? 'success' : 'default'">{{ memoryStatusText }}</n-tag>
+            <n-button size="tiny" @click="clearMemory">清空记忆</n-button>
           </n-flex>
 
           <n-flex style="gap: 8px; flex-wrap: wrap">
@@ -224,6 +372,16 @@ const handleAnalyze = async () => {
           <div class="ai-output-wrap">
             <n-empty v-if="!resultText" description="暂无结果，先测试连接或发起一次分析" />
             <pre v-else class="ai-output-text">{{ resultText }}</pre>
+
+            <n-card v-if="memoryState && memoryModeEnabled" size="small" style="margin-top: 10px">
+              <n-flex vertical style="gap: 6px">
+                <n-text depth="3" style="font-size: 12px">记忆摘要（用于后续追问）</n-text>
+                <n-input :value="memoryState.summary" type="textarea" readonly :autosize="{ minRows: 3, maxRows: 8 }" />
+                <n-text depth="3" style="font-size: 12px">
+                  上次请求模式：{{ lastRequestUsedMemory ? '记忆上下文' : '全量上下文' }}
+                </n-text>
+              </n-flex>
+            </n-card>
           </div>
         </n-scrollbar>
       </n-card>
