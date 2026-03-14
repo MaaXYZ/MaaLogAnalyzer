@@ -99,6 +99,11 @@ const handleReset = () => {
           </tr>
 
           <tr>
+            <td>忽略未经过节点</td>
+            <td><n-switch v-model:value="settings.flowchartIgnoreUnexecutedNodes" /></td>
+          </tr>
+
+          <tr>
             <td>回放速度</td>
             <td>
               <n-select

@@ -639,7 +639,9 @@ function recomputeEdgeRoutesForCurrentNodes() {
 // Build graph from selected task
 async function rebuildFlowchartLayout(task: TaskInfo, options?: { resetFocus?: boolean; fit?: boolean }) {
   const runId = ++layoutRunId.value
-  const { nodes, edges } = await buildFlowchartData(task)
+  const { nodes, edges } = await buildFlowchartData(task, {
+    ignoreUnexecutedNodes: settings.flowchartIgnoreUnexecutedNodes,
+  })
   if (runId !== layoutRunId.value) return
 
   // Apply base edge styles
@@ -721,6 +723,16 @@ watch(() => settings.flowchartEdgeStyle, () => {
 watch(() => settings.flowchartEdgeFlowEnabled, () => {
   applyEdgeRenderTypes()
   applyFocusStyles()
+})
+
+watch(() => settings.flowchartIgnoreUnexecutedNodes, async () => {
+  const task = selectedTask.value
+  if (!task) return
+
+  stopPlayback()
+  closePopover()
+  selectedTimelineIndex.value = null
+  await rebuildFlowchartLayout(task, { resetFocus: true, fit: false })
 })
 
 onBeforeUnmount(() => {

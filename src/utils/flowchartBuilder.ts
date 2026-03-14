@@ -40,7 +40,11 @@ interface ElkLayoutEdge {
   targets: string[]
 }
 
-export async function buildFlowchartData(task: TaskInfo): Promise<{ nodes: Node[]; edges: Edge[] }> {
+export interface BuildFlowchartOptions {
+  ignoreUnexecutedNodes?: boolean
+}
+
+export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchartOptions = {}): Promise<{ nodes: Node[]; edges: Edge[] }> {
   // 1. Collect executed node names with order and info
   const executedNodeMap = new Map<string, { order: number[]; infos: NodeInfo[] }>()
   task.nodes.forEach((node, index) => {
@@ -53,13 +57,17 @@ export async function buildFlowchartData(task: TaskInfo): Promise<{ nodes: Node[
     }
   })
 
-  // 2. Collect all node names from next_list (unexecuted placeholders)
+  const ignoreUnexecutedNodes = options.ignoreUnexecutedNodes === true
+
+  // 2. Collect all node names (optionally keep only executed nodes)
   const allNodeNames = new Set<string>(executedNodeMap.keys())
-  task.nodes.forEach(node => {
-    node.next_list.forEach(next => {
-      allNodeNames.add(next.name)
+  if (!ignoreUnexecutedNodes) {
+    task.nodes.forEach(node => {
+      node.next_list.forEach(next => {
+        allNodeNames.add(next.name)
+      })
     })
-  })
+  }
 
   // 3. Build nodes
   const flowNodes: Node[] = []
@@ -91,6 +99,7 @@ export async function buildFlowchartData(task: TaskInfo): Promise<{ nodes: Node[
   // Topology edges from next_list
   task.nodes.forEach(node => {
     node.next_list.forEach(next => {
+      if (!allNodeNames.has(node.name) || !allNodeNames.has(next.name)) return
       const edgeId = `${node.name}->${next.name}`
       if (edgeSet.has(edgeId)) return
       edgeSet.add(edgeId)

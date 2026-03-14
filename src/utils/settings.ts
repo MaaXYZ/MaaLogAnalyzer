@@ -29,6 +29,8 @@ export interface AppSettings {
   flowchartFocusZoom: number
   // 拖动节点后是否自动重算布局
   flowchartRelayoutAfterDrag: boolean
+  // 是否忽略未经过节点（仅保留已执行节点参与流程图）
+  flowchartIgnoreUnexecutedNodes: boolean
 }
 
 const SETTINGS_KEY = 'maa-log-analyzer-settings'
@@ -45,6 +47,7 @@ const defaultSettings: AppSettings = {
   flowchartPlaybackIntervalMs: 900,
   flowchartFocusZoom: 1.0,
   flowchartRelayoutAfterDrag: true,
+  flowchartIgnoreUnexecutedNodes: false,
 }
 
 
