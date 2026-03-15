@@ -108,12 +108,24 @@ const clearMemory = () => {
 
 const getSystemPrompt = () => {
   return [
-    '你是 MaaFramework 日志分析助手。',
-    '你必须只根据给定上下文回答，不允许编造。',
-    '必须返回 JSON 对象，格式为：',
+    '你是 MaaFramework 日志诊断助手，目标是给出“可执行、可验证”的排查结论。',
+    '只能基于给定上下文作答，不允许臆测上下文中不存在的事实。',
+    '必须返回 JSON 对象，格式固定为：',
     '{"answer":"...","memory_update":"..."}',
-    '其中 memory_update 是可供后续追问复用的高密度摘要。',
-    '如果证据不足，请在 answer 中明确写“证据不足”。',
+    'answer 必须是 Markdown，且包含以下 4 段：',
+    '## 结论',
+    '## 根因候选（按概率排序）',
+    '## 证据',
+    '## 排查步骤（可直接执行）',
+    '在下结论前，必须先做“量化盘点”：至少引用 timelineDiagnostics.longStayNodes 与 timelineDiagnostics.recoFailuresByName。',
+    '如果 timelineDiagnostics.buyCard.reco 中存在 failed>0，必须显式分析 CCBuyCard 相关链路，不能跳过。',
+    '必须区分“现象”和“根因”：ERR 可能是症状，只有与节点停留/重试模式相关联时才能作为主因。',
+    '证据必须给 E1/E2...，并引用明确字段路径（如 timelineDiagnostics.longStayNodes[0]、signalDiagnostics.failedRecoResultByName[1]）。',
+    '根因候选至少 2 条，每条包含：置信度(0-100)、关键证据编号、反证点。',
+    '排查步骤至少 3 条；每条都要包含：操作、期望现象、若不符合下一步。',
+    '如果证据不足，不能只说“证据不足”；仍需给低置信度候选 + 最小验证步骤。',
+    'memory_update 是供下一轮复用的高密度摘要，<= 1200 字，保留任务状态、关键证据、未决问题。',
+    '避免空话：禁止输出“请检查日志”“可能有问题”这类无指向建议。',
   ].join('\n')
 }
 
@@ -130,8 +142,15 @@ const buildFullContextPrompt = () => {
   })
 
   return [
-    '这是首轮或上下文变化后的分析，请基于完整上下文回答。若开启知识包，则本轮包含全量知识卡片。',
-    `问题: ${question.value}`,
+    '这是首轮或上下文变化后的分析，必须先盘点证据再给结论。若开启知识包，本轮包含全量知识卡片。',
+    `用户问题: ${question.value}`,
+    '',
+    '任务要求:',
+    '- 先列证据清单(E1/E2...)，再给结论。',
+    '- 必须先量化长时间停留节点（引用 timelineDiagnostics.longStayNodes）。',
+    '- 必须检查识别热点（引用 timelineDiagnostics.recoFailuresByName 与 timelineDiagnostics.buyCard）。',
+    '- 给出至少2个根因候选并排序。',
+    '- 排查步骤必须可执行且可验证。',
     '',
     '完整上下文 JSON:',
     JSON.stringify(context, null, 2),
@@ -140,10 +159,15 @@ const buildFullContextPrompt = () => {
 
 const buildMemoryPrompt = (memory: MemoryState) => {
   return [
-    '这是同一上下文下的追问，请优先基于已有记忆回答。',
-    `问题: ${question.value}`,
+    '这是同一上下文下的追问。优先基于已有记忆回答，并保持证据编号连续。',
+    `用户追问: ${question.value}`,
     '',
     `上下文指纹: ${memory.contextKey}`,
+    '追问要求:',
+    '- 若新问题未覆盖已知矛盾，优先处理未决风险。',
+    '- 继续引用 timelineDiagnostics 与 signalDiagnostics 的字段路径。',
+    '- 维持“结论/根因候选/证据/排查步骤”结构。',
+    '',
     '会话记忆:',
     memory.summary,
   ].join('\n')
