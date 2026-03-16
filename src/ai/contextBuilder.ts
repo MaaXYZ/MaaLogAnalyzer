@@ -1,4 +1,4 @@
-﻿import type { EventNotification, TaskInfo } from '../types'
+import type { EventNotification, TaskInfo } from '../types'
 import { maaKnowledgePack, searchKnowledge } from './knowledge'
 
 export interface AiLoadedTarget {
@@ -459,6 +459,119 @@ const buildSignalDiagnostics = (
   }
 }
 
+const buildDeterministicFindings = (
+  timelineDiagnostics: {
+    longStayNodes: Array<{
+      node: string
+      occurrences: number
+      spanMs: number
+      failedRecoCount: number
+      successRecoCount: number
+    }>
+    repeatedRuns: Array<{
+      node: string
+      count: number
+      spanMs: number
+    }>
+    hotspotRecoPairs: Array<{
+      node: string
+      reco: string
+      failed: number
+      total: number
+      failedRate: number
+    }>
+  },
+  signalDiagnostics: null | {
+    failureTypeBreakdown: Array<{
+      name: string
+      totalFailed: number
+      recoResultFailed: number
+      recognitionMissOrRuleFailed: number
+      dominantType: string
+    }>
+    recoResultFailureRatio: number
+    totalRecoResultFailed: number
+    totalTimelineFailed: number
+  }
+) => {
+  const findings: Array<{
+    id: string
+    confidence: number
+    causeType: 'loop_or_rule' | 'reco_result_fetch' | 'mixed'
+    summary: string
+    evidencePaths: string[]
+  }> = []
+
+  const unknowns: string[] = []
+
+  const topStay = timelineDiagnostics.longStayNodes[0]
+  if (topStay) {
+    findings.push({
+      id: 'long_stay_hotspot',
+      confidence: topStay.spanMs >= 30000 || topStay.occurrences >= 8 ? 80 : 68,
+      causeType: 'loop_or_rule',
+      summary: `长停留热点节点 ${topStay.node}（occurrences=${topStay.occurrences}, spanMs=${topStay.spanMs}, failedReco=${topStay.failedRecoCount}）。`,
+      evidencePaths: ['timelineDiagnostics.longStayNodes[0]'],
+    })
+  } else {
+    unknowns.push('longStayNodes 为空，无法识别长停留热点。')
+  }
+
+  const topPair = timelineDiagnostics.hotspotRecoPairs[0]
+  if (topPair && topPair.failed > 0) {
+    findings.push({
+      id: 'reco_pair_hotspot',
+      confidence: topPair.failed >= 8 || topPair.failedRate >= 0.8 ? 82 : 70,
+      causeType: 'loop_or_rule',
+      summary: `高失败识别对 ${topPair.node}/${topPair.reco}（failed=${topPair.failed}, total=${topPair.total}, failedRate=${topPair.failedRate.toFixed(3)}）。`,
+      evidencePaths: ['timelineDiagnostics.hotspotRecoPairs[0]'],
+    })
+  }
+
+  const topRun = timelineDiagnostics.repeatedRuns[0]
+  if (topRun) {
+    findings.push({
+      id: 'repeated_run_hotspot',
+      confidence: topRun.count >= 5 ? 78 : 64,
+      causeType: 'loop_or_rule',
+      summary: `最长连续重复节点 ${topRun.node}（count=${topRun.count}, spanMs=${topRun.spanMs}）。`,
+      evidencePaths: ['timelineDiagnostics.repeatedRuns[0]'],
+    })
+  }
+
+  if (signalDiagnostics) {
+    const ratio = signalDiagnostics.recoResultFailureRatio
+    findings.push({
+      id: 'reco_result_fetch_ratio',
+      confidence: ratio >= 0.25 ? 84 : 58,
+      causeType: ratio >= 0.25 ? 'reco_result_fetch' : 'mixed',
+      summary: `failed_to_get_reco_result 占比 ${(ratio * 100).toFixed(1)}%（${signalDiagnostics.totalRecoResultFailed}/${signalDiagnostics.totalTimelineFailed || 0}）。`,
+      evidencePaths: [
+        'signalDiagnostics.recoResultFailureRatio',
+        'signalDiagnostics.totalRecoResultFailed',
+        'signalDiagnostics.totalTimelineFailed',
+      ],
+    })
+
+    const topType = signalDiagnostics.failureTypeBreakdown[0]
+    if (topType) {
+      findings.push({
+        id: 'top_failure_type',
+        confidence: 74,
+        causeType: topType.dominantType === 'reco_result_fetch_failed' ? 'reco_result_fetch' : 'loop_or_rule',
+        summary: `失败热点识别项 ${topType.name}（total=${topType.totalFailed}, reco_result_failed=${topType.recoResultFailed}, recognition_miss_or_rule_failed=${topType.recognitionMissOrRuleFailed}）。`,
+        evidencePaths: ['signalDiagnostics.failureTypeBreakdown[0]'],
+      })
+    }
+  } else {
+    unknowns.push('未注入 signalLines，无法判定失败分型占比。')
+  }
+
+  return {
+    findings,
+    unknowns,
+  }
+}
 export function buildAiAnalysisContext(input: BuildAiContextInput): Record<string, unknown> {
   const selectedTask = input.selectedTask
 
@@ -511,6 +624,14 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
   const signalDiagnostics = signalLines
     ? buildSignalDiagnostics(signalLines.lines, timelineDiagnostics.recoIdToName, timelineDiagnostics.recoFailuresByNameAll)
     : null
+  const deterministicFindings = buildDeterministicFindings(
+    {
+      longStayNodes: timelineDiagnostics.longStayNodes,
+      repeatedRuns: timelineDiagnostics.repeatedRuns,
+      hotspotRecoPairs: timelineDiagnostics.hotspotRecoPairs,
+    },
+    signalDiagnostics
+  )
 
   const knowledge = !input.includeKnowledgePack
     ? []
@@ -545,6 +666,7 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
     },
     signalLines,
     signalDiagnostics,
+    deterministicFindings,
     knowledge,
   }
 }

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { NAlert, NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NInputNumber, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
 import type { TaskInfo } from '../types'
@@ -118,8 +118,9 @@ const getSystemPrompt = () => {
     '## 证据',
     '## 排查步骤（可直接执行）',
     '在下结论前，必须先做“量化盘点”：至少引用 timelineDiagnostics.longStayNodes 与 timelineDiagnostics.recoFailuresByName。',
+    '若 deterministicFindings.findings 非空，优先基于它构建结论骨架，再补充细节证据。',
     '必须区分“现象”和“根因”：ERR 可能是症状，只有与节点停留/重试模式相关联时才能作为主因。',
-    '证据必须给 E1/E2...，并引用明确字段路径（如 timelineDiagnostics.longStayNodes[0]、signalDiagnostics.failedRecoResultByName[1]）。',
+    '证据必须给 E1/E2...，并引用明确字段路径（如 timelineDiagnostics.longStayNodes[0]、signalDiagnostics.failureTypeBreakdown[0]、deterministicFindings.findings[0]）。',
     '根因候选至少 2 条，每条包含：置信度(0-100)、关键证据编号、反证点。',
     '排查步骤至少 3 条；每条都要包含：操作、期望现象、若不符合下一步。',
     '如果证据不足，不能只说“证据不足”；仍需给低置信度候选 + 最小验证步骤。',
@@ -148,6 +149,7 @@ const buildFullContextPrompt = () => {
     '- 先列证据清单(E1/E2...)，再给结论。',
     '- 必须先量化长时间停留节点（引用 timelineDiagnostics.longStayNodes）。',
     '- 必须检查识别热点（引用 timelineDiagnostics.recoFailuresByName 与 timelineDiagnostics.hotspotRecoPairs）。',
+    '- 若存在 deterministicFindings.findings，至少引用其中 1 条并映射到 E 证据编号。',
     '- 给出至少2个根因候选并排序。',
     '- 排查步骤必须可执行且可验证。',
     '',
@@ -164,7 +166,7 @@ const buildMemoryPrompt = (memory: MemoryState) => {
     `上下文指纹: ${memory.contextKey}`,
     '追问要求:',
     '- 若新问题未覆盖已知矛盾，优先处理未决风险。',
-    '- 继续引用 timelineDiagnostics 与 signalDiagnostics 的字段路径。',
+    '- 继续引用 timelineDiagnostics、signalDiagnostics、deterministicFindings 的字段路径。',
     '- 维持“结论/根因候选/证据/排查步骤”结构。',
     '',
     '会话记忆:',
