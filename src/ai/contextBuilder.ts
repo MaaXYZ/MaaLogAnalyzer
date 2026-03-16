@@ -217,6 +217,13 @@ const buildTimelineDiagnostics = (timeline: TimelineNodeItem[]) => {
     nodes: Set<string>
   }>()
 
+  const failedRecoByNodeAndName = new Map<string, {
+    node: string
+    reco: string
+    failed: number
+    total: number
+  }>()
+
   const recoIdToName = new Map<number, string>()
 
   for (const node of timeline) {
@@ -263,6 +270,17 @@ const buildTimelineDiagnostics = (timeline: TimelineNodeItem[]) => {
       if (reco.status === 'success') recoStats.success += 1
       recoStats.nodes.add(node.name)
       recoByName.set(reco.name, recoStats)
+
+      const pairKey = `${node.name}@@${reco.name}`
+      const pairStats = failedRecoByNodeAndName.get(pairKey) ?? {
+        node: node.name,
+        reco: reco.name,
+        failed: 0,
+        total: 0,
+      }
+      pairStats.total += 1
+      if (reco.status === 'failed') pairStats.failed += 1
+      failedRecoByNodeAndName.set(pairKey, pairStats)
     }
 
     byNodeName.set(node.name, nodeStats)
@@ -301,22 +319,18 @@ const buildTimelineDiagnostics = (timeline: TimelineNodeItem[]) => {
       return b.total - a.total
     })
 
-  const buyCardReco = recoFailuresByName.filter(item => item.name.toLowerCase().includes('buycard'))
-  const buyCardNodes = longStayNodes.filter(item => item.node.toLowerCase().includes('buycard'))
-  const flagNodeBuyCard = timeline.reduce((acc, node) => {
-    if (node.name !== 'CCFlagInCombatMain') return acc
-    let failed = 0
-    let success = 0
-    for (const reco of node.recognition) {
-      if (!reco.name.toLowerCase().includes('buycard')) continue
-      if (reco.status === 'failed') failed += 1
-      if (reco.status === 'success') success += 1
-    }
-    return {
-      failed: acc.failed + failed,
-      success: acc.success + success,
-    }
-  }, { failed: 0, success: 0 })
+  const hotspotRecoPairs = Array.from(failedRecoByNodeAndName.values())
+    .map(item => ({
+      node: item.node,
+      reco: item.reco,
+      failed: item.failed,
+      total: item.total,
+      failedRate: item.total > 0 ? item.failed / item.total : 0,
+    }))
+    .sort((a, b) => {
+      if (b.failed !== a.failed) return b.failed - a.failed
+      return b.total - a.total
+    })
 
   const repeatedRuns: Array<{
     node: string
@@ -362,17 +376,18 @@ const buildTimelineDiagnostics = (timeline: TimelineNodeItem[]) => {
   return {
     longStayNodes: longStayNodes.slice(0, 12),
     recoFailuresByName: recoFailuresByName.slice(0, 20),
+    recoFailuresByNameAll: recoFailuresByName,
     repeatedRuns: repeatedRuns.slice(0, 12),
-    buyCard: {
-      reco: buyCardReco.slice(0, 10),
-      nodes: buyCardNodes.slice(0, 10),
-      inCCFlagInCombatMain: flagNodeBuyCard,
-    },
+    hotspotRecoPairs: hotspotRecoPairs.slice(0, 20),
     recoIdToName,
   }
 }
 
-const buildSignalDiagnostics = (lines: SignalLineItem[], recoIdToName: Map<number, string>) => {
+const buildSignalDiagnostics = (
+  lines: SignalLineItem[],
+  recoIdToName: Map<number, string>,
+  recoFailuresByName: Array<{ name: string; failed: number }>
+) => {
   const failedRecoResultByName = new Map<string, number>()
   let unknownRecoNameCount = 0
 
@@ -397,8 +412,48 @@ const buildSignalDiagnostics = (lines: SignalLineItem[], recoIdToName: Map<numbe
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
 
+  const timelineFailedMap = new Map<string, number>()
+  for (const item of recoFailuresByName) {
+    timelineFailedMap.set(item.name, item.failed)
+  }
+
+  const breakdownNames = new Set<string>([
+    ...Array.from(timelineFailedMap.keys()),
+    ...Array.from(failedRecoResultByName.keys()),
+  ])
+
+  const failureTypeBreakdown = Array.from(breakdownNames).map(name => {
+    const totalFailed = timelineFailedMap.get(name) ?? 0
+    const recoResultFailed = failedRecoResultByName.get(name) ?? 0
+    const recognitionMissOrRuleFailed = Math.max(0, totalFailed - recoResultFailed)
+    const dominantType = recoResultFailed > recognitionMissOrRuleFailed
+      ? 'reco_result_fetch_failed'
+      : recognitionMissOrRuleFailed > 0
+        ? 'recognition_miss_or_rule_failed'
+        : 'unknown'
+
+    return {
+      name,
+      totalFailed,
+      recoResultFailed,
+      recognitionMissOrRuleFailed,
+      dominantType,
+    }
+  }).sort((a, b) => {
+    if (b.totalFailed !== a.totalFailed) return b.totalFailed - a.totalFailed
+    return b.recoResultFailed - a.recoResultFailed
+  })
+
+  const totalRecoResultFailed = topFailedRecoResult.reduce((acc, item) => acc + item.count, 0)
+  const totalTimelineFailed = recoFailuresByName.reduce((acc, item) => acc + item.failed, 0)
+  const recoResultFailureRatio = totalTimelineFailed > 0 ? totalRecoResultFailed / totalTimelineFailed : 0
+
   return {
     failedRecoResultByName: topFailedRecoResult.slice(0, 20),
+    failureTypeBreakdown: failureTypeBreakdown.slice(0, 24),
+    totalRecoResultFailed,
+    totalTimelineFailed,
+    recoResultFailureRatio,
     unknownRecoNameCount,
     lineCount: lines.length,
   }
@@ -454,7 +509,7 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
 
   const timelineDiagnostics = buildTimelineDiagnostics(fullTaskTimeline)
   const signalDiagnostics = signalLines
-    ? buildSignalDiagnostics(signalLines.lines, timelineDiagnostics.recoIdToName)
+    ? buildSignalDiagnostics(signalLines.lines, timelineDiagnostics.recoIdToName, timelineDiagnostics.recoFailuresByNameAll)
     : null
 
   const knowledge = !input.includeKnowledgePack
@@ -486,7 +541,7 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
       longStayNodes: timelineDiagnostics.longStayNodes,
       recoFailuresByName: timelineDiagnostics.recoFailuresByName,
       repeatedRuns: timelineDiagnostics.repeatedRuns,
-      buyCard: timelineDiagnostics.buyCard,
+      hotspotRecoPairs: timelineDiagnostics.hotspotRecoPairs,
     },
     signalLines,
     signalDiagnostics,
