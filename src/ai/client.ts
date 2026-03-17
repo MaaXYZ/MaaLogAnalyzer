@@ -12,11 +12,13 @@ export interface ChatCompletionOptions {
   messages: AiChatMessage[]
   temperature?: number
   maxTokens?: number
+  stream?: boolean
   timeoutMs?: number
 }
 
 export interface ChatCompletionResult {
   text: string
+  finishReason?: string
   usage?: {
     promptTokens?: number
     completionTokens?: number
@@ -27,6 +29,7 @@ export interface ChatCompletionResult {
 
 interface ChatCompletionResponse {
   choices?: Array<{
+    finish_reason?: string
     message?: {
       content?: string | Array<{ type?: string; text?: string }>
       reasoning_content?: string
@@ -43,6 +46,10 @@ const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '')
 
 const normalizeMessageText = (payload: unknown): string => {
   if (typeof payload === 'string') return payload
+  if (typeof payload === 'object' && payload !== null) {
+    const text = (payload as { text?: unknown }).text
+    if (typeof text === 'string') return text
+  }
   if (!Array.isArray(payload)) return ''
 
   const parts: string[] = []
@@ -71,6 +78,129 @@ const pickResponseText = (data: ChatCompletionResponse | null): string => {
   return ''
 }
 
+const toResultUsage = (usage?: ChatCompletionResponse['usage']) => {
+  if (!usage) return undefined
+  return {
+    promptTokens: usage.prompt_tokens,
+    completionTokens: usage.completion_tokens,
+    totalTokens: usage.total_tokens,
+  }
+}
+
+interface StreamReadResult {
+  text: string
+  finishReason?: string
+  usage?: ChatCompletionResponse['usage']
+  rawText: string
+  rawEvents: unknown[]
+}
+
+const readStreamingResponse = async (
+  body: ReadableStream<Uint8Array>,
+  keepAlive: () => void
+): Promise<StreamReadResult> => {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let text = ''
+  let finishReason: string | undefined
+  let usage: ChatCompletionResponse['usage'] | undefined
+  let rawText = ''
+  const rawEvents: unknown[] = []
+  let lineBuffer = ''
+
+  const handlePayload = (payload: string) => {
+    const normalized = payload.trim()
+    if (!normalized || normalized === '[DONE]') return
+
+    let chunk: ChatCompletionResponse | null = null
+    try {
+      chunk = JSON.parse(normalized) as ChatCompletionResponse
+    } catch {
+      return
+    }
+
+    if (rawEvents.length < 24) rawEvents.push(chunk)
+
+    const choice = chunk.choices?.[0]
+    if (!choice) return
+
+    const delta = (choice as { delta?: { content?: unknown; reasoning_content?: unknown } }).delta
+    const deltaContent = normalizeMessageText(delta?.content)
+    if (deltaContent) text += deltaContent
+
+    if (!deltaContent && typeof delta?.reasoning_content === 'string' && delta.reasoning_content.trim()) {
+      text += delta.reasoning_content
+    }
+
+    if (!deltaContent) {
+      const messageContent = normalizeMessageText(choice.message?.content)
+      if (messageContent) text += messageContent
+      if (!messageContent && typeof choice.message?.reasoning_content === 'string' && choice.message.reasoning_content.trim()) {
+        text += choice.message.reasoning_content
+      }
+    }
+
+    if (typeof choice.finish_reason === 'string' && choice.finish_reason.trim()) {
+      finishReason = choice.finish_reason
+    }
+
+    if (chunk.usage) usage = chunk.usage
+  }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      keepAlive()
+
+      const piece = decoder.decode(value, { stream: true })
+      rawText += piece
+      lineBuffer += piece
+
+      while (true) {
+        const lf = lineBuffer.indexOf('\n')
+        if (lf < 0) break
+        const line = lineBuffer.slice(0, lf).replace(/\r$/, '')
+        lineBuffer = lineBuffer.slice(lf + 1)
+
+        if (!line.startsWith('data:')) continue
+        handlePayload(line.slice(5))
+      }
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  const tail = decoder.decode()
+  if (tail) {
+    rawText += tail
+    lineBuffer += tail
+  }
+
+  const lastLine = lineBuffer.trim()
+  if (lastLine.startsWith('data:')) {
+    handlePayload(lastLine.slice(5))
+  }
+
+  return { text, finishReason, usage, rawText, rawEvents }
+}
+
+const parseStreamLikeResponse = (rawText: string): ChatCompletionResponse | null => {
+  const lines = rawText.split(/\r?\n/)
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i]?.trim()
+    if (!line || !line.startsWith('data:')) continue
+    const payload = line.slice(5).trim()
+    if (!payload || payload === '[DONE]') continue
+    try {
+      return JSON.parse(payload) as ChatCompletionResponse
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
 export async function requestChatCompletion(options: ChatCompletionOptions): Promise<ChatCompletionResult> {
   const baseUrl = trimTrailingSlash(options.baseUrl.trim())
   const apiKey = options.apiKey.trim()
@@ -82,9 +212,24 @@ export async function requestChatCompletion(options: ChatCompletionOptions): Pro
 
   const controller = new AbortController()
   const timeoutMs = Math.max(3000, options.timeoutMs ?? 45000)
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  let timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  const keepAlive = () => {
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  }
 
   try {
+    const stream = options.stream ?? false
+    const payload: Record<string, unknown> = {
+      model,
+      messages: options.messages,
+      temperature: options.temperature ?? 0.2,
+      stream,
+    }
+    if (typeof options.maxTokens === 'number' && Number.isFinite(options.maxTokens) && options.maxTokens > 0) {
+      payload.max_tokens = Math.floor(options.maxTokens)
+    }
+
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       signal: controller.signal,
@@ -92,25 +237,58 @@ export async function requestChatCompletion(options: ChatCompletionOptions): Pro
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        messages: options.messages,
-        temperature: options.temperature ?? 0.2,
-        max_tokens: options.maxTokens ?? 1200,
-      }),
+      body: JSON.stringify(payload),
     })
+
+    if (!response.ok) {
+      const rawText = await response.text()
+      let data: ChatCompletionResponse | null = null
+      try {
+        data = rawText ? (JSON.parse(rawText) as ChatCompletionResponse) : null
+      } catch {
+        data = parseStreamLikeResponse(rawText)
+      }
+      const detail = data && typeof data === 'object' ? JSON.stringify(data) : rawText
+      throw new Error(`请求失败 (${response.status}): ${detail || response.statusText}`)
+    }
+
+    if (stream && response.body) {
+      const streamed = await readStreamingResponse(response.body, keepAlive)
+      let content = streamed.text
+      let finishReason = streamed.finishReason
+      let usage = streamed.usage
+
+      if (!content.trim()) {
+        let data: ChatCompletionResponse | null = null
+        try {
+          data = streamed.rawText ? (JSON.parse(streamed.rawText) as ChatCompletionResponse) : null
+        } catch {
+          data = parseStreamLikeResponse(streamed.rawText)
+        }
+
+        content = pickResponseText(data)
+        finishReason = finishReason || data?.choices?.[0]?.finish_reason
+        usage = usage ?? data?.usage
+      }
+
+      if (!content.trim()) {
+        throw new Error('模型返回为空，请检查模型或请求参数')
+      }
+
+      return {
+        text: content,
+        finishReason,
+        usage: toResultUsage(usage),
+        raw: streamed.rawEvents.length > 0 ? streamed.rawEvents : streamed.rawText,
+      }
+    }
 
     const rawText = await response.text()
     let data: ChatCompletionResponse | null = null
     try {
       data = rawText ? (JSON.parse(rawText) as ChatCompletionResponse) : null
     } catch {
-      data = null
-    }
-
-    if (!response.ok) {
-      const detail = data && typeof data === 'object' ? JSON.stringify(data) : rawText
-      throw new Error(`请求失败 (${response.status}): ${detail || response.statusText}`)
+      data = parseStreamLikeResponse(rawText)
     }
 
     const content = pickResponseText(data)
@@ -120,11 +298,8 @@ export async function requestChatCompletion(options: ChatCompletionOptions): Pro
 
     return {
       text: content,
-      usage: {
-        promptTokens: data?.usage?.prompt_tokens,
-        completionTokens: data?.usage?.completion_tokens,
-        totalTokens: data?.usage?.total_tokens,
-      },
+      finishReason: data?.choices?.[0]?.finish_reason,
+      usage: toResultUsage(data?.usage),
       raw: data ?? rawText,
     }
   } catch (error) {

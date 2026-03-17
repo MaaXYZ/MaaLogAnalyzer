@@ -106,6 +106,8 @@ const clearMemory = () => {
   message.success('已清空上下文记忆')
 }
 
+const ANALYSIS_PROMPT_SOFT_LIMIT = 110000
+const ANALYSIS_TIMEOUT_MS = 180000
 const getSystemPrompt = () => {
   return [
     '你是 MaaFramework 日志诊断助手，目标是给出“可执行、可验证”的排查结论。',
@@ -129,8 +131,57 @@ const getSystemPrompt = () => {
   ].join('\n')
 }
 
-const buildFullContextPrompt = () => {
-  const context = buildAiAnalysisContext({
+const toObjectArray = (value: unknown): Array<Record<string, unknown>> =>
+  Array.isArray(value) ? (value as Array<Record<string, unknown>>) : []
+
+const buildCompactContext = (context: Record<string, unknown>): Record<string, unknown> => {
+  const timelineDiagnostics = (context.timelineDiagnostics as Record<string, unknown> | undefined) ?? {}
+  const deterministicFindings = (context.deterministicFindings as Record<string, unknown> | undefined) ?? {}
+
+  const selectedNodeTimeline = toObjectArray(context.selectedNodeTimeline)
+    .slice(-40)
+    .map(node => ({
+      ...node,
+      recognition: toObjectArray(node.recognition).slice(0, 12),
+      next_list: toObjectArray(node.next_list).slice(0, 8),
+    }))
+
+  const signalLines = (() => {
+    const raw = context.signalLines as Record<string, unknown> | null | undefined
+    if (!raw || typeof raw !== 'object') return raw ?? null
+    return {
+      ...raw,
+      lines: toObjectArray(raw.lines).slice(0, 60),
+    }
+  })()
+
+  return {
+    ...context,
+    taskOverview: toObjectArray(context.taskOverview).slice(-10),
+    selectedNodeTimeline,
+    selectedEventTail: toObjectArray(context.selectedEventTail).slice(-20),
+    failureCandidates: toObjectArray(context.failureCandidates).slice(0, 24),
+    timelineDiagnostics: {
+      ...timelineDiagnostics,
+      longStayNodes: toObjectArray(timelineDiagnostics.longStayNodes).slice(0, 8),
+      recoFailuresByName: toObjectArray(timelineDiagnostics.recoFailuresByName).slice(0, 12),
+      repeatedRuns: toObjectArray(timelineDiagnostics.repeatedRuns).slice(0, 8),
+      hotspotRecoPairs: toObjectArray(timelineDiagnostics.hotspotRecoPairs).slice(0, 10),
+    },
+    deterministicFindings: {
+      ...deterministicFindings,
+      findings: toObjectArray(deterministicFindings.findings).slice(0, 6),
+      unknowns: Array.isArray(deterministicFindings.unknowns)
+        ? (deterministicFindings.unknowns as unknown[]).slice(0, 4)
+        : [],
+    },
+    signalLines,
+    knowledge: toObjectArray(context.knowledge).slice(0, 16),
+  }
+}
+
+const buildFullContextPrompt = (compact: boolean, minifiedJson = false) => {
+  const rawContext = buildAiAnalysisContext({
     tasks: props.tasks,
     selectedTask: props.selectedTask,
     question: question.value,
@@ -140,9 +191,15 @@ const buildFullContextPrompt = () => {
     includeKnowledgeBootstrap: true,
     includeSignalLines: settings.includeSignalLines,
   })
+  const context = compact ? buildCompactContext(rawContext) : rawContext
+  const contextText = minifiedJson
+    ? JSON.stringify(context)
+    : JSON.stringify(context, null, 2)
 
   return [
-    '这是首轮或上下文变化后的分析，必须先盘点证据再给结论。若开启知识包，本轮包含全量知识卡片。',
+    compact
+      ? '这是首轮或上下文变化后的分析。由于上下文较大，本轮启用压缩上下文；结论仍必须绑定明确字段证据。'
+      : '这是首轮或上下文变化后的分析，必须先盘点证据再给结论。若开启知识包，本轮包含全量知识卡片。',
     `用户问题: ${question.value}`,
     '',
     '任务要求:',
@@ -154,7 +211,7 @@ const buildFullContextPrompt = () => {
     '- 排查步骤必须可执行且可验证。',
     '',
     '完整上下文 JSON:',
-    JSON.stringify(context, null, 2),
+    contextText,
   ].join('\n')
 }
 
@@ -226,6 +283,9 @@ const buildFallbackMemory = (answer: string, questionText: string): string => {
   return `最近问题: ${questionText}\n最近结论: ${capped}`
 }
 
+const isLikelyPayloadTooLargeError = (msg: string): boolean =>
+  /(context|token|length|too\s*long|maximum context|request too large|payload|invalid_request|无法加载返回数据|返回数据)/i.test(msg)
+
 const runRequest = async (mode: 'test' | 'analyze') => {
   const key = apiKey.value.trim()
   if (!key) {
@@ -242,27 +302,61 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   const useMemoryForThisRound = mode === 'analyze' && memoryModeEnabled.value && !!memoryState.value && memoryState.value.contextKey === contextKey
   lastRequestUsedMemory.value = useMemoryForThisRound
 
-  const userContent = mode === 'test'
-    ? '请只输出：连接正常'
-    : useMemoryForThisRound
-      ? buildMemoryPrompt(memoryState.value as MemoryState)
-      : buildFullContextPrompt()
+  let usedCompactContext = false
+  let userContent = ''
+  if (mode === 'test') {
+    userContent = '请只输出：连接正常'
+  } else if (useMemoryForThisRound) {
+    userContent = buildMemoryPrompt(memoryState.value as MemoryState)
+  } else {
+    const fullPrompt = buildFullContextPrompt(false)
+    if (fullPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT) {
+      usedCompactContext = true
+      const compactPrompt = buildFullContextPrompt(true)
+      userContent = compactPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT
+        ? buildFullContextPrompt(true, true)
+        : compactPrompt
+    } else {
+      userContent = fullPrompt
+    }
+  }
 
-  const response = await requestChatCompletion({
+  const sendRequest = (content: string) => requestChatCompletion({
     baseUrl: settings.baseUrl,
     apiKey: key,
     model: settings.model,
     temperature: mode === 'test' ? 0 : settings.temperature,
-    maxTokens: mode === 'test' ? 256 : settings.maxTokens,
-    timeoutMs: mode === 'test' ? 15000 : 60000,
+    maxTokens: mode === 'test'
+      ? 256
+      : (settings.maxTokensAuto ? undefined : settings.maxTokens),
+    stream: mode === 'analyze' ? settings.streamResponse : false,
+    timeoutMs: mode === 'test' ? 15000 : ANALYSIS_TIMEOUT_MS,
     messages: [
       { role: 'system', content: getSystemPrompt() },
-      { role: 'user', content: userContent },
+      { role: 'user', content },
     ],
   })
 
+  let response
+  try {
+    response = await sendRequest(userContent)
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    const shouldRetryCompact = mode === 'analyze' && !useMemoryForThisRound && !usedCompactContext && isLikelyPayloadTooLargeError(msg)
+    if (!shouldRetryCompact) throw error
+
+    usedCompactContext = true
+    message.warning('分析上下文较大，已自动切换压缩上下文重试一次')
+    const compactPrompt = buildFullContextPrompt(true)
+    response = await sendRequest(
+      compactPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT
+        ? buildFullContextPrompt(true, true)
+        : compactPrompt
+    )
+  }
+
   const usageModeText = mode === 'analyze'
-    ? (useMemoryForThisRound ? '记忆上下文' : '全量上下文')
+    ? (useMemoryForThisRound ? '记忆上下文' : (usedCompactContext ? '压缩全量上下文' : '全量上下文'))
     : '连接测试'
 
   if (response.usage?.totalTokens != null) {
@@ -270,17 +364,25 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   } else {
     usageText.value = `上下文模式: ${usageModeText}`
   }
+  const outputTruncated = response.finishReason === 'length'
+  if (outputTruncated) {
+    usageText.value = `${usageText.value} | 输出截断`
+  }
 
   if (mode === 'test') {
     resultText.value = response.text
     return
   }
 
+  if (outputTruncated) {
+    message.warning('模型输出达到最大长度并被截断，请提高“最大输出”或缩短问题后重试。')
+  }
+
   const parsed = tryParseStructuredOutput(response.text)
   const answerText = parsed?.answer?.trim() || response.text
   resultText.value = answerText
 
-  if (!memoryModeEnabled.value) return
+  if (!memoryModeEnabled.value || outputTruncated) return
 
   const nextMemorySummary = parsed?.memory_update?.trim() || buildFallbackMemory(answerText, question.value)
   memoryState.value = {
@@ -349,12 +451,14 @@ const handleAnalyze = async () => {
 
           <n-flex align="center" style="gap: 8px">
             <n-text depth="3" style="width: 90px">最大输出</n-text>
-            <n-input-number v-model:value="settings.maxTokens" :min="256" :max="4096" :step="64" />
+            <n-input-number v-model:value="settings.maxTokens" :min="256" :max="4096" :step="64" :disabled="settings.maxTokensAuto" />
+            <n-checkbox v-model:checked="settings.maxTokensAuto">自动</n-checkbox>
           </n-flex>
 
           <n-flex vertical style="gap: 6px">
             <n-checkbox v-model:checked="settings.includeKnowledgePack">注入 Maa 领域知识包</n-checkbox>
             <n-checkbox v-model:checked="settings.includeSignalLines">注入日志中的 [WRN]/[ERR] 片段</n-checkbox>
+            <n-checkbox v-model:checked="settings.streamResponse">分析请求使用流式响应（stream=true）</n-checkbox>
             <n-checkbox v-model:checked="memoryModeEnabled">启用上下文记忆模式（追问时不重复发送全量 JSON）</n-checkbox>
           </n-flex>
 

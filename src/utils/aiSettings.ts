@@ -5,6 +5,8 @@ export interface AiSettings {
   model: string
   temperature: number
   maxTokens: number
+  maxTokensAuto: boolean
+  streamResponse: boolean
   includeKnowledgePack: boolean
   includeSignalLines: boolean
 }
@@ -16,7 +18,9 @@ const defaultAiSettings: AiSettings = {
   baseUrl: 'https://api.openai.com/v1',
   model: 'gpt-4.1-mini',
   temperature: 0.2,
-  maxTokens: 1200,
+  maxTokens: 4096,
+  maxTokensAuto: false,
+  streamResponse: true,
   includeKnowledgePack: true,
   includeSignalLines: true,
 }
