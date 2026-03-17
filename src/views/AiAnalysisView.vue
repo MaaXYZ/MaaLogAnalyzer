@@ -4,6 +4,7 @@ import { NAlert, NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NInputNumber,
 import type { TaskInfo } from '../types'
 import { requestChatCompletion } from '../ai/client'
 import { buildAiAnalysisContext, type AiLoadedTarget } from '../ai/contextBuilder'
+import { tryParseStructuredOutput, type StructuredAiOutput } from '../ai/structuredOutput'
 import { getAiSettings, saveAiSettings, getSessionApiKey, setSessionApiKey } from '../utils/aiSettings'
 
 interface Props {
@@ -18,11 +19,6 @@ interface MemoryState {
   contextKey: string
   turns: number
   updatedAt: number
-}
-
-interface StructuredAiOutput {
-  answer: string
-  memory_update: string
 }
 
 interface ConversationTurn {
@@ -543,56 +539,52 @@ const buildMemoryPrompt = (memory: MemoryState) => {
   ].join('\n')
 }
 
-const normalizeJsonCandidate = (text: string): string => {
-  const trimmed = text.trim()
-  if (!trimmed) return ''
-
-  if (trimmed.startsWith('```')) {
-    const cleaned = trimmed
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```$/i, '')
-      .trim()
-    return cleaned
-  }
-
-  return trimmed
-}
-
-const tryParseStructuredOutput = (text: string): StructuredAiOutput | null => {
-  const candidates: string[] = []
-  const normalized = normalizeJsonCandidate(text)
-  if (normalized) candidates.push(normalized)
-
-  const firstBrace = normalized.indexOf('{')
-  const lastBrace = normalized.lastIndexOf('}')
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    candidates.push(normalized.slice(firstBrace, lastBrace + 1))
-  }
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate) as Record<string, unknown>
-      const answer = typeof parsed.answer === 'string' ? parsed.answer.trim() : ''
-      const memoryUpdate = typeof parsed.memory_update === 'string' ? parsed.memory_update.trim() : ''
-      if (answer || memoryUpdate) {
-        return {
-          answer: answer || '证据不足',
-          memory_update: memoryUpdate,
-        }
-      }
-    } catch {
-      // ignore parse error
-    }
-  }
-
-  return null
-}
-
 const buildFallbackMemory = (answer: string, questionText: string): string => {
   const compact = answer.replace(/\s+/g, ' ').trim()
   const capped = compact.length > 900 ? `${compact.slice(0, 900)}...` : compact
   return `最近问题: ${questionText}\n最近结论: ${capped}`
+}
+
+const repairStructuredOutput = async (
+  rawOutput: string,
+  key: string
+): Promise<StructuredAiOutput | null> => {
+  const trimmed = rawOutput.trim()
+  if (!trimmed) return null
+
+  const capped = trimmed.length > 24000
+    ? `${trimmed.slice(0, 24000)}\n...(truncated)...`
+    : trimmed
+
+  const repair = await requestChatCompletion({
+    baseUrl: settings.baseUrl,
+    apiKey: key,
+    model: settings.model,
+    temperature: 0,
+    maxTokens: 1600,
+    stream: false,
+    responseFormatJson: true,
+    retryOnLength: false,
+    maxNetworkRetries: 1,
+    timeoutMs: 30000,
+    messages: [
+      {
+        role: 'system',
+        content: [
+          '你是 JSON 修复器。',
+          '只输出一个 JSON 对象，格式必须为 {"answer":"...","memory_update":"..."}。',
+          '禁止输出 Markdown 代码块、解释说明、额外字段。',
+          '若原文缺失 memory_update，请给出简洁摘要。',
+        ].join('\n'),
+      },
+      {
+        role: 'user',
+        content: `请将以下文本修复为目标 JSON：\n${capped}`,
+      },
+    ],
+  })
+
+  return tryParseStructuredOutput(repair.text)
 }
 
 const getNextConversationTurn = (contextKey: string): number => {
@@ -656,6 +648,9 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       ? 256
       : (settings.maxTokensAuto ? undefined : settings.maxTokens),
     stream: mode === 'analyze' ? settings.streamResponse : false,
+    responseFormatJson: mode === 'analyze',
+    retryOnLength: mode === 'analyze',
+    maxNetworkRetries: mode === 'analyze' ? 2 : 1,
     onDelta: mode === 'analyze' && settings.streamResponse
       ? (_deltaText: string, fullText: string) => {
           resultText.value = fullText
@@ -710,7 +705,17 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     message.warning('模型输出达到最大长度并被截断，请提高“最大输出”或缩短问题后重试。')
   }
 
-  const parsed = tryParseStructuredOutput(response.text)
+  let parsed = tryParseStructuredOutput(response.text)
+  if (!parsed) {
+    try {
+      parsed = await repairStructuredOutput(response.text, key)
+      if (parsed) {
+        message.warning('模型原始输出不是标准 JSON，已自动修复后继续。')
+      }
+    } catch {
+      // ignore repair failures and keep raw fallback
+    }
+  }
   const answerText = parsed?.answer?.trim() || response.text
   resultText.value = answerText
 

@@ -383,7 +383,7 @@ const buildTimelineDiagnostics = (timeline: TimelineNodeItem[]) => {
   }
 }
 
-const buildSignalDiagnostics = (
+export const buildSignalDiagnostics = (
   lines: SignalLineItem[],
   recoIdToName: Map<number, string>,
   recoFailuresByName: Array<{ name: string; failed: number }>
@@ -459,7 +459,7 @@ const buildSignalDiagnostics = (
   }
 }
 
-const buildDeterministicFindings = (
+export const buildDeterministicFindings = (
   timelineDiagnostics: {
     longStayNodes: Array<{
       node: string
@@ -604,25 +604,18 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
     }))
     : []
 
-  const selectedNodeTimeline = fullTaskTimeline.slice(-80)
-
-  const selectedEventTail = selectedTask
-    ? selectedTask.events.slice(-40).map(summarizeEvent)
+  const selectedEventTailFull = selectedTask
+    ? selectedTask.events.slice(-140).map(summarizeEvent)
     : []
 
-  const failureCandidates = collectFailureNodes(selectedTask)
+  const failureCandidatesFull = collectFailureNodes(selectedTask, 96)
 
   const bestTarget = input.includeSignalLines ? pickBestTarget(input.loadedTargets ?? [], input.loadedDefaultTargetId) : null
-  const signalLines = bestTarget
-    ? {
-        target: bestTarget.fileName || bestTarget.label,
-        lines: collectSignalLines(bestTarget),
-      }
-    : null
+  const signalLineItemsFull = bestTarget ? collectSignalLines(bestTarget, 96, 220) : []
 
   const timelineDiagnostics = buildTimelineDiagnostics(fullTaskTimeline)
-  const signalDiagnostics = signalLines
-    ? buildSignalDiagnostics(signalLines.lines, timelineDiagnostics.recoIdToName, timelineDiagnostics.recoFailuresByNameAll)
+  const signalDiagnostics = bestTarget
+    ? buildSignalDiagnostics(signalLineItemsFull, timelineDiagnostics.recoIdToName, timelineDiagnostics.recoFailuresByNameAll)
     : null
   const deterministicFindings = buildDeterministicFindings(
     {
@@ -633,11 +626,109 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
     signalDiagnostics
   )
 
-  const knowledge = !input.includeKnowledgePack
+  const knowledgeFull = !input.includeKnowledgePack
     ? []
     : input.includeKnowledgeBootstrap
       ? buildKnowledgeBootstrap()
       : buildKnowledgeDigest(input.question, selectedTask)
+
+  const contextTargetChars = 52000
+  const slicePlan = {
+    nodeLimit: Math.min(fullTaskTimeline.length, 96),
+    eventLimit: Math.min(selectedEventTailFull.length, 52),
+    failureLimit: Math.min(failureCandidatesFull.length, 32),
+    signalLimit: Math.min(signalLineItemsFull.length, 70),
+    knowledgeLimit: Math.min(knowledgeFull.length, 18),
+  }
+  const sliceMin = {
+    nodeLimit: Math.min(fullTaskTimeline.length, 18),
+    eventLimit: Math.min(selectedEventTailFull.length, 10),
+    failureLimit: Math.min(failureCandidatesFull.length, 8),
+    signalLimit: Math.min(signalLineItemsFull.length, 18),
+    knowledgeLimit: Math.min(knowledgeFull.length, 4),
+  }
+
+  const applySlicePlan = () => ({
+    selectedNodeTimeline: fullTaskTimeline.slice(-slicePlan.nodeLimit),
+    selectedEventTail: selectedEventTailFull.slice(-slicePlan.eventLimit),
+    failureCandidates: failureCandidatesFull.slice(0, slicePlan.failureLimit),
+    signalLines: bestTarget
+      ? {
+          target: bestTarget.fileName || bestTarget.label,
+          lines: signalLineItemsFull.slice(0, slicePlan.signalLimit),
+        }
+      : null,
+    knowledge: knowledgeFull.slice(0, slicePlan.knowledgeLimit),
+  })
+
+  const estimateContextChars = () => {
+    const sliced = applySlicePlan()
+    return JSON.stringify({
+      generatedAt: 'x',
+      question: input.question,
+      selectedTask: selectedTask
+        ? {
+            task_id: selectedTask.task_id,
+            entry: selectedTask.entry,
+            status: selectedTask.status,
+            duration: selectedTask.duration,
+            nodeCount: selectedTask.nodes.length,
+            start: selectedTask.start_time,
+            end: selectedTask.end_time,
+          }
+        : null,
+      taskOverview,
+      selectedNodeTimeline: sliced.selectedNodeTimeline,
+      selectedEventTail: sliced.selectedEventTail,
+      failureCandidates: sliced.failureCandidates,
+      timelineDiagnostics: {
+        scopeNodeCount: fullTaskTimeline.length,
+        longStayNodes: timelineDiagnostics.longStayNodes,
+        recoFailuresByName: timelineDiagnostics.recoFailuresByName,
+        repeatedRuns: timelineDiagnostics.repeatedRuns,
+        hotspotRecoPairs: timelineDiagnostics.hotspotRecoPairs,
+      },
+      signalLines: sliced.signalLines,
+      signalDiagnostics,
+      deterministicFindings,
+      knowledge: sliced.knowledge,
+    }).length
+  }
+
+  const reduceOneStep = (): boolean => {
+    const candidates = [
+      { key: 'nodeLimit', score: slicePlan.nodeLimit * 170, step: 12 },
+      { key: 'signalLimit', score: slicePlan.signalLimit * 140, step: 8 },
+      { key: 'failureLimit', score: slicePlan.failureLimit * 140, step: 5 },
+      { key: 'eventLimit', score: slicePlan.eventLimit * 95, step: 6 },
+      { key: 'knowledgeLimit', score: slicePlan.knowledgeLimit * 180, step: 2 },
+    ]
+      .filter(item => slicePlan[item.key as keyof typeof slicePlan] > sliceMin[item.key as keyof typeof sliceMin])
+      .sort((a, b) => b.score - a.score)
+
+    if (candidates.length === 0) return false
+
+    const target = candidates[0]
+    const key = target.key as keyof typeof slicePlan
+    const next = Math.max(
+      sliceMin[key],
+      slicePlan[key] - target.step
+    )
+    if (next >= slicePlan[key]) return false
+    slicePlan[key] = next
+    return true
+  }
+
+  let estimatedChars = estimateContextChars()
+  let guard = 0
+  while (estimatedChars > contextTargetChars && guard < 28) {
+    const changed = reduceOneStep()
+    if (!changed) break
+    estimatedChars = estimateContextChars()
+    guard += 1
+  }
+
+  const sliced = applySlicePlan()
 
   return {
     generatedAt: new Date().toISOString(),
@@ -654,9 +745,9 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
         }
       : null,
     taskOverview,
-    selectedNodeTimeline,
-    selectedEventTail,
-    failureCandidates,
+    selectedNodeTimeline: sliced.selectedNodeTimeline,
+    selectedEventTail: sliced.selectedEventTail,
+    failureCandidates: sliced.failureCandidates,
     timelineDiagnostics: {
       scopeNodeCount: fullTaskTimeline.length,
       longStayNodes: timelineDiagnostics.longStayNodes,
@@ -664,9 +755,18 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
       repeatedRuns: timelineDiagnostics.repeatedRuns,
       hotspotRecoPairs: timelineDiagnostics.hotspotRecoPairs,
     },
-    signalLines,
+    signalLines: sliced.signalLines,
     signalDiagnostics,
     deterministicFindings,
-    knowledge,
+    knowledge: sliced.knowledge,
+    contextBudget: {
+      targetChars: contextTargetChars,
+      estimatedChars,
+      nodeLimit: slicePlan.nodeLimit,
+      eventLimit: slicePlan.eventLimit,
+      failureLimit: slicePlan.failureLimit,
+      signalLimit: slicePlan.signalLimit,
+      knowledgeLimit: slicePlan.knowledgeLimit,
+    },
   }
 }
