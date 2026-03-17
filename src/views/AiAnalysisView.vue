@@ -301,6 +301,10 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   const contextKey = buildContextKey()
   const useMemoryForThisRound = mode === 'analyze' && memoryModeEnabled.value && !!memoryState.value && memoryState.value.contextKey === contextKey
   lastRequestUsedMemory.value = useMemoryForThisRound
+  if (mode === 'analyze') {
+    resultText.value = ''
+    usageText.value = 'AI 正在处理请求...'
+  }
 
   let usedCompactContext = false
   let userContent = ''
@@ -330,6 +334,12 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       ? 256
       : (settings.maxTokensAuto ? undefined : settings.maxTokens),
     stream: mode === 'analyze' ? settings.streamResponse : false,
+    onDelta: mode === 'analyze' && settings.streamResponse
+      ? (_deltaText: string, fullText: string) => {
+          resultText.value = fullText
+          usageText.value = 'AI 正在流式输出...'
+        }
+      : undefined,
     timeoutMs: mode === 'test' ? 15000 : ANALYSIS_TIMEOUT_MS,
     messages: [
       { role: 'system', content: getSystemPrompt() },

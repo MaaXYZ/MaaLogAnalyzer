@@ -13,6 +13,7 @@ export interface ChatCompletionOptions {
   temperature?: number
   maxTokens?: number
   stream?: boolean
+  onDelta?: (deltaText: string, fullText: string) => void
   timeoutMs?: number
 }
 
@@ -97,7 +98,8 @@ interface StreamReadResult {
 
 const readStreamingResponse = async (
   body: ReadableStream<Uint8Array>,
-  keepAlive: () => void
+  keepAlive: () => void,
+  onDelta?: (deltaText: string, fullText: string) => void
 ): Promise<StreamReadResult> => {
   const reader = body.getReader()
   const decoder = new TextDecoder()
@@ -107,6 +109,12 @@ const readStreamingResponse = async (
   let rawText = ''
   const rawEvents: unknown[] = []
   let lineBuffer = ''
+
+  const appendText = (piece: string) => {
+    if (!piece) return
+    text += piece
+    onDelta?.(piece, text)
+  }
 
   const handlePayload = (payload: string) => {
     const normalized = payload.trim()
@@ -126,17 +134,18 @@ const readStreamingResponse = async (
 
     const delta = (choice as { delta?: { content?: unknown; reasoning_content?: unknown } }).delta
     const deltaContent = normalizeMessageText(delta?.content)
-    if (deltaContent) text += deltaContent
+    if (deltaContent) appendText(deltaContent)
 
     if (!deltaContent && typeof delta?.reasoning_content === 'string' && delta.reasoning_content.trim()) {
-      text += delta.reasoning_content
+      appendText(delta.reasoning_content)
     }
 
     if (!deltaContent) {
       const messageContent = normalizeMessageText(choice.message?.content)
-      if (messageContent) text += messageContent
+      // Some providers may send a full message in one chunk when stream=true.
+      if (messageContent && !text) appendText(messageContent)
       if (!messageContent && typeof choice.message?.reasoning_content === 'string' && choice.message.reasoning_content.trim()) {
-        text += choice.message.reasoning_content
+        appendText(choice.message.reasoning_content)
       }
     }
 
@@ -253,7 +262,7 @@ export async function requestChatCompletion(options: ChatCompletionOptions): Pro
     }
 
     if (stream && response.body) {
-      const streamed = await readStreamingResponse(response.body, keepAlive)
+      const streamed = await readStreamingResponse(response.body, keepAlive, options.onDelta)
       let content = streamed.text
       let finishReason = streamed.finishReason
       let usage = streamed.usage
