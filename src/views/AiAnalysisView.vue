@@ -25,6 +25,20 @@ interface StructuredAiOutput {
   memory_update: string
 }
 
+interface ConversationTurn {
+  id: string
+  turn: number
+  contextKey: string
+  question: string
+  answer: string
+  usedMemory: boolean
+  timestamp: number
+}
+
+interface ConversationTurnView extends ConversationTurn {
+  answerHtml: string
+}
+
 const props = defineProps<Props>()
 
 const message = useMessage()
@@ -37,8 +51,108 @@ const resultText = ref('')
 const usageText = ref('')
 
 const memoryModeEnabled = ref(true)
-const memoryState = ref<MemoryState | null>(null)
+const MEMORY_SESSION_KEY = 'maa-log-analyzer-ai-memory-state'
+const MEMORY_SUMMARY_MAX_CHARS = 12000
+const CONVERSATION_SESSION_KEY = 'maa-log-analyzer-ai-conversation-turns'
+const CONVERSATION_MAX_TURNS = 20
+const loadSessionMemoryState = (): MemoryState | null => {
+  try {
+    const raw = sessionStorage.getItem(MEMORY_SESSION_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<MemoryState>
+    if (!parsed || typeof parsed !== 'object') return null
+    if (typeof parsed.summary !== 'string') return null
+    if (typeof parsed.contextKey !== 'string') return null
+    if (typeof parsed.turns !== 'number' || !Number.isFinite(parsed.turns)) return null
+    if (typeof parsed.updatedAt !== 'number' || !Number.isFinite(parsed.updatedAt)) return null
+    return {
+      summary: parsed.summary,
+      contextKey: parsed.contextKey,
+      turns: parsed.turns,
+      updatedAt: parsed.updatedAt,
+    }
+  } catch {
+    return null
+  }
+}
+const saveSessionMemoryState = (value: MemoryState | null) => {
+  try {
+    if (!value) {
+      sessionStorage.removeItem(MEMORY_SESSION_KEY)
+      return
+    }
+    sessionStorage.setItem(MEMORY_SESSION_KEY, JSON.stringify(value))
+  } catch {
+    // ignore write errors
+  }
+}
+const appendMemorySummary = (previous: string, next: string, turn: number): string => {
+  const entry = `[第 ${turn} 轮] ${next.trim()}`
+  const blocks = previous.trim() ? previous.split(/\n{2,}/).filter(Boolean) : []
+  blocks.push(entry)
+
+  let merged = blocks.join('\n\n')
+  while (merged.length > MEMORY_SUMMARY_MAX_CHARS && blocks.length > 1) {
+    blocks.shift()
+    merged = blocks.join('\n\n')
+  }
+
+  if (merged.length > MEMORY_SUMMARY_MAX_CHARS) {
+    return merged.slice(merged.length - MEMORY_SUMMARY_MAX_CHARS)
+  }
+  return merged
+}
+const memoryState = ref<MemoryState | null>(loadSessionMemoryState())
 const lastRequestUsedMemory = ref(false)
+
+const loadSessionConversationTurns = (): ConversationTurn[] => {
+  try {
+    const raw = sessionStorage.getItem(CONVERSATION_SESSION_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(item => item && typeof item === 'object')
+      .map(item => item as Partial<ConversationTurn>)
+      .filter(item =>
+        typeof item.id === 'string'
+        && typeof item.turn === 'number'
+        && Number.isFinite(item.turn)
+        && typeof item.contextKey === 'string'
+        && typeof item.question === 'string'
+        && typeof item.answer === 'string'
+        && typeof item.usedMemory === 'boolean'
+        && typeof item.timestamp === 'number'
+        && Number.isFinite(item.timestamp)
+      )
+      .map(item => ({
+        id: item.id as string,
+        turn: item.turn as number,
+        contextKey: item.contextKey as string,
+        question: item.question as string,
+        answer: item.answer as string,
+        usedMemory: item.usedMemory as boolean,
+        timestamp: item.timestamp as number,
+      }))
+      .slice(-CONVERSATION_MAX_TURNS)
+  } catch {
+    return []
+  }
+}
+
+const saveSessionConversationTurns = (turns: ConversationTurn[]) => {
+  try {
+    if (!turns.length) {
+      sessionStorage.removeItem(CONVERSATION_SESSION_KEY)
+      return
+    }
+    sessionStorage.setItem(CONVERSATION_SESSION_KEY, JSON.stringify(turns.slice(-CONVERSATION_MAX_TURNS)))
+  } catch {
+    // ignore write errors
+  }
+}
+
+const conversationTurns = ref<ConversationTurn[]>(loadSessionConversationTurns())
 
 const selectedTaskTitle = computed(() => {
   if (!props.selectedTask) return '未选择任务'
@@ -57,6 +171,14 @@ const sourceLabel = computed(() => {
 watch(apiKey, (value) => {
   setSessionApiKey(value)
 })
+
+watch(memoryState, (value) => {
+  saveSessionMemoryState(value)
+}, { deep: true })
+
+watch(conversationTurns, (value) => {
+  saveSessionConversationTurns(value)
+}, { deep: true })
 
 const buildContextKey = (): string => {
   const task = props.selectedTask
@@ -89,6 +211,193 @@ const memoryStatusText = computed(() => {
   return '记忆模式：上下文已变化，下一次将重建'
 })
 
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+const splitTableCells = (line: string): string[] =>
+  line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(item => item.trim())
+
+const isMarkdownTableDivider = (line: string): boolean =>
+  /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/.test(line)
+
+const renderInlineMarkdown = (text: string): string => {
+  const codeTokens: string[] = []
+  const placeholderWrapped = text.replace(/`([^`\n]+)`/g, (_m, code: string) => {
+    const token = `@@CODE_TOKEN_${codeTokens.length}@@`
+    codeTokens.push(code)
+    return token
+  })
+
+  let html = escapeHtml(placeholderWrapped)
+  html = html.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label: string, url: string) => {
+    const safe = /^https?:\/\//i.test(url)
+    if (!safe) return `${label} (${url})`
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`
+  })
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+  html = html.replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
+  html = html.replace(/@@CODE_TOKEN_(\d+)@@/g, (_m, idx: string) => {
+    const code = codeTokens[Number(idx)] ?? ''
+    return `<code>${escapeHtml(code)}</code>`
+  })
+  return html
+}
+
+const renderMarkdownBlocks = (source: string): string => {
+  const lines = source.split('\n')
+  const out: string[] = []
+  let i = 0
+  let listType: 'ul' | 'ol' | null = null
+  let paragraphLines: string[] = []
+
+  const closeList = () => {
+    if (!listType) return
+    out.push(listType === 'ul' ? '</ul>' : '</ol>')
+    listType = null
+  }
+
+  const flushParagraph = () => {
+    if (!paragraphLines.length) return
+    const html = paragraphLines
+      .map(line => renderInlineMarkdown(line.trimEnd()))
+      .join('<br/>')
+    out.push(`<p>${html}</p>`)
+    paragraphLines = []
+  }
+
+  while (i < lines.length) {
+    const raw = lines[i]
+    const trimmed = raw.trim()
+
+    if (!trimmed) {
+      flushParagraph()
+      closeList()
+      i += 1
+      continue
+    }
+
+    const heading = raw.match(/^\s*(#{1,6})\s+(.+)$/)
+    if (heading) {
+      flushParagraph()
+      closeList()
+      const level = heading[1].length
+      out.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`)
+      i += 1
+      continue
+    }
+
+    if (raw.includes('|') && i + 1 < lines.length && isMarkdownTableDivider(lines[i + 1])) {
+      flushParagraph()
+      closeList()
+      const headers = splitTableCells(raw)
+      i += 2
+      const rows: string[][] = []
+      while (i < lines.length) {
+        const rowRaw = lines[i]
+        if (!rowRaw.trim() || !rowRaw.includes('|')) break
+        rows.push(splitTableCells(rowRaw))
+        i += 1
+      }
+
+      const thead = `<thead><tr>${headers.map(item => `<th>${renderInlineMarkdown(item)}</th>`).join('')}</tr></thead>`
+      const tbodyRows = rows.map(row => {
+        const normalized = headers.map((_, idx) => row[idx] ?? '')
+        return `<tr>${normalized.map(cell => `<td>${renderInlineMarkdown(cell)}</td>`).join('')}</tr>`
+      }).join('')
+      out.push(`<table>${thead}<tbody>${tbodyRows}</tbody></table>`)
+      continue
+    }
+
+    const quote = raw.match(/^\s*>\s?(.*)$/)
+    if (quote) {
+      flushParagraph()
+      closeList()
+      const quoteLines: string[] = []
+      while (i < lines.length) {
+        const current = lines[i].match(/^\s*>\s?(.*)$/)
+        if (!current) break
+        quoteLines.push(current[1])
+        i += 1
+      }
+      out.push(`<blockquote>${renderMarkdownBlocks(quoteLines.join('\n'))}</blockquote>`)
+      continue
+    }
+
+    const ul = raw.match(/^\s*[-*+]\s+(.+)$/)
+    if (ul) {
+      flushParagraph()
+      if (listType !== 'ul') {
+        closeList()
+        out.push('<ul>')
+        listType = 'ul'
+      }
+      out.push(`<li>${renderInlineMarkdown(ul[1])}</li>`)
+      i += 1
+      continue
+    }
+
+    const ol = raw.match(/^\s*\d+\.\s+(.+)$/)
+    if (ol) {
+      flushParagraph()
+      if (listType !== 'ol') {
+        closeList()
+        out.push('<ol>')
+        listType = 'ol'
+      }
+      out.push(`<li>${renderInlineMarkdown(ol[1])}</li>`)
+      i += 1
+      continue
+    }
+
+    closeList()
+    paragraphLines.push(raw)
+    i += 1
+  }
+
+  flushParagraph()
+  closeList()
+  return out.join('\n')
+}
+
+const renderMarkdown = (source: string): string => {
+  if (!source.trim()) return ''
+  const normalized = source.replace(/\r\n?/g, '\n')
+  const segments = normalized.split(/```/)
+  const html: string[] = []
+
+  segments.forEach((segment, index) => {
+    if (index % 2 === 0) {
+      html.push(renderMarkdownBlocks(segment))
+      return
+    }
+
+    const lines = segment.split('\n')
+    const language = lines[0]?.trim() || ''
+    const code = lines.slice(1).join('\n')
+    const langClass = language ? ` class="language-${escapeHtml(language)}"` : ''
+    html.push(`<pre class="md-code"><code${langClass}>${escapeHtml(code)}</code></pre>`)
+  })
+
+  return html.join('\n')
+}
+
+const renderedResultHtml = computed(() => renderMarkdown(resultText.value))
+
+const conversationTurnViews = computed<ConversationTurnView[]>(() => {
+  return [...conversationTurns.value]
+    .sort((a, b) => a.turn - b.turn)
+    .map(item => ({
+      ...item,
+      answerHtml: renderMarkdown(item.answer),
+    }))
+})
+
 const saveConfig = () => {
   saveAiSettings(settings)
   message.success('AI 配置已保存（不含 API Key）')
@@ -102,8 +411,11 @@ const clearApiKey = () => {
 
 const clearMemory = () => {
   memoryState.value = null
+  saveSessionMemoryState(null)
+  conversationTurns.value = []
+  saveSessionConversationTurns([])
   lastRequestUsedMemory.value = false
-  message.success('已清空上下文记忆')
+  message.success('已清空上下文记忆与多轮对话')
 }
 
 const ANALYSIS_PROMPT_SOFT_LIMIT = 110000
@@ -283,6 +595,15 @@ const buildFallbackMemory = (answer: string, questionText: string): string => {
   return `最近问题: ${questionText}\n最近结论: ${capped}`
 }
 
+const getNextConversationTurn = (contextKey: string): number => {
+  let maxTurn = 0
+  for (const item of conversationTurns.value) {
+    if (item.contextKey !== contextKey) continue
+    if (item.turn > maxTurn) maxTurn = item.turn
+  }
+  return maxTurn + 1
+}
+
 const isLikelyPayloadTooLargeError = (msg: string): boolean =>
   /(context|token|length|too\s*long|maximum context|request too large|payload|invalid_request|无法加载返回数据|返回数据)/i.test(msg)
 
@@ -292,6 +613,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     message.warning('请先输入 API Key')
     return
   }
+  const questionSnapshot = question.value.trim() || '（空问题）'
 
   if (mode === 'analyze' && !props.selectedTask) {
     message.warning('请先在日志分析页面选择一个任务')
@@ -392,13 +714,36 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   const answerText = parsed?.answer?.trim() || response.text
   resultText.value = answerText
 
+  if (mode === 'analyze') {
+    const nextTurn = getNextConversationTurn(contextKey)
+    const history: ConversationTurn[] = [
+      ...conversationTurns.value,
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        turn: nextTurn,
+        contextKey,
+        question: questionSnapshot,
+        answer: answerText,
+        usedMemory: useMemoryForThisRound,
+        timestamp: Date.now(),
+      },
+    ]
+    conversationTurns.value = history.slice(-CONVERSATION_MAX_TURNS)
+  }
+
   if (!memoryModeEnabled.value || outputTruncated) return
 
   const nextMemorySummary = parsed?.memory_update?.trim() || buildFallbackMemory(answerText, question.value)
+  const hasSameContextMemory = memoryState.value?.contextKey === contextKey
+  const nextTurns = (hasSameContextMemory ? memoryState.value?.turns ?? 0 : 0) + 1
+  const mergedSummary = hasSameContextMemory
+    ? appendMemorySummary(memoryState.value?.summary ?? '', nextMemorySummary, nextTurns)
+    : appendMemorySummary('', nextMemorySummary, 1)
+
   memoryState.value = {
-    summary: nextMemorySummary,
+    summary: mergedSummary,
     contextKey,
-    turns: (memoryState.value?.contextKey === contextKey ? memoryState.value.turns : 0) + 1,
+    turns: nextTurns,
     updatedAt: Date.now(),
   }
 }
@@ -508,20 +853,41 @@ const handleAnalyze = async () => {
           <n-text depth="3" style="font-size: 12px">{{ usageText }}</n-text>
         </template>
 
-        <n-scrollbar style="height: 100%">
+        <n-scrollbar class="ai-output-scroll" content-style="width: 100%">
           <div class="ai-output-wrap">
-            <n-empty v-if="!resultText" description="暂无结果，先测试连接或发起一次分析" />
-            <pre v-else class="ai-output-text">{{ resultText }}</pre>
+            <n-empty v-if="!resultText && !conversationTurnViews.length" description="暂无结果，先测试连接或发起一次分析" />
+            <div
+              v-else-if="!conversationTurnViews.length"
+              class="ai-output-markdown markdown-body"
+              v-html="renderedResultHtml"
+            ></div>
 
-            <n-card v-if="memoryState && memoryModeEnabled" size="small" style="margin-top: 10px">
-              <n-flex vertical style="gap: 6px">
-                <n-text depth="3" style="font-size: 12px">记忆摘要（用于后续追问）</n-text>
-                <n-input :value="memoryState.summary" type="textarea" readonly :autosize="{ minRows: 3, maxRows: 8 }" />
-                <n-text depth="3" style="font-size: 12px">
-                  上次请求模式：{{ lastRequestUsedMemory ? '记忆上下文' : '全量上下文' }}
-                </n-text>
+            <n-card v-if="conversationTurnViews.length" size="small" class="conversation-card">
+              <n-flex vertical style="gap: 8px">
+                <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+                  <n-text depth="3" style="font-size: 12px">多轮对话（聊天气泡模式）</n-text>
+                  <n-tag size="small" type="info">共 {{ conversationTurnViews.length }} 轮</n-tag>
+                </n-flex>
+                <div class="turn-list">
+                  <div v-for="turn in conversationTurnViews" :key="turn.id" class="turn-item">
+                    <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+                      <n-tag size="small" type="success">第 {{ turn.turn }} 轮</n-tag>
+                      <n-tag size="small" :type="turn.usedMemory ? 'success' : 'warning'">
+                        {{ turn.usedMemory ? '记忆上下文' : '全量上下文' }}
+                      </n-tag>
+                    </n-flex>
+                    <div class="turn-question-box turn-bubble-user">
+                      <n-text depth="3" style="font-size: 12px">用户</n-text>
+                      <pre class="turn-question-text">{{ turn.question }}</pre>
+                    </div>
+                    <div class="turn-answer-box turn-bubble-assistant markdown-body" v-html="turn.answerHtml"></div>
+                  </div>
+                </div>
               </n-flex>
             </n-card>
+            <n-text v-if="resultText" depth="3" style="display: block; margin-top: 10px; font-size: 12px">
+              上次请求模式：{{ lastRequestUsedMemory ? '记忆上下文' : '全量上下文' }}
+            </n-text>
           </div>
         </n-scrollbar>
       </n-card>
@@ -532,34 +898,219 @@ const handleAnalyze = async () => {
 <style scoped>
 .ai-view-root {
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
   padding: 8px;
   box-sizing: border-box;
 }
 
 .ai-view-grid {
   height: 100%;
+  min-height: 0;
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
 }
 
+.ai-view-grid > * {
+  min-height: 0;
+  min-width: 0;
+}
+
 .ai-left-card,
 .ai-right-card {
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.ai-output-wrap {
-  min-height: 100%;
-  padding: 4px 2px 10px;
+.ai-right-card :deep(.n-card__content) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.ai-output-text {
+.ai-output-scroll {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+}
+
+.ai-output-scroll :deep(.n-scrollbar-container) {
+  height: 100%;
+}
+
+.ai-output-scroll :deep(.n-scrollbar-content) {
+  width: 100% !important;
+}
+
+.ai-output-wrap {
+  min-height: 100%;
+  height: 100%;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 2px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-output-markdown {
   margin: 0;
-  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
   line-height: 1.55;
   font-size: 13px;
+}
+
+.conversation-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.conversation-card :deep(.n-card__content) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.turn-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.turn-item {
+  border: 1px solid rgba(127, 231, 196, 0.55);
+  border-left: 4px solid rgba(127, 231, 196, 0.9);
+  border-radius: 10px;
+  padding: 10px 10px 10px 12px;
+  background: rgba(127, 231, 196, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.turn-question-box {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 8px 10px;
+}
+
+.turn-question-text {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.5;
+  font-size: 12px;
+}
+
+.turn-answer-box {
+  border: 1px solid rgba(127, 231, 196, 0.6);
+  border-radius: 8px;
+  background: rgba(127, 231, 196, 0.14);
+  padding: 8px 10px;
+}
+
+.turn-bubble-user {
+  border-color: rgba(242, 201, 125, 0.65);
+  background: rgba(242, 201, 125, 0.12);
+}
+
+.turn-bubble-assistant {
+  border-color: rgba(127, 231, 196, 0.72);
+  background: rgba(127, 231, 196, 0.16);
+}
+
+:deep(.markdown-body h1),
+:deep(.markdown-body h2),
+:deep(.markdown-body h3),
+:deep(.markdown-body h4),
+:deep(.markdown-body h5),
+:deep(.markdown-body h6) {
+  margin: 10px 0 6px;
+  line-height: 1.35;
+}
+
+:deep(.markdown-body p) {
+  margin: 6px 0;
+}
+
+:deep(.markdown-body ul),
+:deep(.markdown-body ol) {
+  margin: 6px 0 6px 20px;
+  padding: 0;
+}
+
+:deep(.markdown-body li) {
+  margin: 2px 0;
+}
+
+:deep(.markdown-body blockquote) {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-left: 3px solid rgba(127, 231, 196, 0.7);
+  background: rgba(127, 231, 196, 0.08);
+}
+
+:deep(.markdown-body code) {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  font-family: Consolas, Menlo, Monaco, monospace;
+  font-size: 0.92em;
+}
+
+:deep(.markdown-body pre.md-code) {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: auto;
+}
+
+:deep(.markdown-body pre.md-code code) {
+  padding: 0;
+  background: transparent;
+}
+
+:deep(.markdown-body table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+:deep(.markdown-body th),
+:deep(.markdown-body td) {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+:deep(.markdown-body th) {
+  background: rgba(127, 231, 196, 0.16);
+  font-weight: 600;
+}
+
+:deep(.markdown-body a) {
+  color: #7fe7c4;
+  text-decoration: underline;
 }
 
 @media (max-width: 900px) {
