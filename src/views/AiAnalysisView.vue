@@ -430,7 +430,7 @@ const getSystemPrompt = () => {
     '在下结论前，必须先做“量化盘点”：至少引用 timelineDiagnostics.longStayNodes 与 timelineDiagnostics.recoFailuresByName。',
     '若 deterministicFindings.findings 非空，优先基于它构建结论骨架，再补充细节证据。',
     '必须优先区分“流程现象”与“真实失败”：若任务成功且无 PipelineNode.Failed，不得把循环/重试直接当根因。',
-    '必须检查 eventChainDiagnostics：用 nextRecognitionChains 与 actionFailureChains 还原事件链。',
+    '必须检查 eventChainDiagnostics：用 onErrorChains 明确 on_error 触发源（action_failed / reco_timeout_or_nohit / error_handling_loop）。',
     '必须区分“现象”和“根因”：ERR 可能是症状，只有与节点停留/重试模式相关联时才能作为主因。',
     '证据必须给 E1/E2...，并引用明确字段路径（如 timelineDiagnostics.longStayNodes[0]、signalDiagnostics.failureTypeBreakdown[0]、deterministicFindings.findings[0]）。',
     '根因候选至少 2 条，每条包含：置信度(0-100)、关键证据编号、反证点。',
@@ -468,6 +468,15 @@ const buildCompactContext = (context: Record<string, unknown>): Record<string, u
 
   const eventChainDiagnostics = {
     ...eventChainDiagnosticsRaw,
+    onErrorChains: toObjectArray(eventChainDiagnosticsRaw.onErrorChains)
+      .slice(0, 8)
+      .map(chain => ({
+        ...chain,
+        steps: toObjectArray(chain.steps).slice(0, 6),
+        fallbackListPreview: Array.isArray(chain.fallbackListPreview)
+          ? (chain.fallbackListPreview as unknown[]).slice(0, 4)
+          : [],
+      })),
     nextRecognitionChains: toObjectArray(eventChainDiagnosticsRaw.nextRecognitionChains)
       .slice(0, 8)
       .map(chain => ({
@@ -535,7 +544,8 @@ const buildFullContextPrompt = (compact: boolean, minifiedJson = false) => {
     '- 先列证据清单(E1/E2...)，再给结论。',
     '- 必须先量化长时间停留节点（引用 timelineDiagnostics.longStayNodes）。',
     '- 必须检查识别热点（引用 timelineDiagnostics.recoFailuresByName 与 timelineDiagnostics.hotspotRecoPairs）。',
-    '- 必须检查 eventChainDiagnostics.nextRecognitionChains / actionFailureChains，优先给出事件链证据。',
+    '- 必须检查 eventChainDiagnostics.onErrorChains，明确 on_error 的触发源与后续结果。',
+    '- 仅把 nextRecognitionChains / actionFailureChains 作为补充证据，不可替代 onErrorChains。',
     '- 若存在 deterministicFindings.findings，至少引用其中 1 条并映射到 E 证据编号。',
     '- 给出至少2个根因候选并排序。',
     '- 排查步骤必须可执行且可验证。',

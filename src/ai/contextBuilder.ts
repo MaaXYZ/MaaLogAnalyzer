@@ -85,6 +85,7 @@ const summarizeEvent = (event: EventNotification) => ({
 })
 
 type EventChainRiskLevel = 'high' | 'medium' | 'low'
+type OnErrorTriggerType = 'action_failed' | 'reco_timeout_or_nohit' | 'error_handling_loop'
 
 interface EventChainStep {
   index: number
@@ -150,6 +151,192 @@ export const buildEventChainDiagnostics = (events: EventNotification[]) => {
     summary: string
     steps: EventChainStep[]
   }> = []
+
+  const onErrorChains: Array<{
+    triggerType: OnErrorTriggerType
+    triggerEvent: string
+    triggerNode: string
+    triggerActionId: number | null
+    triggerLine: number | null
+    timeoutLikeFailureCount: number
+    fallbackFirstNode: string
+    fallbackListPreview: string[]
+    hasRecovered: boolean
+    hasTaskFailed: boolean
+    outcomeEvent: string
+    riskLevel: EventChainRiskLevel
+    summary: string
+    steps: EventChainStep[]
+  }> = []
+
+  const onErrorChainKeys = new Set<string>()
+
+  const extractListNames = (event: EventNotification | null): string[] => {
+    if (!event) return []
+    const list = Array.isArray(event.details?.list) ? event.details.list : []
+    return list
+      .map((item: any) => (typeof item?.name === 'string' ? item.name : ''))
+      .filter(Boolean)
+  }
+
+  const dedupeSteps = (steps: EventChainStep[], limit = 8): EventChainStep[] => {
+    const out: EventChainStep[] = []
+    const seen = new Set<number>()
+    for (const step of steps) {
+      if (seen.has(step.index)) continue
+      seen.add(step.index)
+      out.push(step)
+      if (out.length >= limit) break
+    }
+    return out
+  }
+
+  const buildOnErrorFollowUp = (startIndex: number, seedSteps: EventChainStep[]) => {
+    const steps = [...seedSteps]
+    let fallbackFirstNode = ''
+    let fallbackListPreview: string[] = []
+    let hasRecovered = false
+    let hasTaskFailed = false
+    let outcomeEvent = 'unknown'
+
+    for (let j = startIndex + 1; j < events.length && j <= startIndex + 96; j += 1) {
+      const lookahead = events[j]
+
+      if (lookahead.message === 'Node.NextList.Starting' && !fallbackFirstNode) {
+        const names = extractListNames(lookahead)
+        fallbackListPreview = names.slice(0, 5)
+        fallbackFirstNode = fallbackListPreview[0] ?? ''
+        if (steps.length < 10) steps.push(toEventChainStep(lookahead, j))
+        continue
+      }
+
+      if (lookahead.message === 'Node.PipelineNode.Failed' && outcomeEvent === 'unknown') {
+        outcomeEvent = lookahead.message
+        if (steps.length < 10) steps.push(toEventChainStep(lookahead, j))
+        continue
+      }
+
+      if (lookahead.message === 'Node.PipelineNode.Succeeded') {
+        hasRecovered = true
+        outcomeEvent = lookahead.message
+        if (steps.length < 10) steps.push(toEventChainStep(lookahead, j))
+        break
+      }
+
+      if (lookahead.message === 'Tasker.Task.Succeeded') {
+        hasRecovered = true
+        outcomeEvent = lookahead.message
+        if (steps.length < 10) steps.push(toEventChainStep(lookahead, j))
+        break
+      }
+
+      if (lookahead.message === 'Tasker.Task.Failed') {
+        hasTaskFailed = true
+        outcomeEvent = lookahead.message
+        if (steps.length < 10) steps.push(toEventChainStep(lookahead, j))
+        break
+      }
+    }
+
+    const riskLevel: EventChainRiskLevel = hasTaskFailed
+      ? 'high'
+      : hasRecovered
+        ? 'low'
+        : outcomeEvent === 'Node.PipelineNode.Failed'
+          ? 'medium'
+          : 'low'
+
+    return {
+      fallbackFirstNode,
+      fallbackListPreview,
+      hasRecovered,
+      hasTaskFailed,
+      outcomeEvent,
+      riskLevel,
+      steps: dedupeSteps(steps),
+    }
+  }
+
+  const findRecentActionFailed = (fromIndex: number, nodeName: string, window = 10): number => {
+    for (let j = fromIndex - 1; j >= 0 && fromIndex - j <= window; j -= 1) {
+      const candidate = events[j]
+      if (candidate.message !== 'Node.Action.Failed') continue
+      const candidateName = typeof candidate.details?.name === 'string' ? candidate.details.name : ''
+      if (!nodeName || !candidateName || candidateName === nodeName) {
+        return j
+      }
+    }
+    return -1
+  }
+
+  const findRecentNextListFailed = (
+    fromIndex: number,
+    nodeName: string,
+    window = 40
+  ): { triggerIndex: number; count: number } => {
+    let triggerIndex = -1
+    let count = 0
+    for (let j = fromIndex - 1; j >= 0 && fromIndex - j <= window; j -= 1) {
+      const candidate = events[j]
+      if (candidate.message !== 'Node.NextList.Failed') continue
+      const candidateName = typeof candidate.details?.name === 'string' ? candidate.details.name : ''
+      if (!nodeName || !candidateName || candidateName === nodeName) {
+        if (triggerIndex < 0) triggerIndex = j
+        count += 1
+      }
+    }
+    return { triggerIndex, count }
+  }
+
+  const findRecentPipelineFailedWithoutSuccess = (fromIndex: number, nodeName: string, window = 36): number => {
+    for (let j = fromIndex - 1; j >= 0 && fromIndex - j <= window; j -= 1) {
+      const candidate = events[j]
+      const candidateName = typeof candidate.details?.name === 'string' ? candidate.details.name : ''
+      if (candidateName && nodeName && candidateName !== nodeName) continue
+
+      if (candidate.message === 'Node.PipelineNode.Succeeded') {
+        return -1
+      }
+      if (candidate.message === 'Node.PipelineNode.Failed') {
+        return j
+      }
+    }
+    return -1
+  }
+
+  const pushOnErrorChain = (
+    triggerType: OnErrorTriggerType,
+    triggerIndex: number,
+    triggerEvent: string,
+    triggerNode: string,
+    triggerActionId: number | null,
+    timeoutLikeFailureCount: number,
+    summaryBuilder: (followUp: ReturnType<typeof buildOnErrorFollowUp>) => string
+  ) => {
+    if (triggerIndex < 0 || triggerIndex >= events.length) return
+    const key = `${triggerType}:${triggerIndex}:${triggerNode}`
+    if (onErrorChainKeys.has(key)) return
+    onErrorChainKeys.add(key)
+
+    const trigger = events[triggerIndex]
+    const followUp = buildOnErrorFollowUp(triggerIndex, [toEventChainStep(trigger, triggerIndex)])
+    onErrorChains.push({
+      triggerType,
+      triggerEvent,
+      triggerNode,
+      triggerActionId,
+      triggerLine: typeof trigger._lineNumber === 'number' ? trigger._lineNumber : null,
+      timeoutLikeFailureCount,
+      fallbackFirstNode: followUp.fallbackFirstNode,
+      fallbackListPreview: followUp.fallbackListPreview,
+      hasRecovered: followUp.hasRecovered,
+      hasTaskFailed: followUp.hasTaskFailed,
+      outcomeEvent: followUp.outcomeEvent,
+      riskLevel: followUp.riskLevel,
+      summary: summaryBuilder(followUp),
+      steps: followUp.steps,
+    })
+  }
 
   for (let i = 0; i < events.length; i += 1) {
     const event = events[i]
@@ -287,6 +474,55 @@ export const buildEventChainDiagnostics = (events: EventNotification[]) => {
           `${taskFailed ? 'Tasker.Task.Failed' : 'task not failed in lookahead'}`,
         steps,
       })
+
+      pushOnErrorChain(
+        'action_failed',
+        i,
+        'Node.Action.Failed',
+        nodeName,
+        actionId,
+        0,
+        followUp =>
+          `on_error 触发源 Action.Failed（${nodeName || 'unknown'}） -> ${followUp.outcomeEvent}` +
+          (followUp.fallbackFirstNode ? `，fallback=${followUp.fallbackFirstNode}` : '')
+      )
+    }
+
+    if (message === 'Node.PipelineNode.Failed') {
+      const nodeName = typeof event.details?.name === 'string' ? event.details.name : ''
+      const actionFailedIndex = findRecentActionFailed(i, nodeName, 10)
+      if (actionFailedIndex >= 0) continue
+
+      const timeoutLike = findRecentNextListFailed(i, nodeName, 40)
+      if (timeoutLike.triggerIndex >= 0) {
+        pushOnErrorChain(
+          'reco_timeout_or_nohit',
+          timeoutLike.triggerIndex,
+          'Node.NextList.Failed',
+          nodeName,
+          null,
+          timeoutLike.count,
+          followUp =>
+            `on_error 触发源 NextList 失败/超时（node=${nodeName || 'unknown'}，failed_count=${timeoutLike.count}） -> ${followUp.outcomeEvent}` +
+            (followUp.fallbackFirstNode ? `，fallback=${followUp.fallbackFirstNode}` : '')
+        )
+        continue
+      }
+
+      const prevPipelineFailedIndex = findRecentPipelineFailedWithoutSuccess(i, nodeName, 36)
+      if (prevPipelineFailedIndex >= 0) {
+        pushOnErrorChain(
+          'error_handling_loop',
+          i,
+          'Node.PipelineNode.Failed',
+          nodeName,
+          null,
+          0,
+          followUp =>
+            `on_error 处理链疑似循环（node=${nodeName || 'unknown'}） -> ${followUp.outcomeEvent}` +
+            (followUp.fallbackFirstNode ? `，fallback=${followUp.fallbackFirstNode}` : '')
+        )
+      }
     }
   }
 
@@ -302,11 +538,20 @@ export const buildEventChainDiagnostics = (events: EventNotification[]) => {
     return b.steps[0]?.index - a.steps[0]?.index
   })
 
+  onErrorChains.sort((a, b) => {
+    const riskDiff = rankRiskLevel(b.riskLevel) - rankRiskLevel(a.riskLevel)
+    if (riskDiff !== 0) return riskDiff
+    const aIndex = a.steps[0]?.index ?? -1
+    const bIndex = b.steps[0]?.index ?? -1
+    return bIndex - aIndex
+  })
+
   return {
     eventCount: events.length,
     messageCounts,
     nextRecognitionChains: nextRecognitionChains.slice(0, 10),
     actionFailureChains: actionFailureChains.slice(0, 8),
+    onErrorChains: onErrorChains.slice(0, 10),
   }
 }
 

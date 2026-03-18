@@ -137,7 +137,7 @@ describe('buildDeterministicFindings', () => {
 })
 
 describe('buildEventChainDiagnostics', () => {
-  it('extracts next/recognition chains and action failure escalation chains', () => {
+  it('extracts next/recognition chains, action failure chains, and on_error chains', () => {
     const events = [
       {
         timestamp: '2026-03-18 10:00:00.000',
@@ -199,6 +199,7 @@ describe('buildEventChainDiagnostics', () => {
     expect(diagnostics.eventCount).toBe(events.length)
     expect(diagnostics.nextRecognitionChains.length).toBeGreaterThan(0)
     expect(diagnostics.actionFailureChains.length).toBeGreaterThan(0)
+    expect(diagnostics.onErrorChains.length).toBeGreaterThan(0)
 
     const nextChain = diagnostics.nextRecognitionChains[0]
     expect(nextChain.hasJumpBackCandidate).toBe(true)
@@ -208,5 +209,64 @@ describe('buildEventChainDiagnostics', () => {
     expect(actionChain.hasPipelineFailed).toBe(true)
     expect(actionChain.hasTaskFailed).toBe(true)
     expect(actionChain.riskLevel).toBe('high')
+
+    const onError = diagnostics.onErrorChains[0]
+    expect(onError.triggerType).toBe('action_failed')
+    expect(onError.outcomeEvent).toBe('Tasker.Task.Failed')
+  })
+
+  it('classifies timeout/no-hit path as reco_timeout_or_nohit', () => {
+    const events = [
+      {
+        timestamp: '2026-03-18 11:00:00.000',
+        level: 'INF',
+        message: 'Node.NextList.Starting',
+        details: { task_id: 2, name: 'MainNode', list: [{ name: 'RecoA', jump_back: false, anchor: false }] },
+        _lineNumber: 200,
+      },
+      {
+        timestamp: '2026-03-18 11:00:00.050',
+        level: 'INF',
+        message: 'Node.Recognition.Failed',
+        details: { task_id: 2, name: 'RecoA', reco_id: 501 },
+        _lineNumber: 201,
+      },
+      {
+        timestamp: '2026-03-18 11:00:00.060',
+        level: 'INF',
+        message: 'Node.NextList.Failed',
+        details: { task_id: 2, name: 'MainNode', list: [{ name: 'RecoA', jump_back: false, anchor: false }] },
+        _lineNumber: 202,
+      },
+      {
+        timestamp: '2026-03-18 11:00:00.200',
+        level: 'INF',
+        message: 'Node.NextList.Failed',
+        details: { task_id: 2, name: 'MainNode', list: [{ name: 'RecoA', jump_back: false, anchor: false }] },
+        _lineNumber: 203,
+      },
+      {
+        timestamp: '2026-03-18 11:00:00.400',
+        level: 'ERR',
+        message: 'Node.PipelineNode.Failed',
+        details: { task_id: 2, name: 'MainNode', node_id: 601 },
+        _lineNumber: 204,
+      },
+      {
+        timestamp: '2026-03-18 11:00:00.500',
+        level: 'INF',
+        message: 'Node.NextList.Starting',
+        details: { task_id: 2, name: 'MainNode', list: [{ name: 'FallbackNode', jump_back: false, anchor: false }] },
+        _lineNumber: 205,
+      },
+    ]
+
+    const diagnostics = buildEventChainDiagnostics(events)
+    const timeoutChain = diagnostics.onErrorChains.find(item => item.triggerType === 'reco_timeout_or_nohit')
+
+    expect(timeoutChain).toBeTruthy()
+    expect(timeoutChain?.triggerEvent).toBe('Node.NextList.Failed')
+    expect(timeoutChain?.timeoutLikeFailureCount).toBeGreaterThanOrEqual(2)
+    expect(timeoutChain?.fallbackFirstNode).toBe('FallbackNode')
   })
 })
