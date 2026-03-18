@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { EventNotification, TaskInfo } from '../../types'
-import { buildAiAnalysisContext, buildDeterministicFindings, buildEventChainDiagnostics, buildSignalDiagnostics } from '../contextBuilder'
+import {
+  buildAnchorResolutionDiagnostics,
+  buildAiAnalysisContext,
+  buildDeterministicFindings,
+  buildEventChainDiagnostics,
+  buildJumpBackFlowDiagnostics,
+  buildNextCandidateAvailabilityDiagnostics,
+  buildSignalDiagnostics,
+  buildStopTerminationDiagnostics,
+} from '../contextBuilder'
 
 const makeEvent = (
   message: string,
@@ -305,6 +314,153 @@ describe('buildEventChainDiagnostics', () => {
   })
 })
 
+describe('buildStopTerminationDiagnostics', () => {
+  it('identifies likely active-stop termination when task succeeds after stop-like tail events', () => {
+    const events: EventNotification[] = [
+      makeEvent('Node.NextList.Starting', { task_id: 5, name: 'InMainWindow', list: [{ name: 'StopNode' }] }, 500),
+      makeEvent('Node.Action.Starting', { task_id: 5, name: 'StopTask', action_id: 9001 }, 501),
+      makeEvent('Node.PipelineNode.Failed', {
+        task_id: 5,
+        name: 'InMainWindow',
+        node_id: 7001,
+        action_details: { action: '', name: '', success: false },
+      }, 502),
+      makeEvent('Tasker.Task.Succeeded', { task_id: 5, entry: 'DemoEntry' }, 503),
+    ]
+
+    const diagnostics = buildStopTerminationDiagnostics(events, 'succeeded')
+
+    expect(diagnostics.likelyActiveStop).toBe(true)
+    expect(diagnostics.taskSucceededAfterPipelineFailed).toBe(true)
+    expect(diagnostics.taskTerminalEvent).toBe('Tasker.Task.Succeeded')
+    expect(diagnostics.pipelineFailedNearTerminal).toBeGreaterThanOrEqual(1)
+  })
+
+  it('detects StopNode camel-case chain as active-stop with implicit pattern', () => {
+    const events: EventNotification[] = [
+      makeEvent('Node.NextList.Starting', { task_id: 51, name: 'InMainWindow', list: [{ name: 'StopNode' }] }, 510),
+      makeEvent('Node.Recognition.Succeeded', { task_id: 51, name: 'StopNode', reco_id: 9510 }, 511),
+      makeEvent('Node.NextList.Succeeded', { task_id: 51, name: 'InMainWindow', list: [{ name: 'StopNode' }] }, 512),
+      makeEvent('Node.Action.Starting', { task_id: 51, name: 'StopNode', action_id: 9511 }, 513),
+      makeEvent('Node.PipelineNode.Failed', { task_id: 51, name: 'InMainWindow', node_id: 9512 }, 514),
+      makeEvent('Tasker.Task.Succeeded', { task_id: 51, entry: 'DemoStop' }, 515),
+    ]
+
+    const diagnostics = buildStopTerminationDiagnostics(events, 'succeeded')
+
+    expect(diagnostics.stopSignalCount).toBeGreaterThanOrEqual(1)
+    expect(diagnostics.implicitStopPatternDetected).toBe(true)
+    expect(diagnostics.likelyActiveStop).toBe(true)
+    expect(diagnostics.taskTerminalEvent).toBe('Tasker.Task.Succeeded')
+  })
+})
+
+describe('buildNextCandidateAvailabilityDiagnostics', () => {
+  it('separates no-executable-candidate failures from timeout/no-hit failures', () => {
+    const events: EventNotification[] = [
+      makeEvent('Node.NextList.Starting', {
+        task_id: 6,
+        name: 'AnchorStage',
+        list: [{ name: 'AnchorRef', anchor: true, jump_back: false }],
+      }, 600),
+      makeEvent('Node.NextList.Failed', {
+        task_id: 6,
+        name: 'AnchorStage',
+        list: [{ name: 'AnchorRef', anchor: true, jump_back: false }],
+      }, 601),
+      makeEvent('Node.NextList.Starting', {
+        task_id: 6,
+        name: 'RetryStage',
+        list: [{ name: 'RecoA', anchor: false, jump_back: false }],
+      }, 602),
+      makeEvent('Node.Recognition.Starting', { task_id: 6, name: 'RecoA', reco_id: 9101 }, 603),
+      makeEvent('Node.Recognition.Failed', { task_id: 6, name: 'RecoA', reco_id: 9101 }, 604),
+      makeEvent('Node.NextList.Failed', {
+        task_id: 6,
+        name: 'RetryStage',
+        list: [{ name: 'RecoA', anchor: false, jump_back: false }],
+      }, 605),
+    ]
+
+    const diagnostics = buildNextCandidateAvailabilityDiagnostics(events)
+
+    expect(diagnostics.failedNoExecutableCount).toBe(1)
+    expect(diagnostics.failedNoExecutableWithAnchorCount).toBe(1)
+    expect(diagnostics.failedTimeoutLikeCount).toBe(1)
+    expect(diagnostics.suspiciousCases.length).toBeGreaterThan(0)
+    expect(diagnostics.suspiciousCases[0].classification).toBe('likely_no_executable_candidate')
+  })
+})
+
+describe('buildAnchorResolutionDiagnostics', () => {
+  it('marks unresolved anchor candidates when NextList fails without recognition attempts', () => {
+    const events: EventNotification[] = [
+      makeEvent('Node.NextList.Starting', {
+        task_id: 7,
+        name: 'AnchorStageA',
+        list: [{ name: 'AnchorRefA', anchor: true, jump_back: false }],
+      }, 700),
+      makeEvent('Node.NextList.Failed', {
+        task_id: 7,
+        name: 'AnchorStageA',
+        list: [{ name: 'AnchorRefA', anchor: true, jump_back: false }],
+      }, 701),
+      makeEvent('Node.NextList.Starting', {
+        task_id: 7,
+        name: 'AnchorStageB',
+        list: [{ name: 'AnchorRefB', anchor: true, jump_back: false }],
+      }, 702),
+      makeEvent('Node.Recognition.Starting', { task_id: 7, name: 'AnchorRefB', reco_id: 9201 }, 703),
+      makeEvent('Node.NextList.Failed', {
+        task_id: 7,
+        name: 'AnchorStageB',
+        list: [{ name: 'AnchorRefB', anchor: true, jump_back: false }],
+      }, 704),
+    ]
+
+    const diagnostics = buildAnchorResolutionDiagnostics(events)
+
+    expect(diagnostics.unresolvedAnchorLikelyCount).toBe(1)
+    expect(diagnostics.failedAfterAnchorResolvedCount).toBe(1)
+    expect(diagnostics.suspiciousCases.length).toBeGreaterThan(0)
+    expect(diagnostics.suspiciousCases[0].classification).toBe('unresolved_anchor_candidate_likely')
+  })
+})
+
+describe('buildJumpBackFlowDiagnostics', () => {
+  it('captures jump_back hit-then-failed-no-return and hit-then-returned patterns', () => {
+    const events: EventNotification[] = [
+      makeEvent('Node.NextList.Starting', {
+        task_id: 8,
+        name: 'ParentA',
+        list: [{ name: 'JumpA', anchor: false, jump_back: true }],
+      }, 800),
+      makeEvent('Node.Recognition.Succeeded', { task_id: 8, name: 'JumpA', reco_id: 9301 }, 801),
+      makeEvent('Node.PipelineNode.Failed', { task_id: 8, name: 'ParentA', node_id: 9302 }, 802),
+      makeEvent('Tasker.Task.Failed', { task_id: 8, entry: 'DemoA' }, 803),
+
+      makeEvent('Node.NextList.Starting', {
+        task_id: 8,
+        name: 'ParentB',
+        list: [{ name: 'JumpB', anchor: false, jump_back: true }],
+      }, 804),
+      makeEvent('Node.Recognition.Succeeded', { task_id: 8, name: 'JumpB', reco_id: 9303 }, 805),
+      makeEvent('Node.NextList.Starting', {
+        task_id: 8,
+        name: 'ParentB',
+        list: [{ name: 'NormalB', anchor: false, jump_back: false }],
+      }, 806),
+    ]
+
+    const diagnostics = buildJumpBackFlowDiagnostics(events)
+
+    expect(diagnostics.hitThenFailedNoReturnCount).toBe(1)
+    expect(diagnostics.hitThenReturnedCount).toBe(1)
+    expect(diagnostics.suspiciousCases.length).toBeGreaterThan(0)
+    expect(diagnostics.suspiciousCases[0].classification).toBe('hit_then_failed_no_return')
+  })
+})
+
 describe('buildAiAnalysisContext', () => {
   it('includes onErrorChains in generated context payload', () => {
     const task: TaskInfo = {
@@ -359,5 +515,10 @@ describe('buildAiAnalysisContext', () => {
     expect(chains.length).toBeGreaterThan(0)
     expect(chains[0].triggerType).toBe('reco_timeout_or_nohit')
     expect(chains[0].triggerEvent).toBe('Node.NextList.Failed')
+    expect(context.stopTerminationDiagnostics?.likelyActiveStop).toBe(false)
+    expect(context.nextCandidateAvailabilityDiagnostics?.failedNoExecutableCount).toBe(0)
+    expect(context.nextCandidateAvailabilityDiagnostics?.failedTimeoutLikeCount).toBeGreaterThanOrEqual(1)
+    expect(context.anchorResolutionDiagnostics?.unresolvedAnchorLikelyCount).toBe(0)
+    expect(context.jumpBackFlowDiagnostics?.hitThenFailedNoReturnCount).toBe(0)
   })
 })

@@ -86,6 +86,10 @@ const summarizeEvent = (event: EventNotification) => ({
 
 type EventChainRiskLevel = 'high' | 'medium' | 'low'
 type OnErrorTriggerType = 'action_failed' | 'reco_timeout_or_nohit' | 'error_handling_loop'
+type StopConfidenceLevel = 'high' | 'medium' | 'low'
+type NextCandidateFailureClass = 'likely_no_executable_candidate' | 'likely_timeout_or_nohit' | 'recovered_or_succeeded'
+type AnchorResolutionClass = 'unresolved_anchor_candidate_likely' | 'failed_after_anchor_resolution' | 'recovered_or_succeeded'
+type JumpBackFlowClass = 'not_hit' | 'hit_then_returned' | 'hit_then_failed_no_return' | 'hit_no_return_observed'
 
 interface EventChainStep {
   index: number
@@ -555,6 +559,581 @@ export const buildEventChainDiagnostics = (events: EventNotification[]) => {
   }
 }
 
+export const buildStopTerminationDiagnostics = (
+  events: EventNotification[],
+  taskStatus: TaskInfo['status'] | null | undefined
+) => {
+  const stopRegex = /(?:^|[^a-z0-9])(stoptask|post_stop|need_to_stop|stopnode|stop)(?:$|[^a-z0-9])/i
+  const stopSignals: Array<{
+    index: number
+    line: number | null
+    time: string
+    msg: string
+    node: string
+    action: string
+    keyword: string
+  }> = []
+  const stopSignalKeys = new Set<string>()
+
+  let taskTerminalEvent = 'unknown'
+  let taskTerminalIndex = -1
+  let taskTerminalLine: number | null = null
+  let implicitStopPatternDetected = false
+  let implicitStopActionName = ''
+  let implicitStopActionLine: number | null = null
+
+  const pushText = (bucket: string[], value: unknown) => {
+    if (typeof value !== 'string') return
+    const text = value.trim()
+    if (!text) return
+    bucket.push(text)
+  }
+
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i]
+    if (event.message === 'Tasker.Task.Succeeded' || event.message === 'Tasker.Task.Failed') {
+      taskTerminalEvent = event.message
+      taskTerminalIndex = i
+      taskTerminalLine = typeof event._lineNumber === 'number' ? event._lineNumber : null
+    }
+
+    const textCandidates: string[] = [event.message]
+    const details = event.details ?? {}
+    pushText(textCandidates, details.name)
+    pushText(textCandidates, details.action)
+    pushText(textCandidates, details.reason)
+
+    const actionDetails = typeof details.action_details === 'object' && details.action_details
+      ? details.action_details as Record<string, unknown>
+      : null
+    if (actionDetails) {
+      pushText(textCandidates, actionDetails.name)
+      pushText(textCandidates, actionDetails.action)
+    }
+
+    const nodeDetails = typeof details.node_details === 'object' && details.node_details
+      ? details.node_details as Record<string, unknown>
+      : null
+    if (nodeDetails) {
+      pushText(textCandidates, nodeDetails.name)
+    }
+
+    let matchedKeyword = ''
+    for (const text of textCandidates) {
+      const matched = text.match(stopRegex)
+      if (!matched) continue
+      matchedKeyword = matched[1]?.toLowerCase() ?? 'stop'
+      break
+    }
+    if (!matchedKeyword) continue
+
+    const key = `${i}:${matchedKeyword}`
+    if (stopSignalKeys.has(key)) continue
+    stopSignalKeys.add(key)
+
+    stopSignals.push({
+      index: i,
+      line: typeof event._lineNumber === 'number' ? event._lineNumber : null,
+      time: event.timestamp,
+      msg: event.message,
+      node: typeof details.name === 'string' ? details.name : '',
+      action: typeof details.action === 'string'
+        ? details.action
+        : (typeof actionDetails?.action === 'string' ? actionDetails.action : ''),
+      keyword: matchedKeyword,
+    })
+  }
+
+  let pipelineFailedNearTerminal = 0
+  if (taskTerminalIndex >= 0) {
+    const start = Math.max(0, taskTerminalIndex - 20)
+    for (let i = start; i < taskTerminalIndex; i += 1) {
+      if (events[i].message === 'Node.PipelineNode.Failed') {
+        pipelineFailedNearTerminal += 1
+      }
+    }
+  }
+
+  if (taskTerminalEvent === 'Tasker.Task.Succeeded' && taskTerminalIndex >= 0) {
+    const scanStart = Math.max(0, taskTerminalIndex - 24)
+    let actionStartIndex = -1
+    let actionStartId: number | null = null
+    let actionStartName = ''
+
+    for (let i = taskTerminalIndex - 1; i >= scanStart; i -= 1) {
+      const event = events[i]
+      if (event.message !== 'Node.Action.Starting') continue
+      actionStartIndex = i
+      actionStartId = typeof event.details?.action_id === 'number' ? event.details.action_id : null
+      actionStartName = typeof event.details?.name === 'string' ? event.details.name : ''
+      implicitStopActionLine = typeof event._lineNumber === 'number' ? event._lineNumber : null
+      break
+    }
+
+    if (actionStartIndex >= 0) {
+      let hasPipelineFailedAfterStart = false
+      let hasActionResultAfterStart = false
+      let hasStopHint = stopRegex.test(actionStartName)
+
+      for (let j = Math.max(scanStart, actionStartIndex - 6); j < actionStartIndex; j += 1) {
+        const lookback = events[j]
+        if (lookback.message !== 'Node.Recognition.Succeeded') continue
+        const name = typeof lookback.details?.name === 'string' ? lookback.details.name : ''
+        if (!name) continue
+        if (stopRegex.test(name)) {
+          hasStopHint = true
+          break
+        }
+      }
+
+      for (let j = actionStartIndex + 1; j < taskTerminalIndex; j += 1) {
+        const lookahead = events[j]
+        if (lookahead.message === 'Node.PipelineNode.Failed') {
+          hasPipelineFailedAfterStart = true
+          continue
+        }
+        if (lookahead.message === 'Node.Action.Succeeded' || lookahead.message === 'Node.Action.Failed') {
+          const lookaheadActionId = typeof lookahead.details?.action_id === 'number' ? lookahead.details.action_id : null
+          if (actionStartId == null || lookaheadActionId == null || lookaheadActionId === actionStartId) {
+            hasActionResultAfterStart = true
+          }
+        }
+      }
+
+      if (hasStopHint && hasPipelineFailedAfterStart && !hasActionResultAfterStart) {
+        implicitStopPatternDetected = true
+        implicitStopActionName = actionStartName
+      }
+    }
+  }
+
+  const hasStrongStopSignal = stopSignals.some(item =>
+    item.keyword === 'stoptask' || item.keyword === 'post_stop' || item.keyword === 'need_to_stop'
+  )
+  const taskSucceededAfterPipelineFailed = taskTerminalEvent === 'Tasker.Task.Succeeded' && pipelineFailedNearTerminal > 0
+  const likelyActiveStop = taskTerminalEvent === 'Tasker.Task.Succeeded'
+    && (hasStrongStopSignal || implicitStopPatternDetected || (stopSignals.length > 0 && taskSucceededAfterPipelineFailed))
+
+  const confidence: StopConfidenceLevel = likelyActiveStop
+    ? hasStrongStopSignal
+      ? 'high'
+      : implicitStopPatternDetected
+        ? 'medium'
+        : taskSucceededAfterPipelineFailed
+          ? 'medium'
+          : 'low'
+    : stopSignals.length > 0
+      ? 'low'
+      : 'low'
+
+  const summary = likelyActiveStop
+    ? `检测到主动停止特征：task 终态=${taskTerminalEvent}，stop 信号 ${stopSignals.length} 条，隐式 stop 链路=${implicitStopPatternDetected ? '是' : '否'}，终态前 PipelineNode.Failed=${pipelineFailedNearTerminal}。`
+    : stopSignals.length > 0
+      ? `发现 stop 相关信号 ${stopSignals.length} 条，但终态=${taskTerminalEvent}，暂不足以判定主动停止。`
+      : `未检测到 stop 相关信号（task 终态=${taskTerminalEvent}）。`
+
+  return {
+    taskStatus: taskStatus ?? null,
+    taskTerminalEvent,
+    taskTerminalLine,
+    stopSignalCount: stopSignals.length,
+    stopSignals: stopSignals.slice(0, 8),
+    pipelineFailedNearTerminal,
+    taskSucceededAfterPipelineFailed,
+    implicitStopPatternDetected,
+    implicitStopActionName,
+    implicitStopActionLine,
+    likelyActiveStop,
+    confidence,
+    summary,
+  }
+}
+
+export const buildNextCandidateAvailabilityDiagnostics = (events: EventNotification[]) => {
+  const windows: Array<{
+    startNode: string
+    startLine: number | null
+    candidateCount: number
+    anchorCandidateCount: number
+    recognitionAttemptCount: number
+    recognitionFailedCount: number
+    recognitionSucceededCount: number
+    outcomeEvent: string
+    outcomeLine: number | null
+    classification: NextCandidateFailureClass
+    summary: string
+    steps: EventChainStep[]
+  }> = []
+
+  const rankClass = (value: NextCandidateFailureClass): number => {
+    if (value === 'likely_no_executable_candidate') return 3
+    if (value === 'likely_timeout_or_nohit') return 2
+    return 1
+  }
+
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i]
+    if (event.message !== 'Node.NextList.Starting') continue
+
+    const rawList = Array.isArray(event.details?.list) ? event.details.list : []
+    const candidates = rawList.slice(0, 10).map((item: any) => ({
+      name: typeof item?.name === 'string' ? item.name : '',
+      anchor: item?.anchor === true,
+      jump_back: item?.jump_back === true,
+    }))
+    const candidateCount = candidates.length
+    const anchorCandidateCount = candidates.filter(item => item.anchor).length
+
+    let recognitionStartingCount = 0
+    let recognitionFailedCount = 0
+    let recognitionSucceededCount = 0
+    const steps: EventChainStep[] = [toEventChainStep(event, i)]
+    let outcomeEvent = 'unknown'
+    let outcomeLine: number | null = null
+
+    for (let j = i + 1; j < events.length && j <= i + 56; j += 1) {
+      const lookahead = events[j]
+      if (lookahead.message === 'Node.NextList.Starting') break
+
+      if (lookahead.message === 'Node.Recognition.Starting') {
+        recognitionStartingCount += 1
+        if (steps.length < 6) steps.push(toEventChainStep(lookahead, j))
+        continue
+      }
+      if (lookahead.message === 'Node.Recognition.Failed') {
+        recognitionFailedCount += 1
+        if (steps.length < 6) steps.push(toEventChainStep(lookahead, j))
+        continue
+      }
+      if (lookahead.message === 'Node.Recognition.Succeeded') {
+        recognitionSucceededCount += 1
+        if (steps.length < 6) steps.push(toEventChainStep(lookahead, j))
+        continue
+      }
+
+      if (
+        lookahead.message === 'Node.NextList.Failed' ||
+        lookahead.message === 'Node.NextList.Succeeded' ||
+        lookahead.message === 'Node.PipelineNode.Failed' ||
+        lookahead.message === 'Node.PipelineNode.Succeeded' ||
+        lookahead.message === 'Tasker.Task.Succeeded' ||
+        lookahead.message === 'Tasker.Task.Failed'
+      ) {
+        outcomeEvent = lookahead.message
+        outcomeLine = typeof lookahead._lineNumber === 'number' ? lookahead._lineNumber : null
+        if (steps.length < 6) steps.push(toEventChainStep(lookahead, j))
+        break
+      }
+    }
+
+    const recognitionAttemptCount = Math.max(
+      recognitionStartingCount,
+      recognitionFailedCount + recognitionSucceededCount
+    )
+
+    let classification: NextCandidateFailureClass = 'recovered_or_succeeded'
+    if (outcomeEvent === 'Node.NextList.Failed') {
+      classification = recognitionAttemptCount === 0 && candidateCount > 0
+        ? 'likely_no_executable_candidate'
+        : 'likely_timeout_or_nohit'
+    }
+
+    const startNode = typeof event.details?.name === 'string' ? event.details.name : ''
+    const summary = classification === 'likely_no_executable_candidate'
+      ? `NextList(${startNode || 'unknown'}) 失败前无识别尝试，候选不可执行概率高。`
+      : classification === 'likely_timeout_or_nohit'
+        ? `NextList(${startNode || 'unknown'}) 出现识别尝试但未命中后失败，偏向 timeout/no-hit。`
+        : `NextList(${startNode || 'unknown'}) 最终未落到失败。`
+
+    windows.push({
+      startNode,
+      startLine: typeof event._lineNumber === 'number' ? event._lineNumber : null,
+      candidateCount,
+      anchorCandidateCount,
+      recognitionAttemptCount,
+      recognitionFailedCount,
+      recognitionSucceededCount,
+      outcomeEvent,
+      outcomeLine,
+      classification,
+      summary,
+      steps,
+    })
+  }
+
+  const failedNoExecutable = windows.filter(item => item.classification === 'likely_no_executable_candidate')
+  const failedTimeoutLike = windows.filter(item => item.classification === 'likely_timeout_or_nohit')
+  const failedNoExecutableWithAnchor = failedNoExecutable.filter(item => item.anchorCandidateCount > 0)
+  const suspiciousCases = windows
+    .filter(item => item.classification !== 'recovered_or_succeeded')
+    .sort((a, b) => {
+      const classDiff = rankClass(b.classification) - rankClass(a.classification)
+      if (classDiff !== 0) return classDiff
+      if (b.anchorCandidateCount !== a.anchorCandidateCount) return b.anchorCandidateCount - a.anchorCandidateCount
+      return (b.startLine ?? -1) - (a.startLine ?? -1)
+    })
+
+  return {
+    windowCount: windows.length,
+    failedNoExecutableCount: failedNoExecutable.length,
+    failedNoExecutableWithAnchorCount: failedNoExecutableWithAnchor.length,
+    failedTimeoutLikeCount: failedTimeoutLike.length,
+    suspiciousCases: suspiciousCases.slice(0, 10),
+    summary: `NextList窗口=${windows.length}，无可执行候选失败=${failedNoExecutable.length}（其中含 anchor 候选=${failedNoExecutableWithAnchor.length}），timeout/no-hit 失败=${failedTimeoutLike.length}。`,
+  }
+}
+
+export const buildAnchorResolutionDiagnostics = (events: EventNotification[]) => {
+  const windows: Array<{
+    startNode: string
+    startLine: number | null
+    anchorCandidates: string[]
+    candidateCount: number
+    recognitionAttemptCount: number
+    outcomeEvent: string
+    outcomeLine: number | null
+    classification: AnchorResolutionClass
+    summary: string
+    steps: EventChainStep[]
+  }> = []
+
+  const dedupeSteps = (steps: EventChainStep[], limit = 6): EventChainStep[] => {
+    const out: EventChainStep[] = []
+    const seen = new Set<number>()
+    for (const step of steps) {
+      if (seen.has(step.index)) continue
+      seen.add(step.index)
+      out.push(step)
+      if (out.length >= limit) break
+    }
+    return out
+  }
+
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i]
+    if (event.message !== 'Node.NextList.Starting') continue
+
+    const rawList = Array.isArray(event.details?.list) ? event.details.list : []
+    const anchorCandidates = rawList
+      .filter((item: any) => item?.anchor === true)
+      .map((item: any) => (typeof item?.name === 'string' ? item.name : ''))
+      .filter(Boolean)
+      .slice(0, 8)
+    if (anchorCandidates.length === 0) continue
+
+    let recognitionAttemptCount = 0
+    let outcomeEvent = 'unknown'
+    let outcomeLine: number | null = null
+    const steps: EventChainStep[] = [toEventChainStep(event, i)]
+
+    for (let j = i + 1; j < events.length && j <= i + 56; j += 1) {
+      const lookahead = events[j]
+      if (lookahead.message === 'Node.NextList.Starting') break
+
+      if (lookahead.message === 'Node.Recognition.Starting') {
+        recognitionAttemptCount += 1
+        if (steps.length < 6) steps.push(toEventChainStep(lookahead, j))
+        continue
+      }
+
+      if (
+        lookahead.message === 'Node.NextList.Failed' ||
+        lookahead.message === 'Node.NextList.Succeeded' ||
+        lookahead.message === 'Node.PipelineNode.Failed' ||
+        lookahead.message === 'Node.PipelineNode.Succeeded' ||
+        lookahead.message === 'Tasker.Task.Succeeded' ||
+        lookahead.message === 'Tasker.Task.Failed'
+      ) {
+        outcomeEvent = lookahead.message
+        outcomeLine = typeof lookahead._lineNumber === 'number' ? lookahead._lineNumber : null
+        if (steps.length < 6) steps.push(toEventChainStep(lookahead, j))
+        break
+      }
+    }
+
+    const classification: AnchorResolutionClass = outcomeEvent === 'Node.NextList.Failed'
+      ? recognitionAttemptCount === 0
+        ? 'unresolved_anchor_candidate_likely'
+        : 'failed_after_anchor_resolution'
+      : 'recovered_or_succeeded'
+
+    const startNode = typeof event.details?.name === 'string' ? event.details.name : ''
+    const summary = classification === 'unresolved_anchor_candidate_likely'
+      ? `Anchor候选在 NextList(${startNode || 'unknown'}) 中未进入识别即失败，疑似锚点未解析/已清除。`
+      : classification === 'failed_after_anchor_resolution'
+        ? `Anchor候选在 NextList(${startNode || 'unknown'}) 已进入识别但仍失败，疑似后续识别或规则问题。`
+        : `Anchor候选在 NextList(${startNode || 'unknown'}) 未导致失败。`
+
+    windows.push({
+      startNode,
+      startLine: typeof event._lineNumber === 'number' ? event._lineNumber : null,
+      anchorCandidates,
+      candidateCount: anchorCandidates.length,
+      recognitionAttemptCount,
+      outcomeEvent,
+      outcomeLine,
+      classification,
+      summary,
+      steps: dedupeSteps(steps),
+    })
+  }
+
+  const unresolved = windows.filter(item => item.classification === 'unresolved_anchor_candidate_likely')
+  const failedAfterResolved = windows.filter(item => item.classification === 'failed_after_anchor_resolution')
+  const suspiciousCases = unresolved
+    .sort((a, b) => {
+      if (b.candidateCount !== a.candidateCount) return b.candidateCount - a.candidateCount
+      return (b.startLine ?? -1) - (a.startLine ?? -1)
+    })
+    .slice(0, 10)
+
+  return {
+    windowCount: windows.length,
+    unresolvedAnchorLikelyCount: unresolved.length,
+    failedAfterAnchorResolvedCount: failedAfterResolved.length,
+    suspiciousCases,
+    summary: `Anchor窗口=${windows.length}，疑似锚点未解析=${unresolved.length}，已解析但失败=${failedAfterResolved.length}。`,
+  }
+}
+
+export const buildJumpBackFlowDiagnostics = (events: EventNotification[]) => {
+  const cases: Array<{
+    startNode: string
+    startLine: number | null
+    jumpBackCandidates: string[]
+    jumpBackHit: boolean
+    hitCandidate: string
+    hitLine: number | null
+    failureAfterHit: string
+    failureLine: number | null
+    returnObserved: boolean
+    returnLine: number | null
+    terminalEvent: string
+    terminalLine: number | null
+    classification: JumpBackFlowClass
+    summary: string
+    steps: EventChainStep[]
+  }> = []
+
+  const dedupeSteps = (steps: EventChainStep[], limit = 7): EventChainStep[] => {
+    const out: EventChainStep[] = []
+    const seen = new Set<number>()
+    for (const step of steps) {
+      if (seen.has(step.index)) continue
+      seen.add(step.index)
+      out.push(step)
+      if (out.length >= limit) break
+    }
+    return out
+  }
+
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i]
+    if (event.message !== 'Node.NextList.Starting') continue
+
+    const rawList = Array.isArray(event.details?.list) ? event.details.list : []
+    const jumpBackCandidates = rawList
+      .filter((item: any) => item?.jump_back === true)
+      .map((item: any) => (typeof item?.name === 'string' ? item.name : ''))
+      .filter(Boolean)
+      .slice(0, 8)
+    if (jumpBackCandidates.length === 0) continue
+    const jumpBackNameSet = new Set(jumpBackCandidates)
+
+    const startNode = typeof event.details?.name === 'string' ? event.details.name : ''
+    const steps: EventChainStep[] = [toEventChainStep(event, i)]
+    let hitCandidate = ''
+    let hitLine: number | null = null
+    let failureAfterHit = ''
+    let failureLine: number | null = null
+    let returnLine: number | null = null
+    let terminalEvent = 'unknown'
+    let terminalLine: number | null = null
+
+    for (let j = i + 1; j < events.length && j <= i + 140; j += 1) {
+      const lookahead = events[j]
+      const lookaheadName = typeof lookahead.details?.name === 'string' ? lookahead.details.name : ''
+
+      if (!hitCandidate && lookahead.message === 'Node.Recognition.Succeeded' && jumpBackNameSet.has(lookaheadName)) {
+        hitCandidate = lookaheadName
+        hitLine = typeof lookahead._lineNumber === 'number' ? lookahead._lineNumber : null
+        if (steps.length < 7) steps.push(toEventChainStep(lookahead, j))
+        continue
+      }
+
+      if (hitCandidate && !failureAfterHit && (lookahead.message === 'Node.NextList.Failed' || lookahead.message === 'Node.PipelineNode.Failed')) {
+        failureAfterHit = lookahead.message
+        failureLine = typeof lookahead._lineNumber === 'number' ? lookahead._lineNumber : null
+        if (steps.length < 7) steps.push(toEventChainStep(lookahead, j))
+        continue
+      }
+
+      if (hitCandidate && returnLine == null && lookahead.message === 'Node.NextList.Starting' && lookaheadName === startNode) {
+        returnLine = typeof lookahead._lineNumber === 'number' ? lookahead._lineNumber : null
+        if (steps.length < 7) steps.push(toEventChainStep(lookahead, j))
+        break
+      }
+
+      if (terminalEvent === 'unknown' && (lookahead.message === 'Tasker.Task.Succeeded' || lookahead.message === 'Tasker.Task.Failed')) {
+        terminalEvent = lookahead.message
+        terminalLine = typeof lookahead._lineNumber === 'number' ? lookahead._lineNumber : null
+        if (steps.length < 7) steps.push(toEventChainStep(lookahead, j))
+        if (hitCandidate) break
+      }
+    }
+
+    const classification: JumpBackFlowClass = !hitCandidate
+      ? 'not_hit'
+      : returnLine != null
+        ? 'hit_then_returned'
+        : failureAfterHit
+          ? 'hit_then_failed_no_return'
+          : 'hit_no_return_observed'
+
+    const summary = classification === 'not_hit'
+      ? `jump_back 候选在 ${startNode || 'unknown'} 未命中。`
+      : classification === 'hit_then_returned'
+        ? `jump_back 候选命中后观察到父节点回到 NextList（${startNode || 'unknown'}）。`
+        : classification === 'hit_then_failed_no_return'
+          ? `jump_back 候选命中后出现失败链路（${failureAfterHit}），未观察到父节点回跳继续识别。`
+          : `jump_back 候选命中后未观察到回跳，且未见明确失败信号。`
+
+    cases.push({
+      startNode,
+      startLine: typeof event._lineNumber === 'number' ? event._lineNumber : null,
+      jumpBackCandidates,
+      jumpBackHit: Boolean(hitCandidate),
+      hitCandidate,
+      hitLine,
+      failureAfterHit,
+      failureLine,
+      returnObserved: returnLine != null,
+      returnLine,
+      terminalEvent,
+      terminalLine,
+      classification,
+      summary,
+      steps: dedupeSteps(steps),
+    })
+  }
+
+  const hitThenFailedNoReturn = cases.filter(item => item.classification === 'hit_then_failed_no_return')
+  const hitThenReturned = cases.filter(item => item.classification === 'hit_then_returned')
+  const hitNoReturnObserved = cases.filter(item => item.classification === 'hit_no_return_observed')
+  const suspiciousCases = hitThenFailedNoReturn
+    .sort((a, b) => (b.startLine ?? -1) - (a.startLine ?? -1))
+    .slice(0, 10)
+
+  return {
+    caseCount: cases.length,
+    hitThenReturnedCount: hitThenReturned.length,
+    hitThenFailedNoReturnCount: hitThenFailedNoReturn.length,
+    hitNoReturnObservedCount: hitNoReturnObserved.length,
+    suspiciousCases,
+    summary: `jump_back窗口=${cases.length}，命中并回跳=${hitThenReturned.length}，命中后失败且未回跳=${hitThenFailedNoReturn.length}，命中后未观察到回跳=${hitNoReturnObserved.length}。`,
+  }
+}
+
 const collectFailureNodes = (task: TaskInfo | null, limit = 24) => {
   if (!task) return []
 
@@ -970,6 +1549,10 @@ export const buildDeterministicFindings = (
     taskStatus?: 'running' | 'succeeded' | 'failed' | null
     pipelineFailedCount?: number
     jumpBackHotNodes?: string[]
+    stopTerminationDiagnostics?: ReturnType<typeof buildStopTerminationDiagnostics>
+    nextCandidateAvailabilityDiagnostics?: ReturnType<typeof buildNextCandidateAvailabilityDiagnostics>
+    anchorResolutionDiagnostics?: ReturnType<typeof buildAnchorResolutionDiagnostics>
+    jumpBackFlowDiagnostics?: ReturnType<typeof buildJumpBackFlowDiagnostics>
   }
 ) => {
   const findings: Array<{
@@ -984,6 +1567,10 @@ export const buildDeterministicFindings = (
   const taskSucceededWithoutPipelineFailure = behaviorContext?.taskStatus === 'succeeded'
     && (behaviorContext.pipelineFailedCount ?? 0) === 0
   const jumpBackHotNodes = new Set(behaviorContext?.jumpBackHotNodes ?? [])
+  const stopTerminationDiagnostics = behaviorContext?.stopTerminationDiagnostics
+  const nextCandidateAvailabilityDiagnostics = behaviorContext?.nextCandidateAvailabilityDiagnostics
+  const anchorResolutionDiagnostics = behaviorContext?.anchorResolutionDiagnostics
+  const jumpBackFlowDiagnostics = behaviorContext?.jumpBackFlowDiagnostics
 
   const tuneLoopConfidence = (base: number, nodeName?: string) => {
     let next = base
@@ -1047,6 +1634,76 @@ export const buildDeterministicFindings = (
         (taskSucceededWithoutPipelineFailure ? ' 任务成功时该信号优先视为流程现象。' : '') +
         jumpBackHint,
       evidencePaths: ['timelineDiagnostics.repeatedRuns[0]'],
+    })
+  }
+
+  if ((nextCandidateAvailabilityDiagnostics?.failedNoExecutableCount ?? 0) > 0) {
+    const noExecutableCount = nextCandidateAvailabilityDiagnostics?.failedNoExecutableCount ?? 0
+    const anchorCount = nextCandidateAvailabilityDiagnostics?.failedNoExecutableWithAnchorCount ?? 0
+    findings.push({
+      id: 'next_no_executable_candidate',
+      confidence: anchorCount > 0 ? 86 : 76,
+      causeType: 'loop_or_rule',
+      summary:
+        `检测到 ${noExecutableCount} 次 NextList 失败前无识别尝试（anchor 候选相关 ${anchorCount} 次），优先排查候选不可执行（锚点未解析/节点不可用）而非 timeout。`,
+      evidencePaths: [
+        'nextCandidateAvailabilityDiagnostics.failedNoExecutableCount',
+        'nextCandidateAvailabilityDiagnostics.failedNoExecutableWithAnchorCount',
+        'nextCandidateAvailabilityDiagnostics.suspiciousCases[0]',
+      ],
+    })
+  }
+
+  if (stopTerminationDiagnostics?.likelyActiveStop) {
+    const confidence = stopTerminationDiagnostics.confidence === 'high'
+      ? 90
+      : stopTerminationDiagnostics.confidence === 'medium'
+        ? 78
+        : 64
+    const implicitHint = stopTerminationDiagnostics.implicitStopPatternDetected
+      ? `，检测到隐式 stop 动作链（${stopTerminationDiagnostics.implicitStopActionName || 'unknown'}）`
+      : ''
+    findings.push({
+      id: 'active_stop_termination',
+      confidence,
+      causeType: 'mixed',
+      summary:
+        `任务终态 ${stopTerminationDiagnostics.taskTerminalEvent} 且存在停止链路特征（stop 信号 ${stopTerminationDiagnostics.stopSignalCount} 条${implicitHint}，终态前 PipelineNode.Failed=${stopTerminationDiagnostics.pipelineFailedNearTerminal}），优先判定为主动停止流程。`,
+      evidencePaths: [
+        'stopTerminationDiagnostics.likelyActiveStop',
+        'stopTerminationDiagnostics.stopSignalCount',
+        'stopTerminationDiagnostics.implicitStopPatternDetected',
+        'stopTerminationDiagnostics.pipelineFailedNearTerminal',
+      ],
+    })
+  }
+
+  if ((anchorResolutionDiagnostics?.unresolvedAnchorLikelyCount ?? 0) > 0) {
+    findings.push({
+      id: 'anchor_candidate_unresolved',
+      confidence: 84,
+      causeType: 'loop_or_rule',
+      summary:
+        `检测到 ${anchorResolutionDiagnostics?.unresolvedAnchorLikelyCount ?? 0} 次 anchor 候选未进入识别即 NextList 失败，优先排查锚点未解析或被清除。`,
+      evidencePaths: [
+        'anchorResolutionDiagnostics.unresolvedAnchorLikelyCount',
+        'anchorResolutionDiagnostics.suspiciousCases[0]',
+      ],
+    })
+  }
+
+  if ((jumpBackFlowDiagnostics?.hitThenFailedNoReturnCount ?? 0) > 0) {
+    const confidence = taskSucceededWithoutPipelineFailure ? 64 : 76
+    findings.push({
+      id: 'jumpback_hit_failed_no_return',
+      confidence,
+      causeType: taskSucceededWithoutPipelineFailure ? 'mixed' : 'loop_or_rule',
+      summary:
+        `检测到 ${jumpBackFlowDiagnostics?.hitThenFailedNoReturnCount ?? 0} 条 jump_back“命中后失败且未回跳”链路，需结合 on_error 判断是否属于错误路径下的预期不回跳。`,
+      evidencePaths: [
+        'jumpBackFlowDiagnostics.hitThenFailedNoReturnCount',
+        'jumpBackFlowDiagnostics.suspiciousCases[0]',
+      ],
     })
   }
 
@@ -1129,6 +1786,10 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
     ? buildSignalDiagnostics(signalLineItemsFull, timelineDiagnostics.recoIdToName, timelineDiagnostics.recoFailuresByNameAll)
     : null
   const eventChainDiagnostics = buildEventChainDiagnostics(selectedTask?.events ?? [])
+  const stopTerminationDiagnostics = buildStopTerminationDiagnostics(selectedTask?.events ?? [], selectedTask?.status ?? null)
+  const nextCandidateAvailabilityDiagnostics = buildNextCandidateAvailabilityDiagnostics(selectedTask?.events ?? [])
+  const anchorResolutionDiagnostics = buildAnchorResolutionDiagnostics(selectedTask?.events ?? [])
+  const jumpBackFlowDiagnostics = buildJumpBackFlowDiagnostics(selectedTask?.events ?? [])
   const pipelineFailedCount = fullTaskTimeline.filter(item => item.status === 'failed').length
   const jumpBackHotNodes = timelineDiagnostics.longStayNodes
     .filter(item => (item.avgJumpBackBranches ?? 0) > 0)
@@ -1145,6 +1806,10 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
       taskStatus: selectedTask?.status ?? null,
       pipelineFailedCount,
       jumpBackHotNodes,
+      stopTerminationDiagnostics,
+      nextCandidateAvailabilityDiagnostics,
+      anchorResolutionDiagnostics,
+      jumpBackFlowDiagnostics,
     }
   )
 
@@ -1215,6 +1880,10 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
       signalLines: sliced.signalLines,
       signalDiagnostics,
       eventChainDiagnostics,
+      stopTerminationDiagnostics,
+      nextCandidateAvailabilityDiagnostics,
+      anchorResolutionDiagnostics,
+      jumpBackFlowDiagnostics,
       deterministicFindings,
       knowledge: sliced.knowledge,
     }).length
@@ -1285,6 +1954,10 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
     signalLines: sliced.signalLines,
     signalDiagnostics,
     eventChainDiagnostics,
+    stopTerminationDiagnostics,
+    nextCandidateAvailabilityDiagnostics,
+    anchorResolutionDiagnostics,
+    jumpBackFlowDiagnostics,
     deterministicFindings,
     knowledge: sliced.knowledge,
     contextBudget: {

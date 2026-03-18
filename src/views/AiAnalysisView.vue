@@ -3,7 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { NAlert, NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NInputNumber, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
 import type { TaskInfo } from '../types'
 import { requestChatCompletion } from '../ai/client'
-import { buildAiAnalysisContext, buildEventChainDiagnostics, type AiLoadedTarget } from '../ai/contextBuilder'
+import {
+  buildAiAnalysisContext,
+  buildAnchorResolutionDiagnostics,
+  buildEventChainDiagnostics,
+  buildJumpBackFlowDiagnostics,
+  type AiLoadedTarget,
+} from '../ai/contextBuilder'
 import { tryParseStructuredOutput, type StructuredAiOutput } from '../ai/structuredOutput'
 import { getAiSettings, saveAiSettings, getSessionApiKey, setSessionApiKey } from '../utils/aiSettings'
 
@@ -410,6 +416,52 @@ const onErrorPreview = computed(() => {
   }
 })
 
+const anchorPreview = computed(() => {
+  const selectedTask = props.selectedTask
+  if (!selectedTask) {
+    return {
+      windowCount: 0,
+      unresolvedAnchorLikelyCount: 0,
+      failedAfterAnchorResolvedCount: 0,
+      summary: '',
+      cases: [] as ReturnType<typeof buildAnchorResolutionDiagnostics>['suspiciousCases'],
+    }
+  }
+
+  const diagnostics = buildAnchorResolutionDiagnostics(selectedTask.events ?? [])
+  return {
+    windowCount: diagnostics.windowCount,
+    unresolvedAnchorLikelyCount: diagnostics.unresolvedAnchorLikelyCount,
+    failedAfterAnchorResolvedCount: diagnostics.failedAfterAnchorResolvedCount,
+    summary: diagnostics.summary,
+    cases: diagnostics.suspiciousCases.slice(0, 8),
+  }
+})
+
+const jumpBackPreview = computed(() => {
+  const selectedTask = props.selectedTask
+  if (!selectedTask) {
+    return {
+      caseCount: 0,
+      hitThenReturnedCount: 0,
+      hitThenFailedNoReturnCount: 0,
+      hitNoReturnObservedCount: 0,
+      summary: '',
+      cases: [] as ReturnType<typeof buildJumpBackFlowDiagnostics>['suspiciousCases'],
+    }
+  }
+
+  const diagnostics = buildJumpBackFlowDiagnostics(selectedTask.events ?? [])
+  return {
+    caseCount: diagnostics.caseCount,
+    hitThenReturnedCount: diagnostics.hitThenReturnedCount,
+    hitThenFailedNoReturnCount: diagnostics.hitThenFailedNoReturnCount,
+    hitNoReturnObservedCount: diagnostics.hitNoReturnObservedCount,
+    summary: diagnostics.summary,
+    cases: diagnostics.suspiciousCases.slice(0, 8),
+  }
+})
+
 const onErrorTriggerTypeLabel = (value: string): string => {
   if (value === 'action_failed') return 'Action 失败触发'
   if (value === 'reco_timeout_or_nohit') return '识别超时/未命中触发'
@@ -421,6 +473,35 @@ const onErrorRiskTagType = (value: string): 'error' | 'warning' | 'success' => {
   if (value === 'high') return 'error'
   if (value === 'medium') return 'warning'
   return 'success'
+}
+
+const anchorClassLabel = (value: string): string => {
+  if (value === 'unresolved_anchor_candidate_likely') return '疑似锚点未解析'
+  if (value === 'failed_after_anchor_resolution') return '已解析但后续失败'
+  if (value === 'recovered_or_succeeded') return '未见失败'
+  return value
+}
+
+const anchorClassTagType = (value: string): 'error' | 'warning' | 'success' | 'default' => {
+  if (value === 'unresolved_anchor_candidate_likely') return 'error'
+  if (value === 'failed_after_anchor_resolution') return 'warning'
+  if (value === 'recovered_or_succeeded') return 'success'
+  return 'default'
+}
+
+const jumpBackClassLabel = (value: string): string => {
+  if (value === 'hit_then_failed_no_return') return '命中后失败且未回跳'
+  if (value === 'hit_then_returned') return '命中并回跳'
+  if (value === 'hit_no_return_observed') return '命中后未观察到回跳'
+  if (value === 'not_hit') return '未命中'
+  return value
+}
+
+const jumpBackClassTagType = (value: string): 'error' | 'warning' | 'success' | 'default' => {
+  if (value === 'hit_then_failed_no_return') return 'error'
+  if (value === 'hit_no_return_observed') return 'warning'
+  if (value === 'hit_then_returned') return 'success'
+  return 'default'
 }
 
 const saveConfig = () => {
@@ -477,6 +558,10 @@ const buildCompactContext = (context: Record<string, unknown>): Record<string, u
   const timelineDiagnostics = (context.timelineDiagnostics as Record<string, unknown> | undefined) ?? {}
   const deterministicFindings = (context.deterministicFindings as Record<string, unknown> | undefined) ?? {}
   const eventChainDiagnosticsRaw = (context.eventChainDiagnostics as Record<string, unknown> | undefined) ?? {}
+  const stopTerminationDiagnosticsRaw = (context.stopTerminationDiagnostics as Record<string, unknown> | undefined) ?? {}
+  const nextCandidateAvailabilityDiagnosticsRaw = (context.nextCandidateAvailabilityDiagnostics as Record<string, unknown> | undefined) ?? {}
+  const anchorResolutionDiagnosticsRaw = (context.anchorResolutionDiagnostics as Record<string, unknown> | undefined) ?? {}
+  const jumpBackFlowDiagnosticsRaw = (context.jumpBackFlowDiagnostics as Record<string, unknown> | undefined) ?? {}
 
   const selectedNodeTimeline = toObjectArray(context.selectedNodeTimeline)
     .slice(-40)
@@ -521,6 +606,41 @@ const buildCompactContext = (context: Record<string, unknown>): Record<string, u
       })),
   }
 
+  const stopTerminationDiagnostics = {
+    ...stopTerminationDiagnosticsRaw,
+    stopSignals: toObjectArray(stopTerminationDiagnosticsRaw.stopSignals).slice(0, 6),
+  }
+
+  const nextCandidateAvailabilityDiagnostics = {
+    ...nextCandidateAvailabilityDiagnosticsRaw,
+    suspiciousCases: toObjectArray(nextCandidateAvailabilityDiagnosticsRaw.suspiciousCases)
+      .slice(0, 6)
+      .map(item => ({
+        ...item,
+        steps: toObjectArray(item.steps).slice(0, 4),
+      })),
+  }
+
+  const anchorResolutionDiagnostics = {
+    ...anchorResolutionDiagnosticsRaw,
+    suspiciousCases: toObjectArray(anchorResolutionDiagnosticsRaw.suspiciousCases)
+      .slice(0, 6)
+      .map(item => ({
+        ...item,
+        steps: toObjectArray(item.steps).slice(0, 4),
+      })),
+  }
+
+  const jumpBackFlowDiagnostics = {
+    ...jumpBackFlowDiagnosticsRaw,
+    suspiciousCases: toObjectArray(jumpBackFlowDiagnosticsRaw.suspiciousCases)
+      .slice(0, 6)
+      .map(item => ({
+        ...item,
+        steps: toObjectArray(item.steps).slice(0, 4),
+      })),
+  }
+
   return {
     ...context,
     taskOverview: toObjectArray(context.taskOverview).slice(-10),
@@ -543,6 +663,10 @@ const buildCompactContext = (context: Record<string, unknown>): Record<string, u
     },
     signalLines,
     eventChainDiagnostics,
+    stopTerminationDiagnostics,
+    nextCandidateAvailabilityDiagnostics,
+    anchorResolutionDiagnostics,
+    jumpBackFlowDiagnostics,
     knowledge: toObjectArray(context.knowledge).slice(0, 16),
   }
 }
@@ -574,6 +698,8 @@ const buildFullContextPrompt = (compact: boolean, minifiedJson = false) => {
     '- 必须先量化长时间停留节点（引用 timelineDiagnostics.longStayNodes）。',
     '- 必须检查识别热点（引用 timelineDiagnostics.recoFailuresByName 与 timelineDiagnostics.hotspotRecoPairs）。',
     '- 必须检查 eventChainDiagnostics.onErrorChains，明确 on_error 的触发源与后续结果。',
+    '- 必须检查 stopTerminationDiagnostics 与 nextCandidateAvailabilityDiagnostics，区分主动停止、无可执行候选与超时未命中。',
+    '- 必须检查 anchorResolutionDiagnostics 与 jumpBackFlowDiagnostics，区分锚点未解析、回跳命中后未回跳等控制流语义。',
     '- 仅把 nextRecognitionChains / actionFailureChains 作为补充证据，不可替代 onErrorChains。',
     '- 若存在 deterministicFindings.findings，至少引用其中 1 条并映射到 E 证据编号。',
     '- 给出至少2个根因候选并排序。',
@@ -953,6 +1079,90 @@ const handleAnalyze = async () => {
           </n-flex>
         </n-card>
 
+        <n-card v-if="anchorPreview.windowCount" size="small" class="diagnostic-preview-card">
+          <n-flex vertical style="gap: 6px">
+            <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+              <n-text depth="3" style="font-size: 12px">anchor 解析诊断（当前任务）</n-text>
+              <n-tag size="small" type="info">窗口 {{ anchorPreview.windowCount }}</n-tag>
+            </n-flex>
+            <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+              <n-tag size="small" :type="anchorPreview.unresolvedAnchorLikelyCount > 0 ? 'error' : 'success'">
+                未解析疑似 {{ anchorPreview.unresolvedAnchorLikelyCount }}
+              </n-tag>
+              <n-tag size="small" :type="anchorPreview.failedAfterAnchorResolvedCount > 0 ? 'warning' : 'default'">
+                已解析后失败 {{ anchorPreview.failedAfterAnchorResolvedCount }}
+              </n-tag>
+            </n-flex>
+            <n-text depth="3" style="font-size: 12px; line-height: 1.45">
+              {{ anchorPreview.summary }}
+            </n-text>
+            <div v-if="anchorPreview.cases.length" class="diagnostic-preview-list">
+              <div
+                v-for="(item, index) in anchorPreview.cases"
+                :key="`anchor-${item.startLine ?? 'na'}-${index}`"
+                class="diagnostic-preview-item"
+              >
+                <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+                  <n-tag size="small" :type="anchorClassTagType(item.classification)">
+                    {{ anchorClassLabel(item.classification) }}
+                  </n-tag>
+                  <n-text depth="3" style="font-size: 12px">
+                    节点: {{ item.startNode || 'unknown' }}
+                  </n-text>
+                </n-flex>
+                <n-text depth="3" style="font-size: 12px; line-height: 1.45">
+                  {{ item.summary }}
+                </n-text>
+                <n-text depth="3" style="font-size: 11px">
+                  起始行: {{ item.startLine ?? '-' }} · 结果: {{ item.outcomeEvent }}
+                </n-text>
+              </div>
+            </div>
+          </n-flex>
+        </n-card>
+
+        <n-card v-if="jumpBackPreview.caseCount" size="small" class="diagnostic-preview-card">
+          <n-flex vertical style="gap: 6px">
+            <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+              <n-text depth="3" style="font-size: 12px">jump_back 回跳诊断（当前任务）</n-text>
+              <n-tag size="small" type="info">窗口 {{ jumpBackPreview.caseCount }}</n-tag>
+            </n-flex>
+            <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+              <n-tag size="small" :type="jumpBackPreview.hitThenFailedNoReturnCount > 0 ? 'error' : 'success'">
+                命中后失败未回跳 {{ jumpBackPreview.hitThenFailedNoReturnCount }}
+              </n-tag>
+              <n-tag size="small" :type="jumpBackPreview.hitThenReturnedCount > 0 ? 'success' : 'default'">
+                命中并回跳 {{ jumpBackPreview.hitThenReturnedCount }}
+              </n-tag>
+            </n-flex>
+            <n-text depth="3" style="font-size: 12px; line-height: 1.45">
+              {{ jumpBackPreview.summary }}
+            </n-text>
+            <div v-if="jumpBackPreview.cases.length" class="diagnostic-preview-list">
+              <div
+                v-for="(item, index) in jumpBackPreview.cases"
+                :key="`jumpback-${item.startLine ?? 'na'}-${index}`"
+                class="diagnostic-preview-item"
+              >
+                <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+                  <n-tag size="small" :type="jumpBackClassTagType(item.classification)">
+                    {{ jumpBackClassLabel(item.classification) }}
+                  </n-tag>
+                  <n-text depth="3" style="font-size: 12px">
+                    节点: {{ item.startNode || 'unknown' }}
+                  </n-text>
+                </n-flex>
+                <n-text depth="3" style="font-size: 12px; line-height: 1.45">
+                  {{ item.summary }}
+                </n-text>
+                <n-text depth="3" style="font-size: 11px">
+                  命中候选: {{ item.hitCandidate || '-' }} · 回跳: {{ item.returnObserved ? '是' : '否' }}
+                </n-text>
+              </div>
+            </div>
+          </n-flex>
+        </n-card>
+
         <n-scrollbar class="ai-output-scroll" content-style="width: 100%">
           <div class="ai-output-wrap">
             <n-empty v-if="!resultText && !conversationTurnViews.length" description="暂无结果，先测试连接或发起一次分析" />
@@ -1058,6 +1268,30 @@ const handleAnalyze = async () => {
   border-left: 3px solid rgba(127, 231, 196, 0.75);
   border-radius: 8px;
   background: rgba(127, 231, 196, 0.08);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diagnostic-preview-card {
+  margin-bottom: 8px;
+}
+
+.diagnostic-preview-list {
+  max-height: 200px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 2px;
+}
+
+.diagnostic-preview-item {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: 3px solid rgba(127, 231, 196, 0.75);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
   padding: 6px 8px;
   display: flex;
   flex-direction: column;
