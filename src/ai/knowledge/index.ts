@@ -2,8 +2,7 @@ import knowledgeJson from './maa-domain-knowledge.v1.json'
 
 export interface KnowledgeSource {
   id: string
-  path: string
-  note: string
+  note?: string
 }
 
 export interface KnowledgeEvidence {

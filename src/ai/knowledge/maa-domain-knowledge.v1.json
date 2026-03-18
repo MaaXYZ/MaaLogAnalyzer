@@ -1,32 +1,27 @@
 {
   "id": "maa-domain-knowledge",
-  "version": "1.0.0",
-  "generatedAt": "2026-03-14",
+  "version": "1.3.1",
+  "generatedAt": "2026-03-19",
   "language": "zh-CN",
   "sources": [
     {
       "id": "maafw-callback",
-      "path": "sample/MaaFramework/docs/zh_cn/2.3-回调协议.md",
       "note": "官方回调事件语义与 details 字段定义"
     },
     {
       "id": "maafw-pipeline",
-      "path": "sample/MaaFramework/docs/zh_cn/3.1-任务流水线协议.md",
       "note": "Pipeline 执行机制、节点属性与版本语义"
     },
     {
       "id": "maafw-schema",
-      "path": "sample/MaaFramework/tools/pipeline.schema.json",
       "note": "doc/desc、anchor/jump_back 等字段的 schema 约束"
     },
     {
       "id": "analyzer-parser",
-      "path": "src/utils/logParser.ts",
       "note": "Analyzer 当前解析实现（事件筛选、去重、建模）"
     },
     {
       "id": "analyzer-types",
-      "path": "src/types.ts",
       "note": "Analyzer 对 Task/Node/Recognition 等结构定义"
     }
   ],
@@ -149,16 +144,115 @@
       ]
     },
     {
+      "id": "pipeline.control-mechanism-overview",
+      "topic": "pipeline.protocol",
+      "title": "流程控制机制总览",
+      "rule": "Pipeline 主循环包含顺序识别、命中执行、错误处理、回跳与终止判定五个阶段，不应只看单条事件判定流程状态。",
+      "details": [
+        "流程控制关键分支包括：命中后进入 next、动作失败进入 on_error、错误处理未恢复时终止。",
+        "终止分为正常结束、主动停止（need_to_stop）、错误结束三类。"
+      ],
+      "keywords": ["流程控制", "on_error", "JumpBack", "need_to_stop", "终止条件"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "24-70" }
+      ]
+    },
+    {
+      "id": "pipeline.node-lifecycle-chain",
+      "topic": "callback.events",
+      "title": "节点生命周期链",
+      "rule": "典型节点链路是 NextList.Starting -> Recognition.* -> NextList.(Succeeded|Failed) -> Action.* -> PipelineNode.*；PipelineNode 才是节点最终态。",
+      "details": [
+        "Recognition/Action 事件是阶段事件，可能失败后被 on_error 或 stop 流程吸收。",
+        "分析时需按事件链聚合，不应把 Recognition.Failed 直接映射为节点失败。"
+      ],
+      "keywords": ["Node.NextList.Starting", "Node.Recognition", "Node.Action", "Node.PipelineNode", "生命周期"],
+      "evidence": [
+        { "sourceId": "maafw-callback", "loc": "135-180,182-245,251-277" },
+        { "sourceId": "analyzer-parser", "loc": "311-362" }
+      ]
+    },
+    {
+      "id": "pipeline.task-vs-node-layer",
+      "topic": "diagnosis.heuristic",
+      "title": "任务终止层与节点层分离",
+      "rule": "Tasker.Task.* 反映任务层终止结果，Node.PipelineNode.* 反映节点层结果；两层可能短时看起来不一致，需要结合流程控制语义解释。",
+      "details": [
+        "主动停止路径（StopTask/post_stop）优先解释为流程终止语义，不应直接当成业务动作缺陷。",
+        "节点失败但任务继续/成功的情况，需要检查是否进入 on_error 后被恢复。"
+      ],
+      "keywords": ["Tasker.Task.Succeeded", "Tasker.Task.Failed", "Node.PipelineNode.Failed", "StopTask", "on_error"],
+      "evidence": [
+        { "sourceId": "maafw-callback", "loc": "123-127,271-277" },
+        { "sourceId": "maafw-pipeline", "loc": "49-51,68-70,1246-1249" }
+      ]
+    },
+    {
       "id": "pipeline.timeout",
       "topic": "pipeline.protocol",
       "title": "timeout 语义",
-      "rule": "next 循环识别超时后会走 on_error；timeout=-1 表示无限等待。",
+      "rule": "当 next 全未命中时会按 rate_limit 周期重试直到命中或 timeout；timeout=-1 表示无限等待，超时后走 on_error。",
       "details": [
         "存在 NextList 重复但无命中时，需结合 timeout 与 on_error 判断是否异常。"
       ],
       "keywords": ["timeout", "on_error", "-1"],
       "evidence": [
-        { "sourceId": "maafw-pipeline", "loc": "191-198" }
+        { "sourceId": "maafw-pipeline", "loc": "60,225-232" }
+      ]
+    },
+    {
+      "id": "pipeline.next-no-valid-candidate",
+      "topic": "pipeline.protocol",
+      "title": "next 无可执行候选时的行为",
+      "rule": "若 next 中无可执行候选（如禁用节点、锚点未解析），会直接按失败进入 on_error，不进入 timeout 重试循环。",
+      "details": [
+        "这类失败通常表现为快速进入错误处理，而不是长时间 NextList 重试。"
+      ],
+      "keywords": ["next", "on_error", "timeout", "anchor", "enabled"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "61,247" }
+      ]
+    },
+    {
+      "id": "pipeline.stop-termination",
+      "topic": "pipeline.protocol",
+      "title": "StopTask / need_to_stop 终止语义",
+      "rule": "执行 StopTask 或外部 post_stop 置位 need_to_stop 后，任务循环会中断，属于主动停止终止路径。",
+      "details": [
+        "主动停止是终止条件之一，应与普通识别/动作失败区分。",
+        "动作阶段前后都会检查 need_to_stop，可能出现 Action.Starting 后快速结束。"
+      ],
+      "keywords": ["StopTask", "post_stop", "need_to_stop", "主动停止", "终止条件"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "62,69,339,1246-1249" }
+      ]
+    },
+    {
+      "id": "pipeline.action-stop-checkpoint",
+      "topic": "pipeline.protocol",
+      "title": "动作阶段的停止检查点",
+      "rule": "need_to_stop 会在动作执行前后检查，运行中置位后当前节点可能在动作阶段提前结束，不再进入后续识别重试。",
+      "details": [
+        "节点生命周期图中在 action 前后均有 need_to_stop 分支。",
+        "这类终止应按流程停止语义解释，而不是常规识别/动作故障。"
+      ],
+      "keywords": ["need_to_stop", "action", "生命周期", "StopTask"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "310,313,339,1249" }
+      ]
+    },
+    {
+      "id": "pipeline.repeat-last-attempt",
+      "topic": "pipeline.protocol",
+      "title": "repeat 重复动作判定",
+      "rule": "repeat 过程中不会因单次动作失败提前中止，节点动作结果以最后一次动作结果为准。",
+      "details": [
+        "重复执行链为 action -> repeat_wait_freezes -> repeat_delay -> action ...。",
+        "分析动作失败时要区分“中间失败”与“最终失败”。"
+      ],
+      "keywords": ["repeat", "repeat_wait_freezes", "repeat_delay", "动作结果"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "280-283" }
       ]
     },
     {
@@ -167,11 +261,12 @@
       "title": "jump_back / [JumpBack]",
       "rule": "jump_back 用于命中后回跳到父级逻辑，替代旧 is_sub/interrupt 语义。",
       "details": [
-        "AI 分析应把 jump_back 视为控制流回退，而非普通失败。"
+        "AI 分析应把 jump_back 视为控制流回退，而非普通失败。",
+        "错误处理（on_error）路径不会触发 JumpBack，需恢复到非错误处理状态后才可能回跳。"
       ],
       "keywords": ["jump_back", "[JumpBack]", "回跳"],
       "evidence": [
-        { "sourceId": "maafw-pipeline", "loc": "1372-1417" },
+        { "sourceId": "maafw-pipeline", "loc": "234,1430" },
         { "sourceId": "maafw-schema", "loc": "334-339" }
       ]
     },
@@ -179,14 +274,15 @@
       "id": "pipeline.anchor",
       "topic": "pipeline.protocol",
       "title": "anchor / [Anchor]",
-      "rule": "anchor 是运行时可变引用，后设置会覆盖先设置，可被 next/on_error 引用。",
+      "rule": "anchor 是运行时可变引用，命中节点后在 run_action 返回时写入（动作成功或失败都写）；可被 next/on_error 以及 v5.9 的 roi/target 字符串形式引用。",
       "details": [
         "anchor object 形式可指定 target node 或清除锚点。",
-        "引用未设置锚点时该分支会被跳过。"
+        "引用未设置/已清除锚点时，next/on_error 候选会被跳过。",
+        "roi/target 使用 [Anchor] 引用且锚点无效时，会分别表现为识别失败或动作失败。"
       ],
-      "keywords": ["anchor", "[Anchor]", "锚点"],
+      "keywords": ["anchor", "[Anchor]", "锚点", "roi", "target", "v5.9"],
       "evidence": [
-        { "sourceId": "maafw-pipeline", "loc": "200-211,1423-1492" },
+        { "sourceId": "maafw-pipeline", "loc": "37-38,194,239,247,516,957,1142,1483-1485" },
         { "sourceId": "maafw-schema", "loc": "4194-4198" }
       ]
     },
@@ -308,7 +404,7 @@
       ],
       "keywords": ["NextList", "Recognition.Failed", "timeout"],
       "evidence": [
-        { "sourceId": "maafw-pipeline", "loc": "32-51,191-198" },
+        { "sourceId": "maafw-pipeline", "loc": "32-33,60-61,225-232" },
         { "sourceId": "analyzer-parser", "loc": "311-327" }
       ]
     },
@@ -318,10 +414,12 @@
       "title": "动作失败优先看 action_details",
       "rule": "出现 Node.Action.Failed 或节点失败时，应优先展开 action_details 与 wait_freezes 证据链。",
       "details": [
-        "wait_freezes_images 匹配窗口为节点完成前 60 秒内同名 action。"
+        "wait_freezes_images 匹配窗口为节点完成前 60 秒内同名 action。",
+        "若上下文出现 StopTask/need_to_stop，Node.PipelineNode.Failed 可能来自主动停止，不应直接判定动作缺陷。"
       ],
-      "keywords": ["Action.Failed", "action_details", "wait_freezes_images"],
+      "keywords": ["Action.Failed", "action_details", "wait_freezes_images", "StopTask", "need_to_stop"],
       "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "62,69,1246-1249" },
         { "sourceId": "analyzer-parser", "loc": "357-359,513-543" }
       ]
     },

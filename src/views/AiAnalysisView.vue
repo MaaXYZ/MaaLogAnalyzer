@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { NAlert, NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NInputNumber, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
 import type { TaskInfo } from '../types'
 import { requestChatCompletion } from '../ai/client'
-import { buildAiAnalysisContext, type AiLoadedTarget } from '../ai/contextBuilder'
+import { buildAiAnalysisContext, buildEventChainDiagnostics, type AiLoadedTarget } from '../ai/contextBuilder'
 import { tryParseStructuredOutput, type StructuredAiOutput } from '../ai/structuredOutput'
 import { getAiSettings, saveAiSettings, getSessionApiKey, setSessionApiKey } from '../utils/aiSettings'
 
@@ -393,6 +393,35 @@ const conversationTurnViews = computed<ConversationTurnView[]>(() => {
       answerHtml: renderMarkdown(item.answer),
     }))
 })
+
+const onErrorPreview = computed(() => {
+  const selectedTask = props.selectedTask
+  if (!selectedTask) {
+    return {
+      total: 0,
+      chains: [] as ReturnType<typeof buildEventChainDiagnostics>['onErrorChains'],
+    }
+  }
+
+  const diagnostics = buildEventChainDiagnostics(selectedTask.events ?? [])
+  return {
+    total: diagnostics.onErrorChains.length,
+    chains: diagnostics.onErrorChains.slice(0, 8),
+  }
+})
+
+const onErrorTriggerTypeLabel = (value: string): string => {
+  if (value === 'action_failed') return 'Action 失败触发'
+  if (value === 'reco_timeout_or_nohit') return '识别超时/未命中触发'
+  if (value === 'error_handling_loop') return 'on_error 循环触发'
+  return value
+}
+
+const onErrorRiskTagType = (value: string): 'error' | 'warning' | 'success' => {
+  if (value === 'high') return 'error'
+  if (value === 'medium') return 'warning'
+  return 'success'
+}
 
 const saveConfig = () => {
   saveAiSettings(settings)
@@ -890,6 +919,40 @@ const handleAnalyze = async () => {
           <n-text depth="3" style="font-size: 12px">{{ usageText }}</n-text>
         </template>
 
+        <n-card v-if="onErrorPreview.chains.length" size="small" class="on-error-preview-card">
+          <n-flex vertical style="gap: 6px">
+            <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+              <n-text depth="3" style="font-size: 12px">on_error 证据链预览（当前任务）</n-text>
+              <n-tag size="small" type="info">共 {{ onErrorPreview.total }} 条</n-tag>
+            </n-flex>
+            <div class="on-error-preview-list">
+              <div
+                v-for="(chain, index) in onErrorPreview.chains"
+                :key="`${chain.triggerType}-${chain.triggerLine ?? 'na'}-${index}`"
+                class="on-error-preview-item"
+              >
+                <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+                  <n-tag size="small" :type="onErrorRiskTagType(chain.riskLevel)">
+                    {{ chain.riskLevel.toUpperCase() }}
+                  </n-tag>
+                  <n-tag size="small" type="default">
+                    {{ onErrorTriggerTypeLabel(chain.triggerType) }}
+                  </n-tag>
+                  <n-text depth="3" style="font-size: 12px">
+                    节点: {{ chain.triggerNode || 'unknown' }}
+                  </n-text>
+                </n-flex>
+                <n-text depth="3" style="font-size: 12px; line-height: 1.45">
+                  {{ chain.summary }}
+                </n-text>
+                <n-text depth="3" style="font-size: 11px">
+                  触发行: {{ chain.triggerLine ?? '-' }} · 结果: {{ chain.outcomeEvent }}
+                </n-text>
+              </div>
+            </div>
+          </n-flex>
+        </n-card>
+
         <n-scrollbar class="ai-output-scroll" content-style="width: 100%">
           <div class="ai-output-wrap">
             <n-empty v-if="!resultText && !conversationTurnViews.length" description="暂无结果，先测试连接或发起一次分析" />
@@ -975,6 +1038,30 @@ const handleAnalyze = async () => {
   flex: 1;
   height: 100%;
   min-height: 0;
+}
+
+.on-error-preview-card {
+  margin-bottom: 8px;
+}
+
+.on-error-preview-list {
+  max-height: 180px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 2px;
+}
+
+.on-error-preview-item {
+  border: 1px solid rgba(127, 231, 196, 0.4);
+  border-left: 3px solid rgba(127, 231, 196, 0.75);
+  border-radius: 8px;
+  background: rgba(127, 231, 196, 0.08);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .ai-output-scroll :deep(.n-scrollbar-container) {

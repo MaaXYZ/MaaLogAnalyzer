@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { buildDeterministicFindings, buildEventChainDiagnostics, buildSignalDiagnostics } from '../contextBuilder'
+import type { EventNotification, TaskInfo } from '../../types'
+import { buildAiAnalysisContext, buildDeterministicFindings, buildEventChainDiagnostics, buildSignalDiagnostics } from '../contextBuilder'
+
+const makeEvent = (
+  message: string,
+  details: Record<string, unknown>,
+  line: number,
+  timestamp = '2026-03-18 12:00:00.000'
+): EventNotification => ({
+  timestamp,
+  level: 'INF',
+  message,
+  details,
+  _lineNumber: line,
+})
 
 describe('buildSignalDiagnostics', () => {
   it('splits reco_result_fetch vs recognition_miss_or_rule failures', () => {
@@ -268,5 +282,82 @@ describe('buildEventChainDiagnostics', () => {
     expect(timeoutChain?.triggerEvent).toBe('Node.NextList.Failed')
     expect(timeoutChain?.timeoutLikeFailureCount).toBeGreaterThanOrEqual(2)
     expect(timeoutChain?.fallbackFirstNode).toBe('FallbackNode')
+  })
+
+  it('classifies repeated pipeline failure without fresh NextList failure as error_handling_loop', () => {
+    const events: EventNotification[] = []
+    events.push(makeEvent('Node.NextList.Failed', { task_id: 3, name: 'RetryNode', list: [{ name: 'A' }] }, 300))
+    for (let i = 0; i < 9; i += 1) {
+      events.push(makeEvent('Node.Recognition.Starting', { task_id: 3, name: `Filler${i}`, reco_id: 700 + i }, 301 + i))
+    }
+    events.push(makeEvent('Node.PipelineNode.Failed', { task_id: 3, name: 'RetryNode', node_id: 901 }, 310))
+    for (let i = 0; i < 34; i += 1) {
+      events.push(makeEvent('Node.Recognition.Starting', { task_id: 3, name: `Gap${i}`, reco_id: 800 + i }, 311 + i))
+    }
+    events.push(makeEvent('Node.PipelineNode.Failed', { task_id: 3, name: 'RetryNode', node_id: 901 }, 345))
+
+    const diagnostics = buildEventChainDiagnostics(events)
+    const loopChain = diagnostics.onErrorChains.find(item => item.triggerType === 'error_handling_loop')
+
+    expect(loopChain).toBeTruthy()
+    expect(loopChain?.triggerEvent).toBe('Node.PipelineNode.Failed')
+    expect(loopChain?.triggerNode).toBe('RetryNode')
+  })
+})
+
+describe('buildAiAnalysisContext', () => {
+  it('includes onErrorChains in generated context payload', () => {
+    const task: TaskInfo = {
+      task_id: 42,
+      entry: 'Start',
+      hash: 'h1',
+      uuid: 'u1',
+      start_time: '2026-03-18 13:00:00.000',
+      end_time: '2026-03-18 13:00:02.000',
+      status: 'failed',
+      nodes: [
+        {
+          node_id: 1001,
+          name: 'MainNode',
+          timestamp: '2026-03-18 13:00:01.200',
+          status: 'failed',
+          task_id: 42,
+          next_list: [{ name: 'FallbackNode', anchor: false, jump_back: false }],
+          recognition_attempts: [
+            {
+              reco_id: 5001,
+              name: 'RecoA',
+              timestamp: '2026-03-18 13:00:01.050',
+              status: 'failed',
+            },
+          ],
+        },
+      ],
+      events: [
+        makeEvent('Node.NextList.Starting', { task_id: 42, name: 'MainNode', list: [{ name: 'RecoA', jump_back: false, anchor: false }] }, 400),
+        makeEvent('Node.Recognition.Failed', { task_id: 42, name: 'RecoA', reco_id: 5001 }, 401),
+        makeEvent('Node.NextList.Failed', { task_id: 42, name: 'MainNode', list: [{ name: 'RecoA', jump_back: false, anchor: false }] }, 402),
+        makeEvent('Node.PipelineNode.Failed', { task_id: 42, name: 'MainNode', node_id: 1001 }, 403),
+        makeEvent('Node.NextList.Starting', { task_id: 42, name: 'MainNode', list: [{ name: 'FallbackNode', jump_back: false, anchor: false }] }, 404),
+        makeEvent('Tasker.Task.Failed', { task_id: 42, entry: 'Start' }, 405),
+      ],
+      duration: 2000,
+      _startEventIndex: 0,
+      _endEventIndex: 5,
+    }
+
+    const context = buildAiAnalysisContext({
+      tasks: [task],
+      selectedTask: task,
+      question: '请分析 on_error 触发源',
+      includeKnowledgePack: false,
+      includeSignalLines: false,
+    }) as any
+
+    const chains = context.eventChainDiagnostics?.onErrorChains
+    expect(Array.isArray(chains)).toBe(true)
+    expect(chains.length).toBeGreaterThan(0)
+    expect(chains[0].triggerType).toBe('reco_timeout_or_nohit')
+    expect(chains[0].triggerEvent).toBe('Node.NextList.Failed')
   })
 })
