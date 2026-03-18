@@ -19,7 +19,7 @@ const defaultAiSettings: AiSettings = {
   model: 'gpt-4.1-mini',
   temperature: 0.2,
   maxTokens: 4096,
-  maxTokensAuto: false,
+  maxTokensAuto: true,
   streamResponse: true,
   includeKnowledgePack: true,
   includeSignalLines: true,
