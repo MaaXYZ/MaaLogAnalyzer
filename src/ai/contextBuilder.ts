@@ -84,6 +84,232 @@ const summarizeEvent = (event: EventNotification) => ({
   details: pickDetailsSubset(event.details),
 })
 
+type EventChainRiskLevel = 'high' | 'medium' | 'low'
+
+interface EventChainStep {
+  index: number
+  line: number | null
+  time: string
+  msg: string
+  name: string
+}
+
+const toEventChainStep = (event: EventNotification, index: number): EventChainStep => ({
+  index,
+  line: typeof event._lineNumber === 'number' ? event._lineNumber : null,
+  time: event.timestamp,
+  msg: event.message,
+  name: typeof event.details?.name === 'string' ? event.details.name : '',
+})
+
+const toEventName = (event: EventNotification | null): string => (event ? event.message : 'unknown')
+
+const toEventNodeName = (event: EventNotification | null): string => {
+  if (!event) return ''
+  return typeof event.details?.name === 'string' ? event.details.name : ''
+}
+
+const rankRiskLevel = (risk: EventChainRiskLevel): number => {
+  if (risk === 'high') return 3
+  if (risk === 'medium') return 2
+  return 1
+}
+
+export const buildEventChainDiagnostics = (events: EventNotification[]) => {
+  const messageCounts = {
+    nextListStarting: 0,
+    nextListFailed: 0,
+    nextListSucceeded: 0,
+    recognitionFailed: 0,
+    recognitionSucceeded: 0,
+    actionFailed: 0,
+    pipelineFailed: 0,
+    pipelineSucceeded: 0,
+    taskFailed: 0,
+  }
+
+  const nextRecognitionChains: Array<{
+    startNode: string
+    nextCandidates: Array<{ name: string; jump_back: boolean; anchor: boolean }>
+    hasJumpBackCandidate: boolean
+    recognitionFailed: number
+    recognitionSucceeded: number
+    outcomeEvent: string
+    outcomeNode: string
+    riskLevel: EventChainRiskLevel
+    summary: string
+    steps: EventChainStep[]
+  }> = []
+
+  const actionFailureChains: Array<{
+    actionNode: string
+    actionId: number | null
+    hasPipelineFailed: boolean
+    hasTaskFailed: boolean
+    riskLevel: EventChainRiskLevel
+    summary: string
+    steps: EventChainStep[]
+  }> = []
+
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i]
+    const message = event.message
+
+    if (message === 'Node.NextList.Starting') messageCounts.nextListStarting += 1
+    if (message === 'Node.NextList.Failed') messageCounts.nextListFailed += 1
+    if (message === 'Node.NextList.Succeeded') messageCounts.nextListSucceeded += 1
+    if (message === 'Node.Recognition.Failed') messageCounts.recognitionFailed += 1
+    if (message === 'Node.Recognition.Succeeded') messageCounts.recognitionSucceeded += 1
+    if (message === 'Node.Action.Failed') messageCounts.actionFailed += 1
+    if (message === 'Node.PipelineNode.Failed') messageCounts.pipelineFailed += 1
+    if (message === 'Node.PipelineNode.Succeeded') messageCounts.pipelineSucceeded += 1
+    if (message === 'Tasker.Task.Failed') messageCounts.taskFailed += 1
+
+    if (message === 'Node.NextList.Starting') {
+      const rawList = Array.isArray(event.details?.list) ? event.details.list : []
+      const nextCandidates = rawList
+        .slice(0, 8)
+        .map((item: any) => ({
+          name: typeof item?.name === 'string' ? item.name : '',
+          jump_back: item?.jump_back === true,
+          anchor: item?.anchor === true,
+        }))
+      const hasJumpBackCandidate = nextCandidates.some(item => item.jump_back)
+
+      let recognitionFailed = 0
+      let recognitionSucceeded = 0
+      const steps: EventChainStep[] = [toEventChainStep(event, i)]
+      let outcomeEvent: EventNotification | null = null
+
+      for (let j = i + 1; j < events.length && j <= i + 36; j += 1) {
+        const lookahead = events[j]
+        if (lookahead.message === 'Node.NextList.Starting') break
+
+        if (lookahead.message === 'Node.Recognition.Failed') {
+          recognitionFailed += 1
+          if (steps.length < 7) steps.push(toEventChainStep(lookahead, j))
+          continue
+        }
+        if (lookahead.message === 'Node.Recognition.Succeeded') {
+          recognitionSucceeded += 1
+          if (steps.length < 7) steps.push(toEventChainStep(lookahead, j))
+          continue
+        }
+        if (
+          lookahead.message === 'Node.NextList.Failed' ||
+          lookahead.message === 'Node.NextList.Succeeded' ||
+          lookahead.message === 'Node.PipelineNode.Failed' ||
+          lookahead.message === 'Node.PipelineNode.Succeeded'
+        ) {
+          outcomeEvent = lookahead
+          if (steps.length < 7) steps.push(toEventChainStep(lookahead, j))
+          if (
+            lookahead.message === 'Node.PipelineNode.Failed' ||
+            lookahead.message === 'Node.PipelineNode.Succeeded'
+          ) {
+            break
+          }
+        }
+      }
+
+      const recognitionTotal = recognitionFailed + recognitionSucceeded
+      const recognitionFailedRate = recognitionTotal > 0 ? recognitionFailed / recognitionTotal : 0
+      const riskLevel: EventChainRiskLevel = (
+        toEventName(outcomeEvent) === 'Node.PipelineNode.Failed' || toEventName(outcomeEvent) === 'Node.NextList.Failed'
+      )
+        ? 'high'
+        : recognitionTotal >= 3 && recognitionFailedRate >= 0.75
+          ? 'medium'
+          : 'low'
+
+      const startNode = typeof event.details?.name === 'string' ? event.details.name : ''
+      nextRecognitionChains.push({
+        startNode,
+        nextCandidates,
+        hasJumpBackCandidate,
+        recognitionFailed,
+        recognitionSucceeded,
+        outcomeEvent: toEventName(outcomeEvent),
+        outcomeNode: toEventNodeName(outcomeEvent),
+        riskLevel,
+        summary:
+          `NextList from ${startNode || 'unknown'} => ${toEventName(outcomeEvent)}, ` +
+          `reco failed/succeeded=${recognitionFailed}/${recognitionSucceeded}` +
+          (hasJumpBackCandidate ? '，含 jump_back 候选。' : '。'),
+        steps,
+      })
+      continue
+    }
+
+    if (message === 'Node.Action.Failed') {
+      const steps: EventChainStep[] = [toEventChainStep(event, i)]
+      const actionId = typeof event.details?.action_id === 'number' ? event.details.action_id : null
+      const nodeId = typeof event.details?.node_id === 'number' ? event.details.node_id : null
+      const nodeName = typeof event.details?.name === 'string' ? event.details.name : ''
+
+      let pipelineFailed: EventNotification | null = null
+      for (let j = i + 1; j < events.length && j <= i + 24; j += 1) {
+        const lookahead = events[j]
+        if (lookahead.message !== 'Node.PipelineNode.Failed') continue
+
+        const sameNodeId = nodeId != null && lookahead.details?.node_id === nodeId
+        const sameName = nodeName && typeof lookahead.details?.name === 'string' && lookahead.details.name === nodeName
+        if (sameNodeId || sameName || (nodeId == null && !nodeName)) {
+          pipelineFailed = lookahead
+          if (steps.length < 7) steps.push(toEventChainStep(lookahead, j))
+          break
+        }
+      }
+
+      let taskFailed: EventNotification | null = null
+      for (let j = i + 1; j < events.length && j <= i + 72; j += 1) {
+        const lookahead = events[j]
+        if (lookahead.message !== 'Tasker.Task.Failed') continue
+        taskFailed = lookahead
+        if (steps.length < 7) steps.push(toEventChainStep(lookahead, j))
+        break
+      }
+
+      const riskLevel: EventChainRiskLevel = taskFailed
+        ? 'high'
+        : pipelineFailed
+          ? 'medium'
+          : 'low'
+      actionFailureChains.push({
+        actionNode: nodeName,
+        actionId,
+        hasPipelineFailed: Boolean(pipelineFailed),
+        hasTaskFailed: Boolean(taskFailed),
+        riskLevel,
+        summary:
+          `Action.Failed(${nodeName || 'unknown'}) -> ` +
+          `${pipelineFailed ? 'PipelineNode.Failed' : 'no PipelineNode.Failed'} -> ` +
+          `${taskFailed ? 'Tasker.Task.Failed' : 'task not failed in lookahead'}`,
+        steps,
+      })
+    }
+  }
+
+  nextRecognitionChains.sort((a, b) => {
+    const riskDiff = rankRiskLevel(b.riskLevel) - rankRiskLevel(a.riskLevel)
+    if (riskDiff !== 0) return riskDiff
+    return b.steps[0]?.index - a.steps[0]?.index
+  })
+
+  actionFailureChains.sort((a, b) => {
+    const riskDiff = rankRiskLevel(b.riskLevel) - rankRiskLevel(a.riskLevel)
+    if (riskDiff !== 0) return riskDiff
+    return b.steps[0]?.index - a.steps[0]?.index
+  })
+
+  return {
+    eventCount: events.length,
+    messageCounts,
+    nextRecognitionChains: nextRecognitionChains.slice(0, 10),
+    actionFailureChains: actionFailureChains.slice(0, 8),
+  }
+}
+
 const collectFailureNodes = (task: TaskInfo | null, limit = 24) => {
   if (!task) return []
 
@@ -467,6 +693,8 @@ export const buildDeterministicFindings = (
       spanMs: number
       failedRecoCount: number
       successRecoCount: number
+      failedNodeCount?: number
+      avgJumpBackBranches?: number
     }>
     repeatedRuns: Array<{
       node: string
@@ -492,6 +720,11 @@ export const buildDeterministicFindings = (
     recoResultFailureRatio: number
     totalRecoResultFailed: number
     totalTimelineFailed: number
+  },
+  behaviorContext?: {
+    taskStatus?: 'running' | 'succeeded' | 'failed' | null
+    pipelineFailedCount?: number
+    jumpBackHotNodes?: string[]
   }
 ) => {
   const findings: Array<{
@@ -503,14 +736,35 @@ export const buildDeterministicFindings = (
   }> = []
 
   const unknowns: string[] = []
+  const taskSucceededWithoutPipelineFailure = behaviorContext?.taskStatus === 'succeeded'
+    && (behaviorContext.pipelineFailedCount ?? 0) === 0
+  const jumpBackHotNodes = new Set(behaviorContext?.jumpBackHotNodes ?? [])
+
+  const tuneLoopConfidence = (base: number, nodeName?: string) => {
+    let next = base
+    if (taskSucceededWithoutPipelineFailure) next -= 16
+    if (nodeName && jumpBackHotNodes.has(nodeName)) next -= 12
+    return Math.max(taskSucceededWithoutPipelineFailure ? 38 : 48, next)
+  }
+
+  const loopCauseType: 'loop_or_rule' | 'mixed' = taskSucceededWithoutPipelineFailure ? 'mixed' : 'loop_or_rule'
 
   const topStay = timelineDiagnostics.longStayNodes[0]
   if (topStay) {
+    const jumpBackHint = jumpBackHotNodes.has(topStay.node)
+      ? ' 该节点包含 jump_back 分支，可能是预期回跳。'
+      : ''
+    const taskHint = taskSucceededWithoutPipelineFailure
+      ? ' 任务整体成功且无节点失败，优先判定为现象而非根因。'
+      : ''
     findings.push({
       id: 'long_stay_hotspot',
-      confidence: topStay.spanMs >= 30000 || topStay.occurrences >= 8 ? 80 : 68,
-      causeType: 'loop_or_rule',
-      summary: `长停留热点节点 ${topStay.node}（occurrences=${topStay.occurrences}, spanMs=${topStay.spanMs}, failedReco=${topStay.failedRecoCount}）。`,
+      confidence: tuneLoopConfidence(topStay.spanMs >= 30000 || topStay.occurrences >= 8 ? 80 : 68, topStay.node),
+      causeType: loopCauseType,
+      summary:
+        `长停留热点节点 ${topStay.node}（occurrences=${topStay.occurrences}, spanMs=${topStay.spanMs}, failedReco=${topStay.failedRecoCount}）。` +
+        taskHint +
+        jumpBackHint,
       evidencePaths: ['timelineDiagnostics.longStayNodes[0]'],
     })
   } else {
@@ -519,22 +773,34 @@ export const buildDeterministicFindings = (
 
   const topPair = timelineDiagnostics.hotspotRecoPairs[0]
   if (topPair && topPair.failed > 0) {
+    const jumpBackHint = jumpBackHotNodes.has(topPair.node)
+      ? ' 节点存在 jump_back 候选，需先排除流程型回跳。'
+      : ''
     findings.push({
       id: 'reco_pair_hotspot',
-      confidence: topPair.failed >= 8 || topPair.failedRate >= 0.8 ? 82 : 70,
-      causeType: 'loop_or_rule',
-      summary: `高失败识别对 ${topPair.node}/${topPair.reco}（failed=${topPair.failed}, total=${topPair.total}, failedRate=${topPair.failedRate.toFixed(3)}）。`,
+      confidence: tuneLoopConfidence(topPair.failed >= 8 || topPair.failedRate >= 0.8 ? 82 : 70, topPair.node),
+      causeType: loopCauseType,
+      summary:
+        `高失败识别对 ${topPair.node}/${topPair.reco}（failed=${topPair.failed}, total=${topPair.total}, failedRate=${topPair.failedRate.toFixed(3)}）。` +
+        (taskSucceededWithoutPipelineFailure ? ' 任务仍成功，可能是可恢复识别抖动。' : '') +
+        jumpBackHint,
       evidencePaths: ['timelineDiagnostics.hotspotRecoPairs[0]'],
     })
   }
 
   const topRun = timelineDiagnostics.repeatedRuns[0]
   if (topRun) {
+    const jumpBackHint = jumpBackHotNodes.has(topRun.node)
+      ? ' 该节点可能通过 jump_back 回跳复检。'
+      : ''
     findings.push({
       id: 'repeated_run_hotspot',
-      confidence: topRun.count >= 5 ? 78 : 64,
-      causeType: 'loop_or_rule',
-      summary: `最长连续重复节点 ${topRun.node}（count=${topRun.count}, spanMs=${topRun.spanMs}）。`,
+      confidence: tuneLoopConfidence(topRun.count >= 5 ? 78 : 64, topRun.node),
+      causeType: loopCauseType,
+      summary:
+        `最长连续重复节点 ${topRun.node}（count=${topRun.count}, spanMs=${topRun.spanMs}）。` +
+        (taskSucceededWithoutPipelineFailure ? ' 任务成功时该信号优先视为流程现象。' : '') +
+        jumpBackHint,
       evidencePaths: ['timelineDiagnostics.repeatedRuns[0]'],
     })
   }
@@ -617,13 +883,24 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
   const signalDiagnostics = bestTarget
     ? buildSignalDiagnostics(signalLineItemsFull, timelineDiagnostics.recoIdToName, timelineDiagnostics.recoFailuresByNameAll)
     : null
+  const eventChainDiagnostics = buildEventChainDiagnostics(selectedTask?.events ?? [])
+  const pipelineFailedCount = fullTaskTimeline.filter(item => item.status === 'failed').length
+  const jumpBackHotNodes = timelineDiagnostics.longStayNodes
+    .filter(item => (item.avgJumpBackBranches ?? 0) > 0)
+    .map(item => item.node)
+
   const deterministicFindings = buildDeterministicFindings(
     {
       longStayNodes: timelineDiagnostics.longStayNodes,
       repeatedRuns: timelineDiagnostics.repeatedRuns,
       hotspotRecoPairs: timelineDiagnostics.hotspotRecoPairs,
     },
-    signalDiagnostics
+    signalDiagnostics,
+    {
+      taskStatus: selectedTask?.status ?? null,
+      pipelineFailedCount,
+      jumpBackHotNodes,
+    }
   )
 
   const knowledgeFull = !input.includeKnowledgePack
@@ -683,6 +960,8 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
       failureCandidates: sliced.failureCandidates,
       timelineDiagnostics: {
         scopeNodeCount: fullTaskTimeline.length,
+        pipelineFailedCount,
+        jumpBackHotNodes: jumpBackHotNodes.slice(0, 10),
         longStayNodes: timelineDiagnostics.longStayNodes,
         recoFailuresByName: timelineDiagnostics.recoFailuresByName,
         repeatedRuns: timelineDiagnostics.repeatedRuns,
@@ -690,6 +969,7 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
       },
       signalLines: sliced.signalLines,
       signalDiagnostics,
+      eventChainDiagnostics,
       deterministicFindings,
       knowledge: sliced.knowledge,
     }).length
@@ -750,6 +1030,8 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
     failureCandidates: sliced.failureCandidates,
     timelineDiagnostics: {
       scopeNodeCount: fullTaskTimeline.length,
+      pipelineFailedCount,
+      jumpBackHotNodes: jumpBackHotNodes.slice(0, 10),
       longStayNodes: timelineDiagnostics.longStayNodes,
       recoFailuresByName: timelineDiagnostics.recoFailuresByName,
       repeatedRuns: timelineDiagnostics.repeatedRuns,
@@ -757,6 +1039,7 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
     },
     signalLines: sliced.signalLines,
     signalDiagnostics,
+    eventChainDiagnostics,
     deterministicFindings,
     knowledge: sliced.knowledge,
     contextBudget: {

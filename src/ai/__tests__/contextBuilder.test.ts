@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDeterministicFindings, buildSignalDiagnostics } from '../contextBuilder'
+import { buildDeterministicFindings, buildEventChainDiagnostics, buildSignalDiagnostics } from '../contextBuilder'
 
 describe('buildSignalDiagnostics', () => {
   it('splits reco_result_fetch vs recognition_miss_or_rule failures', () => {
@@ -90,5 +90,123 @@ describe('buildDeterministicFindings', () => {
     expect(ratioFinding?.causeType).toBe('reco_result_fetch')
     expect(ratioFinding?.confidence).toBeGreaterThanOrEqual(80)
   })
+
+  it('down-weights loop-like findings when task succeeded without pipeline failures', () => {
+    const findings = buildDeterministicFindings(
+      {
+        longStayNodes: [
+          {
+            node: 'PopupHandler',
+            occurrences: 10,
+            spanMs: 90000,
+            failedRecoCount: 12,
+            successRecoCount: 5,
+          },
+        ],
+        repeatedRuns: [
+          {
+            node: 'PopupHandler',
+            count: 7,
+            spanMs: 24000,
+          },
+        ],
+        hotspotRecoPairs: [
+          {
+            node: 'PopupHandler',
+            reco: 'ClosePopup',
+            failed: 10,
+            total: 14,
+            failedRate: 10 / 14,
+          },
+        ],
+      },
+      null,
+      {
+        taskStatus: 'succeeded',
+        pipelineFailedCount: 0,
+        jumpBackHotNodes: ['PopupHandler'],
+      }
+    )
+
+    const longStay = findings.findings.find(item => item.id === 'long_stay_hotspot')
+    expect(longStay?.causeType).toBe('mixed')
+    expect(longStay?.confidence).toBeLessThan(70)
+    expect(longStay?.summary).toContain('任务整体成功且无节点失败')
+    expect(longStay?.summary).toContain('jump_back')
+  })
 })
 
+describe('buildEventChainDiagnostics', () => {
+  it('extracts next/recognition chains and action failure escalation chains', () => {
+    const events = [
+      {
+        timestamp: '2026-03-18 10:00:00.000',
+        level: 'INF',
+        message: 'Node.NextList.Starting',
+        details: {
+          task_id: 1,
+          name: 'Start',
+          list: [{ name: 'PopupHandler', jump_back: true, anchor: false }],
+        },
+        _lineNumber: 100,
+      },
+      {
+        timestamp: '2026-03-18 10:00:00.100',
+        level: 'INF',
+        message: 'Node.Recognition.Failed',
+        details: { task_id: 1, name: 'PopupHandler', reco_id: 101 },
+        _lineNumber: 101,
+      },
+      {
+        timestamp: '2026-03-18 10:00:00.200',
+        level: 'INF',
+        message: 'Node.Recognition.Succeeded',
+        details: { task_id: 1, name: 'PopupHandler', reco_id: 101 },
+        _lineNumber: 102,
+      },
+      {
+        timestamp: '2026-03-18 10:00:00.300',
+        level: 'INF',
+        message: 'Node.PipelineNode.Succeeded',
+        details: { task_id: 1, name: 'PopupHandler', node_id: 201 },
+        _lineNumber: 103,
+      },
+      {
+        timestamp: '2026-03-18 10:00:01.000',
+        level: 'ERR',
+        message: 'Node.Action.Failed',
+        details: { task_id: 1, name: 'FightBoss', action_id: 301, node_id: 401 },
+        _lineNumber: 110,
+      },
+      {
+        timestamp: '2026-03-18 10:00:01.100',
+        level: 'ERR',
+        message: 'Node.PipelineNode.Failed',
+        details: { task_id: 1, name: 'FightBoss', node_id: 401 },
+        _lineNumber: 111,
+      },
+      {
+        timestamp: '2026-03-18 10:00:01.900',
+        level: 'ERR',
+        message: 'Tasker.Task.Failed',
+        details: { task_id: 1, entry: 'Start' },
+        _lineNumber: 118,
+      },
+    ]
+
+    const diagnostics = buildEventChainDiagnostics(events)
+
+    expect(diagnostics.eventCount).toBe(events.length)
+    expect(diagnostics.nextRecognitionChains.length).toBeGreaterThan(0)
+    expect(diagnostics.actionFailureChains.length).toBeGreaterThan(0)
+
+    const nextChain = diagnostics.nextRecognitionChains[0]
+    expect(nextChain.hasJumpBackCandidate).toBe(true)
+    expect(nextChain.outcomeEvent).toBe('Node.PipelineNode.Succeeded')
+
+    const actionChain = diagnostics.actionFailureChains[0]
+    expect(actionChain.hasPipelineFailed).toBe(true)
+    expect(actionChain.hasTaskFailed).toBe(true)
+    expect(actionChain.riskLevel).toBe('high')
+  })
+})

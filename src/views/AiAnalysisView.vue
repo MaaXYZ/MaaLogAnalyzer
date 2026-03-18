@@ -429,6 +429,8 @@ const getSystemPrompt = () => {
     '## 排查步骤（可直接执行）',
     '在下结论前，必须先做“量化盘点”：至少引用 timelineDiagnostics.longStayNodes 与 timelineDiagnostics.recoFailuresByName。',
     '若 deterministicFindings.findings 非空，优先基于它构建结论骨架，再补充细节证据。',
+    '必须优先区分“流程现象”与“真实失败”：若任务成功且无 PipelineNode.Failed，不得把循环/重试直接当根因。',
+    '必须检查 eventChainDiagnostics：用 nextRecognitionChains 与 actionFailureChains 还原事件链。',
     '必须区分“现象”和“根因”：ERR 可能是症状，只有与节点停留/重试模式相关联时才能作为主因。',
     '证据必须给 E1/E2...，并引用明确字段路径（如 timelineDiagnostics.longStayNodes[0]、signalDiagnostics.failureTypeBreakdown[0]、deterministicFindings.findings[0]）。',
     '根因候选至少 2 条，每条包含：置信度(0-100)、关键证据编号、反证点。',
@@ -445,6 +447,7 @@ const toObjectArray = (value: unknown): Array<Record<string, unknown>> =>
 const buildCompactContext = (context: Record<string, unknown>): Record<string, unknown> => {
   const timelineDiagnostics = (context.timelineDiagnostics as Record<string, unknown> | undefined) ?? {}
   const deterministicFindings = (context.deterministicFindings as Record<string, unknown> | undefined) ?? {}
+  const eventChainDiagnosticsRaw = (context.eventChainDiagnostics as Record<string, unknown> | undefined) ?? {}
 
   const selectedNodeTimeline = toObjectArray(context.selectedNodeTimeline)
     .slice(-40)
@@ -462,6 +465,23 @@ const buildCompactContext = (context: Record<string, unknown>): Record<string, u
       lines: toObjectArray(raw.lines).slice(0, 60),
     }
   })()
+
+  const eventChainDiagnostics = {
+    ...eventChainDiagnosticsRaw,
+    nextRecognitionChains: toObjectArray(eventChainDiagnosticsRaw.nextRecognitionChains)
+      .slice(0, 8)
+      .map(chain => ({
+        ...chain,
+        steps: toObjectArray(chain.steps).slice(0, 6),
+        nextCandidates: toObjectArray(chain.nextCandidates).slice(0, 6),
+      })),
+    actionFailureChains: toObjectArray(eventChainDiagnosticsRaw.actionFailureChains)
+      .slice(0, 6)
+      .map(chain => ({
+        ...chain,
+        steps: toObjectArray(chain.steps).slice(0, 6),
+      })),
+  }
 
   return {
     ...context,
@@ -484,6 +504,7 @@ const buildCompactContext = (context: Record<string, unknown>): Record<string, u
         : [],
     },
     signalLines,
+    eventChainDiagnostics,
     knowledge: toObjectArray(context.knowledge).slice(0, 16),
   }
 }
@@ -514,6 +535,7 @@ const buildFullContextPrompt = (compact: boolean, minifiedJson = false) => {
     '- 先列证据清单(E1/E2...)，再给结论。',
     '- 必须先量化长时间停留节点（引用 timelineDiagnostics.longStayNodes）。',
     '- 必须检查识别热点（引用 timelineDiagnostics.recoFailuresByName 与 timelineDiagnostics.hotspotRecoPairs）。',
+    '- 必须检查 eventChainDiagnostics.nextRecognitionChains / actionFailureChains，优先给出事件链证据。',
     '- 若存在 deterministicFindings.findings，至少引用其中 1 条并映射到 E 证据编号。',
     '- 给出至少2个根因候选并排序。',
     '- 排查步骤必须可执行且可验证。',
