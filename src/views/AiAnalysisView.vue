@@ -627,6 +627,19 @@ const clearMemory = () => {
   message.success('已清空上下文记忆与多轮对话')
 }
 
+const clearCurrentTaskMemory = () => {
+  const contextKey = currentContextKey.value
+  if (!contextKey) return
+
+  const nextStore = { ...memoryStateStore.value }
+  delete nextStore[contextKey]
+  memoryStateStore.value = nextStore
+
+  conversationTurns.value = conversationTurns.value.filter(item => item.contextKey !== contextKey)
+  lastRequestUsedMemory.value = false
+  message.success('已清空当前任务上下文记忆与对话')
+}
+
 const ANALYSIS_PROMPT_SOFT_LIMIT = 110000
 const ANALYSIS_TIMEOUT_MS = 180000
 
@@ -1186,6 +1199,7 @@ const handleAnalyze = async () => {
 
           <n-flex align="center" style="gap: 8px; flex-wrap: wrap">
             <n-tag :type="memoryApplicable ? 'success' : 'default'">{{ memoryStatusText }}</n-tag>
+            <n-button size="tiny" @click="clearCurrentTaskMemory">清空当前任务记忆</n-button>
             <n-button size="tiny" @click="clearMemory">清空记忆</n-button>
           </n-flex>
 
