@@ -1741,7 +1741,7 @@ const handleAnalyze = async () => {
 
       <n-card size="small" title="AI 输出" class="ai-right-card">
         <template #header-extra>
-          <n-text depth="3" style="font-size: 12px">{{ usageText }}</n-text>
+          <n-text class="usage-text" depth="3" :title="usageText">{{ usageText }}</n-text>
         </template>
 
         <n-card
@@ -1987,6 +1987,14 @@ const handleAnalyze = async () => {
   flex-direction: column;
 }
 
+.ai-right-card :deep(.n-card-header) {
+  gap: 8px;
+}
+
+.ai-right-card :deep(.n-card-header__extra) {
+  min-width: 0;
+}
+
 .ai-left-card :deep(.n-card__content),
 .ai-right-card :deep(.n-card__content) {
   flex: 1;
@@ -1994,6 +2002,15 @@ const handleAnalyze = async () => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.usage-text {
+  display: block;
+  max-width: min(54vw, 720px);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .left-panel-content {
@@ -2272,9 +2289,56 @@ const handleAnalyze = async () => {
 }
 
 @media (max-width: 900px) {
+  .ai-view-root {
+    overflow: auto;
+  }
+
   .ai-view-grid {
+    height: auto;
+    min-height: 100%;
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 6px;
+  }
+
+  .ai-left-card,
+  .ai-right-card {
+    height: auto;
+    min-height: 0;
+  }
+
+  .ai-right-card :deep(.n-card-header) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .ai-right-card :deep(.n-card-header__main),
+  .ai-right-card :deep(.n-card-header__extra) {
+    width: 100%;
+  }
+
+  .usage-text {
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+    font-size: 11px;
+  }
+
+  .on-error-preview-list,
+  .diagnostic-preview-list {
+    max-height: 140px;
+  }
+
+  .turn-list {
+    gap: 8px;
+    padding-right: 0;
+  }
+
+  .turn-item {
+    padding: 8px 8px 8px 10px;
+    gap: 8px;
   }
 }
 </style>
