@@ -230,6 +230,15 @@ describe('buildDeterministicFindings', () => {
               nestedGroupFailedCount: 1,
               nestedActionCount: 5,
               nestedActionFailedCount: 4,
+              upstreamJumpBackHitCount: 12,
+              upstreamJumpBackTerminalBounceCount: 7,
+              upstreamJumpBackSources: [
+                {
+                  fromNode: 'CCFlagInCombatMain',
+                  hitCount: 12,
+                  terminalBounceCount: 7,
+                },
+              ],
               topFailedNestedActionNames: [{ name: 'BuyCardAction', count: 3 }],
             },
           ],
@@ -241,6 +250,8 @@ describe('buildDeterministicFindings', () => {
     const nestedFinding = findings.findings.find(item => item.id === 'nested_action_failure_hotspot')
     expect(nestedFinding).toBeTruthy()
     expect(nestedFinding?.summary).toContain('nested/custom action 失败 4 次')
+    expect(nestedFinding?.summary).toContain('直接父节点热点为 CCBuyCard')
+    expect(nestedFinding?.summary).toContain('CCFlagInCombatMain -> CCBuyCard')
     expect(nestedFinding?.confidence).toBeGreaterThanOrEqual(84)
   })
 })
@@ -871,5 +882,171 @@ describe('buildAiAnalysisContext', () => {
     expect(nested.nestedActionFailedCount).toBeGreaterThanOrEqual(1)
     expect(Array.isArray(nested.topParentNodes)).toBe(true)
     expect(nested.topParentNodes[0]?.node).toBe('ParentNode')
+  })
+
+  it('keeps nested action direct-parent and jump_back upstream chain distinct', () => {
+    const task: TaskInfo = {
+      task_id: 89,
+      entry: 'DemoNestedJumpBack',
+      hash: 'h89',
+      uuid: 'u89',
+      start_time: '2026-03-18 15:10:00.000',
+      end_time: '2026-03-18 15:10:03.000',
+      status: 'succeeded',
+      nodes: [
+        {
+          node_id: 8901,
+          name: 'CCBuyCard',
+          timestamp: '2026-03-18 15:10:01.000',
+          status: 'success',
+          task_id: 89,
+          next_list: [],
+          recognition_attempts: [],
+          nested_action_nodes: [
+            {
+              task_id: 189,
+              name: 'CCUpdate',
+              timestamp: '2026-03-18 15:10:01.100',
+              status: 'failed',
+              nested_actions: [
+                {
+                  node_id: 18901,
+                  name: 'CCUpdateAction',
+                  timestamp: '2026-03-18 15:10:01.110',
+                  status: 'failed',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      events: [
+        makeEvent('Node.NextList.Starting', {
+          task_id: 89,
+          name: 'CCFlagInCombatMain',
+          list: [{ name: 'CCBuyCard', anchor: false, jump_back: true }],
+        }, 891),
+        makeEvent('Node.Recognition.Succeeded', {
+          task_id: 89,
+          name: 'CCBuyCard',
+          reco_id: 8911,
+        }, 892),
+        makeEvent('Node.PipelineNode.Succeeded', {
+          task_id: 89,
+          name: 'CCBuyCard',
+          node_id: 8901,
+        }, 893),
+        makeEvent('Node.NextList.Starting', {
+          task_id: 89,
+          name: 'CCFlagInCombatMain',
+          list: [{ name: 'CCBuyCard', anchor: false, jump_back: true }],
+        }, 894),
+        makeEvent('Tasker.Task.Succeeded', { task_id: 89, entry: 'DemoNestedJumpBack' }, 895),
+      ],
+      duration: 3000,
+      _startEventIndex: 0,
+      _endEventIndex: 4,
+    }
+
+    const context = buildAiAnalysisContext({
+      tasks: [task],
+      selectedTask: task,
+      question: '分析 CCBuyCard',
+      includeKnowledgePack: false,
+      includeSignalLines: false,
+    }) as any
+
+    const nested = context.nestedActionDiagnostics
+    expect(nested).toBeTruthy()
+    expect(nested.topParentNodes[0]?.node).toBe('CCBuyCard')
+    expect(nested.topParentNodes[0]?.upstreamJumpBackSources?.[0]?.fromNode).toBe('CCFlagInCombatMain')
+    expect(nested.summary).toContain('CCFlagInCombatMain -> CCBuyCard')
+  })
+
+  it('uses action_details.name as nested direct parent when pipeline node name differs', () => {
+    const task: TaskInfo = {
+      task_id: 90,
+      entry: 'DemoActionParent',
+      hash: 'h90',
+      uuid: 'u90',
+      start_time: '2026-03-18 15:20:00.000',
+      end_time: '2026-03-18 15:20:03.000',
+      status: 'succeeded',
+      nodes: [
+        {
+          node_id: 9001,
+          name: 'CCFlagInCombatMain',
+          timestamp: '2026-03-18 15:20:01.000',
+          status: 'success',
+          task_id: 90,
+          action_details: {
+            action_id: 90011,
+            action: 'Click',
+            box: [0, 0, 0, 0],
+            detail: null,
+            name: 'CCBuyCard',
+            success: false,
+          },
+          next_list: [],
+          recognition_attempts: [],
+          nested_action_nodes: [
+            {
+              task_id: 190,
+              name: 'CCUpdate',
+              timestamp: '2026-03-18 15:20:01.100',
+              status: 'failed',
+              nested_actions: [
+                {
+                  node_id: 19001,
+                  name: 'CCUpdateAction',
+                  timestamp: '2026-03-18 15:20:01.110',
+                  status: 'failed',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      events: [
+        makeEvent('Node.NextList.Starting', {
+          task_id: 90,
+          name: 'CCFlagInCombatMain',
+          list: [{ name: 'CCBuyCard', anchor: false, jump_back: true }],
+        }, 901),
+        makeEvent('Node.Recognition.Succeeded', {
+          task_id: 90,
+          name: 'CCBuyCard',
+          reco_id: 9011,
+        }, 902),
+        makeEvent('Node.PipelineNode.Succeeded', {
+          task_id: 90,
+          name: 'CCFlagInCombatMain',
+          node_id: 9001,
+        }, 903),
+        makeEvent('Node.NextList.Starting', {
+          task_id: 90,
+          name: 'CCFlagInCombatMain',
+          list: [{ name: 'CCBuyCard', anchor: false, jump_back: true }],
+        }, 904),
+        makeEvent('Tasker.Task.Succeeded', { task_id: 90, entry: 'DemoActionParent' }, 905),
+      ],
+      duration: 3000,
+      _startEventIndex: 0,
+      _endEventIndex: 4,
+    }
+
+    const context = buildAiAnalysisContext({
+      tasks: [task],
+      selectedTask: task,
+      question: '分析 CCBuyCard',
+      includeKnowledgePack: false,
+      includeSignalLines: false,
+    }) as any
+
+    const nested = context.nestedActionDiagnostics
+    expect(nested).toBeTruthy()
+    expect(nested.topParentNodes[0]?.node).toBe('CCBuyCard')
+    expect(nested.topParentNodes[0]?.upstreamJumpBackSources?.[0]?.fromNode).toBe('CCFlagInCombatMain')
+    expect(nested.summary).toContain('CCFlagInCombatMain -> CCBuyCard')
   })
 })

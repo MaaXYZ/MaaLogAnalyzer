@@ -1,4 +1,4 @@
-import type { EventNotification, TaskInfo } from '../types'
+import type { EventNotification, NodeInfo, TaskInfo } from '../types'
 import { maaKnowledgePack, searchKnowledge } from './knowledge'
 
 export interface AiLoadedTarget {
@@ -1583,7 +1583,10 @@ const buildQuestionNodeDiagnostics = (
   return diagnostics.slice(0, 8)
 }
 
-const buildNestedActionDiagnostics = (task: TaskInfo | null) => {
+const buildNestedActionDiagnostics = (
+  task: TaskInfo | null,
+  jumpBackFlowDiagnostics?: ReturnType<typeof buildJumpBackFlowDiagnostics>
+) => {
   if (!task) {
     return {
       parentNodeWithNestedCount: 0,
@@ -1600,6 +1603,9 @@ const buildNestedActionDiagnostics = (task: TaskInfo | null) => {
         nestedGroupFailedCount: number
         nestedActionCount: number
         nestedActionFailedCount: number
+        upstreamJumpBackHitCount: number
+        upstreamJumpBackTerminalBounceCount: number
+        upstreamJumpBackSources: Array<{ fromNode: string; hitCount: number; terminalBounceCount: number }>
         topFailedNestedActionNames: Array<{ name: string; count: number }>
       }>,
       summary: '当前任务无 nested action 数据。',
@@ -1607,6 +1613,19 @@ const buildNestedActionDiagnostics = (task: TaskInfo | null) => {
   }
 
   const withNested = task.nodes.filter(node => (node.nested_action_nodes?.length ?? 0) > 0)
+  const pairStats = Array.isArray(jumpBackFlowDiagnostics?.pairStats)
+    ? jumpBackFlowDiagnostics.pairStats as Array<Record<string, unknown>>
+    : []
+
+  const toNonEmpty = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
+  const resolveDirectParentName = (node: NodeInfo): string => {
+    const actionName = toNonEmpty(node.action_details?.name)
+    if (actionName) return actionName
+    const actionKind = toNonEmpty(node.action_details?.action)
+    if (actionKind) return actionKind
+    return toNonEmpty(node.name) || 'unknown'
+  }
+
   const byParent: Array<{
     node: string
     nodeId: number
@@ -1615,6 +1634,9 @@ const buildNestedActionDiagnostics = (task: TaskInfo | null) => {
     nestedGroupFailedCount: number
     nestedActionCount: number
     nestedActionFailedCount: number
+    upstreamJumpBackHitCount: number
+    upstreamJumpBackTerminalBounceCount: number
+    upstreamJumpBackSources: Array<{ fromNode: string; hitCount: number; terminalBounceCount: number }>
     topFailedNestedActionNames: Array<{ name: string; count: number }>
   }> = []
 
@@ -1650,14 +1672,33 @@ const buildNestedActionDiagnostics = (task: TaskInfo | null) => {
     }
 
     if (groupFailed > 0 || actionFailed > 0) {
+      const directParentName = resolveDirectParentName(node)
+      const upstreamSources = pairStats
+        .filter(item => String(item.hitCandidate ?? '') === directParentName || String(item.hitCandidate ?? '') === node.name)
+        .map(item => ({
+          fromNode: String(item.startNode ?? ''),
+          hitCount: Number(item.totalHitCount ?? 0),
+          terminalBounceCount: Number(item.terminalBounceCount ?? 0),
+        }))
+        .filter(item => item.fromNode)
+        .sort((a, b) => {
+          if (b.hitCount !== a.hitCount) return b.hitCount - a.hitCount
+          return b.terminalBounceCount - a.terminalBounceCount
+        })
+        .slice(0, 6)
+      const upstreamHitCount = upstreamSources.reduce((sum, item) => sum + item.hitCount, 0)
+      const upstreamTerminalBounceCount = upstreamSources.reduce((sum, item) => sum + item.terminalBounceCount, 0)
       byParent.push({
-        node: node.name,
+        node: directParentName,
         nodeId: node.node_id,
         timestamp: node.timestamp,
         nestedGroupCount: groups.length,
         nestedGroupFailedCount: groupFailed,
         nestedActionCount: actionCount,
         nestedActionFailedCount: actionFailed,
+        upstreamJumpBackHitCount: upstreamHitCount,
+        upstreamJumpBackTerminalBounceCount: upstreamTerminalBounceCount,
+        upstreamJumpBackSources: upstreamSources,
         topFailedNestedActionNames: toTopNameCounts(failedNames, 4),
       })
     }
@@ -1679,7 +1720,10 @@ const buildNestedActionDiagnostics = (task: TaskInfo | null) => {
     topParentNodes: byParent.slice(0, 10),
     summary:
       nestedActionFailedCount > 0
-        ? `检测到 nested action 失败 ${nestedActionFailedCount} 次（父节点 ${byParent.length} 个），主要集中在 ${byParent[0]?.node || 'unknown'}。`
+        ? `检测到 nested action 失败 ${nestedActionFailedCount} 次（直接父节点 ${byParent.length} 个），主要集中在 ${byParent[0]?.node || 'unknown'}。` +
+          (byParent[0]?.upstreamJumpBackSources?.[0]?.fromNode
+            ? ` 典型链路为 ${byParent[0].upstreamJumpBackSources[0].fromNode} -> ${byParent[0].node}（jump_back 命中后进入）。`
+            : '')
         : withNested.length > 0
           ? `存在 nested action（父节点 ${withNested.length} 个），但未检测到失败。`
           : '当前任务无 nested action 数据。',
@@ -2298,6 +2342,9 @@ export const buildDeterministicFindings = (
     const topNode = nestedActionDiagnostics?.topParentNodes?.[0]
     const topNodeName = typeof topNode?.node === 'string' ? topNode.node : ''
     const topNodeFailed = typeof topNode?.nestedActionFailedCount === 'number' ? topNode.nestedActionFailedCount : 0
+    const upstream = Array.isArray(topNode?.upstreamJumpBackSources) ? topNode.upstreamJumpBackSources[0] : null
+    const upstreamFromNode = upstream && typeof upstream.fromNode === 'string' ? upstream.fromNode : ''
+    const upstreamHitCount = upstream && typeof upstream.hitCount === 'number' ? upstream.hitCount : 0
     findings.push({
       id: 'nested_action_failure_hotspot',
       confidence: Math.max(
@@ -2307,11 +2354,13 @@ export const buildDeterministicFindings = (
       causeType: 'loop_or_rule',
       summary:
         `检测到 nested/custom action 失败 ${(nestedActionDiagnostics?.nestedActionFailedCount ?? 0)} 次，涉及父节点 ${(nestedActionDiagnostics?.parentNodeWithNestedFailureCount ?? 0)} 个。` +
-        (topNodeName ? ` 最高热点为 ${topNodeName}（failed=${topNodeFailed}）。` : '') +
+        (topNodeName ? ` 直接父节点热点为 ${topNodeName}（failed=${topNodeFailed}）。` : '') +
+        (topNodeName && upstreamFromNode ? ` 上游链路主要是 ${upstreamFromNode} -> ${topNodeName}（hit=${upstreamHitCount}）。` : '') +
         ' 动作链失败通常不是正常现象，默认优先级高于“可恢复首轮 miss”。',
       evidencePaths: [
         'nestedActionDiagnostics.nestedActionFailedCount',
         'nestedActionDiagnostics.topParentNodes[0]',
+        'jumpBackFlowDiagnostics.pairStats',
       ],
     })
   }
@@ -2463,7 +2512,7 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
   const nextCandidateAvailabilityDiagnostics = buildNextCandidateAvailabilityDiagnostics(selectedTask?.events ?? [])
   const anchorResolutionDiagnostics = buildAnchorResolutionDiagnostics(selectedTask?.events ?? [])
   const jumpBackFlowDiagnostics = buildJumpBackFlowDiagnostics(selectedTask?.events ?? [])
-  const nestedActionDiagnostics = buildNestedActionDiagnostics(selectedTask)
+  const nestedActionDiagnostics = buildNestedActionDiagnostics(selectedTask, jumpBackFlowDiagnostics)
   const questionNodeDiagnostics = buildQuestionNodeDiagnostics(input.question, selectedTask, jumpBackFlowDiagnostics)
   const pipelineFailedCount = fullTaskTimeline.filter(item => item.status === 'failed').length
   const jumpBackHotNodes = timelineDiagnostics.longStayNodes

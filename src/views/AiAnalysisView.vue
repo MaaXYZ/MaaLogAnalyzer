@@ -48,6 +48,17 @@ interface QuickPromptItem {
   prompt: string
 }
 
+interface ParentRelationConflictIssue {
+  directParents: string[]
+  upstreamChains: Array<{ from: string; to: string }>
+  reason: string
+}
+
+interface ParentRelationFacts {
+  directParentCandidates: Array<{ name: string; failedCount: number }>
+  upstreamChains: Array<{ from: string; to: string; hitCount: number; terminalBounceCount: number }>
+}
+
 const props = defineProps<Props>()
 
 const message = useMessage()
@@ -55,6 +66,7 @@ const settings = getAiSettings()
 const apiKey = ref(getSessionApiKey())
 const question = ref('请分析当前任务中最可能的失败原因，并给出可执行的排查步骤。')
 const analyzing = ref(false)
+const analyzingStage = ref<'idle' | 'streaming' | 'postprocess'>('idle')
 const testing = ref(false)
 const resultText = ref('')
 const usageText = ref('')
@@ -522,6 +534,7 @@ const renderedResultHtml = computed(() => renderMarkdown(resultText.value))
 const streamingAnswerHtml = computed(() => renderMarkdown(resultText.value))
 const showStreamingTurn = computed(() =>
   analyzing.value
+  && analyzingStage.value === 'streaming'
   && !!resultText.value.trim()
   && !!activeRoundQuestion.value.trim()
 )
@@ -751,6 +764,7 @@ const getSystemPrompt = () => {
     '必须检查事件链诊断：用 on_error 触发链路明确触发源（action_failed / reco_timeout_or_nohit / error_handling_loop）。',
     'action_failed 口径必须包含 Node.Action.Failed、Node.ActionNode.Failed，以及 PipelineNode.Failed 中可判定的隐式动作失败（action_details.success=false）。',
     '若存在 nestedActionDiagnostics，必须联动判断 custom/nested action 失败，不得仅凭主任务 events 中 actionFailed=0 就排除动作失败。',
+    '描述 nested/custom action 失败时，必须区分“直接父节点”和“上游 jump_back 来源节点”；若存在 X -> Y，只能写“Y 是直接父节点，X 是上游来源”，禁止把 X 写成直接父节点。',
     '识别问题判定必须以“整轮 next 候选无命中并失败/超时”为主；前几个候选未命中但后续命中恢复，应归类为流程现象而非主因。',
     '必须检查 jump_back 命中后是否出现“回到父节点但命中节点疑似无后继”的复检链路，并评估其对长停留的贡献。',
     '若上下文提供 questionNodeDiagnostics，必须优先回答其中的节点定量数据（出现次数/时长/失败分布/jump_back画像），不能笼统说“数据较少”。',
@@ -973,6 +987,131 @@ const buildFallbackMemory = (answer: string, questionText: string): string => {
   return `最近问题: ${questionText}\n最近结论: ${capped}`
 }
 
+const AUTO_REPAIR_TIMEOUT_MS = 45000
+
+const nodeTokenRegex = /[A-Za-z][A-Za-z0-9_]*/g
+
+const uniqueTokens = (items: string[]): string[] => {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of items) {
+    const token = item.trim()
+    if (!token) continue
+    if (seen.has(token)) continue
+    seen.add(token)
+    out.push(token)
+  }
+  return out
+}
+
+const extractNodeTokenAfterKeyword = (text: string, keyword: string): string[] => {
+  const out: string[] = []
+  let from = 0
+  while (from < text.length) {
+    const index = text.indexOf(keyword, from)
+    if (index < 0) break
+    const tail = text.slice(index + keyword.length, Math.min(text.length, index + keyword.length + 96))
+    const tokenMatch = tail.match(nodeTokenRegex)
+    if (tokenMatch?.length) out.push(tokenMatch[0])
+    from = index + keyword.length
+  }
+  return uniqueTokens(out)
+}
+
+const detectParentRelationConflict = (answer: string): ParentRelationConflictIssue | null => {
+  if (!answer.trim()) return null
+
+  const directParents = extractNodeTokenAfterKeyword(answer, '直接父节点')
+  if (!directParents.length) return null
+
+  const upstreamChains: Array<{ from: string; to: string }> = []
+  const chainRegex = /([A-Za-z][A-Za-z0-9_]*)\s*->\s*([A-Za-z][A-Za-z0-9_]*)/g
+  let match: RegExpExecArray | null
+  while ((match = chainRegex.exec(answer)) !== null) {
+    const from = match[1] ?? ''
+    const to = match[2] ?? ''
+    if (!from || !to) continue
+    const start = Math.max(0, match.index - 24)
+    const end = Math.min(answer.length, chainRegex.lastIndex + 24)
+    const around = answer.slice(start, end)
+    if (!/(上游|来源|jump_back|回跳)/i.test(around)) continue
+    upstreamChains.push({ from, to })
+  }
+
+  const directSet = new Set(directParents)
+  if (directSet.size > 1) {
+    return {
+      directParents: Array.from(directSet),
+      upstreamChains,
+      reason: `检测到多个“直接父节点”表述：${Array.from(directSet).join(', ')}`,
+    }
+  }
+
+  for (const chain of upstreamChains) {
+    if (directSet.has(chain.from) && !directSet.has(chain.to)) {
+      return {
+        directParents: Array.from(directSet),
+        upstreamChains,
+        reason: `上游链路 ${chain.from} -> ${chain.to} 与“直接父节点=${chain.from}”冲突`,
+      }
+    }
+  }
+
+  return null
+}
+
+const collectParentRelationFacts = (task: TaskInfo | null): ParentRelationFacts | null => {
+  if (!task) return null
+
+  const parentFailedCount = new Map<string, number>()
+  const resolveDirectParentName = (node: TaskInfo['nodes'][number]): string => {
+    const actionName = typeof node.action_details?.name === 'string' ? node.action_details.name.trim() : ''
+    if (actionName) return actionName
+    const actionKind = typeof node.action_details?.action === 'string' ? node.action_details.action.trim() : ''
+    if (actionKind) return actionKind
+    return node.name?.trim() || 'unknown'
+  }
+
+  for (const node of task.nodes) {
+    const groups = node.nested_action_nodes ?? []
+    if (!groups.length) continue
+    let hasFailed = false
+    for (const group of groups) {
+      if (group.status === 'failed') hasFailed = true
+      for (const action of group.nested_actions ?? []) {
+        if (action.status === 'failed') hasFailed = true
+      }
+    }
+    if (!hasFailed) continue
+    const parent = resolveDirectParentName(node)
+    parentFailedCount.set(parent, (parentFailedCount.get(parent) ?? 0) + 1)
+  }
+
+  const directParentCandidates = Array.from(parentFailedCount.entries())
+    .map(([name, failedCount]) => ({ name, failedCount }))
+    .sort((a, b) => b.failedCount - a.failedCount)
+    .slice(0, 6)
+
+  const parentSet = new Set(directParentCandidates.map(item => item.name))
+  const jumpBack = buildJumpBackFlowDiagnostics(task.events ?? [])
+  const rawPairStats = Array.isArray(jumpBack.pairStats) ? jumpBack.pairStats : []
+  const upstreamChains = rawPairStats
+    .map(item => ({
+      from: typeof item.startNode === 'string' ? item.startNode : '',
+      to: typeof item.hitCandidate === 'string' ? item.hitCandidate : '',
+      hitCount: typeof item.totalHitCount === 'number' ? item.totalHitCount : 0,
+      terminalBounceCount: typeof item.terminalBounceCount === 'number' ? item.terminalBounceCount : 0,
+    }))
+    .filter(item => item.from && item.to && item.hitCount > 0 && parentSet.has(item.to))
+    .sort((a, b) => {
+      if (b.hitCount !== a.hitCount) return b.hitCount - a.hitCount
+      return b.terminalBounceCount - a.terminalBounceCount
+    })
+    .slice(0, 8)
+
+  return { directParentCandidates, upstreamChains }
+}
+
 const repairStructuredOutput = async (
   rawOutput: string,
   key: string
@@ -994,7 +1133,7 @@ const repairStructuredOutput = async (
     responseFormatJson: true,
     retryOnLength: false,
     maxNetworkRetries: 1,
-    timeoutMs: 30000,
+    timeoutMs: AUTO_REPAIR_TIMEOUT_MS,
     messages: [
       {
         role: 'system',
@@ -1011,8 +1150,79 @@ const repairStructuredOutput = async (
       },
     ],
   })
+  const parsed = tryParseStructuredOutput(repair.text)
+  if (!parsed) {
+    const preview = repair.text.trim().slice(0, 120).replace(/\s+/g, ' ')
+    throw new Error(`修复响应不可解析（length=${repair.text.trim().length}, preview="${preview}"）`)
+  }
+  return parsed
+}
 
-  return tryParseStructuredOutput(repair.text)
+const repairParentRelationConsistency = async (
+  current: StructuredAiOutput,
+  key: string,
+  issue: ParentRelationConflictIssue,
+  facts: ParentRelationFacts | null
+): Promise<StructuredAiOutput | null> => {
+  const answerSource = current.answer.trim()
+  const memorySource = (current.memory_update ?? '').trim()
+  const cappedAnswer = answerSource.length > 20000
+    ? `${answerSource.slice(0, 20000)}\n...(truncated)...`
+    : answerSource
+  const cappedMemory = memorySource.length > 3000
+    ? `${memorySource.slice(0, 3000)}...(truncated)...`
+    : memorySource
+
+  const repair = await requestChatCompletion({
+    baseUrl: settings.baseUrl,
+    apiKey: key,
+    model: settings.model,
+    temperature: 0,
+    maxTokens: 1600,
+    stream: false,
+    responseFormatJson: true,
+    retryOnLength: false,
+    maxNetworkRetries: 1,
+    timeoutMs: AUTO_REPAIR_TIMEOUT_MS,
+    messages: [
+      {
+        role: 'system',
+        content: [
+          '你是术语一致性修复器。',
+          '只修正 answer 中“直接父节点”和“上游来源节点”表述冲突，不改动其余结论结构。',
+          '禁止新增不存在的节点或数字，禁止删掉四段结构与证据编号。',
+          '规则：',
+          '- “直接父节点”只能写 nested/custom action 的直接承载节点。',
+          '- “上游来源节点”只能写 jump_back 来源，不得写成直接父节点。',
+          '- 若出现 X -> Y，则 Y 才可作为直接父节点，X 只能是上游来源。',
+          '仅输出 JSON：{"answer":"...","memory_update":"..."}，不得输出解释。',
+        ].join('\n'),
+      },
+      {
+        role: 'user',
+        content: [
+          `冲突原因：${issue.reason}`,
+          `检测到的直接父节点：${issue.directParents.join(', ') || 'none'}`,
+          `检测到的上游链路：${issue.upstreamChains.map(item => `${item.from}->${item.to}`).join(', ') || 'none'}`,
+          '',
+          '事实卡片（用于裁决，优先级最高）：',
+          JSON.stringify(facts ?? {}, null, 2),
+          '',
+          '原 answer（请仅做术语关系修正，保持四段结构与编号）：',
+          cappedAnswer,
+          '',
+          '原 memory_update（可按需最小修改）：',
+          cappedMemory,
+        ].join('\n'),
+      },
+    ],
+  })
+  const parsed = tryParseStructuredOutput(repair.text)
+  if (!parsed) {
+    const preview = repair.text.trim().slice(0, 120).replace(/\s+/g, ' ')
+    throw new Error(`术语修正响应不可解析（length=${repair.text.trim().length}, preview="${preview}"）`)
+  }
+  return parsed
 }
 
 const getNextConversationTurn = (contextKey: string): number => {
@@ -1048,6 +1258,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     activeRoundQuestion.value = questionSnapshot
     resultText.value = ''
     usageText.value = 'AI 正在处理请求...'
+    analyzingStage.value = 'streaming'
   }
 
   let usedCompactContext = false
@@ -1123,11 +1334,15 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     }
   }
   updateUsageText(response)
+  if (mode === 'analyze') {
+    analyzingStage.value = 'postprocess'
+    usageText.value = `${usageText.value} | 正在执行后处理校验`
+  }
   let outputTruncated = response.finishReason === 'length'
 
   if (mode === 'analyze' && outputTruncated && settings.truncateAutoRetryEnabled) {
-    message.warning('检测到输出被截断，已自动发起一次精简重试。')
-    try {
+      message.warning('检测到输出被截断，已自动发起一次精简重试。')
+      try {
       const conciseBase = (() => {
         if (useMemoryForThisRound) {
           return buildMemoryPrompt(contextMemory as MemoryState)
@@ -1140,6 +1355,10 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       const concisePrompt = buildConciseRetryPrompt(conciseBase)
       response = await sendRequest(concisePrompt)
       updateUsageText(response, ' | 精简重试')
+      if (mode === 'analyze') {
+        analyzingStage.value = 'postprocess'
+        usageText.value = `${usageText.value} | 正在执行后处理校验`
+      }
       outputTruncated = response.finishReason === 'length'
       if (outputTruncated) {
         usageText.value = `${usageText.value} | 仍截断`
@@ -1171,10 +1390,36 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       if (parsed) {
         message.warning('模型原始输出不是标准 JSON，已自动修复后继续。')
       }
-    } catch {
-      // ignore repair failures and keep raw fallback
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      console.warn('[AI][structured-repair] failed:', error)
+      message.warning(`JSON 自动修复失败：${msg}`)
     }
   }
+
+  if (parsed && !outputTruncated) {
+    const conflictIssue = detectParentRelationConflict(parsed.answer)
+    if (conflictIssue) {
+      const relationFacts = collectParentRelationFacts(props.selectedTask)
+      try {
+        const repaired = await repairParentRelationConsistency(parsed, key, conflictIssue, relationFacts)
+        if (repaired) {
+          parsed = repaired
+          message.warning('检测到“直接父节点/上游来源”术语冲突，已自动修正。')
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        console.warn('[AI][parent-relation-repair] failed:', error)
+        message.warning(`术语修正请求失败：${msg}`)
+      }
+
+      const stillConflict = detectParentRelationConflict(parsed.answer)
+      if (stillConflict) {
+        message.warning(`检测到术语冲突，远程修正未生效：${stillConflict.reason}`)
+      }
+    }
+  }
+
   const answerTextRaw = parsed?.answer?.trim() || response.text
   const answerText = sanitizeAnswerForUser(answerTextRaw)
   resultText.value = answerText
@@ -1238,6 +1483,7 @@ const handleTest = async () => {
 
 const handleAnalyze = async () => {
   analyzing.value = true
+  analyzingStage.value = 'streaming'
   try {
     await runRequest('analyze')
   } catch (error) {
@@ -1245,6 +1491,7 @@ const handleAnalyze = async () => {
     message.error(`AI 分析失败: ${msg}`)
   } finally {
     analyzing.value = false
+    analyzingStage.value = 'idle'
   }
 }
 </script>
