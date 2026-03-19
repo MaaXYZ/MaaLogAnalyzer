@@ -7,7 +7,7 @@ import { LogParser } from './utils/logParser'
 import { getErrorMessage } from './utils/errorHandler'
 import type { LoadedTextFile } from './utils/fileDialog'
 import type { TaskInfo, NodeInfo } from './types'
-import { BulbOutlined, BulbFilled, FileSearchOutlined, BarChartOutlined, ColumnHeightOutlined, InfoCircleOutlined, GithubOutlined, DashboardOutlined, SettingOutlined, MenuOutlined, ApartmentOutlined } from '@vicons/antd'
+import { BulbOutlined, BulbFilled, FileSearchOutlined, BarChartOutlined, ColumnHeightOutlined, InfoCircleOutlined, GithubOutlined, DashboardOutlined, SettingOutlined, MenuOutlined, ApartmentOutlined, RobotOutlined } from '@vicons/antd'
 import { version } from '../package.json'
 import { useIsMobile } from './composables/useIsMobile'
 import { formatDuration } from './utils/formatDuration'
@@ -36,12 +36,13 @@ const TextSearchView = defineAsyncComponent(() => import('./views/TextSearchView
 const NodeStatisticsView = defineAsyncComponent(() => import('./views/NodeStatisticsView.vue'))
 const FlowchartView = defineAsyncComponent(() => import('./views/FlowchartView.vue'))
 const SettingsView = defineAsyncComponent(() => import('./views/SettingsView.vue'))
+const AiAnalysisView = defineAsyncComponent(() => import('./views/AiAnalysisView.vue'))
 // 移动端抽屉状态
 const showTaskDrawer = ref(false)
 const showDetailDrawer = ref(false)
 
 // 视图模式
-type ViewMode = 'analysis' | 'search' | 'statistics' | 'flowchart' | 'split'
+type ViewMode = 'analysis' | 'search' | 'statistics' | 'flowchart' | 'ai' | 'split'
 const viewMode = ref<ViewMode>('analysis')
 
 // 所有视图模式选项
@@ -65,6 +66,11 @@ const allViewModeOptions = [
     label: '流程图',
     key: 'flowchart' as ViewMode,
     icon: () => h(ApartmentOutlined)
+  },
+  {
+    label: 'AI 分析',
+    key: 'ai' as ViewMode,
+    icon: () => h(RobotOutlined)
   },
   {
     label: '分屏模式',
@@ -1456,6 +1462,7 @@ onBeforeUnmount(() => {
                     <file-search-outlined v-else-if="viewMode === 'search'" />
                     <dashboard-outlined v-else-if="viewMode === 'statistics'" />
                     <apartment-outlined v-else-if="viewMode === 'flowchart'" />
+                    <robot-outlined v-else-if="viewMode === 'ai'" />
                     <column-height-outlined v-else />
                   </n-icon>
                 </template>
@@ -1717,6 +1724,17 @@ onBeforeUnmount(() => {
           @navigate-to-node="handleNavigateToNode"
           @upload-file="handleFileUpload"
           @upload-content="handleContentUpload"
+        />
+      </div>
+
+      <!-- AI 分析模式 -->
+      <div v-if="viewMode === 'ai'" data-tour="ai-main" style="height: 100%">
+        <ai-analysis-view
+          :tasks="tasks"
+          :selected-task="selectedTask"
+          :loaded-targets="textSearchLoadedTargets"
+          :loaded-default-target-id="textSearchLoadedDefaultTargetId"
+          style="height: 100%"
         />
       </div>
 

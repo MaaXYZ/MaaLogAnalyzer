@@ -1,0 +1,454 @@
+{
+  "id": "maa-domain-knowledge",
+  "version": "1.3.1",
+  "generatedAt": "2026-03-19",
+  "language": "zh-CN",
+  "sources": [
+    {
+      "id": "maafw-callback",
+      "note": "官方回调事件语义与 details 字段定义"
+    },
+    {
+      "id": "maafw-pipeline",
+      "note": "Pipeline 执行机制、节点属性与版本语义"
+    },
+    {
+      "id": "maafw-schema",
+      "note": "doc/desc、anchor/jump_back 等字段的 schema 约束"
+    },
+    {
+      "id": "analyzer-parser",
+      "note": "Analyzer 当前解析实现（事件筛选、去重、建模）"
+    },
+    {
+      "id": "analyzer-types",
+      "note": "Analyzer 对 Task/Node/Recognition 等结构定义"
+    }
+  ],
+  "cards": [
+    {
+      "id": "event.tasker.task.lifecycle",
+      "topic": "callback.events",
+      "title": "任务生命周期事件",
+      "rule": "Tasker.Task.Starting/Succeeded/Failed 描述任务开始与最终状态。",
+      "details": [
+        "关键字段: task_id, entry, uuid, hash。",
+        "Analyzer 先按 uuid 匹配任务，uuid 缺失时回退 task_id。"
+      ],
+      "keywords": ["Tasker.Task.Starting", "Tasker.Task.Succeeded", "Tasker.Task.Failed", "uuid", "task_id"],
+      "evidence": [
+        { "sourceId": "maafw-callback", "loc": "103-129" },
+        { "sourceId": "analyzer-parser", "loc": "217-251" }
+      ]
+    },
+    {
+      "id": "event.node.nextlist",
+      "topic": "callback.events",
+      "title": "NextList 事件语义",
+      "rule": "Node.NextList.Starting 给出当前节点候选后继列表（含 anchor/jump_back 属性）。",
+      "details": [
+        "list 中每个元素可带 name、anchor、jump_back。",
+        "Analyzer 仅在 NextList.Starting 时缓存 currentNextList，用于随后写入 PipelineNode。"
+      ],
+      "keywords": ["Node.NextList.Starting", "list", "anchor", "jump_back", "next_list"],
+      "evidence": [
+        { "sourceId": "maafw-callback", "loc": "135-180" },
+        { "sourceId": "analyzer-parser", "loc": "311-313,347-351" }
+      ]
+    },
+    {
+      "id": "event.node.recognition",
+      "topic": "callback.events",
+      "title": "Recognition 事件语义",
+      "rule": "Node.Recognition.Succeeded/Failed 表示一次识别尝试结果，不等价于节点最终成败。",
+      "details": [
+        "关键字段: reco_id, name, focus。",
+        "Analyzer 会累积到 recognition_attempts，直到对应 PipelineNode 完成再落到节点。"
+      ],
+      "keywords": ["Node.Recognition.Succeeded", "Node.Recognition.Failed", "reco_id", "recognition_attempts"],
+      "evidence": [
+        { "sourceId": "maafw-callback", "loc": "186-212" },
+        { "sourceId": "analyzer-parser", "loc": "315-327" }
+      ]
+    },
+    {
+      "id": "event.node.action",
+      "topic": "callback.events",
+      "title": "Action 事件语义",
+      "rule": "Node.Action.Succeeded/Failed 表示动作执行结果，关键标识是 action_id。",
+      "details": [
+        "Action 事件可发生在子任务上下文中，Analyzer 会放进 SubTaskCollector.actions。",
+        "动作失败常与 PipelineNode.Failed 相关，但不能只看单条事件下结论。"
+      ],
+      "keywords": ["Node.Action.Succeeded", "Node.Action.Failed", "action_id"],
+      "evidence": [
+        { "sourceId": "maafw-callback", "loc": "218-245" },
+        { "sourceId": "analyzer-parser", "loc": "396-404" }
+      ]
+    },
+    {
+      "id": "event.node.pipeline",
+      "topic": "callback.events",
+      "title": "PipelineNode 事件语义",
+      "rule": "Node.PipelineNode.Succeeded/Failed 才是节点最终状态事件。",
+      "details": [
+        "关键字段: task_id, node_id, name。",
+        "Analyzer 仅在 PipelineNode.Succeeded/Failed 时创建 NodeInfo。"
+      ],
+      "keywords": ["Node.PipelineNode.Succeeded", "Node.PipelineNode.Failed", "node_id"],
+      "evidence": [
+        { "sourceId": "maafw-callback", "loc": "251-277" },
+        { "sourceId": "analyzer-parser", "loc": "330-362" }
+      ]
+    },
+    {
+      "id": "event.node.recognitionnode",
+      "topic": "callback.events",
+      "title": "RecognitionNode 事件语义",
+      "rule": "Node.RecognitionNode.* 属于仅识别或子链路节点事件，通常作为嵌套识别信息。",
+      "details": [
+        "Analyzer 将其组装为 nestedRecognitionNodes，再挂到上层 recognition attempt。"
+      ],
+      "keywords": ["Node.RecognitionNode.Succeeded", "Node.RecognitionNode.Failed", "nested_nodes"],
+      "evidence": [
+        { "sourceId": "maafw-callback", "loc": "283-309" },
+        { "sourceId": "analyzer-parser", "loc": "407-421" }
+      ]
+    },
+    {
+      "id": "event.node.actionnode",
+      "topic": "callback.events",
+      "title": "ActionNode 事件语义",
+      "rule": "Node.ActionNode.* 常用于动作子链路，Analyzer 作为 nested_action_nodes 的组成部分。",
+      "details": [
+        "Analyzer 会把 Node.Action 先收集，再在 ActionNode 事件处组装 nested_actions。"
+      ],
+      "keywords": ["Node.ActionNode.Succeeded", "Node.ActionNode.Failed", "nested_actions"],
+      "evidence": [
+        { "sourceId": "maafw-callback", "loc": "315-341" },
+        { "sourceId": "analyzer-parser", "loc": "423-434" }
+      ]
+    },
+    {
+      "id": "pipeline.next-first-hit",
+      "topic": "pipeline.protocol",
+      "title": "next 列表执行是顺序首命中",
+      "rule": "对 next 按顺序识别，只执行第一个命中的后继节点。",
+      "details": [
+        "分析时不能把 next 列表全部视为都会执行。",
+        "未执行项在可视化中应标识为未命中候选。"
+      ],
+      "keywords": ["next", "首命中", "顺序检测"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "32-38,174-177" }
+      ]
+    },
+    {
+      "id": "pipeline.control-mechanism-overview",
+      "topic": "pipeline.protocol",
+      "title": "流程控制机制总览",
+      "rule": "Pipeline 主循环包含顺序识别、命中执行、错误处理、回跳与终止判定五个阶段，不应只看单条事件判定流程状态。",
+      "details": [
+        "流程控制关键分支包括：命中后进入 next、动作失败进入 on_error、错误处理未恢复时终止。",
+        "终止分为正常结束、主动停止（need_to_stop）、错误结束三类。"
+      ],
+      "keywords": ["流程控制", "on_error", "JumpBack", "need_to_stop", "终止条件"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "24-70" }
+      ]
+    },
+    {
+      "id": "pipeline.node-lifecycle-chain",
+      "topic": "callback.events",
+      "title": "节点生命周期链",
+      "rule": "典型节点链路是 NextList.Starting -> Recognition.* -> NextList.(Succeeded|Failed) -> Action.* -> PipelineNode.*；PipelineNode 才是节点最终态。",
+      "details": [
+        "Recognition/Action 事件是阶段事件，可能失败后被 on_error 或 stop 流程吸收。",
+        "分析时需按事件链聚合，不应把 Recognition.Failed 直接映射为节点失败。"
+      ],
+      "keywords": ["Node.NextList.Starting", "Node.Recognition", "Node.Action", "Node.PipelineNode", "生命周期"],
+      "evidence": [
+        { "sourceId": "maafw-callback", "loc": "135-180,182-245,251-277" },
+        { "sourceId": "analyzer-parser", "loc": "311-362" }
+      ]
+    },
+    {
+      "id": "pipeline.task-vs-node-layer",
+      "topic": "diagnosis.heuristic",
+      "title": "任务终止层与节点层分离",
+      "rule": "Tasker.Task.* 反映任务层终止结果，Node.PipelineNode.* 反映节点层结果；两层可能短时看起来不一致，需要结合流程控制语义解释。",
+      "details": [
+        "主动停止路径（StopTask/post_stop）优先解释为流程终止语义，不应直接当成业务动作缺陷。",
+        "节点失败但任务继续/成功的情况，需要检查是否进入 on_error 后被恢复。"
+      ],
+      "keywords": ["Tasker.Task.Succeeded", "Tasker.Task.Failed", "Node.PipelineNode.Failed", "StopTask", "on_error"],
+      "evidence": [
+        { "sourceId": "maafw-callback", "loc": "123-127,271-277" },
+        { "sourceId": "maafw-pipeline", "loc": "49-51,68-70,1246-1249" }
+      ]
+    },
+    {
+      "id": "pipeline.timeout",
+      "topic": "pipeline.protocol",
+      "title": "timeout 语义",
+      "rule": "当 next 全未命中时会按 rate_limit 周期重试直到命中或 timeout；timeout=-1 表示无限等待，超时后走 on_error。",
+      "details": [
+        "存在 NextList 重复但无命中时，需结合 timeout 与 on_error 判断是否异常。"
+      ],
+      "keywords": ["timeout", "on_error", "-1"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "60,225-232" }
+      ]
+    },
+    {
+      "id": "pipeline.next-no-valid-candidate",
+      "topic": "pipeline.protocol",
+      "title": "next 无可执行候选时的行为",
+      "rule": "若 next 中无可执行候选（如禁用节点、锚点未解析），会直接按失败进入 on_error，不进入 timeout 重试循环。",
+      "details": [
+        "这类失败通常表现为快速进入错误处理，而不是长时间 NextList 重试。"
+      ],
+      "keywords": ["next", "on_error", "timeout", "anchor", "enabled"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "61,247" }
+      ]
+    },
+    {
+      "id": "pipeline.stop-termination",
+      "topic": "pipeline.protocol",
+      "title": "StopTask / need_to_stop 终止语义",
+      "rule": "执行 StopTask 或外部 post_stop 置位 need_to_stop 后，任务循环会中断，属于主动停止终止路径。",
+      "details": [
+        "主动停止是终止条件之一，应与普通识别/动作失败区分。",
+        "动作阶段前后都会检查 need_to_stop，可能出现 Action.Starting 后快速结束。"
+      ],
+      "keywords": ["StopTask", "post_stop", "need_to_stop", "主动停止", "终止条件"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "62,69,339,1246-1249" }
+      ]
+    },
+    {
+      "id": "pipeline.action-stop-checkpoint",
+      "topic": "pipeline.protocol",
+      "title": "动作阶段的停止检查点",
+      "rule": "need_to_stop 会在动作执行前后检查，运行中置位后当前节点可能在动作阶段提前结束，不再进入后续识别重试。",
+      "details": [
+        "节点生命周期图中在 action 前后均有 need_to_stop 分支。",
+        "这类终止应按流程停止语义解释，而不是常规识别/动作故障。"
+      ],
+      "keywords": ["need_to_stop", "action", "生命周期", "StopTask"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "310,313,339,1249" }
+      ]
+    },
+    {
+      "id": "pipeline.repeat-last-attempt",
+      "topic": "pipeline.protocol",
+      "title": "repeat 重复动作判定",
+      "rule": "repeat 过程中不会因单次动作失败提前中止，节点动作结果以最后一次动作结果为准。",
+      "details": [
+        "重复执行链为 action -> repeat_wait_freezes -> repeat_delay -> action ...。",
+        "分析动作失败时要区分“中间失败”与“最终失败”。"
+      ],
+      "keywords": ["repeat", "repeat_wait_freezes", "repeat_delay", "动作结果"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "280-283" }
+      ]
+    },
+    {
+      "id": "pipeline.jumpback",
+      "topic": "pipeline.protocol",
+      "title": "jump_back / [JumpBack]",
+      "rule": "jump_back 用于命中后回跳到父级逻辑，替代旧 is_sub/interrupt 语义。",
+      "details": [
+        "AI 分析应把 jump_back 视为控制流回退，而非普通失败。",
+        "错误处理（on_error）路径不会触发 JumpBack，需恢复到非错误处理状态后才可能回跳。"
+      ],
+      "keywords": ["jump_back", "[JumpBack]", "回跳"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "234,1430" },
+        { "sourceId": "maafw-schema", "loc": "334-339" }
+      ]
+    },
+    {
+      "id": "pipeline.anchor",
+      "topic": "pipeline.protocol",
+      "title": "anchor / [Anchor]",
+      "rule": "anchor 是运行时可变引用，命中节点后在 run_action 返回时写入（动作成功或失败都写）；可被 next/on_error 以及 v5.9 的 roi/target 字符串形式引用。",
+      "details": [
+        "anchor object 形式可指定 target node 或清除锚点。",
+        "引用未设置/已清除锚点时，next/on_error 候选会被跳过。",
+        "roi/target 使用 [Anchor] 引用且锚点无效时，会分别表现为识别失败或动作失败。"
+      ],
+      "keywords": ["anchor", "[Anchor]", "锚点", "roi", "target", "v5.9"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "37-38,194,239,247,516,957,1142,1483-1485" },
+        { "sourceId": "maafw-schema", "loc": "4194-4198" }
+      ]
+    },
+    {
+      "id": "pipeline.doc-field",
+      "topic": "pipeline.protocol",
+      "title": "doc/desc 字段用途",
+      "rule": "doc/desc 属于文档元信息字段，可被 AI 分析当作语义注释但不影响执行流程。",
+      "details": [
+        "schema 接受 *_doc / doc / *_desc / desc。",
+        "建议在 AI 分析中作为 explain/context，而非 runtime 证据。"
+      ],
+      "keywords": ["doc", "desc", "schema", "metadata"],
+      "evidence": [
+        { "sourceId": "maafw-schema", "loc": "38-45" }
+      ]
+    },
+    {
+      "id": "pipeline.focus",
+      "topic": "pipeline.protocol",
+      "title": "focus 字段语义",
+      "rule": "focus 用于额外节点通知，不改变节点执行结果。",
+      "details": [
+        "日志中 focus 可作为上下文补充，不应单独作为失败原因。"
+      ],
+      "keywords": ["focus", "节点通知"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "256-259" },
+        { "sourceId": "maafw-callback", "loc": "162-173" }
+      ]
+    },
+    {
+      "id": "parser.only-onevent",
+      "topic": "analyzer.parser",
+      "title": "Analyzer 仅解析 OnEventNotify",
+      "rule": "当前解析器只处理包含 !!!OnEventNotify!!! 的行，其它普通日志不会进入结构化任务树。",
+      "details": [
+        "AI 解释缺失字段时需先判断是否是非事件行被过滤。"
+      ],
+      "keywords": ["OnEventNotify", "EVENT_LINE_REGEX"],
+      "evidence": [
+        { "sourceId": "analyzer-parser", "loc": "12,120,142" }
+      ]
+    },
+    {
+      "id": "parser.dedup",
+      "topic": "analyzer.parser",
+      "title": "事件去重策略",
+      "rule": "Analyzer 用 timestamp(秒级)+message+detailsHash 做 IPC 去重。",
+      "details": [
+        "同秒同消息同 details 会被视为重复。",
+        "分析重试次数时需关注去重后数据，不等于原始行计数。"
+      ],
+      "keywords": ["dedup", "fnv1a", "IPC"],
+      "evidence": [
+        { "sourceId": "analyzer-parser", "loc": "14-22,149-150,203" }
+      ]
+    },
+    {
+      "id": "parser.node-materialization",
+      "topic": "analyzer.parser",
+      "title": "节点落盘时机",
+      "rule": "NodeInfo 在 PipelineNode.Succeeded/Failed 时创建；此前识别和 next 仅缓存。",
+      "details": [
+        "如果日志在 PipelineNode 之前截断，会看到 recognition 但没有节点。"
+      ],
+      "keywords": ["NodeInfo", "PipelineNode", "recognition_attempts"],
+      "evidence": [
+        { "sourceId": "analyzer-parser", "loc": "330-360" },
+        { "sourceId": "analyzer-types", "loc": "80-102" }
+      ]
+    },
+    {
+      "id": "parser-subtask-collector",
+      "topic": "analyzer.parser",
+      "title": "子任务事件收集器",
+      "rule": "当 event.task_id != current task_id 时，Analyzer 进入 SubTaskCollector 聚合，再回挂到当前节点。",
+      "details": [
+        "可解释为什么某些 nested_action_nodes 来自不同 task_id。"
+      ],
+      "keywords": ["SubTaskCollector", "nested_action_nodes", "sub task"],
+      "evidence": [
+        { "sourceId": "analyzer-parser", "loc": "24-83,380-451" }
+      ]
+    },
+    {
+      "id": "parser-nested-fail-override",
+      "topic": "analyzer.parser",
+      "title": "嵌套动作失败覆盖",
+      "rule": "如果节点主状态是 success，但 nested_action_nodes 中有 failed，Analyzer 会把节点改判为 failed。",
+      "details": [
+        "AI 诊断时要优先看 nested_action_nodes.status。"
+      ],
+      "keywords": ["nested_action_nodes", "status override"],
+      "evidence": [
+        { "sourceId": "analyzer-parser", "loc": "363-366" }
+      ]
+    },
+    {
+      "id": "parser-filter-poststop",
+      "topic": "analyzer.parser",
+      "title": "系统任务过滤",
+      "rule": "Analyzer 会过滤 entry=\"MaaTaskerPostStop\" 的系统任务。",
+      "details": [
+        "任务计数与原始日志 task start 行数可能不一致。"
+      ],
+      "keywords": ["MaaTaskerPostStop", "filter"],
+      "evidence": [
+        { "sourceId": "analyzer-parser", "loc": "279" }
+      ]
+    },
+    {
+      "id": "diagnosis.nextlist-loop",
+      "topic": "diagnosis.heuristic",
+      "title": "NextList 循环未命中",
+      "rule": "若同一节点反复出现 NextList/Recognition 失败且无后继 PipelineNode 成功，优先怀疑识别条件或 ROI 不匹配。",
+      "details": [
+        "结合 timeout/on_error 判断是正常重试还是异常卡死。"
+      ],
+      "keywords": ["NextList", "Recognition.Failed", "timeout"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "32-33,60-61,225-232" },
+        { "sourceId": "analyzer-parser", "loc": "311-327" }
+      ]
+    },
+    {
+      "id": "diagnosis.action-failed",
+      "topic": "diagnosis.heuristic",
+      "title": "动作失败优先看 action_details",
+      "rule": "出现 Node.Action.Failed 或节点失败时，应优先展开 action_details 与 wait_freezes 证据链。",
+      "details": [
+        "wait_freezes_images 匹配窗口为节点完成前 60 秒内同名 action。",
+        "若上下文出现 StopTask/need_to_stop，Node.PipelineNode.Failed 可能来自主动停止，不应直接判定动作缺陷。"
+      ],
+      "keywords": ["Action.Failed", "action_details", "wait_freezes_images", "StopTask", "need_to_stop"],
+      "evidence": [
+        { "sourceId": "maafw-pipeline", "loc": "62,69,1246-1249" },
+        { "sourceId": "analyzer-parser", "loc": "357-359,513-543" }
+      ]
+    },
+    {
+      "id": "diagnosis-truncated-log",
+      "topic": "diagnosis.heuristic",
+      "title": "日志截断判断",
+      "rule": "有 Tasker.Task.Starting 但无对应 Succeeded/Failed 且节点流突然中断时，优先判断日志截断或运行中状态。",
+      "details": [
+        "Analyzer 会把这类任务保留为 running，并根据最后节点估算 duration。"
+      ],
+      "keywords": ["running", "truncated", "duration"],
+      "evidence": [
+        { "sourceId": "analyzer-parser", "loc": "267-272" },
+        { "sourceId": "analyzer-types", "loc": "39-45" }
+      ]
+    },
+    {
+      "id": "ai-guardrail-no-hallucination",
+      "topic": "ai.guardrail",
+      "title": "AI 结论必须绑定证据",
+      "rule": "输出根因时必须引用至少一个 task_id/node_id/line 或明确事件名；证据不足时输出 unknowns。",
+      "details": [
+        "禁止仅根据节点名称或经验断言根因。"
+      ],
+      "keywords": ["evidence", "unknowns", "no hallucination"],
+      "evidence": [
+        { "sourceId": "analyzer-types", "loc": "16-22,31-45,80-102" }
+      ]
+    }
+  ]
+}

@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { NCard, NSwitch, NButton, NFlex, NText, NSelect, NRadioGroup, NRadioButton, useMessage } from 'naive-ui'
+import { NCard, NSwitch, NButton, NFlex, NText, NSelect, NRadioGroup, NRadioButton, NInputNumber, NInput, useMessage } from 'naive-ui'
 import { getSettings, saveSettings, getDefaultSettings } from '../utils/settings'
+import { getAiSettings, saveAiSettings, getDefaultAiSettings } from '../utils/aiSettings'
 
 const message = useMessage()
 const settings = getSettings()
+const aiSettings = getAiSettings()
 
 const playbackSpeedOptions = [
   { label: '慢速 1500ms', value: 1500 },
@@ -22,12 +24,15 @@ const focusZoomOptions = [
 
 const handleSave = () => {
   saveSettings(settings)
+  saveAiSettings(aiSettings)
   message.success('设置已保存')
 }
 
 const handleReset = () => {
   Object.assign(settings, getDefaultSettings())
+  Object.assign(aiSettings, getDefaultAiSettings())
   saveSettings(settings)
+  saveAiSettings(aiSettings)
   message.success('已恢复默认设置')
 }
 </script>
@@ -120,6 +125,149 @@ const handleReset = () => {
               <n-select
                 v-model:value="settings.flowchartFocusZoom"
                 :options="focusZoomOptions"
+                style="width: 180px; margin: 0 auto"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </n-card>
+
+    <n-card size="small" :bordered="true" style="margin-bottom: 12px">
+      <n-text strong style="font-size: 16px; display: block; margin-bottom: 16px">AI 基础</n-text>
+
+      <table class="settings-grid" role="presentation">
+        <tbody>
+          <tr>
+            <td>API Base URL</td>
+            <td>
+              <n-input
+                v-model:value="aiSettings.baseUrl"
+                placeholder="https://api.openai.com/v1"
+                style="width: 280px; margin: 0 auto"
+              />
+            </td>
+          </tr>
+
+          <tr>
+            <td>模型名称</td>
+            <td>
+              <n-input
+                v-model:value="aiSettings.model"
+                placeholder="gpt-5.4"
+                style="width: 280px; margin: 0 auto"
+              />
+            </td>
+          </tr>
+
+          <tr>
+            <td>温度</td>
+            <td>
+              <n-input-number
+                v-model:value="aiSettings.temperature"
+                :min="0"
+                :max="2"
+                :step="0.1"
+                style="width: 180px; margin: 0 auto"
+              />
+            </td>
+          </tr>
+
+          <tr>
+            <td>最大输出 token</td>
+            <td>
+              <n-flex align="center" justify="center" style="gap: 8px; flex-wrap: wrap">
+                <n-input-number
+                  v-model:value="aiSettings.maxTokens"
+                  :min="256"
+                  :max="8192"
+                  :step="64"
+                  style="width: 180px"
+                />
+              </n-flex>
+            </td>
+          </tr>
+
+          <tr>
+            <td>自动截断重试（提额）</td>
+            <td><n-switch v-model:value="aiSettings.maxTokensAuto" /></td>
+          </tr>
+
+          <tr>
+            <td>注入 Maa 领域知识包</td>
+            <td><n-switch v-model:value="aiSettings.includeKnowledgePack" /></td>
+          </tr>
+
+          <tr>
+            <td>注入 [WRN]/[ERR] 信号线</td>
+            <td><n-switch v-model:value="aiSettings.includeSignalLines" /></td>
+          </tr>
+
+          <tr>
+            <td>分析请求启用流式</td>
+            <td><n-switch v-model:value="aiSettings.streamResponse" /></td>
+          </tr>
+        </tbody>
+      </table>
+    </n-card>
+
+    <n-card size="small" :bordered="true" style="margin-bottom: 12px">
+      <n-text strong style="font-size: 16px; display: block; margin-bottom: 16px">AI 诊断输出</n-text>
+
+      <table class="settings-grid" role="presentation">
+        <tbody>
+          <tr>
+            <td>截断后自动精简重试</td>
+            <td><n-switch v-model:value="aiSettings.truncateAutoRetryEnabled" /></td>
+          </tr>
+
+          <tr>
+            <td>精简答案长度上限</td>
+            <td>
+              <n-input-number
+                v-model:value="aiSettings.conciseAnswerMaxChars"
+                :min="800"
+                :max="5000"
+                :step="100"
+                style="width: 180px; margin: 0 auto"
+              />
+            </td>
+          </tr>
+
+          <tr>
+            <td>根因候选条数上限</td>
+            <td>
+              <n-input-number
+                v-model:value="aiSettings.conciseMaxRootCauses"
+                :min="2"
+                :max="6"
+                :step="1"
+                style="width: 180px; margin: 0 auto"
+              />
+            </td>
+          </tr>
+
+          <tr>
+            <td>证据条数上限</td>
+            <td>
+              <n-input-number
+                v-model:value="aiSettings.conciseMaxEvidence"
+                :min="3"
+                :max="12"
+                :step="1"
+                style="width: 180px; margin: 0 auto"
+              />
+            </td>
+          </tr>
+
+          <tr>
+            <td>排查步骤条数</td>
+            <td>
+              <n-input-number
+                v-model:value="aiSettings.conciseFixedSteps"
+                :min="3"
+                :max="8"
+                :step="1"
                 style="width: 180px; margin: 0 auto"
               />
             </td>

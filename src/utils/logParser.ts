@@ -263,6 +263,13 @@ export class LogParser {
 
     for (const task of tasks) {
       task.nodes = this.getTaskNodes(task)
+      const taskStartIndex = task._startEventIndex ?? -1
+      const taskEndIndex = task._endEventIndex ?? this.events.length - 1
+      if (taskStartIndex >= 0) {
+        task.events = this.events
+          .slice(taskStartIndex, taskEndIndex + 1)
+          .filter(event => event.details?.task_id === task.task_id)
+      }
 
       if (task.status === 'running' && task.nodes.length > 0) {
         const lastNode = task.nodes[task.nodes.length - 1]
