@@ -306,8 +306,16 @@ const currentMemoryState = computed<MemoryState | null>(() => memoryStateStore.v
 const currentMemoryPreview = computed(() => {
   const summary = currentMemoryState.value?.summary?.trim() ?? ''
   if (!summary) return '当前任务暂无记忆，可先发起一轮分析。'
-  if (summary.length <= 900) return summary
-  return `${summary.slice(0, 900)}...`
+  const blocks = summary.split(/\n{2,}/).filter(Boolean)
+  if (blocks.length <= 3) {
+    if (summary.length <= 900) return summary
+    return `...${summary.slice(-900)}`
+  }
+  const tail = blocks.slice(-3).join('\n\n')
+  if (tail.length <= 900) {
+    return `（仅展示最近 3 轮）\n${tail}`
+  }
+  return `（仅展示最近 3 轮）\n...${tail.slice(-900)}`
 })
 const quickPrompts: QuickPromptItem[] = [
   {
