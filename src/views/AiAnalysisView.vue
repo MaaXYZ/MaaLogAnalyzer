@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { NAlert, NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NInputNumber, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
 import type { TaskInfo } from '../types'
 import { requestChatCompletion } from '../ai/client'
@@ -54,6 +54,9 @@ const testing = ref(false)
 const resultText = ref('')
 const usageText = ref('')
 const evidencePanelCollapsed = ref(true)
+const conversationFollowMode = ref(true)
+const activeRoundQuestion = ref('')
+const turnListRef = ref<HTMLElement | null>(null)
 
 const memoryModeEnabled = ref(true)
 const MEMORY_SESSION_KEY = 'maa-log-analyzer-ai-memory-state'
@@ -463,6 +466,12 @@ const sanitizeAnswerForUser = (raw: string): string => {
 }
 
 const renderedResultHtml = computed(() => renderMarkdown(resultText.value))
+const streamingAnswerHtml = computed(() => renderMarkdown(resultText.value))
+const showStreamingTurn = computed(() =>
+  analyzing.value
+  && !!resultText.value.trim()
+  && !!activeRoundQuestion.value.trim()
+)
 
 const conversationTurnViews = computed<ConversationTurnView[]>(() => {
   return [...conversationTurns.value]
@@ -472,6 +481,31 @@ const conversationTurnViews = computed<ConversationTurnView[]>(() => {
       ...item,
       answerHtml: renderMarkdown(item.answer),
     }))
+})
+
+const scrollConversationToBottom = async (behavior: ScrollBehavior = 'auto') => {
+  if (!conversationFollowMode.value) return
+  await nextTick()
+  const el = turnListRef.value
+  if (!el) return
+  el.scrollTo({ top: el.scrollHeight, behavior })
+}
+
+watch(
+  () => conversationTurnViews.value.length,
+  () => {
+    void scrollConversationToBottom('auto')
+  }
+)
+
+watch(resultText, () => {
+  if (!analyzing.value) return
+  void scrollConversationToBottom('auto')
+})
+
+watch(conversationFollowMode, (enabled) => {
+  if (!enabled) return
+  void scrollConversationToBottom('smooth')
 })
 
 const onErrorPreview = computed(() => {
@@ -880,6 +914,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   const useMemoryForThisRound = mode === 'analyze' && memoryModeEnabled.value && !!contextMemory
   lastRequestUsedMemory.value = useMemoryForThisRound
   if (mode === 'analyze') {
+    activeRoundQuestion.value = questionSnapshot
     resultText.value = ''
     usageText.value = 'AI 正在处理请求...'
   }
@@ -1289,10 +1324,15 @@ const handleAnalyze = async () => {
             <n-card v-if="conversationTurnViews.length" size="small" class="conversation-card">
               <n-flex vertical style="gap: 8px">
                 <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
-                  <n-text depth="3" style="font-size: 12px">多轮对话（聊天气泡模式）</n-text>
-                  <n-tag size="small" type="info">共 {{ conversationTurnViews.length }} 轮</n-tag>
+                  <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+                    <n-text depth="3" style="font-size: 12px">多轮对话（聊天气泡模式）</n-text>
+                    <n-tag size="small" type="info">共 {{ conversationTurnViews.length }} 轮</n-tag>
+                  </n-flex>
+                  <n-checkbox v-model:checked="conversationFollowMode" size="small">
+                    跟随最新
+                  </n-checkbox>
                 </n-flex>
-                <div class="turn-list">
+                <div ref="turnListRef" class="turn-list">
                   <div v-for="turn in conversationTurnViews" :key="turn.id" class="turn-item">
                     <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
                       <n-tag size="small" type="success">第 {{ turn.turn }} 轮</n-tag>
@@ -1305,6 +1345,17 @@ const handleAnalyze = async () => {
                       <pre class="turn-question-text">{{ turn.question }}</pre>
                     </div>
                     <div class="turn-answer-box turn-bubble-assistant markdown-body" v-html="turn.answerHtml"></div>
+                  </div>
+                  <div v-if="showStreamingTurn" class="turn-item turn-item-streaming">
+                    <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+                      <n-tag size="small" type="warning">进行中</n-tag>
+                      <n-tag size="small" type="info">流式输出</n-tag>
+                    </n-flex>
+                    <div class="turn-question-box turn-bubble-user">
+                      <n-text depth="3" style="font-size: 12px">用户</n-text>
+                      <pre class="turn-question-text">{{ activeRoundQuestion }}</pre>
+                    </div>
+                    <div class="turn-answer-box turn-bubble-assistant markdown-body" v-html="streamingAnswerHtml"></div>
                   </div>
                 </div>
               </n-flex>
@@ -1478,6 +1529,11 @@ const handleAnalyze = async () => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.turn-item-streaming {
+  border-style: dashed;
+  background: rgba(127, 231, 196, 0.12);
 }
 
 .turn-question-box {
