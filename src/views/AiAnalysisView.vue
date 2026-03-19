@@ -323,8 +323,14 @@ const renderMarkdownBlocks = (source: string): string => {
   while (i < lines.length) {
     const raw = lines[i]
     const trimmed = raw.trim()
+    const leadingSpaces = raw.length - raw.trimStart().length
 
     if (!trimmed) {
+      if (listType && listItems.length > 0) {
+        listItems[listItems.length - 1].push('')
+        i += 1
+        continue
+      }
       flushParagraph()
       closeList()
       i += 1
@@ -380,6 +386,11 @@ const renderMarkdownBlocks = (source: string): string => {
 
     const ul = raw.match(/^\s*[-*+]\s+(.+)$/)
     if (ul) {
+      if (listType && listItems.length > 0 && leadingSpaces > 0) {
+        listItems[listItems.length - 1].push(raw.trim())
+        i += 1
+        continue
+      }
       flushParagraph()
       if (listType !== 'ul') {
         closeList()
@@ -392,6 +403,11 @@ const renderMarkdownBlocks = (source: string): string => {
 
     const ol = raw.match(/^\s*\d+\.\s+(.+)$/)
     if (ol) {
+      if (listType && listItems.length > 0 && leadingSpaces > 0) {
+        listItems[listItems.length - 1].push(raw.trim())
+        i += 1
+        continue
+      }
       flushParagraph()
       if (listType !== 'ol') {
         closeList()
