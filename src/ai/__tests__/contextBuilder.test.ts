@@ -241,6 +241,7 @@ describe('buildDeterministicFindings', () => {
     const nestedFinding = findings.findings.find(item => item.id === 'nested_action_failure_hotspot')
     expect(nestedFinding).toBeTruthy()
     expect(nestedFinding?.summary).toContain('nested/custom action 失败 4 次')
+    expect(nestedFinding?.confidence).toBeGreaterThanOrEqual(84)
   })
 })
 
@@ -535,6 +536,27 @@ describe('buildNextCandidateAvailabilityDiagnostics', () => {
     expect(diagnostics.failedTimeoutLikeCount).toBe(1)
     expect(diagnostics.suspiciousCases.length).toBeGreaterThan(0)
     expect(diagnostics.suspiciousCases[0].classification).toBe('likely_no_executable_candidate')
+  })
+
+  it('treats partial miss then success as recovered phenomenon (not hard failure)', () => {
+    const events: EventNotification[] = [
+      makeEvent('Node.NextList.Starting', {
+        task_id: 61,
+        name: 'RecoverStage',
+        list: [{ name: 'RecoA', anchor: false, jump_back: false }, { name: 'RecoB', anchor: false, jump_back: false }],
+      }, 610),
+      makeEvent('Node.Recognition.Starting', { task_id: 61, name: 'RecoA', reco_id: 9610 }, 611),
+      makeEvent('Node.Recognition.Failed', { task_id: 61, name: 'RecoA', reco_id: 9610 }, 612),
+      makeEvent('Node.Recognition.Starting', { task_id: 61, name: 'RecoB', reco_id: 9611 }, 613),
+      makeEvent('Node.Recognition.Succeeded', { task_id: 61, name: 'RecoB', reco_id: 9611 }, 614),
+      makeEvent('Node.NextList.Succeeded', { task_id: 61, name: 'RecoverStage', list: [{ name: 'RecoA' }, { name: 'RecoB' }] }, 615),
+    ]
+
+    const diagnostics = buildNextCandidateAvailabilityDiagnostics(events)
+
+    expect(diagnostics.failedTimeoutLikeCount).toBe(0)
+    expect(diagnostics.recoveredAfterPartialMissCount).toBe(1)
+    expect(diagnostics.partialMissRecoveredByNode[0]?.node).toBe('RecoverStage')
   })
 })
 

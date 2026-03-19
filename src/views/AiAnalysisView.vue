@@ -751,6 +751,7 @@ const getSystemPrompt = () => {
     '必须检查事件链诊断：用 on_error 触发链路明确触发源（action_failed / reco_timeout_or_nohit / error_handling_loop）。',
     'action_failed 口径必须包含 Node.Action.Failed、Node.ActionNode.Failed，以及 PipelineNode.Failed 中可判定的隐式动作失败（action_details.success=false）。',
     '若存在 nestedActionDiagnostics，必须联动判断 custom/nested action 失败，不得仅凭主任务 events 中 actionFailed=0 就排除动作失败。',
+    '识别问题判定必须以“整轮 next 候选无命中并失败/超时”为主；前几个候选未命中但后续命中恢复，应归类为流程现象而非主因。',
     '必须检查 jump_back 命中后是否出现“回到父节点但命中节点疑似无后继”的复检链路，并评估其对长停留的贡献。',
     '若上下文提供 questionNodeDiagnostics，必须优先回答其中的节点定量数据（出现次数/时长/失败分布/jump_back画像），不能笼统说“数据较少”。',
     '必须区分“现象”和“根因”：ERR 可能是症状，只有与节点停留/重试模式相关联时才能作为主因。',
@@ -829,6 +830,8 @@ const buildCompactContext = (context: Record<string, unknown>): Record<string, u
 
   const nextCandidateAvailabilityDiagnostics = {
     ...nextCandidateAvailabilityDiagnosticsRaw,
+    noHitFailureByNode: toObjectArray(nextCandidateAvailabilityDiagnosticsRaw.noHitFailureByNode).slice(0, 6),
+    partialMissRecoveredByNode: toObjectArray(nextCandidateAvailabilityDiagnosticsRaw.partialMissRecoveredByNode).slice(0, 6),
     suspiciousCases: toObjectArray(nextCandidateAvailabilityDiagnosticsRaw.suspiciousCases)
       .slice(0, 6)
       .map(item => ({
@@ -932,6 +935,7 @@ const buildFullContextPrompt = (compact: boolean, minifiedJson = false) => {
     '- 必须检查 on_error 触发链路，明确 on_error 的触发源与后续结果。',
     '- action_failed 判定要覆盖 ActionNode.Failed 与 PipelineNode.Failed(implicit action failure)，不能只看 Action.Failed。',
     '- 若存在 nested action 诊断，必须合并判断 custom/nested action 失败热点。',
+    '- 识别问题只在“整轮 next list 无命中并失败/超时”时判定为异常；前段 miss 后命中恢复不应直接定为根因。',
     '- 必须检查停止链路诊断与 next 候选可执行性诊断，区分主动停止、无可执行候选与超时未命中。',
     '- 必须检查 anchor 解析诊断与 jump_back 回跳诊断，区分锚点未解析、回跳命中后未回跳等控制流语义。',
     '- 必须额外检查 jump_back 命中后“回到父节点但命中节点疑似无后继”的复检链路，判断其是否导致长停留。',

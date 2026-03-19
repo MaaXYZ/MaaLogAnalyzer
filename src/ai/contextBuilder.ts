@@ -980,6 +980,21 @@ export const buildNextCandidateAvailabilityDiagnostics = (events: EventNotificat
   const failedNoExecutable = windows.filter(item => item.classification === 'likely_no_executable_candidate')
   const failedTimeoutLike = windows.filter(item => item.classification === 'likely_timeout_or_nohit')
   const failedNoExecutableWithAnchor = failedNoExecutable.filter(item => item.anchorCandidateCount > 0)
+  const recoveredAfterPartialMiss = windows.filter(item =>
+    item.classification === 'recovered_or_succeeded'
+    && item.recognitionFailedCount > 0
+    && item.recognitionSucceededCount > 0
+  )
+  const noHitFailureByNode = new Map<string, number>()
+  const partialMissRecoveredByNode = new Map<string, number>()
+  for (const item of failedTimeoutLike) {
+    const key = item.startNode || 'unknown'
+    noHitFailureByNode.set(key, (noHitFailureByNode.get(key) ?? 0) + 1)
+  }
+  for (const item of recoveredAfterPartialMiss) {
+    const key = item.startNode || 'unknown'
+    partialMissRecoveredByNode.set(key, (partialMissRecoveredByNode.get(key) ?? 0) + 1)
+  }
   const suspiciousCases = windows
     .filter(item => item.classification !== 'recovered_or_succeeded')
     .sort((a, b) => {
@@ -994,8 +1009,20 @@ export const buildNextCandidateAvailabilityDiagnostics = (events: EventNotificat
     failedNoExecutableCount: failedNoExecutable.length,
     failedNoExecutableWithAnchorCount: failedNoExecutableWithAnchor.length,
     failedTimeoutLikeCount: failedTimeoutLike.length,
+    recoveredAfterPartialMissCount: recoveredAfterPartialMiss.length,
+    recoveredAfterPartialMissRatio: windows.length > 0 ? recoveredAfterPartialMiss.length / windows.length : 0,
+    noHitFailureByNode: Array.from(noHitFailureByNode.entries())
+      .map(([node, count]) => ({ node, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10),
+    partialMissRecoveredByNode: Array.from(partialMissRecoveredByNode.entries())
+      .map(([node, count]) => ({ node, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10),
     suspiciousCases: suspiciousCases.slice(0, 10),
-    summary: `NextList窗口=${windows.length}，无可执行候选失败=${failedNoExecutable.length}（其中含 anchor 候选=${failedNoExecutableWithAnchor.length}），timeout/no-hit 失败=${failedTimeoutLike.length}。`,
+    summary:
+      `NextList窗口=${windows.length}，无可执行候选失败=${failedNoExecutable.length}（其中含 anchor 候选=${failedNoExecutableWithAnchor.length}），` +
+      `整轮无命中并失败(timeout/no-hit)=${failedTimeoutLike.length}，前段未命中但后续命中恢复=${recoveredAfterPartialMiss.length}。`,
   }
 }
 
@@ -2073,6 +2100,8 @@ export const buildDeterministicFindings = (
   behaviorContext?: {
     taskStatus?: 'running' | 'succeeded' | 'failed' | null
     pipelineFailedCount?: number
+    actionFailureCount?: number
+    actionFailureOnErrorChainCount?: number
     jumpBackHotNodes?: string[]
     stopTerminationDiagnostics?: ReturnType<typeof buildStopTerminationDiagnostics>
     nextCandidateAvailabilityDiagnostics?: ReturnType<typeof buildNextCandidateAvailabilityDiagnostics>
@@ -2092,6 +2121,8 @@ export const buildDeterministicFindings = (
   const unknowns: string[] = []
   const taskSucceededWithoutPipelineFailure = behaviorContext?.taskStatus === 'succeeded'
     && (behaviorContext.pipelineFailedCount ?? 0) === 0
+  const actionFailureCount = behaviorContext?.actionFailureCount ?? 0
+  const actionFailureOnErrorChainCount = behaviorContext?.actionFailureOnErrorChainCount ?? 0
   const jumpBackHotNodes = new Set(behaviorContext?.jumpBackHotNodes ?? [])
   const stopTerminationDiagnostics = behaviorContext?.stopTerminationDiagnostics
   const nextCandidateAvailabilityDiagnostics = behaviorContext?.nextCandidateAvailabilityDiagnostics
@@ -2105,6 +2136,12 @@ export const buildDeterministicFindings = (
     if (nodeName && jumpBackHotNodes.has(nodeName)) next -= 12
     return Math.max(taskSucceededWithoutPipelineFailure ? 38 : 48, next)
   }
+
+  const noHitFailureCount = nextCandidateAvailabilityDiagnostics?.failedTimeoutLikeCount ?? 0
+  const nextWindowCount = nextCandidateAvailabilityDiagnostics?.windowCount ?? 0
+  const partialMissRecoveredCount = nextCandidateAvailabilityDiagnostics?.recoveredAfterPartialMissCount ?? 0
+  const noHitPressure = nextWindowCount > 0 ? noHitFailureCount / nextWindowCount : 0
+  const partialRecoverPressure = nextWindowCount > 0 ? partialMissRecoveredCount / nextWindowCount : 0
 
   const loopCauseType: 'loop_or_rule' | 'mixed' = taskSucceededWithoutPipelineFailure ? 'mixed' : 'loop_or_rule'
 
@@ -2135,13 +2172,20 @@ export const buildDeterministicFindings = (
     const jumpBackHint = jumpBackHotNodes.has(topPair.node)
       ? ' 节点存在 jump_back 候选，需先排除流程型回跳。'
       : ''
+    const lowNoHitHint = noHitPressure <= 0.1 && partialRecoverPressure >= 0.2
+      ? ' 但该任务“整轮无命中并失败”占比不高，更多是前段 miss 后恢复，不宜单独作为主因。'
+      : ''
     findings.push({
       id: 'reco_pair_hotspot',
-      confidence: tuneLoopConfidence(topPair.failed >= 8 || topPair.failedRate >= 0.8 ? 82 : 70, topPair.node),
+      confidence: tuneLoopConfidence(
+        (topPair.failed >= 8 || topPair.failedRate >= 0.8 ? 82 : 70) - (lowNoHitHint ? 14 : 0),
+        topPair.node
+      ),
       causeType: loopCauseType,
       summary:
         `高失败识别对 ${topPair.node}/${topPair.reco}（failed=${topPair.failed}, total=${topPair.total}, failedRate=${topPair.failedRate.toFixed(3)}）。` +
         (taskSucceededWithoutPipelineFailure ? ' 任务仍成功，可能是可恢复识别抖动。' : '') +
+        lowNoHitHint +
         jumpBackHint,
       evidencePaths: ['timelineDiagnostics.hotspotRecoPairs[0]'],
     })
@@ -2177,6 +2221,37 @@ export const buildDeterministicFindings = (
         'nextCandidateAvailabilityDiagnostics.failedNoExecutableCount',
         'nextCandidateAvailabilityDiagnostics.failedNoExecutableWithAnchorCount',
         'nextCandidateAvailabilityDiagnostics.suspiciousCases[0]',
+      ],
+    })
+  }
+
+  if (noHitFailureCount > 0) {
+    findings.push({
+      id: 'next_round_nohit_timeout',
+      confidence: noHitPressure >= 0.2 ? 88 : noHitPressure >= 0.1 ? 80 : 72,
+      causeType: 'loop_or_rule',
+      summary:
+        `检测到“整轮 next 候选均未命中并失败/超时” ${noHitFailureCount} 次（窗口总数 ${nextWindowCount}，占比 ${(noHitPressure * 100).toFixed(1)}%）。` +
+        ' 该信号比“前几个候选未命中但后续命中”更能代表真实识别问题。',
+      evidencePaths: [
+        'nextCandidateAvailabilityDiagnostics.failedTimeoutLikeCount',
+        'nextCandidateAvailabilityDiagnostics.windowCount',
+        'nextCandidateAvailabilityDiagnostics.noHitFailureByNode[0]',
+      ],
+    })
+  }
+
+  if (partialMissRecoveredCount > 0) {
+    findings.push({
+      id: 'next_partial_miss_recovered',
+      confidence: 58,
+      causeType: 'mixed',
+      summary:
+        `存在 ${partialMissRecoveredCount} 次“前段候选未命中但后续命中恢复”的 NextList 轮次（占比 ${(partialRecoverPressure * 100).toFixed(1)}%）。` +
+        ' 这类首轮 miss 通常属于流程现象，不宜直接判定为根因。',
+      evidencePaths: [
+        'nextCandidateAvailabilityDiagnostics.recoveredAfterPartialMissCount',
+        'nextCandidateAvailabilityDiagnostics.partialMissRecoveredByNode[0]',
       ],
     })
   }
@@ -2225,12 +2300,15 @@ export const buildDeterministicFindings = (
     const topNodeFailed = typeof topNode?.nestedActionFailedCount === 'number' ? topNode.nestedActionFailedCount : 0
     findings.push({
       id: 'nested_action_failure_hotspot',
-      confidence: tuneLoopConfidence((nestedActionDiagnostics?.nestedActionFailedCount ?? 0) >= 8 ? 80 : 66, topNodeName || undefined),
-      causeType: 'mixed',
+      confidence: Math.max(
+        actionFailureCount > 0 || actionFailureOnErrorChainCount > 0 ? 92 : 84,
+        (nestedActionDiagnostics?.nestedActionFailedCount ?? 0) >= 8 ? 90 : 84
+      ),
+      causeType: 'loop_or_rule',
       summary:
         `检测到 nested/custom action 失败 ${(nestedActionDiagnostics?.nestedActionFailedCount ?? 0)} 次，涉及父节点 ${(nestedActionDiagnostics?.parentNodeWithNestedFailureCount ?? 0)} 个。` +
         (topNodeName ? ` 最高热点为 ${topNodeName}（failed=${topNodeFailed}）。` : '') +
-        ' 该类失败可能不直接表现为主任务事件中的 Node.Action.Failed，需要与 nested 链路联合判断。',
+        ' 动作链失败通常不是正常现象，默认优先级高于“可恢复首轮 miss”。',
       evidencePaths: [
         'nestedActionDiagnostics.nestedActionFailedCount',
         'nestedActionDiagnostics.topParentNodes[0]',
@@ -2402,6 +2480,8 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
     {
       taskStatus: selectedTask?.status ?? null,
       pipelineFailedCount,
+      actionFailureCount: eventChainDiagnostics.messageCounts.actionFailed,
+      actionFailureOnErrorChainCount: eventChainDiagnostics.onErrorChains.filter(item => item.triggerType === 'action_failed').length,
       jumpBackHotNodes,
       stopTerminationDiagnostics,
       nextCandidateAvailabilityDiagnostics,
