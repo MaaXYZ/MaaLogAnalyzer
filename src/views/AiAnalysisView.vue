@@ -256,12 +256,23 @@ const renderMarkdownBlocks = (source: string): string => {
   const out: string[] = []
   let i = 0
   let listType: 'ul' | 'ol' | null = null
+  let listItems: string[][] = []
   let paragraphLines: string[] = []
 
   const closeList = () => {
     if (!listType) return
-    out.push(listType === 'ul' ? '</ul>' : '</ol>')
+    const tag = listType
+    const itemsHtml = listItems
+      .map(itemLines => {
+        const body = itemLines
+          .map(line => renderInlineMarkdown(line.trimEnd()))
+          .join('<br/>')
+        return `<li>${body}</li>`
+      })
+      .join('')
+    out.push(`<${tag}>${itemsHtml}</${tag}>`)
     listType = null
+    listItems = []
   }
 
   const flushParagraph = () => {
@@ -336,10 +347,9 @@ const renderMarkdownBlocks = (source: string): string => {
       flushParagraph()
       if (listType !== 'ul') {
         closeList()
-        out.push('<ul>')
         listType = 'ul'
       }
-      out.push(`<li>${renderInlineMarkdown(ul[1])}</li>`)
+      listItems.push([ul[1]])
       i += 1
       continue
     }
@@ -349,10 +359,15 @@ const renderMarkdownBlocks = (source: string): string => {
       flushParagraph()
       if (listType !== 'ol') {
         closeList()
-        out.push('<ol>')
         listType = 'ol'
       }
-      out.push(`<li>${renderInlineMarkdown(ol[1])}</li>`)
+      listItems.push([ol[1]])
+      i += 1
+      continue
+    }
+
+    if (listType && listItems.length > 0) {
+      listItems[listItems.length - 1].push(raw)
       i += 1
       continue
     }
