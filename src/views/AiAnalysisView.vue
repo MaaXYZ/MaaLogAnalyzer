@@ -37,6 +37,10 @@ interface ConversationTurn {
   answer: string
   usedMemory: boolean
   timestamp: number
+  roundPromptTokens?: number
+  roundCompletionTokens?: number
+  roundTotalTokens?: number
+  roundRequestCount?: number
 }
 
 interface ConversationTurnView extends ConversationTurn {
@@ -57,6 +61,13 @@ interface ParentRelationConflictIssue {
 interface ParentRelationFacts {
   directParentCandidates: Array<{ name: string; failedCount: number }>
   upstreamChains: Array<{ from: string; to: string; hitCount: number; terminalBounceCount: number }>
+}
+
+interface TokenUsageAccumulator {
+  prompt: number
+  completion: number
+  total: number
+  requestCount: number
 }
 
 const props = defineProps<Props>()
@@ -184,6 +195,18 @@ const loadSessionConversationTurns = (): ConversationTurn[] => {
         answer: item.answer as string,
         usedMemory: item.usedMemory as boolean,
         timestamp: item.timestamp as number,
+        roundPromptTokens: typeof item.roundPromptTokens === 'number' && Number.isFinite(item.roundPromptTokens)
+          ? item.roundPromptTokens
+          : undefined,
+        roundCompletionTokens: typeof item.roundCompletionTokens === 'number' && Number.isFinite(item.roundCompletionTokens)
+          ? item.roundCompletionTokens
+          : undefined,
+        roundTotalTokens: typeof item.roundTotalTokens === 'number' && Number.isFinite(item.roundTotalTokens)
+          ? item.roundTotalTokens
+          : undefined,
+        roundRequestCount: typeof item.roundRequestCount === 'number' && Number.isFinite(item.roundRequestCount)
+          ? item.roundRequestCount
+          : undefined,
       }))
       .slice(-CONVERSATION_MAX_TOTAL_TURNS)
   } catch {
@@ -204,6 +227,34 @@ const saveSessionConversationTurns = (turns: ConversationTurn[]) => {
 }
 
 const conversationTurns = ref<ConversationTurn[]>(loadSessionConversationTurns())
+
+const makeTokenUsageAccumulator = (): TokenUsageAccumulator => ({
+  prompt: 0,
+  completion: 0,
+  total: 0,
+  requestCount: 0,
+})
+
+const sumContextTokenUsage = (
+  contextKey: string,
+  extraRound?: TokenUsageAccumulator
+): TokenUsageAccumulator => {
+  const sum = makeTokenUsageAccumulator()
+  for (const turn of conversationTurns.value) {
+    if (turn.contextKey !== contextKey) continue
+    sum.prompt += Number(turn.roundPromptTokens ?? 0)
+    sum.completion += Number(turn.roundCompletionTokens ?? 0)
+    sum.total += Number(turn.roundTotalTokens ?? 0)
+    sum.requestCount += Number(turn.roundRequestCount ?? 0)
+  }
+  if (extraRound) {
+    sum.prompt += extraRound.prompt
+    sum.completion += extraRound.completion
+    sum.total += extraRound.total
+    sum.requestCount += extraRound.requestCount
+  }
+  return sum
+}
 
 const selectedTaskTitle = computed(() => {
   if (!props.selectedTask) return '未选择任务'
@@ -1151,7 +1202,8 @@ const collectParentRelationFacts = (task: TaskInfo | null): ParentRelationFacts 
 
 const repairStructuredOutput = async (
   rawOutput: string,
-  key: string
+  key: string,
+  onUsage?: (resp: ChatCompletionResult) => void
 ): Promise<StructuredAiOutput | null> => {
   const trimmed = rawOutput.trim()
   if (!trimmed) return null
@@ -1187,6 +1239,7 @@ const repairStructuredOutput = async (
       },
     ],
   })
+  onUsage?.(repair)
   const parsed = tryParseStructuredOutput(repair.text)
   if (!parsed) {
     const preview = repair.text.trim().slice(0, 120).replace(/\s+/g, ' ')
@@ -1199,7 +1252,8 @@ const repairParentRelationConsistency = async (
   current: StructuredAiOutput,
   key: string,
   issue: ParentRelationConflictIssue,
-  facts: ParentRelationFacts | null
+  facts: ParentRelationFacts | null,
+  onUsage?: (resp: ChatCompletionResult) => void
 ): Promise<StructuredAiOutput | null> => {
   const answerSource = current.answer.trim()
   const memorySource = (current.memory_update ?? '').trim()
@@ -1254,6 +1308,7 @@ const repairParentRelationConsistency = async (
       },
     ],
   })
+  onUsage?.(repair)
   const parsed = tryParseStructuredOutput(repair.text)
   if (!parsed) {
     const preview = repair.text.trim().slice(0, 120).replace(/\s+/g, ' ')
@@ -1345,9 +1400,27 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     ],
   })
 
+  const roundTokenUsage = makeTokenUsageAccumulator()
+  const trackRoundTokenUsage = (resp: ChatCompletionResult) => {
+    roundTokenUsage.requestCount += 1
+    if (resp.usage?.promptTokens != null) roundTokenUsage.prompt += resp.usage.promptTokens
+    if (resp.usage?.completionTokens != null) roundTokenUsage.completion += resp.usage.completionTokens
+    if (resp.usage?.totalTokens != null) {
+      roundTokenUsage.total += resp.usage.totalTokens
+    } else if (resp.usage?.promptTokens != null || resp.usage?.completionTokens != null) {
+      roundTokenUsage.total += (resp.usage.promptTokens ?? 0) + (resp.usage.completionTokens ?? 0)
+    }
+  }
+
+  const sendRequestTracked = async (content: string) => {
+    const resp = await sendRequest(content)
+    trackRoundTokenUsage(resp)
+    return resp
+  }
+
   let response: ChatCompletionResult
   try {
-    response = await sendRequest(userContent)
+    response = await sendRequestTracked(userContent)
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     const shouldRetryCompact = mode === 'analyze' && !useMemoryForThisRound && !usedCompactContext && isLikelyPayloadTooLargeError(msg)
@@ -1356,7 +1429,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     usedCompactContext = true
     message.warning('分析上下文较大，已自动切换压缩上下文重试一次')
     const compactPrompt = buildFullContextPrompt(true)
-    response = await sendRequest(
+    response = await sendRequestTracked(
       compactPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT
         ? buildFullContextPrompt(true, true)
         : compactPrompt
@@ -1370,18 +1443,32 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       return `${scope} · ${profileLabel}`
     })()
     : '连接测试'
+  const buildTokenStatsSuffix = () => {
+    if (mode !== 'analyze') return ''
+    const contextTotal = sumContextTokenUsage(contextKey, roundTokenUsage)
+    if (roundTokenUsage.requestCount <= 0 && contextTotal.requestCount <= 0) return ''
+    return ` | 本轮 ${roundTokenUsage.total}T/${roundTokenUsage.requestCount}次` +
+      ` | 累计 ${contextTotal.total}T/${contextTotal.requestCount}次`
+  }
   const updateUsageText = (resp: typeof response, extra = '') => {
+    if (mode === 'analyze') {
+      usageText.value = `${usageModeText}${extra}${buildTokenStatsSuffix()}`
+      return
+    }
     if (resp.usage?.totalTokens != null) {
-      usageText.value = `Token 使用: ${resp.usage.totalTokens} (prompt ${resp.usage.promptTokens ?? '-'} / completion ${resp.usage.completionTokens ?? '-'}) | ${usageModeText}${extra}`
+      usageText.value = `Token ${resp.usage.totalTokens} (P ${resp.usage.promptTokens ?? '-'} / C ${resp.usage.completionTokens ?? '-'}) | ${usageModeText}${extra}${buildTokenStatsSuffix()}`
     } else {
-      usageText.value = `上下文模式: ${usageModeText}${extra}`
+      usageText.value = `上下文模式: ${usageModeText}${extra}${buildTokenStatsSuffix()}`
+    }
+  }
+  const markPostprocess = () => {
+    if (mode !== 'analyze') return
+    analyzingStage.value = 'postprocess'
+    if (!usageText.value.includes('后处理中')) {
+      usageText.value = `${usageText.value} | 后处理中`
     }
   }
   updateUsageText(response)
-  if (mode === 'analyze') {
-    analyzingStage.value = 'postprocess'
-    usageText.value = `${usageText.value} | 正在执行后处理校验`
-  }
   let outputTruncated = response.finishReason === 'length'
 
   if (mode === 'analyze' && outputTruncated && settings.truncateAutoRetryEnabled) {
@@ -1397,12 +1484,8 @@ const runRequest = async (mode: 'test' | 'analyze') => {
           : compactPrompt
       })()
       const concisePrompt = buildConciseRetryPrompt(conciseBase, promptProfile)
-      response = await sendRequest(concisePrompt)
+      response = await sendRequestTracked(concisePrompt)
       updateUsageText(response, ' | 精简重试')
-      if (mode === 'analyze') {
-        analyzingStage.value = 'postprocess'
-        usageText.value = `${usageText.value} | 正在执行后处理校验`
-      }
       outputTruncated = response.finishReason === 'length'
       if (outputTruncated) {
         usageText.value = `${usageText.value} | 仍截断`
@@ -1429,8 +1512,10 @@ const runRequest = async (mode: 'test' | 'analyze') => {
 
   let parsed = tryParseStructuredOutput(response.text)
   if (!parsed && !outputTruncated) {
+    markPostprocess()
     try {
-      parsed = await repairStructuredOutput(response.text, key)
+      parsed = await repairStructuredOutput(response.text, key, trackRoundTokenUsage)
+      updateUsageText(response, ' | JSON修复')
       if (parsed) {
         message.warning('模型原始输出不是标准 JSON，已自动修复后继续。')
       }
@@ -1445,8 +1530,10 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     const conflictIssue = detectParentRelationConflict(parsed.answer)
     if (conflictIssue) {
       const relationFacts = collectParentRelationFacts(props.selectedTask)
+      markPostprocess()
       try {
-        const repaired = await repairParentRelationConsistency(parsed, key, conflictIssue, relationFacts)
+        const repaired = await repairParentRelationConsistency(parsed, key, conflictIssue, relationFacts, trackRoundTokenUsage)
+        updateUsageText(response, ' | 术语修正')
         if (repaired) {
           parsed = repaired
           message.warning('检测到“直接父节点/上游来源”术语冲突，已自动修正。')
@@ -1478,6 +1565,10 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       answer: answerText,
       usedMemory: useMemoryForThisRound,
       timestamp: Date.now(),
+      roundPromptTokens: roundTokenUsage.prompt,
+      roundCompletionTokens: roundTokenUsage.completion,
+      roundTotalTokens: roundTokenUsage.total,
+      roundRequestCount: roundTokenUsage.requestCount,
     }
     const sameContextTurns = conversationTurns.value
       .filter(item => item.contextKey === contextKey)

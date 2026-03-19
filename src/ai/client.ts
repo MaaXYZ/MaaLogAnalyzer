@@ -125,6 +125,9 @@ const readStreamingResponse = async (
 
     if (rawEvents.length < 24) rawEvents.push(chunk)
 
+    // Some providers send usage in a terminal chunk without choices.
+    if (chunk.usage) usage = chunk.usage
+
     const choice = chunk.choices?.[0]
     if (!choice) return
 
@@ -141,8 +144,6 @@ const readStreamingResponse = async (
     if (typeof choice.finish_reason === 'string' && choice.finish_reason.trim()) {
       finishReason = choice.finish_reason
     }
-
-    if (chunk.usage) usage = chunk.usage
   }
 
   try {
@@ -225,6 +226,11 @@ const shouldRetryStatus = (status: number): boolean =>
 const isResponseFormatUnsupported = (status: number, detail: string): boolean => {
   if (status !== 400) return false
   return /(response_format|json_object|unsupported.*response|invalid.*response)/i.test(detail)
+}
+
+const isStreamUsageUnsupported = (status: number, detail: string): boolean => {
+  if (status !== 400) return false
+  return /(stream_options|include_usage|unsupported.*stream|invalid.*stream)/i.test(detail)
 }
 
 const isTransientNetworkError = (error: unknown): boolean => {
@@ -351,8 +357,10 @@ export async function requestChatCompletion(options: ChatCompletionOptions): Pro
     ? Math.floor(options.maxTokens)
     : undefined
   let useResponseFormatJson = options.responseFormatJson ?? false
+  let useStreamUsage = stream
   let retriedLength = false
   let fallbackResponseFormat = false
+  let fallbackStreamUsage = false
   let networkRetryCount = 0
 
   while (true) {
@@ -367,6 +375,9 @@ export async function requestChatCompletion(options: ChatCompletionOptions): Pro
     }
     if (useResponseFormatJson) {
       payload.response_format = { type: 'json_object' }
+    }
+    if (stream && useStreamUsage) {
+      payload.stream_options = { include_usage: true }
     }
 
     try {
@@ -394,6 +405,12 @@ export async function requestChatCompletion(options: ChatCompletionOptions): Pro
         if (useResponseFormatJson && !fallbackResponseFormat && isResponseFormatUnsupported(error.status, error.detail)) {
           fallbackResponseFormat = true
           useResponseFormatJson = false
+          continue
+        }
+
+        if (stream && useStreamUsage && !fallbackStreamUsage && isStreamUsageUnsupported(error.status, error.detail)) {
+          fallbackStreamUsage = true
+          useStreamUsage = false
           continue
         }
 
