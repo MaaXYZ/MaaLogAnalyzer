@@ -9,6 +9,11 @@ export interface AiSettings {
   streamResponse: boolean
   includeKnowledgePack: boolean
   includeSignalLines: boolean
+  truncateAutoRetryEnabled: boolean
+  conciseAnswerMaxChars: number
+  conciseMaxEvidence: number
+  conciseMaxRootCauses: number
+  conciseFixedSteps: number
 }
 
 const AI_SETTINGS_KEY = 'maa-log-analyzer-ai-settings'
@@ -23,6 +28,11 @@ const defaultAiSettings: AiSettings = {
   streamResponse: true,
   includeKnowledgePack: true,
   includeSignalLines: true,
+  truncateAutoRetryEnabled: true,
+  conciseAnswerMaxChars: 1800,
+  conciseMaxEvidence: 6,
+  conciseMaxRootCauses: 2,
+  conciseFixedSteps: 3,
 }
 
 export function getDefaultAiSettings(): AiSettings {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { NAlert, NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NInputNumber, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
 import type { TaskInfo } from '../types'
 import { requestChatCompletion, type ChatCompletionResult } from '../ai/client'
 import {
@@ -11,7 +11,7 @@ import {
   type AiLoadedTarget,
 } from '../ai/contextBuilder'
 import { tryParseStructuredOutput, type StructuredAiOutput } from '../ai/structuredOutput'
-import { getAiSettings, saveAiSettings, getSessionApiKey, setSessionApiKey } from '../utils/aiSettings'
+import { getAiSettings, getSessionApiKey, setSessionApiKey } from '../utils/aiSettings'
 
 interface Props {
   tasks: TaskInfo[]
@@ -612,11 +612,6 @@ const jumpBackClassTagType = (value: string): 'error' | 'warning' | 'success' | 
   return 'default'
 }
 
-const saveConfig = () => {
-  saveAiSettings(settings)
-  message.success('AI 配置已保存（不含 API Key）')
-}
-
 const clearApiKey = () => {
   apiKey.value = ''
   setSessionApiKey('')
@@ -634,26 +629,35 @@ const clearMemory = () => {
 
 const ANALYSIS_PROMPT_SOFT_LIMIT = 110000
 const ANALYSIS_TIMEOUT_MS = 180000
-const ANALYSIS_CONCISE_ANSWER_MAX_CHARS = 1800
-const ANALYSIS_CONCISE_MAX_EVIDENCE = 6
-const ANALYSIS_CONCISE_MAX_ROOT_CAUSES = 2
-const ANALYSIS_CONCISE_FIXED_STEPS = 3
+
+const getConciseAnswerMaxChars = () => Math.max(800, Math.floor(settings.conciseAnswerMaxChars || 1800))
+const getConciseMaxEvidence = () => Math.max(3, Math.floor(settings.conciseMaxEvidence || 6))
+const getConciseMaxRootCauses = () => Math.max(2, Math.floor(settings.conciseMaxRootCauses || 2))
+const getConciseFixedSteps = () => Math.max(3, Math.floor(settings.conciseFixedSteps || 3))
 
 const buildConciseRetryPrompt = (baseContent: string) => {
+  const conciseAnswerMaxChars = getConciseAnswerMaxChars()
+  const conciseMaxRootCauses = getConciseMaxRootCauses()
+  const conciseMaxEvidence = getConciseMaxEvidence()
+  const conciseFixedSteps = getConciseFixedSteps()
   return [
     baseContent,
     '',
     '二次精简输出要求（因上次输出被截断）：',
-    `- answer 总长度建议 <= ${ANALYSIS_CONCISE_ANSWER_MAX_CHARS} 字符。`,
-    `- 根因候选最多 ${ANALYSIS_CONCISE_MAX_ROOT_CAUSES} 条。`,
-    `- 证据最多 ${ANALYSIS_CONCISE_MAX_EVIDENCE} 条。`,
-    `- 排查步骤固定 ${ANALYSIS_CONCISE_FIXED_STEPS} 条。`,
+    `- answer 总长度建议 <= ${conciseAnswerMaxChars} 字符。`,
+    `- 根因候选最多 ${conciseMaxRootCauses} 条。`,
+    `- 证据最多 ${conciseMaxEvidence} 条。`,
+    `- 排查步骤固定 ${conciseFixedSteps} 条。`,
     '- 禁止复述完整上下文或长段引用，只保留可执行结论。',
     '- 必须继续保持 JSON 输出格式：{"answer":"...","memory_update":"..."}。',
   ].join('\n')
 }
 
 const getSystemPrompt = () => {
+  const conciseAnswerMaxChars = getConciseAnswerMaxChars()
+  const conciseMaxRootCauses = getConciseMaxRootCauses()
+  const conciseMaxEvidence = getConciseMaxEvidence()
+  const conciseFixedSteps = getConciseFixedSteps()
   return [
     '你是 MaaFramework 日志诊断助手，目标是给出“可执行、可验证”的排查结论。',
     '只能基于给定上下文作答，不允许臆测上下文中不存在的事实。',
@@ -673,8 +677,8 @@ const getSystemPrompt = () => {
     '证据段面向用户可读，禁止输出内部字段路径（例如 timelineDiagnostics.longStayNodes[0] 这类文本）。',
     '根因候选至少 2 条，每条包含：置信度(0-100)、关键证据编号、反证点。',
     '排查步骤至少 3 条；每条都要包含：操作、期望现象、若不符合下一步。',
-    `输出长度优先级很高：answer 尽量控制在 ${ANALYSIS_CONCISE_ANSWER_MAX_CHARS} 字符以内。`,
-    `根因候选不超过 ${ANALYSIS_CONCISE_MAX_ROOT_CAUSES} 条，证据不超过 ${ANALYSIS_CONCISE_MAX_EVIDENCE} 条，排查步骤固定 ${ANALYSIS_CONCISE_FIXED_STEPS} 条。`,
+    `输出长度优先级很高：answer 尽量控制在 ${conciseAnswerMaxChars} 字符以内。`,
+    `根因候选不超过 ${conciseMaxRootCauses} 条，证据不超过 ${conciseMaxEvidence} 条，排查步骤固定 ${conciseFixedSteps} 条。`,
     '如果证据不足，不能只说“证据不足”；仍需给低置信度候选 + 最小验证步骤。',
     'memory_update 是供下一轮复用的高密度摘要，<= 1200 字，保留任务状态、关键证据、未决问题。',
     '避免空话：禁止输出“请检查日志”“可能有问题”这类无指向建议。',
@@ -969,7 +973,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       : settings.maxTokens,
     stream: mode === 'analyze' ? settings.streamResponse : false,
     responseFormatJson: mode === 'analyze',
-    retryOnLength: mode === 'analyze',
+    retryOnLength: mode === 'analyze' && settings.maxTokensAuto,
     maxNetworkRetries: mode === 'analyze' ? 2 : 1,
     onDelta: mode === 'analyze' && settings.streamResponse
       ? (_deltaText: string, fullText: string) => {
@@ -1015,7 +1019,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   updateUsageText(response)
   let outputTruncated = response.finishReason === 'length'
 
-  if (mode === 'analyze' && outputTruncated) {
+  if (mode === 'analyze' && outputTruncated && settings.truncateAutoRetryEnabled) {
     message.warning('检测到输出被截断，已自动发起一次精简重试。')
     try {
       const conciseBase = (() => {
@@ -1039,6 +1043,8 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       message.warning(`精简重试失败，保留截断结果：${msg}`)
       usageText.value = `${usageText.value} | 输出截断`
     }
+  } else if (mode === 'analyze' && outputTruncated && !settings.truncateAutoRetryEnabled) {
+    usageText.value = `${usageText.value} | 输出截断`
   } else if (outputTruncated) {
     usageText.value = `${usageText.value} | 输出截断`
   }
@@ -1155,30 +1161,28 @@ const handleAnalyze = async () => {
             name="maa-ai-api-key"
           />
 
-          <n-input
-            v-model:value="settings.baseUrl"
-            placeholder="API Base URL，例如 https://api.openai.com/v1"
-          />
+          <n-card size="small" :bordered="true">
+            <n-flex vertical style="gap: 6px">
+              <n-text depth="3" style="font-size: 12px">全局 AI 配置（在“设置”页统一修改）</n-text>
+              <n-text depth="3" style="font-size: 12px">
+                Base URL：{{ settings.baseUrl }}
+              </n-text>
+              <n-text depth="3" style="font-size: 12px">
+                模型：{{ settings.model }} · 温度：{{ settings.temperature }}
+              </n-text>
+              <n-text depth="3" style="font-size: 12px">
+                最大输出：{{ settings.maxTokens }} · 自动截断重试（提额）：{{ settings.maxTokensAuto ? '开' : '关' }}
+              </n-text>
+              <n-text depth="3" style="font-size: 12px">
+                知识包：{{ settings.includeKnowledgePack ? '开' : '关' }} · 信号线：{{ settings.includeSignalLines ? '开' : '关' }} · 流式：{{ settings.streamResponse ? '开' : '关' }}
+              </n-text>
+              <n-text depth="3" style="font-size: 12px">
+                截断精简重试：{{ settings.truncateAutoRetryEnabled ? '开' : '关' }} · 精简上限：{{ settings.conciseAnswerMaxChars }} 字
+              </n-text>
+            </n-flex>
+          </n-card>
 
-          <n-input v-model:value="settings.model" placeholder="模型名称，例如 gpt-4.1-mini" />
-
-          <n-flex align="center" style="gap: 8px">
-            <n-text depth="3" style="width: 90px">温度</n-text>
-            <n-input-number v-model:value="settings.temperature" :min="0" :max="2" :step="0.1" />
-          </n-flex>
-
-          <n-flex align="center" style="gap: 8px">
-            <n-text depth="3" style="width: 90px">最大输出</n-text>
-            <n-input-number v-model:value="settings.maxTokens" :min="256" :max="4096" :step="64" :disabled="settings.maxTokensAuto" />
-            <n-checkbox v-model:checked="settings.maxTokensAuto">自动</n-checkbox>
-          </n-flex>
-
-          <n-flex vertical style="gap: 6px">
-            <n-checkbox v-model:checked="settings.includeKnowledgePack">注入 Maa 领域知识包</n-checkbox>
-            <n-checkbox v-model:checked="settings.includeSignalLines">注入日志中的 [WRN]/[ERR] 片段</n-checkbox>
-            <n-checkbox v-model:checked="settings.streamResponse">分析请求使用流式响应（stream=true）</n-checkbox>
-            <n-checkbox v-model:checked="memoryModeEnabled">启用上下文记忆模式（追问时不重复发送全量 JSON）</n-checkbox>
-          </n-flex>
+          <n-checkbox v-model:checked="memoryModeEnabled">启用上下文记忆模式（追问时不重复发送全量 JSON）</n-checkbox>
 
           <n-flex align="center" style="gap: 8px; flex-wrap: wrap">
             <n-tag :type="memoryApplicable ? 'success' : 'default'">{{ memoryStatusText }}</n-tag>
@@ -1186,7 +1190,6 @@ const handleAnalyze = async () => {
           </n-flex>
 
           <n-flex style="gap: 8px; flex-wrap: wrap">
-            <n-button @click="saveConfig">保存配置</n-button>
             <n-button @click="clearApiKey">清空 Key</n-button>
             <n-button :loading="testing" @click="handleTest">测试连接</n-button>
           </n-flex>
