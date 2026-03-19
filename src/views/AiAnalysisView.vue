@@ -27,6 +27,8 @@ interface MemoryState {
   updatedAt: number
 }
 
+type MemoryStateStore = Record<string, MemoryState>
+
 interface ConversationTurn {
   id: string
   turn: number
@@ -56,31 +58,55 @@ const evidencePanelCollapsed = ref(true)
 const memoryModeEnabled = ref(true)
 const MEMORY_SESSION_KEY = 'maa-log-analyzer-ai-memory-state'
 const MEMORY_SUMMARY_MAX_CHARS = 12000
+const MEMORY_STORE_MAX_CONTEXTS = 30
 const CONVERSATION_SESSION_KEY = 'maa-log-analyzer-ai-conversation-turns'
 const CONVERSATION_MAX_TURNS = 20
-const loadSessionMemoryState = (): MemoryState | null => {
-  try {
-    const raw = sessionStorage.getItem(MEMORY_SESSION_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<MemoryState>
-    if (!parsed || typeof parsed !== 'object') return null
-    if (typeof parsed.summary !== 'string') return null
-    if (typeof parsed.contextKey !== 'string') return null
-    if (typeof parsed.turns !== 'number' || !Number.isFinite(parsed.turns)) return null
-    if (typeof parsed.updatedAt !== 'number' || !Number.isFinite(parsed.updatedAt)) return null
-    return {
-      summary: parsed.summary,
-      contextKey: parsed.contextKey,
-      turns: parsed.turns,
-      updatedAt: parsed.updatedAt,
-    }
-  } catch {
-    return null
+const CONVERSATION_MAX_TOTAL_TURNS = 200
+const normalizeMemoryState = (value: unknown): MemoryState | null => {
+  if (!value || typeof value !== 'object') return null
+  const parsed = value as Partial<MemoryState>
+  if (typeof parsed.summary !== 'string') return null
+  if (typeof parsed.contextKey !== 'string') return null
+  if (typeof parsed.turns !== 'number' || !Number.isFinite(parsed.turns)) return null
+  if (typeof parsed.updatedAt !== 'number' || !Number.isFinite(parsed.updatedAt)) return null
+  return {
+    summary: parsed.summary,
+    contextKey: parsed.contextKey,
+    turns: parsed.turns,
+    updatedAt: parsed.updatedAt,
   }
 }
-const saveSessionMemoryState = (value: MemoryState | null) => {
+
+const loadSessionMemoryStateStore = (): MemoryStateStore => {
   try {
-    if (!value) {
+    const raw = sessionStorage.getItem(MEMORY_SESSION_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+
+    // backward compatibility: old single memory object
+    const single = normalizeMemoryState(parsed)
+    if (single) {
+      return { [single.contextKey]: single }
+    }
+
+    if (!parsed || typeof parsed !== 'object') return {}
+    const entries = Object.entries(parsed as Record<string, unknown>)
+      .map(([key, value]) => {
+        const normalized = normalizeMemoryState(value)
+        if (!normalized) return null
+        return [key, normalized] as const
+      })
+      .filter((item): item is readonly [string, MemoryState] => !!item)
+      .sort((a, b) => b[1].updatedAt - a[1].updatedAt)
+      .slice(0, MEMORY_STORE_MAX_CONTEXTS)
+    return Object.fromEntries(entries)
+  } catch {
+    return {}
+  }
+}
+const saveSessionMemoryStateStore = (value: MemoryStateStore) => {
+  try {
+    if (!Object.keys(value).length) {
       sessionStorage.removeItem(MEMORY_SESSION_KEY)
       return
     }
@@ -105,7 +131,7 @@ const appendMemorySummary = (previous: string, next: string, turn: number): stri
   }
   return merged
 }
-const memoryState = ref<MemoryState | null>(loadSessionMemoryState())
+const memoryStateStore = ref<MemoryStateStore>(loadSessionMemoryStateStore())
 const lastRequestUsedMemory = ref(false)
 
 const loadSessionConversationTurns = (): ConversationTurn[] => {
@@ -137,7 +163,7 @@ const loadSessionConversationTurns = (): ConversationTurn[] => {
         usedMemory: item.usedMemory as boolean,
         timestamp: item.timestamp as number,
       }))
-      .slice(-CONVERSATION_MAX_TURNS)
+      .slice(-CONVERSATION_MAX_TOTAL_TURNS)
   } catch {
     return []
   }
@@ -149,7 +175,7 @@ const saveSessionConversationTurns = (turns: ConversationTurn[]) => {
       sessionStorage.removeItem(CONVERSATION_SESSION_KEY)
       return
     }
-    sessionStorage.setItem(CONVERSATION_SESSION_KEY, JSON.stringify(turns.slice(-CONVERSATION_MAX_TURNS)))
+    sessionStorage.setItem(CONVERSATION_SESSION_KEY, JSON.stringify(turns.slice(-CONVERSATION_MAX_TOTAL_TURNS)))
   } catch {
     // ignore write errors
   }
@@ -175,8 +201,8 @@ watch(apiKey, (value) => {
   setSessionApiKey(value)
 })
 
-watch(memoryState, (value) => {
-  saveSessionMemoryState(value)
+watch(memoryStateStore, (value) => {
+  saveSessionMemoryStateStore(value)
 }, { deep: true })
 
 watch(conversationTurns, (value) => {
@@ -202,16 +228,21 @@ const buildContextKey = (): string => {
   ].join('|')
 }
 
+const currentContextKey = computed(() => buildContextKey())
+const currentMemoryState = computed<MemoryState | null>(() => memoryStateStore.value[currentContextKey.value] ?? null)
+
 const memoryApplicable = computed(() => {
-  if (!memoryModeEnabled.value || !memoryState.value) return false
-  return memoryState.value.contextKey === buildContextKey()
+  if (!memoryModeEnabled.value) return false
+  return !!currentMemoryState.value
 })
 
 const memoryStatusText = computed(() => {
   if (!memoryModeEnabled.value) return '记忆模式：关闭'
-  if (!memoryState.value) return '记忆模式：未建立'
-  if (memoryApplicable.value) return `记忆模式：可复用（${memoryState.value.turns} 轮）`
-  return '记忆模式：上下文已变化，下一次将重建'
+  const current = currentMemoryState.value
+  if (current) return `记忆模式：可复用（${current.turns} 轮）`
+  const cachedCount = Object.keys(memoryStateStore.value).length
+  if (!cachedCount) return '记忆模式：未建立'
+  return `记忆模式：当前任务未建立（已缓存 ${cachedCount} 组）`
 })
 
 const escapeHtml = (value: string): string =>
@@ -435,6 +466,7 @@ const renderedResultHtml = computed(() => renderMarkdown(resultText.value))
 
 const conversationTurnViews = computed<ConversationTurnView[]>(() => {
   return [...conversationTurns.value]
+    .filter(item => item.contextKey === currentContextKey.value)
     .sort((a, b) => a.turn - b.turn)
     .map(item => ({
       ...item,
@@ -558,8 +590,8 @@ const clearApiKey = () => {
 }
 
 const clearMemory = () => {
-  memoryState.value = null
-  saveSessionMemoryState(null)
+  memoryStateStore.value = {}
+  saveSessionMemoryStateStore({})
   conversationTurns.value = []
   saveSessionConversationTurns([])
   lastRequestUsedMemory.value = false
@@ -843,8 +875,9 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     return
   }
 
-  const contextKey = buildContextKey()
-  const useMemoryForThisRound = mode === 'analyze' && memoryModeEnabled.value && !!memoryState.value && memoryState.value.contextKey === contextKey
+  const contextKey = currentContextKey.value
+  const contextMemory = memoryStateStore.value[contextKey]
+  const useMemoryForThisRound = mode === 'analyze' && memoryModeEnabled.value && !!contextMemory
   lastRequestUsedMemory.value = useMemoryForThisRound
   if (mode === 'analyze') {
     resultText.value = ''
@@ -856,7 +889,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   if (mode === 'test') {
     userContent = '请只输出：连接正常'
   } else if (useMemoryForThisRound) {
-    userContent = buildMemoryPrompt(memoryState.value as MemoryState)
+    userContent = buildMemoryPrompt(contextMemory as MemoryState)
   } else {
     const fullPrompt = buildFullContextPrompt(false)
     if (fullPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT) {
@@ -953,36 +986,46 @@ const runRequest = async (mode: 'test' | 'analyze') => {
 
   if (mode === 'analyze') {
     const nextTurn = getNextConversationTurn(contextKey)
-    const history: ConversationTurn[] = [
-      ...conversationTurns.value,
-      {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        turn: nextTurn,
-        contextKey,
-        question: questionSnapshot,
-        answer: answerText,
-        usedMemory: useMemoryForThisRound,
-        timestamp: Date.now(),
-      },
-    ]
-    conversationTurns.value = history.slice(-CONVERSATION_MAX_TURNS)
+    const nextTurnItem: ConversationTurn = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      turn: nextTurn,
+      contextKey,
+      question: questionSnapshot,
+      answer: answerText,
+      usedMemory: useMemoryForThisRound,
+      timestamp: Date.now(),
+    }
+    const sameContextTurns = conversationTurns.value
+      .filter(item => item.contextKey === contextKey)
+      .concat(nextTurnItem)
+      .sort((a, b) => a.turn - b.turn)
+      .slice(-CONVERSATION_MAX_TURNS)
+    const otherContextTurns = conversationTurns.value.filter(item => item.contextKey !== contextKey)
+    conversationTurns.value = [...otherContextTurns, ...sameContextTurns]
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(-CONVERSATION_MAX_TOTAL_TURNS)
   }
 
   if (!memoryModeEnabled.value || outputTruncated) return
 
   const nextMemorySummary = parsed?.memory_update?.trim() || buildFallbackMemory(answerText, question.value)
-  const hasSameContextMemory = memoryState.value?.contextKey === contextKey
-  const nextTurns = (hasSameContextMemory ? memoryState.value?.turns ?? 0 : 0) + 1
-  const mergedSummary = hasSameContextMemory
-    ? appendMemorySummary(memoryState.value?.summary ?? '', nextMemorySummary, nextTurns)
-    : appendMemorySummary('', nextMemorySummary, 1)
+  const prevMemory = memoryStateStore.value[contextKey]
+  const nextTurns = (prevMemory?.turns ?? 0) + 1
+  const mergedSummary = appendMemorySummary(prevMemory?.summary ?? '', nextMemorySummary, nextTurns)
 
-  memoryState.value = {
+  const nextState: MemoryState = {
     summary: mergedSummary,
     contextKey,
     turns: nextTurns,
     updatedAt: Date.now(),
   }
+  const nextEntries = Object.entries({
+    ...memoryStateStore.value,
+    [contextKey]: nextState,
+  })
+    .sort((a, b) => b[1].updatedAt - a[1].updatedAt)
+    .slice(0, MEMORY_STORE_MAX_CONTEXTS)
+  memoryStateStore.value = Object.fromEntries(nextEntries)
 }
 
 const handleTest = async () => {
