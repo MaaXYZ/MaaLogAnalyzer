@@ -47,9 +47,13 @@ interface ConversationTurnView extends ConversationTurn {
   answerHtml: string
 }
 
+type AnalysisFocusMode = 'general' | 'on_error' | 'hotspot'
+
 interface QuickPromptItem {
   label: string
   prompt: string
+  forceProfile?: 'diagnostic' | 'followup'
+  focusMode?: AnalysisFocusMode
 }
 
 interface ParentRelationConflictIssue {
@@ -87,6 +91,8 @@ const activeRoundQuestion = ref('')
 const showApiKeyHint = ref(false)
 const globalSettingsCollapsed = ref(true)
 const memoryDialogVisible = ref(false)
+const quickPromptProfileOverride = ref<'diagnostic' | 'followup' | null>(null)
+const quickPromptFocusOverride = ref<AnalysisFocusMode | null>(null)
 const turnListRef = ref<HTMLElement | null>(null)
 const aiOutputScrollbarRef = ref<{ scrollTo: (options: { top?: number; left?: number; behavior?: ScrollBehavior }) => void } | null>(null)
 
@@ -323,18 +329,20 @@ const quickPrompts: QuickPromptItem[] = [
   {
     label: '失败根因',
     prompt: '请先量化盘点，再给出当前任务最可能的失败根因与3条可执行验证步骤。',
+    forceProfile: 'diagnostic',
+    focusMode: 'general',
   },
   {
     label: 'on_error链路',
     prompt: '请只聚焦 on_error 触发链路，说明触发源、后续结果和最小修复动作。',
+    forceProfile: 'diagnostic',
+    focusMode: 'on_error',
   },
   {
     label: '识别热点',
     prompt: '请按失败率列出前3个识别热点，并给出每个热点的修复优先级与验证方式。',
-  },
-  {
-    label: '成功对比',
-    prompt: '请对比当前任务与最近一次成功同类任务，给出关键差异证据和修复建议。',
+    forceProfile: 'diagnostic',
+    focusMode: 'hotspot',
   },
 ]
 
@@ -352,8 +360,10 @@ const memoryStatusText = computed(() => {
   return `记忆模式：当前任务未建立（已缓存 ${cachedCount} 组）`
 })
 
-const applyQuickPrompt = (prompt: string) => {
-  question.value = prompt
+const applyQuickPrompt = (item: QuickPromptItem) => {
+  question.value = item.prompt
+  quickPromptProfileOverride.value = item.forceProfile ?? null
+  quickPromptFocusOverride.value = item.focusMode ?? null
 }
 
 const escapeHtml = (value: string): string =>
@@ -790,7 +800,37 @@ type AnalysisPromptProfile = 'diagnostic' | 'followup'
 const shouldUseDiagnosticTemplateForQuestion = (questionText: string): boolean => {
   const text = questionText.trim()
   if (!text) return false
-  return /(分析|诊断|根因|失败原因|排查步骤|复盘|按模板|完整分析|重新分析|结论|证据)/.test(text)
+  return /(分析|诊断|根因|失败原因|排查步骤|复盘|按模板|完整分析|重新分析|结论|证据|on_error|识别热点|成功对比)/.test(text)
+}
+
+const getFocusTaskRequirementLines = (focusMode: AnalysisFocusMode): string[] => {
+  if (focusMode === 'on_error') {
+    return [
+      '- 本轮是 on_error 专项：优先输出触发源、触发事件、后续结果（是否恢复/是否任务失败）。',
+      '- 证据优先引用 on_error 触发链路与相关回退链，其他证据仅作补充。',
+      '- 排查步骤优先 on_error 路径最小修复动作，不展开无关分支。',
+    ]
+  }
+  if (focusMode === 'hotspot') {
+    return [
+      '- 本轮是识别热点专项：优先输出失败率最高的 3 个识别项及所在节点。',
+      '- 必须区分“前段 miss 后恢复”和“整轮无命中并失败/超时”。',
+      '- 排查步骤优先模板/阈值/ROI验证与回归指标。',
+    ]
+  }
+  return []
+}
+
+const getFocusFollowupRule = (profile: AnalysisPromptProfile, focusMode: AnalysisFocusMode): string => {
+  if (focusMode === 'on_error') {
+    return '- 本轮仅聚焦 on_error 链路：先答触发源与恢复结果，再给最小修复动作。'
+  }
+  if (focusMode === 'hotspot') {
+    return '- 本轮仅聚焦识别热点：先答 Top 失败项与失败率，再给最小修复动作。'
+  }
+  return profile === 'diagnostic'
+    ? '- 维持“结论/根因候选/证据/排查步骤”结构。'
+    : '- 先直接回答追问，再补必要证据与下一步；除非用户明确要求，否则不要套四段诊断模板。'
 }
 
 const buildConciseRetryPrompt = (baseContent: string, profile: AnalysisPromptProfile) => {
@@ -822,7 +862,7 @@ const buildConciseRetryPrompt = (baseContent: string, profile: AnalysisPromptPro
   ].join('\n')
 }
 
-const getSystemPrompt = (profile: AnalysisPromptProfile) => {
+const getSystemPrompt = (profile: AnalysisPromptProfile, focusMode: AnalysisFocusMode = 'general') => {
   const conciseAnswerMaxChars = getConciseAnswerMaxChars()
   const conciseMaxRootCauses = getConciseMaxRootCauses()
   const conciseMaxEvidence = getConciseMaxEvidence()
@@ -838,6 +878,44 @@ const getSystemPrompt = (profile: AnalysisPromptProfile) => {
       '若上下文提供量化数据，应优先引用关键数字支持判断。',
       '若涉及 on_error / jump_back / nested action 关系，必须明确区分触发源、直接父节点与上游来源节点。',
       '证据描述面向用户可读，禁止输出内部字段路径（例如 timelineDiagnostics.longStayNodes[0]）。',
+      `输出长度优先级很高：answer 尽量控制在 ${conciseAnswerMaxChars} 字符以内。`,
+      'memory_update 是供下一轮复用的高密度摘要，<= 1200 字。',
+      '避免空话：禁止输出“请检查日志”“可能有问题”这类无指向建议。',
+    ].join('\n')
+  }
+  if (focusMode === 'on_error') {
+    return [
+      '你是 MaaFramework 日志 on_error 链路诊断助手，目标是定位触发源并给出最小修复动作。',
+      '只能基于给定上下文作答，不允许臆测上下文中不存在的事实。',
+      '必须返回 JSON 对象，格式固定为：',
+      '{"answer":"...","memory_update":"..."}',
+      'answer 必须是 Markdown，且包含以下 3 段：',
+      '## 结论',
+      '## on_error 触发链路',
+      '## 最小修复步骤',
+      '必须明确写出：触发源类型（action_failed / reco_timeout_or_nohit / error_handling_loop）、触发节点、后续结果（是否恢复/是否任务失败）。',
+      '若任务最终成功，必须区分“局部失败被恢复”与“任务级失败”。',
+      '证据必须给 E1/E2...，每条写“关键数值 + 结论”，禁止输出内部字段路径文本。',
+      '排查步骤固定 3 条，每条包含：操作、期望现象、若不符合下一步。',
+      `输出长度优先级很高：answer 尽量控制在 ${conciseAnswerMaxChars} 字符以内。`,
+      'memory_update 是供下一轮复用的高密度摘要，<= 1200 字。',
+      '避免空话：禁止输出“请检查日志”“可能有问题”这类无指向建议。',
+    ].join('\n')
+  }
+  if (focusMode === 'hotspot') {
+    return [
+      '你是 MaaFramework 识别热点诊断助手，目标是找出最关键热点并给出可验证修复动作。',
+      '只能基于给定上下文作答，不允许臆测上下文中不存在的事实。',
+      '必须返回 JSON 对象，格式固定为：',
+      '{"answer":"...","memory_update":"..."}',
+      'answer 必须是 Markdown，且包含以下 3 段：',
+      '## 结论',
+      '## Top 识别热点',
+      '## 验证与修复步骤',
+      '必须先量化输出 Top3 识别热点（失败次数、总次数、失败率、所在节点）。',
+      '必须区分“前段 miss 后恢复”与“整轮无命中并失败/超时”，不得把前者直接当根因。',
+      '证据必须给 E1/E2...，每条写“关键数值 + 结论”，禁止输出内部字段路径文本。',
+      '修复步骤固定 3 条，每条包含：操作、期望现象、若不符合下一步。',
       `输出长度优先级很高：answer 尽量控制在 ${conciseAnswerMaxChars} 字符以内。`,
       'memory_update 是供下一轮复用的高密度摘要，<= 1200 字。',
       '避免空话：禁止输出“请检查日志”“可能有问题”这类无指向建议。',
@@ -1015,7 +1093,7 @@ const buildCompactContext = (context: Record<string, unknown>): Record<string, u
   }
 }
 
-const buildFullContextPrompt = (compact: boolean, minifiedJson = false) => {
+const buildFullContextPrompt = (compact: boolean, minifiedJson = false, focusMode: AnalysisFocusMode = 'general') => {
   const rawContext = buildAiAnalysisContext({
     tasks: props.tasks,
     selectedTask: props.selectedTask,
@@ -1038,6 +1116,7 @@ const buildFullContextPrompt = (compact: boolean, minifiedJson = false) => {
     `用户问题: ${question.value}`,
     '',
     '任务要求:',
+    ...getFocusTaskRequirementLines(focusMode),
     '- 先列证据清单(E1/E2...)，再给结论。',
     '- 必须先量化长时间停留节点（使用时间线长停留统计数据）。',
     '- 必须检查识别热点（使用识别失败分布与热点组合统计数据）。',
@@ -1060,12 +1139,10 @@ const buildFullContextPrompt = (compact: boolean, minifiedJson = false) => {
   ].join('\n')
 }
 
-const buildMemoryPrompt = (memory: MemoryState, profile: AnalysisPromptProfile) => {
-  const followupRule = profile === 'diagnostic'
-    ? '- 维持“结论/根因候选/证据/排查步骤”结构。'
-    : '- 先直接回答追问，再补必要证据与下一步；除非用户明确要求，否则不要套四段诊断模板。'
+const buildMemoryPrompt = (memory: MemoryState, profile: AnalysisPromptProfile, focusMode: AnalysisFocusMode = 'general') => {
+  const followupRule = getFocusFollowupRule(profile, focusMode)
   return [
-    '这是同一上下文下的追问。优先基于已有记忆回答，并保持证据编号连续。',
+    '这是同一上下文下的追问。优先基于已有记忆回答。',
     `用户追问: ${question.value}`,
     '',
     `上下文指纹: ${memory.contextKey}`,
@@ -1355,9 +1432,16 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   const contextKey = currentContextKey.value
   const contextMemory = memoryStateStore.value[contextKey]
   const useMemoryForThisRound = mode === 'analyze' && memoryModeEnabled.value && !!contextMemory
+  const forcedProfile = mode === 'analyze' ? quickPromptProfileOverride.value : null
+  const forcedFocus = mode === 'analyze' ? quickPromptFocusOverride.value : null
+  const focusMode: AnalysisFocusMode = forcedFocus ?? 'general'
   const promptProfile: AnalysisPromptProfile = mode !== 'analyze'
     ? 'diagnostic'
-    : (useMemoryForThisRound && !shouldUseDiagnosticTemplateForQuestion(questionSnapshot) ? 'followup' : 'diagnostic')
+    : (forcedProfile ?? (useMemoryForThisRound && !shouldUseDiagnosticTemplateForQuestion(questionSnapshot) ? 'followup' : 'diagnostic'))
+  if (mode === 'analyze') {
+    quickPromptProfileOverride.value = null
+    quickPromptFocusOverride.value = null
+  }
   lastRequestUsedMemory.value = useMemoryForThisRound
   if (mode === 'analyze') {
     activeRoundQuestion.value = questionSnapshot
@@ -1371,14 +1455,14 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   if (mode === 'test') {
     userContent = '请只输出：连接正常'
   } else if (useMemoryForThisRound) {
-    userContent = buildMemoryPrompt(contextMemory as MemoryState, promptProfile)
+    userContent = buildMemoryPrompt(contextMemory as MemoryState, promptProfile, focusMode)
   } else {
-    const fullPrompt = buildFullContextPrompt(false)
+    const fullPrompt = buildFullContextPrompt(false, false, focusMode)
     if (fullPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT) {
       usedCompactContext = true
-      const compactPrompt = buildFullContextPrompt(true)
+      const compactPrompt = buildFullContextPrompt(true, false, focusMode)
       userContent = compactPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT
-        ? buildFullContextPrompt(true, true)
+        ? buildFullContextPrompt(true, true, focusMode)
         : compactPrompt
     } else {
       userContent = fullPrompt
@@ -1405,7 +1489,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       : undefined,
     timeoutMs: mode === 'test' ? 15000 : ANALYSIS_TIMEOUT_MS,
     messages: [
-      { role: 'system', content: getSystemPrompt(promptProfile) },
+      { role: 'system', content: getSystemPrompt(promptProfile, focusMode) },
       { role: 'user', content },
     ],
   })
@@ -1438,10 +1522,10 @@ const runRequest = async (mode: 'test' | 'analyze') => {
 
     usedCompactContext = true
     message.warning('分析上下文较大，已自动切换压缩上下文重试一次')
-    const compactPrompt = buildFullContextPrompt(true)
+    const compactPrompt = buildFullContextPrompt(true, false, focusMode)
     response = await sendRequestTracked(
       compactPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT
-        ? buildFullContextPrompt(true, true)
+        ? buildFullContextPrompt(true, true, focusMode)
         : compactPrompt
     )
   }
@@ -1450,7 +1534,12 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     ? (() => {
       const scope = useMemoryForThisRound ? '记忆上下文' : (usedCompactContext ? '压缩全量上下文' : '全量上下文')
       const profileLabel = promptProfile === 'followup' ? '追问模板' : '诊断模板'
-      return `${scope} · ${profileLabel}`
+      const focusLabel = focusMode === 'on_error'
+        ? 'on_error专项'
+        : focusMode === 'hotspot'
+          ? '识别热点专项'
+          : ''
+      return focusLabel ? `${scope} · ${profileLabel} · ${focusLabel}` : `${scope} · ${profileLabel}`
     })()
     : '连接测试'
   const buildTokenStatsSuffix = () => {
@@ -1486,11 +1575,11 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       try {
       const conciseBase = (() => {
         if (useMemoryForThisRound) {
-          return buildMemoryPrompt(contextMemory as MemoryState, promptProfile)
+          return buildMemoryPrompt(contextMemory as MemoryState, promptProfile, focusMode)
         }
-        const compactPrompt = buildFullContextPrompt(true)
+        const compactPrompt = buildFullContextPrompt(true, false, focusMode)
         return compactPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT
-          ? buildFullContextPrompt(true, true)
+          ? buildFullContextPrompt(true, true, focusMode)
           : compactPrompt
       })()
       const concisePrompt = buildConciseRetryPrompt(conciseBase, promptProfile)
@@ -1744,7 +1833,7 @@ const handleAnalyze = async () => {
                   :key="item.label"
                   size="tiny"
                   quaternary
-                  @click="applyQuickPrompt(item.prompt)"
+                  @click="applyQuickPrompt(item)"
                 >
                   {{ item.label }}
                 </n-button>
