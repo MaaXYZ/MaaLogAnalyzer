@@ -1,6 +1,6 @@
 import type { TourStep } from './types'
 
-export const TOUR_VERSION = 2
+export const TOUR_VERSION = 3
 export const TOUR_STORAGE_KEY = 'maa-log-analyzer-tutorial-version'
 
 // Boarded by sections: overall intro first, then each feature area.
@@ -101,8 +101,56 @@ export const TOUR_STEPS: TourStep[] = [
     target: '[data-tour="statistics-main"]',
     view: 'statistics',
     placement: 'left',
-    nextLabel: '看分屏模式',
+    nextLabel: '进入 AI 分析板块',
     sinceVersion: 1
+  },
+  {
+    id: 'ai-main',
+    sectionId: 'ai',
+    sectionTitle: 'AI 分析',
+    title: 'AI 分析视图',
+    content: '这里可以让 AI 基于当前任务上下文做诊断，并支持多轮追问。',
+    target: '[data-tour="ai-main"]',
+    view: 'ai',
+    placement: 'left',
+    nextLabel: '下一步',
+    sinceVersion: 3
+  },
+  {
+    id: 'ai-input-panel',
+    sectionId: 'ai',
+    sectionTitle: 'AI 分析',
+    title: '连接与提问区',
+    content: '在这里填写 API Key、查看记忆摘要、使用快捷提问，并编辑问题输入。',
+    target: '[data-tour="ai-input-panel"]',
+    view: 'ai',
+    placement: 'right',
+    nextLabel: '下一步',
+    sinceVersion: 3
+  },
+  {
+    id: 'ai-analyze-action',
+    sectionId: 'ai',
+    sectionTitle: 'AI 分析',
+    title: '发起分析',
+    content: '点击“分析当前任务”发送请求。建议先用默认问题跑一轮，再进行追问。',
+    target: '[data-tour="ai-analyze-action"]',
+    view: 'ai',
+    placement: 'right',
+    nextLabel: '下一步',
+    sinceVersion: 3
+  },
+  {
+    id: 'ai-output-panel',
+    sectionId: 'ai',
+    sectionTitle: 'AI 分析',
+    title: '查看输出结果',
+    content: '右侧会显示诊断结论、多轮对话和证据链摘要，可用于快速定位问题。',
+    target: '[data-tour="ai-output-panel"]',
+    view: 'ai',
+    placement: 'left',
+    nextLabel: '看分屏模式',
+    sinceVersion: 3
   },
   {
     id: 'split-main',

@@ -1733,7 +1733,7 @@ const handleAnalyze = async () => {
 <template>
   <div class="ai-view-root">
     <div class="ai-view-grid">
-      <n-card size="small" title="连接与输入" class="ai-left-card">
+      <n-card size="small" title="连接与输入" class="ai-left-card" data-tour="ai-input-panel">
         <div class="left-panel-shell">
           <n-flex vertical style="gap: 12px" class="left-panel-content">
           <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
@@ -1853,14 +1853,14 @@ const handleAnalyze = async () => {
               placeholder="输入你希望 AI 分析的问题"
             />
 
-            <n-button type="primary" :loading="analyzing" @click="handleAnalyze">
+            <n-button data-tour="ai-analyze-action" type="primary" :loading="analyzing" @click="handleAnalyze">
               分析当前任务
             </n-button>
           </div>
         </div>
       </n-card>
 
-      <n-card size="small" title="AI 输出" class="ai-right-card">
+      <n-card size="small" title="AI 输出" class="ai-right-card" data-tour="ai-output-panel">
         <template #header-extra>
           <n-text class="usage-text" depth="3" :title="usageText">{{ usageText }}</n-text>
         </template>

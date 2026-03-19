@@ -1,4 +1,4 @@
-export type TourViewMode = 'analysis' | 'search' | 'statistics' | 'flowchart' | 'split'
+export type TourViewMode = 'analysis' | 'search' | 'statistics' | 'flowchart' | 'ai' | 'split'
 
 export type TourPlacement = 'auto' | 'top' | 'right' | 'bottom' | 'left'
 
