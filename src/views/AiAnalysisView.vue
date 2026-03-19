@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
+import { NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NModal, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
 import type { TaskInfo } from '../types'
 import { requestChatCompletion, type ChatCompletionResult } from '../ai/client'
 import {
@@ -85,6 +85,8 @@ const evidencePanelCollapsed = ref(true)
 const conversationFollowMode = ref(true)
 const activeRoundQuestion = ref('')
 const showApiKeyHint = ref(false)
+const globalSettingsCollapsed = ref(true)
+const memoryDialogVisible = ref(false)
 const turnListRef = ref<HTMLElement | null>(null)
 const aiOutputScrollbarRef = ref<{ scrollTo: (options: { top?: number; left?: number; behavior?: ScrollBehavior }) => void } | null>(null)
 
@@ -303,19 +305,19 @@ const buildContextKey = (): string => {
 
 const currentContextKey = computed(() => buildContextKey())
 const currentMemoryState = computed<MemoryState | null>(() => memoryStateStore.value[currentContextKey.value] ?? null)
+const currentMemoryFull = computed(() => {
+  const summary = currentMemoryState.value?.summary?.trim() ?? ''
+  if (!summary) return '当前任务暂无记忆，可先发起一轮分析。'
+  return summary
+})
 const currentMemoryPreview = computed(() => {
   const summary = currentMemoryState.value?.summary?.trim() ?? ''
   if (!summary) return '当前任务暂无记忆，可先发起一轮分析。'
   const blocks = summary.split(/\n{2,}/).filter(Boolean)
-  if (blocks.length <= 3) {
-    if (summary.length <= 900) return summary
-    return `...${summary.slice(-900)}`
-  }
-  const tail = blocks.slice(-3).join('\n\n')
-  if (tail.length <= 900) {
-    return `（仅展示最近 3 轮）\n${tail}`
-  }
-  return `（仅展示最近 3 轮）\n...${tail.slice(-900)}`
+  const latest = blocks.length ? blocks[blocks.length - 1] : summary
+  const oneLine = latest.replace(/\s+/g, ' ').trim()
+  if (oneLine.length <= 84) return oneLine
+  return `${oneLine.slice(0, 84)}...`
 })
 const quickPrompts: QuickPromptItem[] = [
   {
@@ -1643,7 +1645,8 @@ const handleAnalyze = async () => {
   <div class="ai-view-root">
     <div class="ai-view-grid">
       <n-card size="small" title="连接与输入" class="ai-left-card">
-        <n-flex vertical style="gap: 12px" class="left-panel-content">
+        <div class="left-panel-shell">
+          <n-flex vertical style="gap: 12px" class="left-panel-content">
           <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
             <n-text depth="3" style="font-size: 12px">API Key（会话内）</n-text>
             <n-button text size="tiny" @click="showApiKeyHint = !showApiKeyHint">
@@ -1665,22 +1668,34 @@ const handleAnalyze = async () => {
 
           <n-card size="small" :bordered="true">
             <n-flex vertical style="gap: 6px">
-              <n-text depth="3" style="font-size: 12px">全局 AI 配置（在“设置”页统一修改）</n-text>
+              <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+                <n-text depth="3" style="font-size: 12px">全局 AI 配置（在“设置”页统一修改）</n-text>
+                <n-button text size="tiny" @click="globalSettingsCollapsed = !globalSettingsCollapsed">
+                  {{ globalSettingsCollapsed ? '展开' : '收起' }}
+                </n-button>
+              </n-flex>
+
               <n-text depth="3" style="font-size: 12px">
-                Base URL：{{ settings.baseUrl }}
+                {{ settings.model }} · {{ settings.maxTokens }} tokens · {{ settings.streamResponse ? '流式开' : '流式关' }}
               </n-text>
-              <n-text depth="3" style="font-size: 12px">
-                模型：{{ settings.model }} · 温度：{{ settings.temperature }}
-              </n-text>
-              <n-text depth="3" style="font-size: 12px">
-                最大输出：{{ settings.maxTokens }} · 自动截断重试（提额）：{{ settings.maxTokensAuto ? '开' : '关' }}
-              </n-text>
-              <n-text depth="3" style="font-size: 12px">
-                知识包：{{ settings.includeKnowledgePack ? '开' : '关' }} · 信号线：{{ settings.includeSignalLines ? '开' : '关' }} · 流式：{{ settings.streamResponse ? '开' : '关' }}
-              </n-text>
-              <n-text depth="3" style="font-size: 12px">
-                截断精简重试：{{ settings.truncateAutoRetryEnabled ? '开' : '关' }} · 精简上限：{{ settings.conciseAnswerMaxChars }} 字
-              </n-text>
+
+              <template v-if="!globalSettingsCollapsed">
+                <n-text depth="3" style="font-size: 12px">
+                  Base URL：{{ settings.baseUrl }}
+                </n-text>
+                <n-text depth="3" style="font-size: 12px">
+                  模型：{{ settings.model }} · 温度：{{ settings.temperature }}
+                </n-text>
+                <n-text depth="3" style="font-size: 12px">
+                  最大输出：{{ settings.maxTokens }} · 自动截断重试（提额）：{{ settings.maxTokensAuto ? '开' : '关' }}
+                </n-text>
+                <n-text depth="3" style="font-size: 12px">
+                  知识包：{{ settings.includeKnowledgePack ? '开' : '关' }} · 信号线：{{ settings.includeSignalLines ? '开' : '关' }} · 流式：{{ settings.streamResponse ? '开' : '关' }}
+                </n-text>
+                <n-text depth="3" style="font-size: 12px">
+                  截断精简重试：{{ settings.truncateAutoRetryEnabled ? '开' : '关' }} · 精简上限：{{ settings.conciseAnswerMaxChars }} 字
+                </n-text>
+              </template>
             </n-flex>
           </n-card>
 
@@ -1708,9 +1723,14 @@ const handleAnalyze = async () => {
             <n-flex vertical style="gap: 8px; height: 100%">
               <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
                 <n-text depth="3" style="font-size: 12px">当前任务记忆摘要</n-text>
-                <n-tag size="small" :type="currentMemoryState ? 'success' : 'default'">
-                  {{ currentMemoryState ? `已积累 ${currentMemoryState.turns} 轮` : '未建立' }}
-                </n-tag>
+                <n-flex align="center" style="gap: 6px">
+                  <n-tag size="small" :type="currentMemoryState ? 'success' : 'default'">
+                    {{ currentMemoryState ? `已积累 ${currentMemoryState.turns} 轮` : '未建立' }}
+                  </n-tag>
+                  <n-button size="tiny" quaternary :disabled="!currentMemoryState" @click="memoryDialogVisible = true">
+                    查看全文
+                  </n-button>
+                </n-flex>
               </n-flex>
 
               <div class="memory-preview-box">
@@ -1732,11 +1752,15 @@ const handleAnalyze = async () => {
             </n-flex>
           </n-card>
 
+          </n-flex>
+
           <div class="left-analyze-block">
             <n-input
+              class="question-input-fill"
               v-model:value="question"
               type="textarea"
-              :autosize="{ minRows: 5, maxRows: 12 }"
+              :autosize="false"
+              rows="6"
               placeholder="输入你希望 AI 分析的问题"
             />
 
@@ -1744,7 +1768,7 @@ const handleAnalyze = async () => {
               分析当前任务
             </n-button>
           </div>
-        </n-flex>
+        </div>
       </n-card>
 
       <n-card size="small" title="AI 输出" class="ai-right-card">
@@ -1954,6 +1978,17 @@ const handleAnalyze = async () => {
         </n-scrollbar>
       </n-card>
     </div>
+
+    <n-modal
+      v-model:show="memoryDialogVisible"
+      preset="card"
+      title="当前任务记忆全文"
+      :style="{ width: 'min(860px, 92vw)' }"
+    >
+      <div class="memory-modal-body">
+        <pre class="memory-modal-text">{{ currentMemoryFull }}</pre>
+      </div>
+    </n-modal>
   </div>
 </template>
 
@@ -2012,6 +2047,14 @@ const handleAnalyze = async () => {
   flex-direction: column;
 }
 
+.left-panel-shell {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .usage-text {
   display: block;
   max-width: min(54vw, 720px);
@@ -2022,21 +2065,30 @@ const handleAnalyze = async () => {
 }
 
 .left-panel-content {
-  flex: 1;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: calc(100% - 210px);
+  overflow: auto;
+  padding-right: 2px;
+  padding-bottom: 4px;
+}
+
+.left-context-card {
+  flex: 0 0 auto;
+  min-height: 132px;
+  max-height: 168px;
+}
+
+.left-context-card :deep(.n-card__content) {
   min-height: 0;
   overflow: auto;
   padding-right: 2px;
 }
 
-.left-context-card {
-  flex: 1;
-  min-height: 140px;
-}
-
 .memory-preview-box {
   flex: 1;
-  min-height: 96px;
-  max-height: 220px;
+  min-height: 44px;
+  max-height: 72px;
   overflow: auto;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 6px;
@@ -2049,15 +2101,52 @@ const handleAnalyze = async () => {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+  line-height: 1.45;
+  font-size: 12px;
+}
+
+.memory-modal-body {
+  max-height: min(72vh, 760px);
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.memory-modal-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   line-height: 1.5;
   font-size: 12px;
 }
 
 .left-analyze-block {
-  margin-top: auto;
+  flex: 1;
+  min-height: 0;
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 8px;
+}
+
+.question-input-fill {
+  flex: 1;
+  min-height: 0;
+}
+
+.question-input-fill :deep(.n-input-wrapper),
+.question-input-fill :deep(.n-input__textarea),
+.question-input-fill :deep(.n-input__textarea-el) {
+  height: 100%;
+}
+
+.left-analyze-block > .n-button {
+  flex-shrink: 0;
 }
 
 .ai-output-scroll {
@@ -2313,6 +2402,19 @@ const handleAnalyze = async () => {
   .ai-right-card {
     height: auto;
     min-height: 0;
+  }
+
+  .left-context-card {
+    min-height: 120px;
+    max-height: 150px;
+  }
+
+  .left-panel-content {
+    max-height: none;
+  }
+
+  .memory-preview-box {
+    max-height: 64px;
   }
 
   .ai-right-card :deep(.n-card-header) {
