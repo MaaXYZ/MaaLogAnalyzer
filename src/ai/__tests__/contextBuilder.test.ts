@@ -348,7 +348,7 @@ describe('buildStopTerminationDiagnostics', () => {
 
     const diagnostics = buildStopTerminationDiagnostics(events, 'succeeded')
 
-    expect(diagnostics.stopSignalCount).toBeGreaterThanOrEqual(1)
+    expect(diagnostics.stopSignalCount).toBe(0)
     expect(diagnostics.implicitStopPatternDetected).toBe(true)
     expect(diagnostics.likelyActiveStop).toBe(true)
     expect(diagnostics.taskTerminalEvent).toBe('Tasker.Task.Succeeded')

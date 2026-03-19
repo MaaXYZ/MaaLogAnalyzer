@@ -563,7 +563,7 @@ export const buildStopTerminationDiagnostics = (
   events: EventNotification[],
   taskStatus: TaskInfo['status'] | null | undefined
 ) => {
-  const stopRegex = /(?:^|[^a-z0-9])(stoptask|post_stop|need_to_stop|stopnode|stop)(?:$|[^a-z0-9])/i
+  const stopRegex = /(?:^|[^a-z0-9])(stoptask|post_stop|need_to_stop|stop)(?:$|[^a-z0-9])/i
   const stopSignals: Array<{
     index: number
     line: number | null
@@ -580,6 +580,7 @@ export const buildStopTerminationDiagnostics = (
   let taskTerminalLine: number | null = null
   let implicitStopPatternDetected = false
   let implicitStopActionName = ''
+  let implicitStopActionId: number | null = null
   let implicitStopActionLine: number | null = null
 
   const pushText = (bucket: string[], value: unknown) => {
@@ -599,7 +600,6 @@ export const buildStopTerminationDiagnostics = (
 
     const textCandidates: string[] = [event.message]
     const details = event.details ?? {}
-    pushText(textCandidates, details.name)
     pushText(textCandidates, details.action)
     pushText(textCandidates, details.reason)
 
@@ -607,15 +607,7 @@ export const buildStopTerminationDiagnostics = (
       ? details.action_details as Record<string, unknown>
       : null
     if (actionDetails) {
-      pushText(textCandidates, actionDetails.name)
       pushText(textCandidates, actionDetails.action)
-    }
-
-    const nodeDetails = typeof details.node_details === 'object' && details.node_details
-      ? details.node_details as Record<string, unknown>
-      : null
-    if (nodeDetails) {
-      pushText(textCandidates, nodeDetails.name)
     }
 
     let matchedKeyword = ''
@@ -658,38 +650,27 @@ export const buildStopTerminationDiagnostics = (
     const scanStart = Math.max(0, taskTerminalIndex - 24)
     let actionStartIndex = -1
     let actionStartId: number | null = null
-    let actionStartName = ''
+    let actionStartAction = ''
 
     for (let i = taskTerminalIndex - 1; i >= scanStart; i -= 1) {
       const event = events[i]
       if (event.message !== 'Node.Action.Starting') continue
       actionStartIndex = i
       actionStartId = typeof event.details?.action_id === 'number' ? event.details.action_id : null
-      actionStartName = typeof event.details?.name === 'string' ? event.details.name : ''
+      actionStartAction = typeof event.details?.action === 'string' ? event.details.action : ''
       implicitStopActionLine = typeof event._lineNumber === 'number' ? event._lineNumber : null
       break
     }
 
     if (actionStartIndex >= 0) {
-      let hasPipelineFailedAfterStart = false
+      let firstPipelineFailedIndex = -1
       let hasActionResultAfterStart = false
-      let hasStopHint = stopRegex.test(actionStartName)
-
-      for (let j = Math.max(scanStart, actionStartIndex - 6); j < actionStartIndex; j += 1) {
-        const lookback = events[j]
-        if (lookback.message !== 'Node.Recognition.Succeeded') continue
-        const name = typeof lookback.details?.name === 'string' ? lookback.details.name : ''
-        if (!name) continue
-        if (stopRegex.test(name)) {
-          hasStopHint = true
-          break
-        }
-      }
+      const actionToTerminalGap = taskTerminalIndex - actionStartIndex
 
       for (let j = actionStartIndex + 1; j < taskTerminalIndex; j += 1) {
         const lookahead = events[j]
-        if (lookahead.message === 'Node.PipelineNode.Failed') {
-          hasPipelineFailedAfterStart = true
+        if (lookahead.message === 'Node.PipelineNode.Failed' && firstPipelineFailedIndex < 0) {
+          firstPipelineFailedIndex = j
           continue
         }
         if (lookahead.message === 'Node.Action.Succeeded' || lookahead.message === 'Node.Action.Failed') {
@@ -700,9 +681,15 @@ export const buildStopTerminationDiagnostics = (
         }
       }
 
-      if (hasStopHint && hasPipelineFailedAfterStart && !hasActionResultAfterStart) {
+      const hasPipelineFailedAfterStart = firstPipelineFailedIndex >= 0
+      const failedToTerminalGap = hasPipelineFailedAfterStart
+        ? taskTerminalIndex - firstPipelineFailedIndex
+        : Number.POSITIVE_INFINITY
+
+      if (hasPipelineFailedAfterStart && !hasActionResultAfterStart && actionToTerminalGap <= 8 && failedToTerminalGap <= 4) {
         implicitStopPatternDetected = true
-        implicitStopActionName = actionStartName
+        implicitStopActionName = actionStartAction
+        implicitStopActionId = actionStartId
       }
     }
   }
@@ -742,6 +729,7 @@ export const buildStopTerminationDiagnostics = (
     taskSucceededAfterPipelineFailed,
     implicitStopPatternDetected,
     implicitStopActionName,
+    implicitStopActionId,
     implicitStopActionLine,
     likelyActiveStop,
     confidence,
