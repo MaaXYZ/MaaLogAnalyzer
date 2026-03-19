@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { NAlert, NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NInputNumber, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
 import type { TaskInfo } from '../types'
-import { requestChatCompletion } from '../ai/client'
+import { requestChatCompletion, type ChatCompletionResult } from '../ai/client'
 import {
   buildAiAnalysisContext,
   buildAnchorResolutionDiagnostics,
@@ -634,6 +634,25 @@ const clearMemory = () => {
 
 const ANALYSIS_PROMPT_SOFT_LIMIT = 110000
 const ANALYSIS_TIMEOUT_MS = 180000
+const ANALYSIS_CONCISE_ANSWER_MAX_CHARS = 1800
+const ANALYSIS_CONCISE_MAX_EVIDENCE = 6
+const ANALYSIS_CONCISE_MAX_ROOT_CAUSES = 2
+const ANALYSIS_CONCISE_FIXED_STEPS = 3
+
+const buildConciseRetryPrompt = (baseContent: string) => {
+  return [
+    baseContent,
+    '',
+    '二次精简输出要求（因上次输出被截断）：',
+    `- answer 总长度建议 <= ${ANALYSIS_CONCISE_ANSWER_MAX_CHARS} 字符。`,
+    `- 根因候选最多 ${ANALYSIS_CONCISE_MAX_ROOT_CAUSES} 条。`,
+    `- 证据最多 ${ANALYSIS_CONCISE_MAX_EVIDENCE} 条。`,
+    `- 排查步骤固定 ${ANALYSIS_CONCISE_FIXED_STEPS} 条。`,
+    '- 禁止复述完整上下文或长段引用，只保留可执行结论。',
+    '- 必须继续保持 JSON 输出格式：{"answer":"...","memory_update":"..."}。',
+  ].join('\n')
+}
+
 const getSystemPrompt = () => {
   return [
     '你是 MaaFramework 日志诊断助手，目标是给出“可执行、可验证”的排查结论。',
@@ -654,6 +673,8 @@ const getSystemPrompt = () => {
     '证据段面向用户可读，禁止输出内部字段路径（例如 timelineDiagnostics.longStayNodes[0] 这类文本）。',
     '根因候选至少 2 条，每条包含：置信度(0-100)、关键证据编号、反证点。',
     '排查步骤至少 3 条；每条都要包含：操作、期望现象、若不符合下一步。',
+    `输出长度优先级很高：answer 尽量控制在 ${ANALYSIS_CONCISE_ANSWER_MAX_CHARS} 字符以内。`,
+    `根因候选不超过 ${ANALYSIS_CONCISE_MAX_ROOT_CAUSES} 条，证据不超过 ${ANALYSIS_CONCISE_MAX_EVIDENCE} 条，排查步骤固定 ${ANALYSIS_CONCISE_FIXED_STEPS} 条。`,
     '如果证据不足，不能只说“证据不足”；仍需给低置信度候选 + 最小验证步骤。',
     'memory_update 是供下一轮复用的高密度摘要，<= 1200 字，保留任务状态、关键证据、未决问题。',
     '避免空话：禁止输出“请检查日志”“可能有问题”这类无指向建议。',
@@ -945,7 +966,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     temperature: mode === 'test' ? 0 : settings.temperature,
     maxTokens: mode === 'test'
       ? 256
-      : (settings.maxTokensAuto ? undefined : settings.maxTokens),
+      : settings.maxTokens,
     stream: mode === 'analyze' ? settings.streamResponse : false,
     responseFormatJson: mode === 'analyze',
     retryOnLength: mode === 'analyze',
@@ -963,7 +984,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     ],
   })
 
-  let response
+  let response: ChatCompletionResult
   try {
     response = await sendRequest(userContent)
   } catch (error) {
@@ -984,14 +1005,41 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   const usageModeText = mode === 'analyze'
     ? (useMemoryForThisRound ? '记忆上下文' : (usedCompactContext ? '压缩全量上下文' : '全量上下文'))
     : '连接测试'
-
-  if (response.usage?.totalTokens != null) {
-    usageText.value = `Token 使用: ${response.usage.totalTokens} (prompt ${response.usage.promptTokens ?? '-'} / completion ${response.usage.completionTokens ?? '-'}) | ${usageModeText}`
-  } else {
-    usageText.value = `上下文模式: ${usageModeText}`
+  const updateUsageText = (resp: typeof response, extra = '') => {
+    if (resp.usage?.totalTokens != null) {
+      usageText.value = `Token 使用: ${resp.usage.totalTokens} (prompt ${resp.usage.promptTokens ?? '-'} / completion ${resp.usage.completionTokens ?? '-'}) | ${usageModeText}${extra}`
+    } else {
+      usageText.value = `上下文模式: ${usageModeText}${extra}`
+    }
   }
-  const outputTruncated = response.finishReason === 'length'
-  if (outputTruncated) {
+  updateUsageText(response)
+  let outputTruncated = response.finishReason === 'length'
+
+  if (mode === 'analyze' && outputTruncated) {
+    message.warning('检测到输出被截断，已自动发起一次精简重试。')
+    try {
+      const conciseBase = (() => {
+        if (useMemoryForThisRound) {
+          return buildMemoryPrompt(contextMemory as MemoryState)
+        }
+        const compactPrompt = buildFullContextPrompt(true)
+        return compactPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT
+          ? buildFullContextPrompt(true, true)
+          : compactPrompt
+      })()
+      const concisePrompt = buildConciseRetryPrompt(conciseBase)
+      response = await sendRequest(concisePrompt)
+      updateUsageText(response, ' | 精简重试')
+      outputTruncated = response.finishReason === 'length'
+      if (outputTruncated) {
+        usageText.value = `${usageText.value} | 仍截断`
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      message.warning(`精简重试失败，保留截断结果：${msg}`)
+      usageText.value = `${usageText.value} | 输出截断`
+    }
+  } else if (outputTruncated) {
     usageText.value = `${usageText.value} | 输出截断`
   }
 
@@ -1001,11 +1049,11 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   }
 
   if (outputTruncated) {
-    message.warning('模型输出达到最大长度并被截断，请提高“最大输出”或缩短问题后重试。')
+    message.warning('模型输出仍被截断，请继续缩小范围或拆分问题后重试。')
   }
 
   let parsed = tryParseStructuredOutput(response.text)
-  if (!parsed) {
+  if (!parsed && !outputTruncated) {
     try {
       parsed = await repairStructuredOutput(response.text, key)
       if (parsed) {
