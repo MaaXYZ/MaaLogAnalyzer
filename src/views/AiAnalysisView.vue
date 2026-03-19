@@ -1923,6 +1923,18 @@ const handleAnalyze = async () => {
           </n-flex>
         </n-card>
 
+        <div v-if="conversationTurnViews.length" class="conversation-frozen-toolbar">
+          <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+            <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+              <n-text depth="3" style="font-size: 12px">多轮对话（聊天气泡模式）</n-text>
+              <n-tag size="small" type="info">共 {{ conversationTurnViews.length }} 轮</n-tag>
+            </n-flex>
+            <n-checkbox v-model:checked="conversationFollowMode" size="small">
+              跟随最新
+            </n-checkbox>
+          </n-flex>
+        </div>
+
         <n-scrollbar ref="aiOutputScrollbarRef" class="ai-output-scroll" content-style="width: 100%">
           <div class="ai-output-wrap">
             <n-empty v-if="!resultText && !conversationTurnViews.length" description="暂无结果，先测试连接或发起一次分析" />
@@ -1934,15 +1946,6 @@ const handleAnalyze = async () => {
 
             <n-card v-if="conversationTurnViews.length" size="small" class="conversation-card">
               <n-flex vertical style="gap: 8px">
-                <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
-                  <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
-                    <n-text depth="3" style="font-size: 12px">多轮对话（聊天气泡模式）</n-text>
-                    <n-tag size="small" type="info">共 {{ conversationTurnViews.length }} 轮</n-tag>
-                  </n-flex>
-                  <n-checkbox v-model:checked="conversationFollowMode" size="small">
-                    跟随最新
-                  </n-checkbox>
-                </n-flex>
                 <div ref="turnListRef" class="turn-list">
                   <div v-for="turn in conversationTurnViews" :key="turn.id" class="turn-item">
                     <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
@@ -2260,6 +2263,15 @@ const handleAnalyze = async () => {
   padding-right: 4px;
 }
 
+.conversation-frozen-toolbar {
+  flex-shrink: 0;
+  background: rgba(46, 51, 56, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+}
+
 .turn-item {
   border: 1px solid rgba(127, 231, 196, 0.55);
   border-left: 4px solid rgba(127, 231, 196, 0.9);
@@ -2444,6 +2456,10 @@ const handleAnalyze = async () => {
   .turn-list {
     gap: 8px;
     padding-right: 0;
+  }
+
+  .conversation-frozen-toolbar {
+    padding: 6px 7px;
   }
 
   .turn-item {
