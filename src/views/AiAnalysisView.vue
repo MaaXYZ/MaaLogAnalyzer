@@ -57,6 +57,7 @@ const evidencePanelCollapsed = ref(true)
 const conversationFollowMode = ref(true)
 const activeRoundQuestion = ref('')
 const turnListRef = ref<HTMLElement | null>(null)
+const aiOutputScrollbarRef = ref<{ scrollTo: (options: { top?: number; left?: number; behavior?: ScrollBehavior }) => void } | null>(null)
 
 const memoryModeEnabled = ref(true)
 const MEMORY_SESSION_KEY = 'maa-log-analyzer-ai-memory-state'
@@ -486,22 +487,31 @@ const conversationTurnViews = computed<ConversationTurnView[]>(() => {
 const scrollConversationToBottom = async (behavior: ScrollBehavior = 'auto') => {
   if (!conversationFollowMode.value) return
   await nextTick()
-  const el = turnListRef.value
-  if (!el) return
-  el.scrollTo({ top: el.scrollHeight, behavior })
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+
+  const turnListEl = turnListRef.value
+  if (turnListEl) {
+    turnListEl.scrollTop = turnListEl.scrollHeight
+    if (behavior === 'smooth') {
+      turnListEl.scrollTo({ top: turnListEl.scrollHeight, behavior })
+    }
+  }
+
+  aiOutputScrollbarRef.value?.scrollTo?.({ top: Number.MAX_SAFE_INTEGER, behavior })
 }
 
 watch(
-  () => conversationTurnViews.value.length,
+  () => [conversationTurnViews.value.length, showStreamingTurn.value, currentContextKey.value],
   () => {
     void scrollConversationToBottom('auto')
-  }
+  },
+  { immediate: true, flush: 'post' }
 )
 
 watch(resultText, () => {
   if (!analyzing.value) return
   void scrollConversationToBottom('auto')
-})
+}, { flush: 'post' })
 
 watch(conversationFollowMode, (enabled) => {
   if (!enabled) return
@@ -1377,7 +1387,7 @@ const handleAnalyze = async () => {
           </n-flex>
         </n-card>
 
-        <n-scrollbar class="ai-output-scroll" content-style="width: 100%">
+        <n-scrollbar ref="aiOutputScrollbarRef" class="ai-output-scroll" content-style="width: 100%">
           <div class="ai-output-wrap">
             <n-empty v-if="!resultText && !conversationTurnViews.length" description="暂无结果，先测试连接或发起一次分析" />
             <div
