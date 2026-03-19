@@ -157,6 +157,91 @@ describe('buildDeterministicFindings', () => {
     expect(longStay?.summary).toContain('任务整体成功且无节点失败')
     expect(longStay?.summary).toContain('jump_back')
   })
+
+  it('adds terminal jump_back bounce finding when hit node likely has no next-list', () => {
+    const jumpBackDiagnostics = buildJumpBackFlowDiagnostics([
+      makeEvent('Node.NextList.Starting', {
+        task_id: 9,
+        name: 'CCFlagInCombatMain',
+        list: [{ name: 'CCCombatEnd', anchor: false, jump_back: true }],
+      }, 900),
+      makeEvent('Node.Recognition.Succeeded', { task_id: 9, name: 'CCCombatEnd', reco_id: 9901 }, 901),
+      makeEvent('Node.PipelineNode.Succeeded', { task_id: 9, name: 'CCCombatEnd', node_id: 9902 }, 902),
+      makeEvent('Node.NextList.Starting', {
+        task_id: 9,
+        name: 'CCFlagInCombatMain',
+        list: [{ name: 'CCCombatEnd', anchor: false, jump_back: true }],
+      }, 903),
+    ])
+
+    const findings = buildDeterministicFindings(
+      {
+        longStayNodes: [
+          {
+            node: 'CCFlagInCombatMain',
+            occurrences: 120,
+            spanMs: 450000,
+            failedRecoCount: 600,
+            successRecoCount: 120,
+          },
+        ],
+        repeatedRuns: [],
+        hotspotRecoPairs: [],
+      },
+      null,
+      {
+        taskStatus: 'succeeded',
+        pipelineFailedCount: 1,
+        jumpBackHotNodes: ['CCFlagInCombatMain'],
+        jumpBackFlowDiagnostics: jumpBackDiagnostics,
+      }
+    )
+
+    const bounceFinding = findings.findings.find(item => item.id === 'jumpback_terminal_bounce_loop')
+    expect(bounceFinding).toBeTruthy()
+    expect(bounceFinding?.summary).toContain('命中后回跳且命中节点疑似无后继')
+  })
+
+  it('adds nested action failure finding when nested diagnostics report failures', () => {
+    const findings = buildDeterministicFindings(
+      {
+        longStayNodes: [],
+        repeatedRuns: [],
+        hotspotRecoPairs: [],
+      },
+      null,
+      {
+        taskStatus: 'succeeded',
+        pipelineFailedCount: 1,
+        jumpBackHotNodes: [],
+        nestedActionDiagnostics: {
+          parentNodeWithNestedCount: 2,
+          parentNodeWithNestedFailureCount: 1,
+          nestedGroupCount: 3,
+          nestedGroupFailedCount: 1,
+          nestedActionCount: 6,
+          nestedActionFailedCount: 4,
+          topParentNodes: [
+            {
+              node: 'CCBuyCard',
+              nodeId: 33001,
+              timestamp: '2026-03-18 10:00:00.000',
+              nestedGroupCount: 2,
+              nestedGroupFailedCount: 1,
+              nestedActionCount: 5,
+              nestedActionFailedCount: 4,
+              topFailedNestedActionNames: [{ name: 'BuyCardAction', count: 3 }],
+            },
+          ],
+          summary: 'mock',
+        },
+      }
+    )
+
+    const nestedFinding = findings.findings.find(item => item.id === 'nested_action_failure_hotspot')
+    expect(nestedFinding).toBeTruthy()
+    expect(nestedFinding?.summary).toContain('nested/custom action 失败 4 次')
+  })
 })
 
 describe('buildEventChainDiagnostics', () => {
@@ -312,6 +397,67 @@ describe('buildEventChainDiagnostics', () => {
     expect(loopChain?.triggerEvent).toBe('Node.PipelineNode.Failed')
     expect(loopChain?.triggerNode).toBe('RetryNode')
   })
+
+  it('treats Node.ActionNode.Failed as action_failed trigger', () => {
+    const events = [
+      makeEvent('Node.NextList.Starting', { task_id: 21, name: 'CCBuyCard', list: [{ name: 'A', jump_back: false, anchor: false }] }, 2100),
+      makeEvent('Node.ActionNode.Failed', { task_id: 21, name: 'CCBuyCard', action_id: 3101, node_id: 4101 }, 2101),
+      makeEvent('Node.PipelineNode.Failed', { task_id: 21, name: 'CCBuyCard', node_id: 4101 }, 2102),
+      makeEvent('Tasker.Task.Succeeded', { task_id: 21, entry: 'DemoCard' }, 2103),
+    ]
+
+    const diagnostics = buildEventChainDiagnostics(events)
+    const actionChain = diagnostics.actionFailureChains[0]
+    const onError = diagnostics.onErrorChains.find(item => item.triggerType === 'action_failed')
+
+    expect(diagnostics.messageCounts.actionFailed).toBe(1)
+    expect(actionChain).toBeTruthy()
+    expect(actionChain.summary).toContain('Node.ActionNode.Failed')
+    expect(onError).toBeTruthy()
+    expect(onError?.triggerEvent).toBe('Node.ActionNode.Failed')
+  })
+
+  it('treats PipelineNode.Failed with action_details.success=false as implicit action_failed', () => {
+    const events = [
+      makeEvent('Node.NextList.Starting', { task_id: 22, name: 'CCBuyCard', list: [{ name: 'A', jump_back: false, anchor: false }] }, 2200),
+      makeEvent('Node.PipelineNode.Failed', {
+        task_id: 22,
+        name: 'CCBuyCard',
+        node_id: 4201,
+        action_details: { action_id: 5201, action: 'Click', name: 'CCBuyCard', success: false },
+      }, 2201),
+      makeEvent('Tasker.Task.Succeeded', { task_id: 22, entry: 'DemoCard' }, 2202),
+    ]
+
+    const diagnostics = buildEventChainDiagnostics(events)
+    const actionChain = diagnostics.actionFailureChains.find(item => item.actionId === 5201)
+    const onError = diagnostics.onErrorChains.find(
+      item => item.triggerType === 'action_failed' && item.triggerEvent === 'Node.PipelineNode.Failed'
+    )
+
+    expect(actionChain).toBeTruthy()
+    expect(actionChain?.summary).toContain('implicit_action_failed')
+    expect(onError).toBeTruthy()
+    expect(onError?.triggerActionId).toBe(5201)
+  })
+
+  it('prefers nearby ActionNode.Failed over timeout/no-hit when names differ but task matches', () => {
+    const events = [
+      makeEvent('Node.NextList.Starting', { task_id: 23, name: 'CCBuyCard', list: [{ name: 'RecoA', jump_back: false, anchor: false }] }, 2300),
+      makeEvent('Node.Recognition.Failed', { task_id: 23, name: 'RecoA', reco_id: 5301 }, 2301),
+      makeEvent('Node.NextList.Failed', { task_id: 23, name: 'CCBuyCard', list: [{ name: 'RecoA', jump_back: false, anchor: false }] }, 2302),
+      makeEvent('Node.ActionNode.Failed', { task_id: 23, name: 'CCBuyCard_ActionNodeX', action_id: 6301, node_id: 7301 }, 2303),
+      makeEvent('Node.PipelineNode.Failed', { task_id: 23, name: 'CCBuyCard', node_id: 7302 }, 2304),
+      makeEvent('Tasker.Task.Succeeded', { task_id: 23, entry: 'DemoCard' }, 2305),
+    ]
+
+    const diagnostics = buildEventChainDiagnostics(events)
+    const actionChains = diagnostics.onErrorChains.filter(item => item.triggerType === 'action_failed')
+    const timeoutChains = diagnostics.onErrorChains.filter(item => item.triggerType === 'reco_timeout_or_nohit')
+
+    expect(actionChains.length).toBeGreaterThan(0)
+    expect(timeoutChains.length).toBe(0)
+  })
 })
 
 describe('buildStopTerminationDiagnostics', () => {
@@ -459,6 +605,47 @@ describe('buildJumpBackFlowDiagnostics', () => {
     expect(diagnostics.suspiciousCases.length).toBeGreaterThan(0)
     expect(diagnostics.suspiciousCases[0].classification).toBe('hit_then_failed_no_return')
   })
+
+  it('marks terminal-like jump_back bounce when hit candidate returns without its own NextList', () => {
+    const events: EventNotification[] = [
+      makeEvent('Node.NextList.Starting', {
+        task_id: 81,
+        name: 'ParentTerminal',
+        list: [{ name: 'JumpTerminal', anchor: false, jump_back: true }],
+      }, 810),
+      makeEvent('Node.Recognition.Succeeded', { task_id: 81, name: 'JumpTerminal', reco_id: 9810 }, 811),
+      makeEvent('Node.PipelineNode.Succeeded', { task_id: 81, name: 'JumpTerminal', node_id: 9811 }, 812),
+      makeEvent('Node.NextList.Starting', {
+        task_id: 81,
+        name: 'ParentTerminal',
+        list: [{ name: 'JumpTerminal', anchor: false, jump_back: true }],
+      }, 813),
+
+      makeEvent('Node.NextList.Starting', {
+        task_id: 81,
+        name: 'ParentNormal',
+        list: [{ name: 'JumpNormal', anchor: false, jump_back: true }],
+      }, 814),
+      makeEvent('Node.Recognition.Succeeded', { task_id: 81, name: 'JumpNormal', reco_id: 9812 }, 815),
+      makeEvent('Node.NextList.Starting', {
+        task_id: 81,
+        name: 'JumpNormal',
+        list: [{ name: 'AfterJump', anchor: false, jump_back: false }],
+      }, 816),
+      makeEvent('Node.NextList.Starting', {
+        task_id: 81,
+        name: 'ParentNormal',
+        list: [{ name: 'JumpNormal', anchor: false, jump_back: true }],
+      }, 817),
+    ]
+
+    const diagnostics = buildJumpBackFlowDiagnostics(events)
+
+    expect(diagnostics.terminalBounceCount).toBe(1)
+    expect(diagnostics.terminalBounceCases.length).toBeGreaterThan(0)
+    expect(diagnostics.terminalBounceCases[0].startNode).toBe('ParentTerminal')
+    expect(diagnostics.suspiciousCases.some(item => item.terminalBounceLikely)).toBe(true)
+  })
 })
 
 describe('buildAiAnalysisContext', () => {
@@ -520,5 +707,147 @@ describe('buildAiAnalysisContext', () => {
     expect(context.nextCandidateAvailabilityDiagnostics?.failedTimeoutLikeCount).toBeGreaterThanOrEqual(1)
     expect(context.anchorResolutionDiagnostics?.unresolvedAnchorLikelyCount).toBe(0)
     expect(context.jumpBackFlowDiagnostics?.hitThenFailedNoReturnCount).toBe(0)
+  })
+
+  it('includes questionNodeDiagnostics for explicitly asked node', () => {
+    const task: TaskInfo = {
+      task_id: 77,
+      entry: 'DemoEntry',
+      hash: 'h77',
+      uuid: 'u77',
+      start_time: '2026-03-18 14:00:00.000',
+      end_time: '2026-03-18 14:00:03.000',
+      status: 'succeeded',
+      nodes: [
+        {
+          node_id: 7701,
+          name: 'CCFlagInCombatMain',
+          timestamp: '2026-03-18 14:00:00.100',
+          status: 'success',
+          task_id: 77,
+          next_list: [{ name: 'CCBuyCard', anchor: false, jump_back: true }],
+          recognition_attempts: [
+            { reco_id: 8701, name: 'CCBuyCard', timestamp: '2026-03-18 14:00:00.120', status: 'success' },
+          ],
+        },
+        {
+          node_id: 7702,
+          name: 'CCBuyCard',
+          timestamp: '2026-03-18 14:00:00.300',
+          status: 'success',
+          task_id: 77,
+          action_details: { action_id: 9701, action: 'Custom', box: [0, 0, 0, 0], detail: null, name: 'CCBuyCard', success: true },
+          next_list: [],
+          recognition_attempts: [
+            { reco_id: 8702, name: 'CritterCrash', timestamp: '2026-03-18 14:00:00.310', status: 'failed' },
+          ],
+          nested_action_nodes: [
+            {
+              task_id: 177,
+              name: 'SubTask',
+              timestamp: '2026-03-18 14:00:00.320',
+              status: 'success',
+              nested_actions: [
+                {
+                  node_id: 17701,
+                  name: 'SubActionNode',
+                  timestamp: '2026-03-18 14:00:00.321',
+                  status: 'success',
+                  recognition_attempts: [
+                    { reco_id: 18701, name: 'SubReco', timestamp: '2026-03-18 14:00:00.322', status: 'success' },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      events: [
+        makeEvent('Node.NextList.Starting', { task_id: 77, name: 'CCFlagInCombatMain', list: [{ name: 'CCBuyCard', jump_back: true, anchor: false }] }, 770),
+        makeEvent('Node.Recognition.Succeeded', { task_id: 77, name: 'CCBuyCard', reco_id: 8701 }, 771),
+        makeEvent('Node.PipelineNode.Succeeded', { task_id: 77, name: 'CCBuyCard', node_id: 7702 }, 772),
+        makeEvent('Node.NextList.Starting', { task_id: 77, name: 'CCFlagInCombatMain', list: [{ name: 'CCBuyCard', jump_back: true, anchor: false }] }, 773),
+        makeEvent('Tasker.Task.Succeeded', { task_id: 77, entry: 'DemoEntry' }, 774),
+      ],
+      duration: 3000,
+      _startEventIndex: 0,
+      _endEventIndex: 4,
+    }
+
+    const context = buildAiAnalysisContext({
+      tasks: [task],
+      selectedTask: task,
+      question: '给出你知道的 CCBuyCard 相关数据',
+      includeKnowledgePack: false,
+      includeSignalLines: false,
+    }) as any
+
+    const diagnostics = Array.isArray(context.questionNodeDiagnostics) ? context.questionNodeDiagnostics : []
+    expect(diagnostics.length).toBeGreaterThan(0)
+    const target = diagnostics.find((item: any) => item.node === 'CCBuyCard')
+    expect(target).toBeTruthy()
+    expect(target.occurrences).toBeGreaterThanOrEqual(1)
+    expect(Array.isArray(target.jumpBackCandidates)).toBe(true)
+    expect(target.nestedActionGroupCount).toBeGreaterThanOrEqual(1)
+  })
+
+  it('includes nestedActionDiagnostics summary when nested failures exist', () => {
+    const task: TaskInfo = {
+      task_id: 88,
+      entry: 'DemoNested',
+      hash: 'h88',
+      uuid: 'u88',
+      start_time: '2026-03-18 15:00:00.000',
+      end_time: '2026-03-18 15:00:03.000',
+      status: 'succeeded',
+      nodes: [
+        {
+          node_id: 8801,
+          name: 'ParentNode',
+          timestamp: '2026-03-18 15:00:01.000',
+          status: 'success',
+          task_id: 88,
+          next_list: [],
+          recognition_attempts: [],
+          nested_action_nodes: [
+            {
+              task_id: 188,
+              name: 'SubTaskA',
+              timestamp: '2026-03-18 15:00:01.100',
+              status: 'failed',
+              nested_actions: [
+                {
+                  node_id: 18801,
+                  name: 'SubActionA',
+                  timestamp: '2026-03-18 15:00:01.110',
+                  status: 'failed',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      events: [
+        makeEvent('Tasker.Task.Starting', { task_id: 88, entry: 'DemoNested' }, 880),
+        makeEvent('Tasker.Task.Succeeded', { task_id: 88, entry: 'DemoNested' }, 881),
+      ],
+      duration: 3000,
+      _startEventIndex: 0,
+      _endEventIndex: 1,
+    }
+
+    const context = buildAiAnalysisContext({
+      tasks: [task],
+      selectedTask: task,
+      question: '分析这个任务',
+      includeKnowledgePack: false,
+      includeSignalLines: false,
+    }) as any
+
+    const nested = context.nestedActionDiagnostics
+    expect(nested).toBeTruthy()
+    expect(nested.nestedActionFailedCount).toBeGreaterThanOrEqual(1)
+    expect(Array.isArray(nested.topParentNodes)).toBe(true)
+    expect(nested.topParentNodes[0]?.node).toBe('ParentNode')
   })
 })

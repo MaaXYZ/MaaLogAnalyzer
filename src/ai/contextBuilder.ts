@@ -41,6 +41,14 @@ interface TimelineNodeItem {
   name: string
   status: 'success' | 'failed'
   timestamp: string
+  action: string
+  actionName: string
+  nestedActionGroupCount: number
+  nestedActionNodeCount: number
+  nestedActionFailedNodeCount: number
+  nestedRecognitionInActionCount: number
+  nestedActionTopNames: Array<{ name: string; count: number }>
+  nestedRecognitionTopNames: Array<{ name: string; count: number }>
   recognition: TimelineRecoItem[]
   next_list: TimelineNextItem[]
 }
@@ -49,6 +57,21 @@ const truncate = (value: string, max = 260): string => {
   const text = value.replace(/\s+/g, ' ').trim()
   if (text.length <= max) return text
   return `${text.slice(0, max)}...`
+}
+
+const toTopNameCounts = (names: string[], limit = 3): Array<{ name: string; count: number }> => {
+  const map = new Map<string, number>()
+  for (const name of names) {
+    if (!name) continue
+    map.set(name, (map.get(name) ?? 0) + 1)
+  }
+  return Array.from(map.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count
+      return a.name.localeCompare(b.name)
+    })
+    .slice(0, limit)
 }
 
 const pickBestTarget = (targets: AiLoadedTarget[], preferredId = ''): AiLoadedTarget | null => {
@@ -261,16 +284,80 @@ export const buildEventChainDiagnostics = (events: EventNotification[]) => {
     }
   }
 
-  const findRecentActionFailed = (fromIndex: number, nodeName: string, window = 10): number => {
+  const findRecentActionFailed = (
+    fromIndex: number,
+    nodeName: string,
+    expectedActionId: number | null,
+    expectedTaskId: number | null,
+    window = 10
+  ): number => {
+    let nearFallback = -1
     for (let j = fromIndex - 1; j >= 0 && fromIndex - j <= window; j -= 1) {
       const candidate = events[j]
-      if (candidate.message !== 'Node.Action.Failed') continue
+      if (candidate.message !== 'Node.Action.Failed' && candidate.message !== 'Node.ActionNode.Failed') continue
       const candidateName = typeof candidate.details?.name === 'string' ? candidate.details.name : ''
-      if (!nodeName || !candidateName || candidateName === nodeName) {
+      const candidateActionId = readActionId(candidate)
+      const candidateTaskId = typeof candidate.details?.task_id === 'number' ? candidate.details.task_id : null
+      const actionIdMatched = expectedActionId != null && candidateActionId != null && candidateActionId === expectedActionId
+      const taskIdMatched = expectedTaskId != null && candidateTaskId != null && candidateTaskId === expectedTaskId
+      const nameMatched = !nodeName || !candidateName || candidateName === nodeName
+
+      if (actionIdMatched || (nameMatched && (taskIdMatched || expectedTaskId == null))) {
         return j
       }
+
+      if (nearFallback < 0 && taskIdMatched && fromIndex - j <= 4) {
+        nearFallback = j
+      }
     }
-    return -1
+    return nearFallback
+  }
+
+  const readActionId = (event: EventNotification | null): number | null => {
+    if (!event) return null
+    const details = event.details ?? {}
+    if (typeof details.action_id === 'number') return details.action_id
+
+    const actionDetails = typeof details.action_details === 'object' && details.action_details
+      ? details.action_details as Record<string, unknown>
+      : null
+    if (actionDetails && typeof actionDetails.action_id === 'number') return actionDetails.action_id
+
+    const nodeDetails = typeof details.node_details === 'object' && details.node_details
+      ? details.node_details as Record<string, unknown>
+      : null
+    if (nodeDetails && typeof nodeDetails.action_id === 'number') return nodeDetails.action_id
+
+    return null
+  }
+
+  const readActionName = (event: EventNotification | null): string => {
+    if (!event) return ''
+    const details = event.details ?? {}
+    if (typeof details.action === 'string' && details.action.trim()) return details.action
+    if (typeof details.name === 'string' && details.name.trim()) return details.name
+
+    const actionDetails = typeof details.action_details === 'object' && details.action_details
+      ? details.action_details as Record<string, unknown>
+      : null
+    if (actionDetails) {
+      if (typeof actionDetails.action === 'string' && actionDetails.action.trim()) return actionDetails.action
+      if (typeof actionDetails.name === 'string' && actionDetails.name.trim()) return actionDetails.name
+    }
+    return ''
+  }
+
+  const hasMeaningfulFailedActionDetails = (event: EventNotification): boolean => {
+    if (event.message !== 'Node.PipelineNode.Failed') return false
+    const actionDetails = typeof event.details?.action_details === 'object' && event.details.action_details
+      ? event.details.action_details as Record<string, unknown>
+      : null
+    if (!actionDetails) return false
+    if (actionDetails.success !== false) return false
+    const actionId = typeof actionDetails.action_id === 'number' ? actionDetails.action_id : 0
+    const action = typeof actionDetails.action === 'string' ? actionDetails.action.trim() : ''
+    const name = typeof actionDetails.name === 'string' ? actionDetails.name.trim() : ''
+    return actionId > 0 || Boolean(action) || Boolean(name)
   }
 
   const findRecentNextListFailed = (
@@ -351,7 +438,7 @@ export const buildEventChainDiagnostics = (events: EventNotification[]) => {
     if (message === 'Node.NextList.Succeeded') messageCounts.nextListSucceeded += 1
     if (message === 'Node.Recognition.Failed') messageCounts.recognitionFailed += 1
     if (message === 'Node.Recognition.Succeeded') messageCounts.recognitionSucceeded += 1
-    if (message === 'Node.Action.Failed') messageCounts.actionFailed += 1
+    if (message === 'Node.Action.Failed' || message === 'Node.ActionNode.Failed') messageCounts.actionFailed += 1
     if (message === 'Node.PipelineNode.Failed') messageCounts.pipelineFailed += 1
     if (message === 'Node.PipelineNode.Succeeded') messageCounts.pipelineSucceeded += 1
     if (message === 'Tasker.Task.Failed') messageCounts.taskFailed += 1
@@ -432,11 +519,12 @@ export const buildEventChainDiagnostics = (events: EventNotification[]) => {
       continue
     }
 
-    if (message === 'Node.Action.Failed') {
+    if (message === 'Node.Action.Failed' || message === 'Node.ActionNode.Failed') {
       const steps: EventChainStep[] = [toEventChainStep(event, i)]
-      const actionId = typeof event.details?.action_id === 'number' ? event.details.action_id : null
+      const actionId = readActionId(event)
       const nodeId = typeof event.details?.node_id === 'number' ? event.details.node_id : null
       const nodeName = typeof event.details?.name === 'string' ? event.details.name : ''
+      const triggerEventName = message
 
       let pipelineFailed: EventNotification | null = null
       for (let j = i + 1; j < events.length && j <= i + 24; j += 1) {
@@ -473,7 +561,7 @@ export const buildEventChainDiagnostics = (events: EventNotification[]) => {
         hasTaskFailed: Boolean(taskFailed),
         riskLevel,
         summary:
-          `Action.Failed(${nodeName || 'unknown'}) -> ` +
+          `${triggerEventName}(${nodeName || 'unknown'}) -> ` +
           `${pipelineFailed ? 'PipelineNode.Failed' : 'no PipelineNode.Failed'} -> ` +
           `${taskFailed ? 'Tasker.Task.Failed' : 'task not failed in lookahead'}`,
         steps,
@@ -482,20 +570,60 @@ export const buildEventChainDiagnostics = (events: EventNotification[]) => {
       pushOnErrorChain(
         'action_failed',
         i,
-        'Node.Action.Failed',
+        triggerEventName,
         nodeName,
         actionId,
         0,
         followUp =>
-          `on_error 触发源 Action.Failed（${nodeName || 'unknown'}） -> ${followUp.outcomeEvent}` +
+          `on_error 触发源 ${triggerEventName}（${nodeName || 'unknown'}） -> ${followUp.outcomeEvent}` +
           (followUp.fallbackFirstNode ? `，fallback=${followUp.fallbackFirstNode}` : '')
       )
     }
 
     if (message === 'Node.PipelineNode.Failed') {
       const nodeName = typeof event.details?.name === 'string' ? event.details.name : ''
-      const actionFailedIndex = findRecentActionFailed(i, nodeName, 10)
+      const actionId = readActionId(event)
+      const taskId = typeof event.details?.task_id === 'number' ? event.details.task_id : null
+      const actionFailedIndex = findRecentActionFailed(i, nodeName, actionId, taskId, 10)
       if (actionFailedIndex >= 0) continue
+
+      if (hasMeaningfulFailedActionDetails(event)) {
+        const actionName = readActionName(event)
+        const implicitSteps: EventChainStep[] = [toEventChainStep(event, i)]
+        let taskFailed: EventNotification | null = null
+        for (let j = i + 1; j < events.length && j <= i + 72; j += 1) {
+          const lookahead = events[j]
+          if (lookahead.message !== 'Tasker.Task.Failed') continue
+          taskFailed = lookahead
+          if (implicitSteps.length < 7) implicitSteps.push(toEventChainStep(lookahead, j))
+          break
+        }
+
+        actionFailureChains.push({
+          actionNode: nodeName || actionName,
+          actionId,
+          hasPipelineFailed: true,
+          hasTaskFailed: Boolean(taskFailed),
+          riskLevel: taskFailed ? 'high' : 'medium',
+          summary:
+            `PipelineNode.Failed(implicit_action_failed, node=${nodeName || 'unknown'}, action=${actionName || 'unknown'}) -> ` +
+            `${taskFailed ? 'Tasker.Task.Failed' : 'task not failed in lookahead'}`,
+          steps: implicitSteps,
+        })
+
+        pushOnErrorChain(
+          'action_failed',
+          i,
+          'Node.PipelineNode.Failed',
+          nodeName || actionName,
+          actionId,
+          0,
+          followUp =>
+            `on_error 触发源 PipelineNode.Failed(implicit action failure, node=${nodeName || 'unknown'}, action=${actionName || 'unknown'}) -> ${followUp.outcomeEvent}` +
+            (followUp.fallbackFirstNode ? `，fallback=${followUp.fallbackFirstNode}` : '')
+        )
+        continue
+      }
 
       const timeoutLike = findRecentNextListFailed(i, nodeName, 40)
       if (timeoutLike.triggerIndex >= 0) {
@@ -996,6 +1124,8 @@ export const buildJumpBackFlowDiagnostics = (events: EventNotification[]) => {
     failureLine: number | null
     returnObserved: boolean
     returnLine: number | null
+    hitNodeNextListStarted: boolean
+    terminalBounceLikely: boolean
     terminalEvent: string
     terminalLine: number | null
     classification: JumpBackFlowClass
@@ -1035,6 +1165,7 @@ export const buildJumpBackFlowDiagnostics = (events: EventNotification[]) => {
     let failureAfterHit = ''
     let failureLine: number | null = null
     let returnLine: number | null = null
+    let hitNodeNextListStarted = false
     let terminalEvent = 'unknown'
     let terminalLine: number | null = null
 
@@ -1056,6 +1187,11 @@ export const buildJumpBackFlowDiagnostics = (events: EventNotification[]) => {
         continue
       }
 
+      if (hitCandidate && lookahead.message === 'Node.NextList.Starting' && lookaheadName === hitCandidate) {
+        hitNodeNextListStarted = true
+        if (steps.length < 7) steps.push(toEventChainStep(lookahead, j))
+      }
+
       if (hitCandidate && returnLine == null && lookahead.message === 'Node.NextList.Starting' && lookaheadName === startNode) {
         returnLine = typeof lookahead._lineNumber === 'number' ? lookahead._lineNumber : null
         if (steps.length < 7) steps.push(toEventChainStep(lookahead, j))
@@ -1070,6 +1206,7 @@ export const buildJumpBackFlowDiagnostics = (events: EventNotification[]) => {
       }
     }
 
+    const terminalBounceLikely = Boolean(hitCandidate && returnLine != null && !hitNodeNextListStarted)
     const classification: JumpBackFlowClass = !hitCandidate
       ? 'not_hit'
       : returnLine != null
@@ -1081,7 +1218,9 @@ export const buildJumpBackFlowDiagnostics = (events: EventNotification[]) => {
     const summary = classification === 'not_hit'
       ? `jump_back 候选在 ${startNode || 'unknown'} 未命中。`
       : classification === 'hit_then_returned'
-        ? `jump_back 候选命中后观察到父节点回到 NextList（${startNode || 'unknown'}）。`
+        ? terminalBounceLikely
+          ? `jump_back 候选命中后回到父节点（${startNode || 'unknown'}），但命中节点未观察到 NextList.Starting，疑似无后继/终止节点导致回跳复检。`
+          : `jump_back 候选命中后观察到父节点回到 NextList（${startNode || 'unknown'}）。`
         : classification === 'hit_then_failed_no_return'
           ? `jump_back 候选命中后出现失败链路（${failureAfterHit}），未观察到父节点回跳继续识别。`
           : `jump_back 候选命中后未观察到回跳，且未见明确失败信号。`
@@ -1097,6 +1236,8 @@ export const buildJumpBackFlowDiagnostics = (events: EventNotification[]) => {
       failureLine,
       returnObserved: returnLine != null,
       returnLine,
+      hitNodeNextListStarted,
+      terminalBounceLikely,
       terminalEvent,
       terminalLine,
       classification,
@@ -1108,8 +1249,72 @@ export const buildJumpBackFlowDiagnostics = (events: EventNotification[]) => {
   const hitThenFailedNoReturn = cases.filter(item => item.classification === 'hit_then_failed_no_return')
   const hitThenReturned = cases.filter(item => item.classification === 'hit_then_returned')
   const hitNoReturnObserved = cases.filter(item => item.classification === 'hit_no_return_observed')
-  const suspiciousCases = hitThenFailedNoReturn
-    .sort((a, b) => (b.startLine ?? -1) - (a.startLine ?? -1))
+  const terminalBounceCases = hitThenReturned.filter(item => item.terminalBounceLikely)
+  const terminalBounceByPair = new Map<string, {
+    startNode: string
+    hitCandidate: string
+    count: number
+    firstLine: number | null
+    lastLine: number | null
+  }>()
+  for (const item of terminalBounceCases) {
+    const key = `${item.startNode}@@${item.hitCandidate}`
+    const current = terminalBounceByPair.get(key) ?? {
+      startNode: item.startNode,
+      hitCandidate: item.hitCandidate,
+      count: 0,
+      firstLine: item.startLine,
+      lastLine: item.startLine,
+    }
+    current.count += 1
+    if (item.startLine != null) {
+      if (current.firstLine == null || item.startLine < current.firstLine) current.firstLine = item.startLine
+      if (current.lastLine == null || item.startLine > current.lastLine) current.lastLine = item.startLine
+    }
+    terminalBounceByPair.set(key, current)
+  }
+
+  const pairStatsMap = new Map<string, {
+    startNode: string
+    hitCandidate: string
+    totalHitCount: number
+    hitThenReturnedCount: number
+    hitThenFailedNoReturnCount: number
+    hitNoReturnObservedCount: number
+    terminalBounceCount: number
+    latestLine: number | null
+  }>()
+  for (const item of cases) {
+    if (!item.hitCandidate) continue
+    const key = `${item.startNode}@@${item.hitCandidate}`
+    const current = pairStatsMap.get(key) ?? {
+      startNode: item.startNode,
+      hitCandidate: item.hitCandidate,
+      totalHitCount: 0,
+      hitThenReturnedCount: 0,
+      hitThenFailedNoReturnCount: 0,
+      hitNoReturnObservedCount: 0,
+      terminalBounceCount: 0,
+      latestLine: item.startLine,
+    }
+    current.totalHitCount += 1
+    if (item.classification === 'hit_then_returned') current.hitThenReturnedCount += 1
+    if (item.classification === 'hit_then_failed_no_return') current.hitThenFailedNoReturnCount += 1
+    if (item.classification === 'hit_no_return_observed') current.hitNoReturnObservedCount += 1
+    if (item.terminalBounceLikely) current.terminalBounceCount += 1
+    if (item.startLine != null && (current.latestLine == null || item.startLine > current.latestLine)) {
+      current.latestLine = item.startLine
+    }
+    pairStatsMap.set(key, current)
+  }
+
+  const suspiciousCases = [...hitThenFailedNoReturn, ...terminalBounceCases]
+    .sort((a, b) => {
+      const rank = (item: typeof a) => item.classification === 'hit_then_failed_no_return' ? 2 : 1
+      const rankDiff = rank(b) - rank(a)
+      if (rankDiff !== 0) return rankDiff
+      return (b.startLine ?? -1) - (a.startLine ?? -1)
+    })
     .slice(0, 10)
 
   return {
@@ -1117,8 +1322,340 @@ export const buildJumpBackFlowDiagnostics = (events: EventNotification[]) => {
     hitThenReturnedCount: hitThenReturned.length,
     hitThenFailedNoReturnCount: hitThenFailedNoReturn.length,
     hitNoReturnObservedCount: hitNoReturnObserved.length,
+    terminalBounceCount: terminalBounceCases.length,
+    terminalBounceCases: Array.from(terminalBounceByPair.values())
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count
+        return (b.lastLine ?? -1) - (a.lastLine ?? -1)
+      })
+      .slice(0, 8),
+    pairStats: Array.from(pairStatsMap.values())
+      .sort((a, b) => {
+        if (b.totalHitCount !== a.totalHitCount) return b.totalHitCount - a.totalHitCount
+        if (b.terminalBounceCount !== a.terminalBounceCount) return b.terminalBounceCount - a.terminalBounceCount
+        return (b.latestLine ?? -1) - (a.latestLine ?? -1)
+      })
+      .slice(0, 24),
     suspiciousCases,
-    summary: `jump_back窗口=${cases.length}，命中并回跳=${hitThenReturned.length}，命中后失败且未回跳=${hitThenFailedNoReturn.length}，命中后未观察到回跳=${hitNoReturnObserved.length}。`,
+    summary: `jump_back窗口=${cases.length}，命中并回跳=${hitThenReturned.length}，命中后失败且未回跳=${hitThenFailedNoReturn.length}，命中后未观察到回跳=${hitNoReturnObserved.length}，命中后回跳且命中节点疑似无后继=${terminalBounceCases.length}。`,
+  }
+}
+
+const extractQuestionIdentifiers = (question: string): string[] => {
+  const tokens = question.match(/\b[A-Za-z_][A-Za-z0-9_]{2,}\b/g) ?? []
+  const stopWords = new Set([
+    'json',
+    'answer',
+    'memory',
+    'update',
+    'task',
+    'node',
+    'next',
+    'list',
+    'jump',
+    'back',
+    'failed',
+    'succeeded',
+    'pipeline',
+    'action',
+    'recognition',
+    'error',
+  ])
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const token of tokens) {
+    const lower = token.toLowerCase()
+    if (stopWords.has(lower)) continue
+    if (seen.has(lower)) continue
+    seen.add(lower)
+    out.push(token)
+    if (out.length >= 6) break
+  }
+  return out
+}
+
+const buildQuestionNodeDiagnostics = (
+  question: string,
+  task: TaskInfo | null,
+  jumpBackFlowDiagnostics: ReturnType<typeof buildJumpBackFlowDiagnostics>
+) => {
+  if (!task) return []
+  const identifiers = extractQuestionIdentifiers(question)
+  if (identifiers.length === 0) return []
+
+  const allNodeNames = Array.from(new Set(task.nodes.map(item => item.name)))
+  const pairStats = Array.isArray(jumpBackFlowDiagnostics?.pairStats)
+    ? jumpBackFlowDiagnostics.pairStats
+    : []
+
+  const diagnostics: Array<Record<string, unknown>> = []
+  for (const identifier of identifiers) {
+    const lower = identifier.toLowerCase()
+    const exact = allNodeNames.filter(name => name.toLowerCase() === lower)
+    const fuzzy = exact.length > 0
+      ? []
+      : allNodeNames.filter(name => lower.length >= 6 && name.toLowerCase().includes(lower))
+    const matchedNames = [...exact, ...fuzzy].slice(0, 2)
+
+    if (matchedNames.length === 0) {
+      diagnostics.push({
+        query: identifier,
+        matched: false,
+      })
+      continue
+    }
+
+    for (const nodeName of matchedNames) {
+      const nodeRows = task.nodes.filter(item => item.name === nodeName)
+      const timestamps = nodeRows
+        .map(item => toTimestampMs(item.timestamp))
+        .filter((value): value is number => value != null)
+      const firstTs = timestamps.length > 0 ? Math.min(...timestamps) : null
+      const lastTs = timestamps.length > 0 ? Math.max(...timestamps) : null
+      const spanMs = firstTs != null && lastTs != null ? Math.max(0, lastTs - firstTs) : 0
+      const failedNodeCount = nodeRows.filter(item => item.status === 'failed').length
+      const failedRecoCount = nodeRows.reduce(
+        (sum, item) => sum + item.recognition_attempts.filter(reco => reco.status === 'failed').length,
+        0
+      )
+      const successRecoCount = nodeRows.reduce(
+        (sum, item) => sum + item.recognition_attempts.filter(reco => reco.status === 'success').length,
+        0
+      )
+
+      const recoStats = new Map<string, { failed: number; success: number; total: number }>()
+      const jumpBackCandidateStats = new Map<string, { referencedCount: number; anchorCount: number }>()
+      const actionKindStats = new Map<string, number>()
+      let nestedActionGroupCount = 0
+      let nestedActionNodeCount = 0
+      let nestedActionFailedNodeCount = 0
+      let nestedRecognitionInActionCount = 0
+
+      for (const row of nodeRows) {
+        const actionKindRaw = row.action_details?.action || row.action_details?.name || ''
+        const actionKind = typeof actionKindRaw === 'string' ? actionKindRaw.trim() : ''
+        if (actionKind) actionKindStats.set(actionKind, (actionKindStats.get(actionKind) ?? 0) + 1)
+
+        for (const reco of row.recognition_attempts) {
+          const current = recoStats.get(reco.name) ?? { failed: 0, success: 0, total: 0 }
+          current.total += 1
+          if (reco.status === 'failed') current.failed += 1
+          if (reco.status === 'success') current.success += 1
+          recoStats.set(reco.name, current)
+        }
+
+        for (const nextItem of row.next_list) {
+          if (!nextItem.jump_back) continue
+          const current = jumpBackCandidateStats.get(nextItem.name) ?? { referencedCount: 0, anchorCount: 0 }
+          current.referencedCount += 1
+          if (nextItem.anchor) current.anchorCount += 1
+          jumpBackCandidateStats.set(nextItem.name, current)
+        }
+
+        const nestedGroups = row.nested_action_nodes ?? []
+        nestedActionGroupCount += nestedGroups.length
+        for (const group of nestedGroups) {
+          const nestedActions = group.nested_actions ?? []
+          nestedActionNodeCount += nestedActions.length
+          nestedActionFailedNodeCount += nestedActions.filter(item => item.status === 'failed').length
+          for (const nestedAction of nestedActions) {
+            nestedRecognitionInActionCount += nestedAction.recognition_attempts?.length ?? 0
+          }
+        }
+      }
+
+      const jumpBackCandidates = Array.from(jumpBackCandidateStats.entries())
+        .map(([name, stat]) => {
+          const candidateNodes = task.nodes.filter(item => item.name === name)
+          const candidateWithNextListCount = candidateNodes.filter(item => item.next_list.length > 0).length
+          const candidateWithoutNextListCount = candidateNodes.length - candidateWithNextListCount
+          const candidateActionKinds = Array.from(
+            new Set(
+              candidateNodes
+                .map(item => item.action_details?.action || item.action_details?.name || '')
+                .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+            )
+          ).slice(0, 4)
+          const pair = pairStats.find(
+            item => item.startNode === nodeName && item.hitCandidate === name
+          ) as Record<string, unknown> | undefined
+          return {
+            name,
+            referencedCount: stat.referencedCount,
+            anchorCount: stat.anchorCount,
+            hitCount: Number(pair?.totalHitCount ?? 0),
+            terminalBounceCount: Number(pair?.terminalBounceCount ?? 0),
+            candidateNodeOccurrences: candidateNodes.length,
+            candidateWithNextListCount,
+            candidateWithoutNextListCount,
+            candidateActionKinds,
+            candidateNestedActionGroupCount: candidateNodes.reduce((sum, item) => sum + (item.nested_action_nodes?.length ?? 0), 0),
+          }
+        })
+        .sort((a, b) => {
+          if (b.referencedCount !== a.referencedCount) return b.referencedCount - a.referencedCount
+          if (b.terminalBounceCount !== a.terminalBounceCount) return b.terminalBounceCount - a.terminalBounceCount
+          return b.hitCount - a.hitCount
+        })
+        .slice(0, 6)
+
+      const hitAsJumpBackTargetStats = pairStats
+        .filter(item => item.hitCandidate === nodeName)
+        .reduce(
+          (acc, item) => {
+            acc.totalHitCount += Number(item.totalHitCount ?? 0)
+            acc.terminalBounceCount += Number(item.terminalBounceCount ?? 0)
+            acc.fromNodes.push(String(item.startNode ?? ''))
+            return acc
+          },
+          {
+            totalHitCount: 0,
+            terminalBounceCount: 0,
+            fromNodes: [] as string[],
+          }
+        )
+
+      diagnostics.push({
+        query: identifier,
+        matched: true,
+        node: nodeName,
+        occurrences: nodeRows.length,
+        spanMs,
+        failedNodeCount,
+        failedRecoCount,
+        successRecoCount,
+        topFailedRecognition: Array.from(recoStats.entries())
+          .map(([name, stat]) => ({
+            name,
+            failed: stat.failed,
+            success: stat.success,
+            total: stat.total,
+          }))
+          .filter(item => item.failed > 0)
+          .sort((a, b) => {
+            if (b.failed !== a.failed) return b.failed - a.failed
+            return b.total - a.total
+          })
+          .slice(0, 6),
+        jumpBackCandidates,
+        actionKinds: Array.from(actionKindStats.entries())
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 4),
+        nestedActionGroupCount,
+        nestedActionNodeCount,
+        nestedActionFailedNodeCount,
+        nestedRecognitionInActionCount,
+        hitAsJumpBackTargetTotalCount: hitAsJumpBackTargetStats.totalHitCount,
+        hitAsJumpBackTargetTerminalBounceCount: hitAsJumpBackTargetStats.terminalBounceCount,
+        hitAsJumpBackTargetFromNodes: Array.from(new Set(hitAsJumpBackTargetStats.fromNodes.filter(Boolean))).slice(0, 6),
+      })
+    }
+  }
+
+  return diagnostics.slice(0, 8)
+}
+
+const buildNestedActionDiagnostics = (task: TaskInfo | null) => {
+  if (!task) {
+    return {
+      parentNodeWithNestedCount: 0,
+      parentNodeWithNestedFailureCount: 0,
+      nestedGroupCount: 0,
+      nestedGroupFailedCount: 0,
+      nestedActionCount: 0,
+      nestedActionFailedCount: 0,
+      topParentNodes: [] as Array<{
+        node: string
+        nodeId: number
+        timestamp: string
+        nestedGroupCount: number
+        nestedGroupFailedCount: number
+        nestedActionCount: number
+        nestedActionFailedCount: number
+        topFailedNestedActionNames: Array<{ name: string; count: number }>
+      }>,
+      summary: '当前任务无 nested action 数据。',
+    }
+  }
+
+  const withNested = task.nodes.filter(node => (node.nested_action_nodes?.length ?? 0) > 0)
+  const byParent: Array<{
+    node: string
+    nodeId: number
+    timestamp: string
+    nestedGroupCount: number
+    nestedGroupFailedCount: number
+    nestedActionCount: number
+    nestedActionFailedCount: number
+    topFailedNestedActionNames: Array<{ name: string; count: number }>
+  }> = []
+
+  let nestedGroupCount = 0
+  let nestedGroupFailedCount = 0
+  let nestedActionCount = 0
+  let nestedActionFailedCount = 0
+
+  for (const node of withNested) {
+    const groups = node.nested_action_nodes ?? []
+    let groupFailed = 0
+    let actionCount = 0
+    let actionFailed = 0
+    const failedNames: string[] = []
+
+    for (const group of groups) {
+      nestedGroupCount += 1
+      if (group.status === 'failed') {
+        nestedGroupFailedCount += 1
+        groupFailed += 1
+      }
+
+      const nestedActions = group.nested_actions ?? []
+      actionCount += nestedActions.length
+      nestedActionCount += nestedActions.length
+      for (const action of nestedActions) {
+        if (action.status === 'failed') {
+          actionFailed += 1
+          nestedActionFailedCount += 1
+          if (action.name) failedNames.push(action.name)
+        }
+      }
+    }
+
+    if (groupFailed > 0 || actionFailed > 0) {
+      byParent.push({
+        node: node.name,
+        nodeId: node.node_id,
+        timestamp: node.timestamp,
+        nestedGroupCount: groups.length,
+        nestedGroupFailedCount: groupFailed,
+        nestedActionCount: actionCount,
+        nestedActionFailedCount: actionFailed,
+        topFailedNestedActionNames: toTopNameCounts(failedNames, 4),
+      })
+    }
+  }
+
+  byParent.sort((a, b) => {
+    if (b.nestedActionFailedCount !== a.nestedActionFailedCount) return b.nestedActionFailedCount - a.nestedActionFailedCount
+    if (b.nestedGroupFailedCount !== a.nestedGroupFailedCount) return b.nestedGroupFailedCount - a.nestedGroupFailedCount
+    return b.nestedActionCount - a.nestedActionCount
+  })
+
+  return {
+    parentNodeWithNestedCount: withNested.length,
+    parentNodeWithNestedFailureCount: byParent.length,
+    nestedGroupCount,
+    nestedGroupFailedCount,
+    nestedActionCount,
+    nestedActionFailedCount,
+    topParentNodes: byParent.slice(0, 10),
+    summary:
+      nestedActionFailedCount > 0
+        ? `检测到 nested action 失败 ${nestedActionFailedCount} 次（父节点 ${byParent.length} 个），主要集中在 ${byParent[0]?.node || 'unknown'}。`
+        : withNested.length > 0
+          ? `存在 nested action（父节点 ${withNested.length} 个），但未检测到失败。`
+          : '当前任务无 nested action 数据。',
   }
 }
 
@@ -1541,6 +2078,7 @@ export const buildDeterministicFindings = (
     nextCandidateAvailabilityDiagnostics?: ReturnType<typeof buildNextCandidateAvailabilityDiagnostics>
     anchorResolutionDiagnostics?: ReturnType<typeof buildAnchorResolutionDiagnostics>
     jumpBackFlowDiagnostics?: ReturnType<typeof buildJumpBackFlowDiagnostics>
+    nestedActionDiagnostics?: ReturnType<typeof buildNestedActionDiagnostics>
   }
 ) => {
   const findings: Array<{
@@ -1559,6 +2097,7 @@ export const buildDeterministicFindings = (
   const nextCandidateAvailabilityDiagnostics = behaviorContext?.nextCandidateAvailabilityDiagnostics
   const anchorResolutionDiagnostics = behaviorContext?.anchorResolutionDiagnostics
   const jumpBackFlowDiagnostics = behaviorContext?.jumpBackFlowDiagnostics
+  const nestedActionDiagnostics = behaviorContext?.nestedActionDiagnostics
 
   const tuneLoopConfidence = (base: number, nodeName?: string) => {
     let next = base
@@ -1680,6 +2219,52 @@ export const buildDeterministicFindings = (
     })
   }
 
+  if ((nestedActionDiagnostics?.nestedActionFailedCount ?? 0) > 0) {
+    const topNode = nestedActionDiagnostics?.topParentNodes?.[0]
+    const topNodeName = typeof topNode?.node === 'string' ? topNode.node : ''
+    const topNodeFailed = typeof topNode?.nestedActionFailedCount === 'number' ? topNode.nestedActionFailedCount : 0
+    findings.push({
+      id: 'nested_action_failure_hotspot',
+      confidence: tuneLoopConfidence((nestedActionDiagnostics?.nestedActionFailedCount ?? 0) >= 8 ? 80 : 66, topNodeName || undefined),
+      causeType: 'mixed',
+      summary:
+        `检测到 nested/custom action 失败 ${(nestedActionDiagnostics?.nestedActionFailedCount ?? 0)} 次，涉及父节点 ${(nestedActionDiagnostics?.parentNodeWithNestedFailureCount ?? 0)} 个。` +
+        (topNodeName ? ` 最高热点为 ${topNodeName}（failed=${topNodeFailed}）。` : '') +
+        ' 该类失败可能不直接表现为主任务事件中的 Node.Action.Failed，需要与 nested 链路联合判断。',
+      evidencePaths: [
+        'nestedActionDiagnostics.nestedActionFailedCount',
+        'nestedActionDiagnostics.topParentNodes[0]',
+      ],
+    })
+  }
+
+  if ((jumpBackFlowDiagnostics?.terminalBounceCount ?? 0) > 0) {
+    const topCase = jumpBackFlowDiagnostics?.terminalBounceCases?.[0]
+    const topStartNode = typeof topCase?.startNode === 'string' ? topCase.startNode : ''
+    const topHitCandidate = typeof topCase?.hitCandidate === 'string' ? topCase.hitCandidate : ''
+    const topCount = typeof topCase?.count === 'number' ? topCase.count : 0
+    const baseConfidence = (jumpBackFlowDiagnostics?.terminalBounceCount ?? 0) >= 20
+      ? 88
+      : (jumpBackFlowDiagnostics?.terminalBounceCount ?? 0) >= 8
+        ? 80
+        : 68
+    findings.push({
+      id: 'jumpback_terminal_bounce_loop',
+      confidence: tuneLoopConfidence(baseConfidence, topStartNode || undefined),
+      causeType: loopCauseType,
+      summary:
+        `检测到 ${(jumpBackFlowDiagnostics?.terminalBounceCount ?? 0)} 条 jump_back“命中后回跳且命中节点疑似无后继”链路。` +
+        (topCount > 0
+          ? ` 高频组合为 ${topStartNode || 'unknown'} -> ${topHitCandidate || 'unknown'}（count=${topCount}）。`
+          : '') +
+        (taskSucceededWithoutPipelineFailure ? ' 在任务成功场景下更可能是流程耗时放大点。' : ' 这类链路容易导致同一父节点长时间复检。'),
+      evidencePaths: [
+        'jumpBackFlowDiagnostics.terminalBounceCount',
+        'jumpBackFlowDiagnostics.terminalBounceCases[0]',
+      ],
+    })
+  }
+
   if ((jumpBackFlowDiagnostics?.hitThenFailedNoReturnCount ?? 0) > 0) {
     const confidence = taskSucceededWithoutPipelineFailure ? 64 : 76
     findings.push({
@@ -1743,6 +2328,28 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
 
   const fullTaskTimeline: TimelineNodeItem[] = selectedTask
     ? selectedTask.nodes.map(node => ({
+      ...(() => {
+        const nestedGroups = node.nested_action_nodes ?? []
+        const nestedActions = nestedGroups.flatMap(group => group.nested_actions ?? [])
+        const nestedActionNames = nestedActions.map(item => item.name).filter(Boolean)
+        const nestedRecognitionNames = nestedActions
+          .flatMap(item => item.recognition_attempts ?? [])
+          .map(item => item.name)
+          .filter(Boolean)
+        return {
+          action: node.action_details?.action || '',
+          actionName: node.action_details?.name || '',
+          nestedActionGroupCount: nestedGroups.length,
+          nestedActionNodeCount: nestedActions.length,
+          nestedActionFailedNodeCount: nestedActions.filter(item => item.status === 'failed').length,
+          nestedRecognitionInActionCount: nestedActions.reduce(
+            (sum, item) => sum + (item.recognition_attempts?.length ?? 0),
+            0
+          ),
+          nestedActionTopNames: toTopNameCounts(nestedActionNames),
+          nestedRecognitionTopNames: toTopNameCounts(nestedRecognitionNames),
+        }
+      })(),
       node_id: node.node_id,
       name: node.name,
       status: node.status,
@@ -1778,6 +2385,8 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
   const nextCandidateAvailabilityDiagnostics = buildNextCandidateAvailabilityDiagnostics(selectedTask?.events ?? [])
   const anchorResolutionDiagnostics = buildAnchorResolutionDiagnostics(selectedTask?.events ?? [])
   const jumpBackFlowDiagnostics = buildJumpBackFlowDiagnostics(selectedTask?.events ?? [])
+  const nestedActionDiagnostics = buildNestedActionDiagnostics(selectedTask)
+  const questionNodeDiagnostics = buildQuestionNodeDiagnostics(input.question, selectedTask, jumpBackFlowDiagnostics)
   const pipelineFailedCount = fullTaskTimeline.filter(item => item.status === 'failed').length
   const jumpBackHotNodes = timelineDiagnostics.longStayNodes
     .filter(item => (item.avgJumpBackBranches ?? 0) > 0)
@@ -1798,6 +2407,7 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
       nextCandidateAvailabilityDiagnostics,
       anchorResolutionDiagnostics,
       jumpBackFlowDiagnostics,
+      nestedActionDiagnostics,
     }
   )
 
@@ -1872,6 +2482,8 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
       nextCandidateAvailabilityDiagnostics,
       anchorResolutionDiagnostics,
       jumpBackFlowDiagnostics,
+      nestedActionDiagnostics,
+      questionNodeDiagnostics,
       deterministicFindings,
       knowledge: sliced.knowledge,
     }).length
@@ -1946,6 +2558,8 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
     nextCandidateAvailabilityDiagnostics,
     anchorResolutionDiagnostics,
     jumpBackFlowDiagnostics,
+    nestedActionDiagnostics,
+    questionNodeDiagnostics,
     deterministicFindings,
     knowledge: sliced.knowledge,
     contextBudget: {

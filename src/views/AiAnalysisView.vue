@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { NAlert, NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
+import { NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
 import type { TaskInfo } from '../types'
 import { requestChatCompletion, type ChatCompletionResult } from '../ai/client'
 import {
@@ -43,6 +43,11 @@ interface ConversationTurnView extends ConversationTurn {
   answerHtml: string
 }
 
+interface QuickPromptItem {
+  label: string
+  prompt: string
+}
+
 const props = defineProps<Props>()
 
 const message = useMessage()
@@ -56,6 +61,7 @@ const usageText = ref('')
 const evidencePanelCollapsed = ref(true)
 const conversationFollowMode = ref(true)
 const activeRoundQuestion = ref('')
+const showApiKeyHint = ref(false)
 const turnListRef = ref<HTMLElement | null>(null)
 const aiOutputScrollbarRef = ref<{ scrollTo: (options: { top?: number; left?: number; behavior?: ScrollBehavior }) => void } | null>(null)
 
@@ -234,6 +240,30 @@ const buildContextKey = (): string => {
 
 const currentContextKey = computed(() => buildContextKey())
 const currentMemoryState = computed<MemoryState | null>(() => memoryStateStore.value[currentContextKey.value] ?? null)
+const currentMemoryPreview = computed(() => {
+  const summary = currentMemoryState.value?.summary?.trim() ?? ''
+  if (!summary) return '当前任务暂无记忆，可先发起一轮分析。'
+  if (summary.length <= 900) return summary
+  return `${summary.slice(0, 900)}...`
+})
+const quickPrompts: QuickPromptItem[] = [
+  {
+    label: '失败根因',
+    prompt: '请先量化盘点，再给出当前任务最可能的失败根因与3条可执行验证步骤。',
+  },
+  {
+    label: 'on_error链路',
+    prompt: '请只聚焦 on_error 触发链路，说明触发源、后续结果和最小修复动作。',
+  },
+  {
+    label: '识别热点',
+    prompt: '请按失败率列出前3个识别热点，并给出每个热点的修复优先级与验证方式。',
+  },
+  {
+    label: '成功对比',
+    prompt: '请对比当前任务与最近一次成功同类任务，给出关键差异证据和修复建议。',
+  },
+]
 
 const memoryApplicable = computed(() => {
   if (!memoryModeEnabled.value) return false
@@ -248,6 +278,10 @@ const memoryStatusText = computed(() => {
   if (!cachedCount) return '记忆模式：未建立'
   return `记忆模式：当前任务未建立（已缓存 ${cachedCount} 组）`
 })
+
+const applyQuickPrompt = (prompt: string) => {
+  question.value = prompt
+}
 
 const escapeHtml = (value: string): string =>
   value
@@ -470,6 +504,8 @@ const sanitizeAnswerForUser = (raw: string): string => {
     [/nextCandidateAvailabilityDiagnostics(?:\.[A-Za-z0-9_\[\]\.]+)?/g, 'next 候选可执行性诊断'],
     [/anchorResolutionDiagnostics(?:\.[A-Za-z0-9_\[\]\.]+)?/g, 'anchor 解析诊断'],
     [/jumpBackFlowDiagnostics(?:\.[A-Za-z0-9_\[\]\.]+)?/g, 'jump_back 回跳诊断'],
+    [/nestedActionDiagnostics(?:\.[A-Za-z0-9_\[\]\.]+)?/g, 'nested action 诊断'],
+    [/questionNodeDiagnostics(?:\.[A-Za-z0-9_\[\]\.]+)?/g, '问题节点专项统计'],
     [/signalDiagnostics(?:\.[A-Za-z0-9_\[\]\.]+)?/g, '信号分型统计'],
     [/deterministicFindings\.findings(?:\[\d+\])?/g, '确定性结论摘要'],
     [/selectedEventTail(?:\[\d+\])?/g, '事件尾部记录'],
@@ -580,6 +616,7 @@ const jumpBackPreview = computed(() => {
       hitThenReturnedCount: 0,
       hitThenFailedNoReturnCount: 0,
       hitNoReturnObservedCount: 0,
+      terminalBounceCount: 0,
       summary: '',
       cases: [] as ReturnType<typeof buildJumpBackFlowDiagnostics>['suspiciousCases'],
     }
@@ -591,6 +628,7 @@ const jumpBackPreview = computed(() => {
     hitThenReturnedCount: diagnostics.hitThenReturnedCount,
     hitThenFailedNoReturnCount: diagnostics.hitThenFailedNoReturnCount,
     hitNoReturnObservedCount: diagnostics.hitNoReturnObservedCount,
+    terminalBounceCount: diagnostics.terminalBounceCount,
     summary: diagnostics.summary,
     cases: diagnostics.suspiciousCases.slice(0, 8),
   }
@@ -711,6 +749,10 @@ const getSystemPrompt = () => {
     '若存在“确定性结论摘要”，优先基于它构建结论骨架，再补充细节证据。',
     '必须优先区分“流程现象”与“真实失败”：若任务成功且无节点最终失败事件，不得把循环/重试直接当根因。',
     '必须检查事件链诊断：用 on_error 触发链路明确触发源（action_failed / reco_timeout_or_nohit / error_handling_loop）。',
+    'action_failed 口径必须包含 Node.Action.Failed、Node.ActionNode.Failed，以及 PipelineNode.Failed 中可判定的隐式动作失败（action_details.success=false）。',
+    '若存在 nestedActionDiagnostics，必须联动判断 custom/nested action 失败，不得仅凭主任务 events 中 actionFailed=0 就排除动作失败。',
+    '必须检查 jump_back 命中后是否出现“回到父节点但命中节点疑似无后继”的复检链路，并评估其对长停留的贡献。',
+    '若上下文提供 questionNodeDiagnostics，必须优先回答其中的节点定量数据（出现次数/时长/失败分布/jump_back画像），不能笼统说“数据较少”。',
     '必须区分“现象”和“根因”：ERR 可能是症状，只有与节点停留/重试模式相关联时才能作为主因。',
     '证据必须给 E1/E2...，每条写“证据名称 + 关键数值 + 结论”。',
     '证据段面向用户可读，禁止输出内部字段路径（例如 timelineDiagnostics.longStayNodes[0] 这类文本）。',
@@ -735,6 +777,7 @@ const buildCompactContext = (context: Record<string, unknown>): Record<string, u
   const nextCandidateAvailabilityDiagnosticsRaw = (context.nextCandidateAvailabilityDiagnostics as Record<string, unknown> | undefined) ?? {}
   const anchorResolutionDiagnosticsRaw = (context.anchorResolutionDiagnostics as Record<string, unknown> | undefined) ?? {}
   const jumpBackFlowDiagnosticsRaw = (context.jumpBackFlowDiagnostics as Record<string, unknown> | undefined) ?? {}
+  const nestedActionDiagnosticsRaw = (context.nestedActionDiagnostics as Record<string, unknown> | undefined) ?? {}
 
   const selectedNodeTimeline = toObjectArray(context.selectedNodeTimeline)
     .slice(-40)
@@ -806,12 +849,19 @@ const buildCompactContext = (context: Record<string, unknown>): Record<string, u
 
   const jumpBackFlowDiagnostics = {
     ...jumpBackFlowDiagnosticsRaw,
+    terminalBounceCases: toObjectArray(jumpBackFlowDiagnosticsRaw.terminalBounceCases).slice(0, 6),
+    pairStats: toObjectArray(jumpBackFlowDiagnosticsRaw.pairStats).slice(0, 8),
     suspiciousCases: toObjectArray(jumpBackFlowDiagnosticsRaw.suspiciousCases)
       .slice(0, 6)
       .map(item => ({
         ...item,
         steps: toObjectArray(item.steps).slice(0, 4),
       })),
+  }
+
+  const nestedActionDiagnostics = {
+    ...nestedActionDiagnosticsRaw,
+    topParentNodes: toObjectArray(nestedActionDiagnosticsRaw.topParentNodes).slice(0, 6),
   }
 
   return {
@@ -840,6 +890,15 @@ const buildCompactContext = (context: Record<string, unknown>): Record<string, u
     nextCandidateAvailabilityDiagnostics,
     anchorResolutionDiagnostics,
     jumpBackFlowDiagnostics,
+    nestedActionDiagnostics,
+    questionNodeDiagnostics: toObjectArray(context.questionNodeDiagnostics)
+      .slice(0, 6)
+      .map(item => ({
+        ...item,
+        topFailedRecognition: toObjectArray(item.topFailedRecognition).slice(0, 6),
+        jumpBackCandidates: toObjectArray(item.jumpBackCandidates).slice(0, 6),
+        actionKinds: toObjectArray(item.actionKinds).slice(0, 4),
+      })),
     knowledge: toObjectArray(context.knowledge).slice(0, 16),
   }
 }
@@ -871,8 +930,12 @@ const buildFullContextPrompt = (compact: boolean, minifiedJson = false) => {
     '- 必须先量化长时间停留节点（使用时间线长停留统计数据）。',
     '- 必须检查识别热点（使用识别失败分布与热点组合统计数据）。',
     '- 必须检查 on_error 触发链路，明确 on_error 的触发源与后续结果。',
+    '- action_failed 判定要覆盖 ActionNode.Failed 与 PipelineNode.Failed(implicit action failure)，不能只看 Action.Failed。',
+    '- 若存在 nested action 诊断，必须合并判断 custom/nested action 失败热点。',
     '- 必须检查停止链路诊断与 next 候选可执行性诊断，区分主动停止、无可执行候选与超时未命中。',
     '- 必须检查 anchor 解析诊断与 jump_back 回跳诊断，区分锚点未解析、回跳命中后未回跳等控制流语义。',
+    '- 必须额外检查 jump_back 命中后“回到父节点但命中节点疑似无后继”的复检链路，判断其是否导致长停留。',
+    '- 若存在 questionNodeDiagnostics，先输出该节点的定量数据，再给结论。',
     '- 仅把 next 识别链路 / 动作失败链路作为补充证据，不可替代 on_error 触发链路。',
     '- 若存在确定性结论摘要，至少引用其中 1 条并映射到 E 证据编号。',
     '- 输出面向用户可读，禁止出现 timelineDiagnostics.xxx 这类字段路径文本。',
@@ -1186,10 +1249,16 @@ const handleAnalyze = async () => {
   <div class="ai-view-root">
     <div class="ai-view-grid">
       <n-card size="small" title="连接与输入" class="ai-left-card">
-        <n-flex vertical style="gap: 12px">
-          <n-alert type="info" :show-icon="false">
+        <n-flex vertical style="gap: 12px" class="left-panel-content">
+          <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+            <n-text depth="3" style="font-size: 12px">API Key（会话内）</n-text>
+            <n-button text size="tiny" @click="showApiKeyHint = !showApiKeyHint">
+              {{ showApiKeyHint ? '隐藏说明' : '显示说明' }}
+            </n-button>
+          </n-flex>
+          <n-text v-if="showApiKeyHint" depth="3" style="font-size: 12px">
             纯前端 BYOK 模式：API Key 仅保存到当前会话，不写入本地长期存储。
-          </n-alert>
+          </n-text>
 
           <n-input
             v-model:value="apiKey"
@@ -1241,16 +1310,46 @@ const handleAnalyze = async () => {
             </n-flex>
           </n-card>
 
-          <n-input
-            v-model:value="question"
-            type="textarea"
-            :autosize="{ minRows: 5, maxRows: 12 }"
-            placeholder="输入你希望 AI 分析的问题"
-          />
+          <n-card size="small" :bordered="true" class="left-context-card">
+            <n-flex vertical style="gap: 8px; height: 100%">
+              <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+                <n-text depth="3" style="font-size: 12px">当前任务记忆摘要</n-text>
+                <n-tag size="small" :type="currentMemoryState ? 'success' : 'default'">
+                  {{ currentMemoryState ? `已积累 ${currentMemoryState.turns} 轮` : '未建立' }}
+                </n-tag>
+              </n-flex>
 
-          <n-button type="primary" :loading="analyzing" @click="handleAnalyze">
-            分析当前任务
-          </n-button>
+              <div class="memory-preview-box">
+                <pre class="memory-preview-text">{{ currentMemoryPreview }}</pre>
+              </div>
+
+              <n-text depth="3" style="font-size: 12px">快捷提问</n-text>
+              <n-flex style="gap: 6px; flex-wrap: wrap">
+                <n-button
+                  v-for="item in quickPrompts"
+                  :key="item.label"
+                  size="tiny"
+                  quaternary
+                  @click="applyQuickPrompt(item.prompt)"
+                >
+                  {{ item.label }}
+                </n-button>
+              </n-flex>
+            </n-flex>
+          </n-card>
+
+          <div class="left-analyze-block">
+            <n-input
+              v-model:value="question"
+              type="textarea"
+              :autosize="{ minRows: 5, maxRows: 12 }"
+              placeholder="输入你希望 AI 分析的问题"
+            />
+
+            <n-button type="primary" :loading="analyzing" @click="handleAnalyze">
+              分析当前任务
+            </n-button>
+          </div>
         </n-flex>
       </n-card>
 
@@ -1371,6 +1470,9 @@ const handleAnalyze = async () => {
                     <n-tag size="small" :type="jumpBackPreview.hitThenReturnedCount > 0 ? 'success' : 'default'">
                       命中并回跳 {{ jumpBackPreview.hitThenReturnedCount }}
                     </n-tag>
+                    <n-tag size="small" :type="jumpBackPreview.terminalBounceCount > 0 ? 'warning' : 'default'">
+                      回跳但命中节点疑似无后继 {{ jumpBackPreview.terminalBounceCount }}
+                    </n-tag>
                   </n-flex>
                   <n-text depth="3" style="font-size: 12px; line-height: 1.45">
                     {{ jumpBackPreview.summary }}
@@ -1483,7 +1585,14 @@ const handleAnalyze = async () => {
   min-width: 0;
 }
 
-.ai-left-card,
+.ai-left-card {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .ai-right-card {
   height: 100%;
   min-height: 0;
@@ -1492,12 +1601,52 @@ const handleAnalyze = async () => {
   flex-direction: column;
 }
 
+.ai-left-card :deep(.n-card__content),
 .ai-right-card :deep(.n-card__content) {
   flex: 1;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.left-panel-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.left-context-card {
+  flex: 1;
+  min-height: 140px;
+}
+
+.memory-preview-box {
+  flex: 1;
+  min-height: 96px;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 8px 10px 12px;
+}
+
+.memory-preview-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.5;
+  font-size: 12px;
+}
+
+.left-analyze-block {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .ai-output-scroll {
