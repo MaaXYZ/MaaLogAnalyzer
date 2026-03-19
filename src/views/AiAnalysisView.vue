@@ -389,6 +389,32 @@ const renderMarkdown = (source: string): string => {
   return html.join('\n')
 }
 
+const sanitizeAnswerForUser = (raw: string): string => {
+  if (!raw) return raw
+  const replacers: Array<[RegExp, string]> = [
+    [/timelineDiagnostics\.longStayNodes(?:\[\d+\])?/g, '时间线长停留统计'],
+    [/timelineDiagnostics\.recoFailuresByName(?:\[\d+\])?/g, '识别失败分布统计'],
+    [/timelineDiagnostics\.hotspotRecoPairs(?:\[\d+\])?/g, '识别热点组合统计'],
+    [/timelineDiagnostics\.repeatedRuns(?:\[\d+\])?/g, '连续重复运行统计'],
+    [/eventChainDiagnostics\.onErrorChains(?:\[\d+\])?/g, 'on_error 触发链路'],
+    [/eventChainDiagnostics\.nextRecognitionChains(?:\[\d+\])?/g, 'next 识别链路'],
+    [/eventChainDiagnostics\.actionFailureChains(?:\[\d+\])?/g, '动作失败链路'],
+    [/stopTerminationDiagnostics(?:\.[A-Za-z0-9_\[\]\.]+)?/g, '停止链路诊断'],
+    [/nextCandidateAvailabilityDiagnostics(?:\.[A-Za-z0-9_\[\]\.]+)?/g, 'next 候选可执行性诊断'],
+    [/anchorResolutionDiagnostics(?:\.[A-Za-z0-9_\[\]\.]+)?/g, 'anchor 解析诊断'],
+    [/jumpBackFlowDiagnostics(?:\.[A-Za-z0-9_\[\]\.]+)?/g, 'jump_back 回跳诊断'],
+    [/signalDiagnostics(?:\.[A-Za-z0-9_\[\]\.]+)?/g, '信号分型统计'],
+    [/deterministicFindings\.findings(?:\[\d+\])?/g, '确定性结论摘要'],
+    [/selectedEventTail(?:\[\d+\])?/g, '事件尾部记录'],
+  ]
+
+  let next = raw
+  for (const [pattern, replacement] of replacers) {
+    next = next.replace(pattern, replacement)
+  }
+  return next
+}
+
 const renderedResultHtml = computed(() => renderMarkdown(resultText.value))
 
 const conversationTurnViews = computed<ConversationTurnView[]>(() => {
@@ -537,12 +563,13 @@ const getSystemPrompt = () => {
     '## 根因候选（按概率排序）',
     '## 证据',
     '## 排查步骤（可直接执行）',
-    '在下结论前，必须先做“量化盘点”：至少引用 timelineDiagnostics.longStayNodes 与 timelineDiagnostics.recoFailuresByName。',
-    '若 deterministicFindings.findings 非空，优先基于它构建结论骨架，再补充细节证据。',
-    '必须优先区分“流程现象”与“真实失败”：若任务成功且无 PipelineNode.Failed，不得把循环/重试直接当根因。',
-    '必须检查 eventChainDiagnostics：用 onErrorChains 明确 on_error 触发源（action_failed / reco_timeout_or_nohit / error_handling_loop）。',
+    '在下结论前，必须先做“量化盘点”：至少引用长停留节点统计与识别失败分布统计。',
+    '若存在“确定性结论摘要”，优先基于它构建结论骨架，再补充细节证据。',
+    '必须优先区分“流程现象”与“真实失败”：若任务成功且无节点最终失败事件，不得把循环/重试直接当根因。',
+    '必须检查事件链诊断：用 on_error 触发链路明确触发源（action_failed / reco_timeout_or_nohit / error_handling_loop）。',
     '必须区分“现象”和“根因”：ERR 可能是症状，只有与节点停留/重试模式相关联时才能作为主因。',
-    '证据必须给 E1/E2...，并引用明确字段路径（如 timelineDiagnostics.longStayNodes[0]、signalDiagnostics.failureTypeBreakdown[0]、deterministicFindings.findings[0]）。',
+    '证据必须给 E1/E2...，每条写“证据名称 + 关键数值 + 结论”。',
+    '证据段面向用户可读，禁止输出内部字段路径（例如 timelineDiagnostics.longStayNodes[0] 这类文本）。',
     '根因候选至少 2 条，每条包含：置信度(0-100)、关键证据编号、反证点。',
     '排查步骤至少 3 条；每条都要包含：操作、期望现象、若不符合下一步。',
     '如果证据不足，不能只说“证据不足”；仍需给低置信度候选 + 最小验证步骤。',
@@ -695,13 +722,14 @@ const buildFullContextPrompt = (compact: boolean, minifiedJson = false) => {
     '',
     '任务要求:',
     '- 先列证据清单(E1/E2...)，再给结论。',
-    '- 必须先量化长时间停留节点（引用 timelineDiagnostics.longStayNodes）。',
-    '- 必须检查识别热点（引用 timelineDiagnostics.recoFailuresByName 与 timelineDiagnostics.hotspotRecoPairs）。',
-    '- 必须检查 eventChainDiagnostics.onErrorChains，明确 on_error 的触发源与后续结果。',
-    '- 必须检查 stopTerminationDiagnostics 与 nextCandidateAvailabilityDiagnostics，区分主动停止、无可执行候选与超时未命中。',
-    '- 必须检查 anchorResolutionDiagnostics 与 jumpBackFlowDiagnostics，区分锚点未解析、回跳命中后未回跳等控制流语义。',
-    '- 仅把 nextRecognitionChains / actionFailureChains 作为补充证据，不可替代 onErrorChains。',
-    '- 若存在 deterministicFindings.findings，至少引用其中 1 条并映射到 E 证据编号。',
+    '- 必须先量化长时间停留节点（使用时间线长停留统计数据）。',
+    '- 必须检查识别热点（使用识别失败分布与热点组合统计数据）。',
+    '- 必须检查 on_error 触发链路，明确 on_error 的触发源与后续结果。',
+    '- 必须检查停止链路诊断与 next 候选可执行性诊断，区分主动停止、无可执行候选与超时未命中。',
+    '- 必须检查 anchor 解析诊断与 jump_back 回跳诊断，区分锚点未解析、回跳命中后未回跳等控制流语义。',
+    '- 仅把 next 识别链路 / 动作失败链路作为补充证据，不可替代 on_error 触发链路。',
+    '- 若存在确定性结论摘要，至少引用其中 1 条并映射到 E 证据编号。',
+    '- 输出面向用户可读，禁止出现 timelineDiagnostics.xxx 这类字段路径文本。',
     '- 给出至少2个根因候选并排序。',
     '- 排查步骤必须可执行且可验证。',
     '',
@@ -718,7 +746,7 @@ const buildMemoryPrompt = (memory: MemoryState) => {
     `上下文指纹: ${memory.contextKey}`,
     '追问要求:',
     '- 若新问题未覆盖已知矛盾，优先处理未决风险。',
-    '- 继续引用 timelineDiagnostics、signalDiagnostics、deterministicFindings 的字段路径。',
+    '- 继续引用已有证据与关键数值，保持用户可读，不输出内部字段路径。',
     '- 维持“结论/根因候选/证据/排查步骤”结构。',
     '',
     '会话记忆:',
@@ -903,7 +931,8 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       // ignore repair failures and keep raw fallback
     }
   }
-  const answerText = parsed?.answer?.trim() || response.text
+  const answerTextRaw = parsed?.answer?.trim() || response.text
+  const answerText = sanitizeAnswerForUser(answerTextRaw)
   resultText.value = answerText
 
   if (mode === 'analyze') {
