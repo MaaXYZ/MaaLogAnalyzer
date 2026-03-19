@@ -724,12 +724,30 @@ const getConciseAnswerMaxChars = () => Math.max(800, Math.floor(settings.concise
 const getConciseMaxEvidence = () => Math.max(3, Math.floor(settings.conciseMaxEvidence || 6))
 const getConciseMaxRootCauses = () => Math.max(2, Math.floor(settings.conciseMaxRootCauses || 2))
 const getConciseFixedSteps = () => Math.max(3, Math.floor(settings.conciseFixedSteps || 3))
+type AnalysisPromptProfile = 'diagnostic' | 'followup'
 
-const buildConciseRetryPrompt = (baseContent: string) => {
+const shouldUseDiagnosticTemplateForQuestion = (questionText: string): boolean => {
+  const text = questionText.trim()
+  if (!text) return false
+  return /(分析|诊断|根因|失败原因|排查步骤|复盘|按模板|完整分析|重新分析|结论|证据)/.test(text)
+}
+
+const buildConciseRetryPrompt = (baseContent: string, profile: AnalysisPromptProfile) => {
   const conciseAnswerMaxChars = getConciseAnswerMaxChars()
   const conciseMaxRootCauses = getConciseMaxRootCauses()
   const conciseMaxEvidence = getConciseMaxEvidence()
   const conciseFixedSteps = getConciseFixedSteps()
+  if (profile === 'followup') {
+    return [
+      baseContent,
+      '',
+      '二次精简输出要求（因上次输出被截断）：',
+      `- answer 总长度建议 <= ${conciseAnswerMaxChars} 字符。`,
+      '- 先直接回答用户追问，再补必要证据要点（不超过 3 条）。',
+      '- 除非用户明确要求，否则不要套四段诊断模板。',
+      '- 必须继续保持 JSON 输出格式：{"answer":"...","memory_update":"..."}。',
+    ].join('\n')
+  }
   return [
     baseContent,
     '',
@@ -743,11 +761,27 @@ const buildConciseRetryPrompt = (baseContent: string) => {
   ].join('\n')
 }
 
-const getSystemPrompt = () => {
+const getSystemPrompt = (profile: AnalysisPromptProfile) => {
   const conciseAnswerMaxChars = getConciseAnswerMaxChars()
   const conciseMaxRootCauses = getConciseMaxRootCauses()
   const conciseMaxEvidence = getConciseMaxEvidence()
   const conciseFixedSteps = getConciseFixedSteps()
+  if (profile === 'followup') {
+    return [
+      '你是 MaaFramework 日志追问助手，目标是直接回答当前追问并给出可执行建议。',
+      '只能基于给定上下文与会话记忆作答，不允许臆测上下文中不存在的事实。',
+      '必须返回 JSON 对象，格式固定为：',
+      '{"answer":"...","memory_update":"..."}',
+      'answer 必须是 Markdown。',
+      '追问场景优先“先答问题，再补依据”，除非用户明确要求，否则不要强制输出“结论/根因候选/证据/排查步骤”四段模板。',
+      '若上下文提供量化数据，应优先引用关键数字支持判断。',
+      '若涉及 on_error / jump_back / nested action 关系，必须明确区分触发源、直接父节点与上游来源节点。',
+      '证据描述面向用户可读，禁止输出内部字段路径（例如 timelineDiagnostics.longStayNodes[0]）。',
+      `输出长度优先级很高：answer 尽量控制在 ${conciseAnswerMaxChars} 字符以内。`,
+      'memory_update 是供下一轮复用的高密度摘要，<= 1200 字。',
+      '避免空话：禁止输出“请检查日志”“可能有问题”这类无指向建议。',
+    ].join('\n')
+  }
   return [
     '你是 MaaFramework 日志诊断助手，目标是给出“可执行、可验证”的排查结论。',
     '只能基于给定上下文作答，不允许臆测上下文中不存在的事实。',
@@ -965,7 +999,10 @@ const buildFullContextPrompt = (compact: boolean, minifiedJson = false) => {
   ].join('\n')
 }
 
-const buildMemoryPrompt = (memory: MemoryState) => {
+const buildMemoryPrompt = (memory: MemoryState, profile: AnalysisPromptProfile) => {
+  const followupRule = profile === 'diagnostic'
+    ? '- 维持“结论/根因候选/证据/排查步骤”结构。'
+    : '- 先直接回答追问，再补必要证据与下一步；除非用户明确要求，否则不要套四段诊断模板。'
   return [
     '这是同一上下文下的追问。优先基于已有记忆回答，并保持证据编号连续。',
     `用户追问: ${question.value}`,
@@ -974,7 +1011,7 @@ const buildMemoryPrompt = (memory: MemoryState) => {
     '追问要求:',
     '- 若新问题未覆盖已知矛盾，优先处理未决风险。',
     '- 继续引用已有证据与关键数值，保持用户可读，不输出内部字段路径。',
-    '- 维持“结论/根因候选/证据/排查步骤”结构。',
+    followupRule,
     '',
     '会话记忆:',
     memory.summary,
@@ -1253,6 +1290,9 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   const contextKey = currentContextKey.value
   const contextMemory = memoryStateStore.value[contextKey]
   const useMemoryForThisRound = mode === 'analyze' && memoryModeEnabled.value && !!contextMemory
+  const promptProfile: AnalysisPromptProfile = mode !== 'analyze'
+    ? 'diagnostic'
+    : (useMemoryForThisRound && !shouldUseDiagnosticTemplateForQuestion(questionSnapshot) ? 'followup' : 'diagnostic')
   lastRequestUsedMemory.value = useMemoryForThisRound
   if (mode === 'analyze') {
     activeRoundQuestion.value = questionSnapshot
@@ -1266,7 +1306,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   if (mode === 'test') {
     userContent = '请只输出：连接正常'
   } else if (useMemoryForThisRound) {
-    userContent = buildMemoryPrompt(contextMemory as MemoryState)
+    userContent = buildMemoryPrompt(contextMemory as MemoryState, promptProfile)
   } else {
     const fullPrompt = buildFullContextPrompt(false)
     if (fullPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT) {
@@ -1300,7 +1340,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       : undefined,
     timeoutMs: mode === 'test' ? 15000 : ANALYSIS_TIMEOUT_MS,
     messages: [
-      { role: 'system', content: getSystemPrompt() },
+      { role: 'system', content: getSystemPrompt(promptProfile) },
       { role: 'user', content },
     ],
   })
@@ -1324,7 +1364,11 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   }
 
   const usageModeText = mode === 'analyze'
-    ? (useMemoryForThisRound ? '记忆上下文' : (usedCompactContext ? '压缩全量上下文' : '全量上下文'))
+    ? (() => {
+      const scope = useMemoryForThisRound ? '记忆上下文' : (usedCompactContext ? '压缩全量上下文' : '全量上下文')
+      const profileLabel = promptProfile === 'followup' ? '追问模板' : '诊断模板'
+      return `${scope} · ${profileLabel}`
+    })()
     : '连接测试'
   const updateUsageText = (resp: typeof response, extra = '') => {
     if (resp.usage?.totalTokens != null) {
@@ -1345,14 +1389,14 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       try {
       const conciseBase = (() => {
         if (useMemoryForThisRound) {
-          return buildMemoryPrompt(contextMemory as MemoryState)
+          return buildMemoryPrompt(contextMemory as MemoryState, promptProfile)
         }
         const compactPrompt = buildFullContextPrompt(true)
         return compactPrompt.length > ANALYSIS_PROMPT_SOFT_LIMIT
           ? buildFullContextPrompt(true, true)
           : compactPrompt
       })()
-      const concisePrompt = buildConciseRetryPrompt(conciseBase)
+      const concisePrompt = buildConciseRetryPrompt(conciseBase, promptProfile)
       response = await sendRequest(concisePrompt)
       updateUsageText(response, ' | 精简重试')
       if (mode === 'analyze') {
