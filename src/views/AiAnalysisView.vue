@@ -51,6 +51,7 @@ const analyzing = ref(false)
 const testing = ref(false)
 const resultText = ref('')
 const usageText = ref('')
+const evidencePanelCollapsed = ref(true)
 
 const memoryModeEnabled = ref(true)
 const MEMORY_SESSION_KEY = 'maa-log-analyzer-ai-memory-state'
@@ -1089,121 +1090,147 @@ const handleAnalyze = async () => {
           <n-text depth="3" style="font-size: 12px">{{ usageText }}</n-text>
         </template>
 
-        <n-card v-if="onErrorPreview.chains.length" size="small" class="on-error-preview-card">
-          <n-flex vertical style="gap: 6px">
+        <n-card
+          v-if="onErrorPreview.chains.length || anchorPreview.windowCount || jumpBackPreview.caseCount"
+          size="small"
+          class="evidence-panel-card"
+        >
+          <n-flex vertical style="gap: 8px">
             <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
-              <n-text depth="3" style="font-size: 12px">on_error 证据链预览（当前任务）</n-text>
-              <n-tag size="small" type="info">共 {{ onErrorPreview.total }} 条</n-tag>
+              <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+                <n-text depth="3" style="font-size: 12px">证据链诊断（当前任务）</n-text>
+                <n-tag size="small" type="info">on_error {{ onErrorPreview.total }}</n-tag>
+                <n-tag size="small" type="info">anchor {{ anchorPreview.windowCount }}</n-tag>
+                <n-tag size="small" type="info">jump_back {{ jumpBackPreview.caseCount }}</n-tag>
+              </n-flex>
+              <n-button size="tiny" quaternary @click="evidencePanelCollapsed = !evidencePanelCollapsed">
+                {{ evidencePanelCollapsed ? '展开证据链' : '收起证据链' }}
+              </n-button>
             </n-flex>
-            <div class="on-error-preview-list">
-              <div
-                v-for="(chain, index) in onErrorPreview.chains"
-                :key="`${chain.triggerType}-${chain.triggerLine ?? 'na'}-${index}`"
-                class="on-error-preview-item"
-              >
-                <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
-                  <n-tag size="small" :type="onErrorRiskTagType(chain.riskLevel)">
-                    {{ chain.riskLevel.toUpperCase() }}
-                  </n-tag>
-                  <n-tag size="small" type="default">
-                    {{ onErrorTriggerTypeLabel(chain.triggerType) }}
-                  </n-tag>
-                  <n-text depth="3" style="font-size: 12px">
-                    节点: {{ chain.triggerNode || 'unknown' }}
-                  </n-text>
-                </n-flex>
-                <n-text depth="3" style="font-size: 12px; line-height: 1.45">
-                  {{ chain.summary }}
-                </n-text>
-                <n-text depth="3" style="font-size: 11px">
-                  触发行: {{ chain.triggerLine ?? '-' }} · 结果: {{ chain.outcomeEvent }}
-                </n-text>
-              </div>
-            </div>
-          </n-flex>
-        </n-card>
 
-        <n-card v-if="anchorPreview.windowCount" size="small" class="diagnostic-preview-card">
-          <n-flex vertical style="gap: 6px">
-            <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
-              <n-text depth="3" style="font-size: 12px">anchor 解析诊断（当前任务）</n-text>
-              <n-tag size="small" type="info">窗口 {{ anchorPreview.windowCount }}</n-tag>
-            </n-flex>
-            <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
-              <n-tag size="small" :type="anchorPreview.unresolvedAnchorLikelyCount > 0 ? 'error' : 'success'">
-                未解析疑似 {{ anchorPreview.unresolvedAnchorLikelyCount }}
-              </n-tag>
-              <n-tag size="small" :type="anchorPreview.failedAfterAnchorResolvedCount > 0 ? 'warning' : 'default'">
-                已解析后失败 {{ anchorPreview.failedAfterAnchorResolvedCount }}
-              </n-tag>
-            </n-flex>
-            <n-text depth="3" style="font-size: 12px; line-height: 1.45">
-              {{ anchorPreview.summary }}
+            <n-text v-if="evidencePanelCollapsed" depth="3" style="font-size: 12px">
+              证据链已折叠，当前可集中查看对话与结论。
             </n-text>
-            <div v-if="anchorPreview.cases.length" class="diagnostic-preview-list">
-              <div
-                v-for="(item, index) in anchorPreview.cases"
-                :key="`anchor-${item.startLine ?? 'na'}-${index}`"
-                class="diagnostic-preview-item"
-              >
-                <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
-                  <n-tag size="small" :type="anchorClassTagType(item.classification)">
-                    {{ anchorClassLabel(item.classification) }}
-                  </n-tag>
-                  <n-text depth="3" style="font-size: 12px">
-                    节点: {{ item.startNode || 'unknown' }}
-                  </n-text>
-                </n-flex>
-                <n-text depth="3" style="font-size: 12px; line-height: 1.45">
-                  {{ item.summary }}
-                </n-text>
-                <n-text depth="3" style="font-size: 11px">
-                  起始行: {{ item.startLine ?? '-' }} · 结果: {{ item.outcomeEvent }}
-                </n-text>
-              </div>
-            </div>
-          </n-flex>
-        </n-card>
 
-        <n-card v-if="jumpBackPreview.caseCount" size="small" class="diagnostic-preview-card">
-          <n-flex vertical style="gap: 6px">
-            <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
-              <n-text depth="3" style="font-size: 12px">jump_back 回跳诊断（当前任务）</n-text>
-              <n-tag size="small" type="info">窗口 {{ jumpBackPreview.caseCount }}</n-tag>
-            </n-flex>
-            <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
-              <n-tag size="small" :type="jumpBackPreview.hitThenFailedNoReturnCount > 0 ? 'error' : 'success'">
-                命中后失败未回跳 {{ jumpBackPreview.hitThenFailedNoReturnCount }}
-              </n-tag>
-              <n-tag size="small" :type="jumpBackPreview.hitThenReturnedCount > 0 ? 'success' : 'default'">
-                命中并回跳 {{ jumpBackPreview.hitThenReturnedCount }}
-              </n-tag>
-            </n-flex>
-            <n-text depth="3" style="font-size: 12px; line-height: 1.45">
-              {{ jumpBackPreview.summary }}
-            </n-text>
-            <div v-if="jumpBackPreview.cases.length" class="diagnostic-preview-list">
-              <div
-                v-for="(item, index) in jumpBackPreview.cases"
-                :key="`jumpback-${item.startLine ?? 'na'}-${index}`"
-                class="diagnostic-preview-item"
-              >
-                <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
-                  <n-tag size="small" :type="jumpBackClassTagType(item.classification)">
-                    {{ jumpBackClassLabel(item.classification) }}
-                  </n-tag>
-                  <n-text depth="3" style="font-size: 12px">
-                    节点: {{ item.startNode || 'unknown' }}
-                  </n-text>
+            <template v-else>
+              <n-card v-if="onErrorPreview.chains.length" size="small" class="on-error-preview-card">
+                <n-flex vertical style="gap: 6px">
+                  <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+                    <n-text depth="3" style="font-size: 12px">on_error 证据链预览</n-text>
+                    <n-tag size="small" type="info">共 {{ onErrorPreview.total }} 条</n-tag>
+                  </n-flex>
+                  <div class="on-error-preview-list">
+                    <div
+                      v-for="(chain, index) in onErrorPreview.chains"
+                      :key="`${chain.triggerType}-${chain.triggerLine ?? 'na'}-${index}`"
+                      class="on-error-preview-item"
+                    >
+                      <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+                        <n-tag size="small" :type="onErrorRiskTagType(chain.riskLevel)">
+                          {{ chain.riskLevel.toUpperCase() }}
+                        </n-tag>
+                        <n-tag size="small" type="default">
+                          {{ onErrorTriggerTypeLabel(chain.triggerType) }}
+                        </n-tag>
+                        <n-text depth="3" style="font-size: 12px">
+                          节点: {{ chain.triggerNode || 'unknown' }}
+                        </n-text>
+                      </n-flex>
+                      <n-text depth="3" style="font-size: 12px; line-height: 1.45">
+                        {{ chain.summary }}
+                      </n-text>
+                      <n-text depth="3" style="font-size: 11px">
+                        触发行: {{ chain.triggerLine ?? '-' }} · 结果: {{ chain.outcomeEvent }}
+                      </n-text>
+                    </div>
+                  </div>
                 </n-flex>
-                <n-text depth="3" style="font-size: 12px; line-height: 1.45">
-                  {{ item.summary }}
-                </n-text>
-                <n-text depth="3" style="font-size: 11px">
-                  命中候选: {{ item.hitCandidate || '-' }} · 回跳: {{ item.returnObserved ? '是' : '否' }}
-                </n-text>
-              </div>
-            </div>
+              </n-card>
+
+              <n-card v-if="anchorPreview.windowCount" size="small" class="diagnostic-preview-card">
+                <n-flex vertical style="gap: 6px">
+                  <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+                    <n-text depth="3" style="font-size: 12px">anchor 解析诊断</n-text>
+                    <n-tag size="small" type="info">窗口 {{ anchorPreview.windowCount }}</n-tag>
+                  </n-flex>
+                  <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+                    <n-tag size="small" :type="anchorPreview.unresolvedAnchorLikelyCount > 0 ? 'error' : 'success'">
+                      未解析疑似 {{ anchorPreview.unresolvedAnchorLikelyCount }}
+                    </n-tag>
+                    <n-tag size="small" :type="anchorPreview.failedAfterAnchorResolvedCount > 0 ? 'warning' : 'default'">
+                      已解析后失败 {{ anchorPreview.failedAfterAnchorResolvedCount }}
+                    </n-tag>
+                  </n-flex>
+                  <n-text depth="3" style="font-size: 12px; line-height: 1.45">
+                    {{ anchorPreview.summary }}
+                  </n-text>
+                  <div v-if="anchorPreview.cases.length" class="diagnostic-preview-list">
+                    <div
+                      v-for="(item, index) in anchorPreview.cases"
+                      :key="`anchor-${item.startLine ?? 'na'}-${index}`"
+                      class="diagnostic-preview-item"
+                    >
+                      <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+                        <n-tag size="small" :type="anchorClassTagType(item.classification)">
+                          {{ anchorClassLabel(item.classification) }}
+                        </n-tag>
+                        <n-text depth="3" style="font-size: 12px">
+                          节点: {{ item.startNode || 'unknown' }}
+                        </n-text>
+                      </n-flex>
+                      <n-text depth="3" style="font-size: 12px; line-height: 1.45">
+                        {{ item.summary }}
+                      </n-text>
+                      <n-text depth="3" style="font-size: 11px">
+                        起始行: {{ item.startLine ?? '-' }} · 结果: {{ item.outcomeEvent }}
+                      </n-text>
+                    </div>
+                  </div>
+                </n-flex>
+              </n-card>
+
+              <n-card v-if="jumpBackPreview.caseCount" size="small" class="diagnostic-preview-card">
+                <n-flex vertical style="gap: 6px">
+                  <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
+                    <n-text depth="3" style="font-size: 12px">jump_back 回跳诊断</n-text>
+                    <n-tag size="small" type="info">窗口 {{ jumpBackPreview.caseCount }}</n-tag>
+                  </n-flex>
+                  <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+                    <n-tag size="small" :type="jumpBackPreview.hitThenFailedNoReturnCount > 0 ? 'error' : 'success'">
+                      命中后失败未回跳 {{ jumpBackPreview.hitThenFailedNoReturnCount }}
+                    </n-tag>
+                    <n-tag size="small" :type="jumpBackPreview.hitThenReturnedCount > 0 ? 'success' : 'default'">
+                      命中并回跳 {{ jumpBackPreview.hitThenReturnedCount }}
+                    </n-tag>
+                  </n-flex>
+                  <n-text depth="3" style="font-size: 12px; line-height: 1.45">
+                    {{ jumpBackPreview.summary }}
+                  </n-text>
+                  <div v-if="jumpBackPreview.cases.length" class="diagnostic-preview-list">
+                    <div
+                      v-for="(item, index) in jumpBackPreview.cases"
+                      :key="`jumpback-${item.startLine ?? 'na'}-${index}`"
+                      class="diagnostic-preview-item"
+                    >
+                      <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+                        <n-tag size="small" :type="jumpBackClassTagType(item.classification)">
+                          {{ jumpBackClassLabel(item.classification) }}
+                        </n-tag>
+                        <n-text depth="3" style="font-size: 12px">
+                          节点: {{ item.startNode || 'unknown' }}
+                        </n-text>
+                      </n-flex>
+                      <n-text depth="3" style="font-size: 12px; line-height: 1.45">
+                        {{ item.summary }}
+                      </n-text>
+                      <n-text depth="3" style="font-size: 11px">
+                        命中候选: {{ item.hitCandidate || '-' }} · 回跳: {{ item.returnObserved ? '是' : '否' }}
+                      </n-text>
+                    </div>
+                  </div>
+                </n-flex>
+              </n-card>
+            </template>
           </n-flex>
         </n-card>
 
@@ -1292,6 +1319,10 @@ const handleAnalyze = async () => {
   flex: 1;
   height: 100%;
   min-height: 0;
+}
+
+.evidence-panel-card {
+  margin-bottom: 8px;
 }
 
 .on-error-preview-card {
