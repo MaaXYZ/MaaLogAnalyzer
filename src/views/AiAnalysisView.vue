@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { NButton, NCard, NCheckbox, NEmpty, NFlex, NInput, NModal, NScrollbar, NTag, NText, useMessage } from 'naive-ui'
 import type { TaskInfo } from '../types'
 import { requestChatCompletion, type ChatCompletionResult } from '../ai/client'
@@ -95,14 +95,50 @@ const quickPromptProfileOverride = ref<'diagnostic' | 'followup' | null>(null)
 const quickPromptFocusOverride = ref<AnalysisFocusMode | null>(null)
 const turnListRef = ref<HTMLElement | null>(null)
 const aiOutputScrollbarRef = ref<{ scrollTo: (options: { top?: number; left?: number; behavior?: ScrollBehavior }) => void } | null>(null)
+const streamingRenderText = ref('')
+const streamFlushTimer = ref<number | null>(null)
+const pendingStreamFullText = ref('')
+
+const clearStreamFlushTimer = () => {
+  if (streamFlushTimer.value != null) {
+    window.clearTimeout(streamFlushTimer.value)
+    streamFlushTimer.value = null
+  }
+}
+
+const flushStreamingText = (force = false) => {
+  if (!force && streamFlushTimer.value != null) return
+  const doFlush = () => {
+    streamingRenderText.value = pendingStreamFullText.value
+    streamFlushTimer.value = null
+  }
+  if (force) {
+    clearStreamFlushTimer()
+    doFlush()
+    return
+  }
+  streamFlushTimer.value = window.setTimeout(doFlush, 120)
+}
+
+onBeforeUnmount(() => {
+  clearStreamFlushTimer()
+})
 
 const memoryModeEnabled = ref(true)
 const MEMORY_SESSION_KEY = 'maa-log-analyzer-ai-memory-state'
 const MEMORY_SUMMARY_MAX_CHARS = 12000
 const MEMORY_STORE_MAX_CONTEXTS = 30
 const CONVERSATION_SESSION_KEY = 'maa-log-analyzer-ai-conversation-turns'
-const CONVERSATION_MAX_TURNS = 20
-const CONVERSATION_MAX_TOTAL_TURNS = 200
+const CONVERSATION_MAX_TURNS = 12
+const CONVERSATION_MAX_TOTAL_TURNS = 80
+const CONVERSATION_QUESTION_MAX_CHARS = 1200
+const CONVERSATION_ANSWER_MAX_CHARS = 28000
+
+const clipForStorage = (value: string, maxChars: number): string => {
+  const text = value.trim()
+  if (text.length <= maxChars) return text
+  return `${text.slice(0, maxChars)}\n\n...(内容较长，已为降低内存占用自动截断)...`
+}
 const normalizeMemoryState = (value: unknown): MemoryState | null => {
   if (!value || typeof value !== 'object') return null
   const parsed = value as Partial<MemoryState>
@@ -199,8 +235,8 @@ const loadSessionConversationTurns = (): ConversationTurn[] => {
         id: item.id as string,
         turn: item.turn as number,
         contextKey: item.contextKey as string,
-        question: item.question as string,
-        answer: item.answer as string,
+        question: clipForStorage(item.question as string, CONVERSATION_QUESTION_MAX_CHARS),
+        answer: clipForStorage(item.answer as string, CONVERSATION_ANSWER_MAX_CHARS),
         usedMemory: item.usedMemory as boolean,
         timestamp: item.timestamp as number,
         roundPromptTokens: typeof item.roundPromptTokens === 'number' && Number.isFinite(item.roundPromptTokens)
@@ -602,11 +638,11 @@ const sanitizeAnswerForUser = (raw: string): string => {
 }
 
 const renderedResultHtml = computed(() => renderMarkdown(resultText.value))
-const streamingAnswerHtml = computed(() => renderMarkdown(resultText.value))
+const streamingAnswerHtml = computed(() => renderMarkdown(streamingRenderText.value))
 const showStreamingTurn = computed(() =>
   analyzing.value
   && analyzingStage.value === 'streaming'
-  && !!resultText.value.trim()
+  && !!streamingRenderText.value.trim()
   && !!activeRoundQuestion.value.trim()
 )
 
@@ -644,7 +680,7 @@ watch(
   { immediate: true, flush: 'post' }
 )
 
-watch(resultText, () => {
+watch(streamingRenderText, () => {
   if (!analyzing.value) return
   void scrollConversationToBottom('auto')
 }, { flush: 'post' })
@@ -772,6 +808,11 @@ const clearMemory = () => {
   conversationTurns.value = []
   saveSessionConversationTurns([])
   lastRequestUsedMemory.value = false
+  resultText.value = ''
+  activeRoundQuestion.value = ''
+  pendingStreamFullText.value = ''
+  streamingRenderText.value = ''
+  clearStreamFlushTimer()
   message.success('已清空上下文记忆与多轮对话')
 }
 
@@ -785,6 +826,11 @@ const clearCurrentTaskMemory = () => {
 
   conversationTurns.value = conversationTurns.value.filter(item => item.contextKey !== contextKey)
   lastRequestUsedMemory.value = false
+  resultText.value = ''
+  activeRoundQuestion.value = ''
+  pendingStreamFullText.value = ''
+  streamingRenderText.value = ''
+  clearStreamFlushTimer()
   message.success('已清空当前任务上下文记忆与对话')
 }
 
@@ -1446,6 +1492,9 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   if (mode === 'analyze') {
     activeRoundQuestion.value = questionSnapshot
     resultText.value = ''
+    pendingStreamFullText.value = ''
+    streamingRenderText.value = ''
+    clearStreamFlushTimer()
     usageText.value = 'AI 正在处理请求...'
     analyzingStage.value = 'streaming'
   }
@@ -1483,7 +1532,8 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     maxNetworkRetries: mode === 'analyze' ? 2 : 1,
     onDelta: mode === 'analyze' && settings.streamResponse
       ? (_deltaText: string, fullText: string) => {
-          resultText.value = fullText
+          pendingStreamFullText.value = fullText
+          flushStreamingText(false)
           usageText.value = 'AI 正在流式输出...'
         }
       : undefined,
@@ -1568,6 +1618,10 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     }
   }
   updateUsageText(response)
+  if (mode === 'analyze') {
+    pendingStreamFullText.value = response.text
+    flushStreamingText(true)
+  }
   let outputTruncated = response.finishReason === 'length'
 
   if (mode === 'analyze' && outputTruncated && settings.truncateAutoRetryEnabled) {
@@ -1585,6 +1639,8 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       const concisePrompt = buildConciseRetryPrompt(conciseBase, promptProfile)
       response = await sendRequestTracked(concisePrompt)
       updateUsageText(response, ' | 精简重试')
+      pendingStreamFullText.value = response.text
+      flushStreamingText(true)
       outputTruncated = response.finishReason === 'length'
       if (outputTruncated) {
         usageText.value = `${usageText.value} | 仍截断`
@@ -1660,8 +1716,8 @@ const runRequest = async (mode: 'test' | 'analyze') => {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       turn: nextTurn,
       contextKey,
-      question: questionSnapshot,
-      answer: answerText,
+      question: clipForStorage(questionSnapshot, CONVERSATION_QUESTION_MAX_CHARS),
+      answer: clipForStorage(answerText, CONVERSATION_ANSWER_MAX_CHARS),
       usedMemory: useMemoryForThisRound,
       timestamp: Date.now(),
       roundPromptTokens: roundTokenUsage.prompt,
@@ -1726,6 +1782,10 @@ const handleAnalyze = async () => {
   } finally {
     analyzing.value = false
     analyzingStage.value = 'idle'
+    activeRoundQuestion.value = ''
+    pendingStreamFullText.value = ''
+    streamingRenderText.value = ''
+    clearStreamFlushTimer()
   }
 }
 </script>
