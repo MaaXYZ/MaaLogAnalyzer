@@ -118,6 +118,8 @@ const emit = defineEmits<{
   'select-recognition': [node: NodeInfo, attemptIndex: number]
   'select-nested': [node: NodeInfo, attemptIndex: number, nestedIndex: number]
   'select-nested-action': [node: NodeInfo, actionIndex: number, nestedIndex: number]
+  'select-action-recognition': [node: NodeInfo, attemptIndex: number]
+  'select-nested-action-recognition': [node: NodeInfo, actionIndex: number, nestedIndex: number, attemptIndex: number]
   'file-loading-start': []
   'file-loading-end': []
   'open-task-drawer': []
@@ -812,6 +814,16 @@ const handleNestedClick = (node: NodeInfo, attemptIndex: number, nestedIndex: nu
 const handleNestedActionClick = (node: NodeInfo, actionIndex: number, nestedIndex: number) => {
   emit('select-nested-action', node, actionIndex, nestedIndex)
 }
+
+// 选择 Action 内识别（action-level reco）
+const handleActionRecognitionClick = (node: NodeInfo, attemptIndex: number) => {
+  emit('select-action-recognition', node, attemptIndex)
+}
+
+// 选择嵌套动作中的识别尝试
+const handleNestedActionRecognitionClick = (node: NodeInfo, actionIndex: number, nestedIndex: number, attemptIndex: number) => {
+  emit('select-nested-action-recognition', node, actionIndex, nestedIndex, attemptIndex)
+}
 </script>
 
 <template>
@@ -1002,6 +1014,8 @@ const handleNestedActionClick = (node: NodeInfo, actionIndex: number, nestedInde
                   @select-recognition="handleRecognitionClick"
                   @select-nested="handleNestedClick"
                   @select-nested-action="handleNestedActionClick"
+                  @select-action-recognition="handleActionRecognitionClick"
+                  @select-nested-action-recognition="handleNestedActionRecognitionClick"
                 />
               </div>
             </DynamicScrollerItem>
@@ -1278,6 +1292,8 @@ const handleNestedActionClick = (node: NodeInfo, actionIndex: number, nestedInde
                             @select-recognition="handleRecognitionClick"
                             @select-nested="handleNestedClick"
                             @select-nested-action="handleNestedActionClick"
+                            @select-action-recognition="handleActionRecognitionClick"
+                            @select-nested-action-recognition="handleNestedActionRecognitionClick"
                           />
                         </div>
                       </DynamicScrollerItem>

@@ -50,7 +50,7 @@ export const TOUR_STEPS: TourStep[] = [
     sectionTitle: '日志分析',
     title: '日志分析主区域',
     content: '这是排查问题的主工作区，任务列表、节点链路和详情都在这里。',
-    target: '[data-tour="analysis-main"]',
+    target: '[data-tour="analysis-process-root"]',
     view: 'analysis',
     placement: 'right',
     nextLabel: '进入流程图板块',

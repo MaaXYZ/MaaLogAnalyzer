@@ -346,6 +346,8 @@ const selectedRecognitionIndex = ref<number | null>(null)
 const selectedNestedIndex = ref<number | null>(null)
 const selectedActionIndex = ref<number | null>(null)
 const selectedNestedActionIndex = ref<number | null>(null)
+const selectedActionRecognitionIndex = ref<number | null>(null)
+const selectedNestedActionRecognitionIndex = ref<number | null>(null)
 const isActionOnlyView = ref(false)
 const loading = ref(false)
 const pendingScrollNodeId = ref<number | null>(null)
@@ -360,6 +362,8 @@ const resetSelectionState = () => {
   selectedNestedIndex.value = null
   selectedActionIndex.value = null
   selectedNestedActionIndex.value = null
+  selectedActionRecognitionIndex.value = null
+  selectedNestedActionRecognitionIndex.value = null
   isActionOnlyView.value = false
   pendingScrollNodeId.value = null
 }
@@ -403,6 +407,8 @@ const applyParsedTasks = (nextTasks: TaskInfo[], preserveSelection: boolean) => 
   selectedNestedIndex.value = null
   selectedActionIndex.value = null
   selectedNestedActionIndex.value = null
+  selectedActionRecognitionIndex.value = null
+  selectedNestedActionRecognitionIndex.value = null
   isActionOnlyView.value = false
 }
 
@@ -1161,6 +1167,11 @@ const handleSelectTask = (task: TaskInfo) => {
   selectedNode.value = null
   selectedRecognitionIndex.value = null
   selectedNestedIndex.value = null
+  selectedActionIndex.value = null
+  selectedNestedActionIndex.value = null
+  selectedActionRecognitionIndex.value = null
+  selectedNestedActionRecognitionIndex.value = null
+  isActionOnlyView.value = false
 }
 
 // 从流程图定位到日志分析
@@ -1171,6 +1182,8 @@ const handleNavigateToNode = (task: TaskInfo, node: NodeInfo) => {
   selectedNestedIndex.value = null
   selectedActionIndex.value = null
   selectedNestedActionIndex.value = null
+  selectedActionRecognitionIndex.value = null
+  selectedNestedActionRecognitionIndex.value = null
   isActionOnlyView.value = false
   pendingScrollNodeId.value = node.node_id
   viewMode.value = 'analysis'
@@ -1183,6 +1196,8 @@ const handleSelectNode = (node: NodeInfo) => {
   selectedNestedIndex.value = null
   selectedActionIndex.value = null
   selectedNestedActionIndex.value = null
+  selectedActionRecognitionIndex.value = null
+  selectedNestedActionRecognitionIndex.value = null
   isActionOnlyView.value = false
 }
 
@@ -1193,7 +1208,21 @@ const handleSelectAction = (node: NodeInfo) => {
   selectedNestedIndex.value = null
   selectedActionIndex.value = null
   selectedNestedActionIndex.value = null
+  selectedActionRecognitionIndex.value = null
+  selectedNestedActionRecognitionIndex.value = null
   isActionOnlyView.value = true
+}
+
+// 选择 Action 内识别（例如 CCLevelMax）
+const handleSelectActionRecognition = (node: NodeInfo, attemptIndex: number) => {
+  selectedNode.value = node
+  selectedRecognitionIndex.value = null
+  selectedNestedIndex.value = null
+  selectedActionIndex.value = null
+  selectedNestedActionIndex.value = null
+  selectedActionRecognitionIndex.value = attemptIndex
+  selectedNestedActionRecognitionIndex.value = null
+  isActionOnlyView.value = false
 }
 
 // 选择识别尝试
@@ -1203,6 +1232,8 @@ const handleSelectRecognition = (node: NodeInfo, attemptIndex: number) => {
   selectedNestedIndex.value = null
   selectedActionIndex.value = null
   selectedNestedActionIndex.value = null
+  selectedActionRecognitionIndex.value = null
+  selectedNestedActionRecognitionIndex.value = null
   isActionOnlyView.value = false
 }
 
@@ -1213,6 +1244,8 @@ const handleSelectNested = (node: NodeInfo, attemptIndex: number, nestedIndex: n
   selectedNestedIndex.value = nestedIndex
   selectedActionIndex.value = null
   selectedNestedActionIndex.value = null
+  selectedActionRecognitionIndex.value = null
+  selectedNestedActionRecognitionIndex.value = null
   isActionOnlyView.value = false
 }
 
@@ -1223,6 +1256,20 @@ const handleSelectNestedAction = (node: NodeInfo, actionIndex: number, nestedInd
   selectedNestedIndex.value = null
   selectedActionIndex.value = actionIndex
   selectedNestedActionIndex.value = nestedIndex
+  selectedActionRecognitionIndex.value = null
+  selectedNestedActionRecognitionIndex.value = null
+  isActionOnlyView.value = false
+}
+
+// 选择嵌套动作中的识别尝试（例如 CCUpdate 下的某次识别）
+const handleSelectNestedActionRecognition = (node: NodeInfo, actionIndex: number, nestedIndex: number, attemptIndex: number) => {
+  selectedNode.value = node
+  selectedRecognitionIndex.value = null
+  selectedNestedIndex.value = null
+  selectedActionIndex.value = actionIndex
+  selectedNestedActionIndex.value = nestedIndex
+  selectedActionRecognitionIndex.value = null
+  selectedNestedActionRecognitionIndex.value = attemptIndex
   isActionOnlyView.value = false
 }
 
@@ -1328,7 +1375,16 @@ const modalWidthSmall = computed(() => isMobile.value ? '90vw' : '500px')
 
 // 移动端下选中节点/识别/动作自动打开详情抽屉
 watch(
-  [selectedNode, selectedRecognitionIndex, selectedNestedIndex, selectedActionIndex, selectedNestedActionIndex, isActionOnlyView],
+  [
+    selectedNode,
+    selectedRecognitionIndex,
+    selectedNestedIndex,
+    selectedActionIndex,
+    selectedNestedActionIndex,
+    selectedActionRecognitionIndex,
+    selectedNestedActionRecognitionIndex,
+    isActionOnlyView,
+  ],
   () => {
     if (isMobile.value && selectedNode.value) {
       showDetailDrawer.value = true
@@ -1567,6 +1623,8 @@ onBeforeUnmount(() => {
             @select-recognition="handleSelectRecognition"
             @select-nested="handleSelectNested"
             @select-nested-action="handleSelectNestedAction"
+            @select-action-recognition="handleSelectActionRecognition"
+            @select-nested-action-recognition="handleSelectNestedActionRecognition"
             @file-loading-start="handleFileLoadingStart"
             @file-loading-end="handleFileLoadingEnd"
             @open-task-drawer="showTaskDrawer = true"
@@ -1634,6 +1692,8 @@ onBeforeUnmount(() => {
                 :selected-nested-index="selectedNestedIndex"
                 :selected-action-index="selectedActionIndex"
                 :selected-nested-action-index="selectedNestedActionIndex"
+                :selected-action-recognition-index="selectedActionRecognitionIndex"
+                :selected-nested-action-recognition-index="selectedNestedActionRecognitionIndex"
                 :is-action-only-view="isActionOnlyView"
                 style="height: 100%"
               />
@@ -1667,6 +1727,8 @@ onBeforeUnmount(() => {
               @select-recognition="handleSelectRecognition"
               @select-nested="handleSelectNested"
               @select-nested-action="handleSelectNestedAction"
+              @select-action-recognition="handleSelectActionRecognition"
+              @select-nested-action-recognition="handleSelectNestedActionRecognition"
               @file-loading-start="handleFileLoadingStart"
               @file-loading-end="handleFileLoadingEnd"
               @scroll-done="pendingScrollNodeId = null"
@@ -1696,6 +1758,8 @@ onBeforeUnmount(() => {
                 :selected-nested-index="selectedNestedIndex"
                 :selected-action-index="selectedActionIndex"
                 :selected-nested-action-index="selectedNestedActionIndex"
+                :selected-action-recognition-index="selectedActionRecognitionIndex"
+                :selected-nested-action-recognition-index="selectedNestedActionRecognitionIndex"
                 :is-action-only-view="isActionOnlyView"
                 style="height: 100%"
               />
@@ -1776,6 +1840,8 @@ onBeforeUnmount(() => {
                   @select-recognition="handleSelectRecognition"
                   @select-nested="handleSelectNested"
                   @select-nested-action="handleSelectNestedAction"
+                  @select-action-recognition="handleSelectActionRecognition"
+                  @select-nested-action-recognition="handleSelectNestedActionRecognition"
                   @file-loading-start="handleFileLoadingStart"
                   @file-loading-end="handleFileLoadingEnd"
                   @open-task-drawer="showTaskDrawer = true"
@@ -1854,6 +1920,8 @@ onBeforeUnmount(() => {
                 :selected-nested-index="selectedNestedIndex"
                 :selected-action-index="selectedActionIndex"
                 :selected-nested-action-index="selectedNestedActionIndex"
+                :selected-action-recognition-index="selectedActionRecognitionIndex"
+                :selected-nested-action-recognition-index="selectedNestedActionRecognitionIndex"
                 :is-action-only-view="isActionOnlyView"
                 style="height: 100%"
               />
@@ -1895,6 +1963,8 @@ onBeforeUnmount(() => {
                   @select-recognition="handleSelectRecognition"
                   @select-nested="handleSelectNested"
                   @select-nested-action="handleSelectNestedAction"
+                  @select-action-recognition="handleSelectActionRecognition"
+                  @select-nested-action-recognition="handleSelectNestedActionRecognition"
                   @file-loading-start="handleFileLoadingStart"
                   @file-loading-end="handleFileLoadingEnd"
                   @scroll-done="pendingScrollNodeId = null"
@@ -1925,6 +1995,8 @@ onBeforeUnmount(() => {
                     :selected-nested-index="selectedNestedIndex"
                     :selected-action-index="selectedActionIndex"
                     :selected-nested-action-index="selectedNestedActionIndex"
+                    :selected-action-recognition-index="selectedActionRecognitionIndex"
+                    :selected-nested-action-recognition-index="selectedNestedActionRecognitionIndex"
                     :is-action-only-view="isActionOnlyView"
                     style="height: 100%"
                   />

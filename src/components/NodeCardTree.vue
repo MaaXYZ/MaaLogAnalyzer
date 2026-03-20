@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { NButton, NFlex, NText } from 'naive-ui'
 import { CheckCircleOutlined, CloseCircleOutlined } from '@vicons/antd'
-import type { NodeInfo, MergedRecognitionItem } from '../types'
+import type { NodeInfo, MergedRecognitionItem, RecognitionAttempt } from '../types'
 
 const props = defineProps<{
   node: NodeInfo
@@ -18,6 +18,8 @@ const emit = defineEmits<{
   'select-recognition': [node: NodeInfo, attemptIndex: number]
   'select-nested': [node: NodeInfo, attemptIndex: number, nestedIndex: number]
   'select-nested-action': [node: NodeInfo, actionIndex: number, nestedIndex: number]
+  'select-action-recognition': [node: NodeInfo, attemptIndex: number]
+  'select-nested-action-recognition': [node: NodeInfo, actionIndex: number, nestedIndex: number, attemptIndex: number]
   'toggle-recognition': []
   'toggle-action': []
   'toggle-nested': [attemptIndex: number]
@@ -39,19 +41,66 @@ const isActionFailed = computed(() => {
   return false
 })
 
-// 扁平化的 nested action 节点列表
-const flatNestedActions = computed(() => {
-  const result: Array<{ groupIdx: number; nestedIdx: number; name: string; status: string }> = []
+const dedupeRecognitionAttempts = (items: RecognitionAttempt[]) => {
+  const seen = new Set<string>()
+  const result: RecognitionAttempt[] = []
+  for (const item of items) {
+    const key = `${item.reco_id}|${item.name}|${item.timestamp}|${item.status}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(item)
+  }
+  return result
+}
+
+const actionTree = computed(() => {
+  const actionItems: Array<{
+    groupIdx: number
+    nestedIdx: number
+    name: string
+    status: string
+    recognitionItems: RecognitionAttempt[]
+    recognitionCount: number
+  }> = []
+
   if (props.node.nested_action_nodes) {
     for (let gi = 0; gi < props.node.nested_action_nodes.length; gi++) {
       const group = props.node.nested_action_nodes[gi]
       for (let ni = 0; ni < group.nested_actions.length; ni++) {
         const n = group.nested_actions[ni]
-        result.push({ groupIdx: gi, nestedIdx: ni, name: n.name, status: n.status })
+        actionItems.push({
+          groupIdx: gi,
+          nestedIdx: ni,
+          name: n.name,
+          status: n.status,
+          recognitionItems: [...(n.recognition_attempts ?? [])],
+          recognitionCount: n.recognition_attempts?.length ?? 0,
+        })
       }
     }
   }
-  return result
+
+  for (const item of actionItems) {
+    item.recognitionItems = dedupeRecognitionAttempts(item.recognitionItems)
+    item.recognitionCount = item.recognitionItems.length
+  }
+
+  return {
+    actions: actionItems,
+    actionLevelReco: dedupeRecognitionAttempts(props.node.nested_recognition_in_action ?? []),
+  }
+})
+
+const hasActionSection = computed(() => {
+  return !!(
+    props.node.action_details ||
+    actionTree.value.actions.length > 0 ||
+    actionTree.value.actionLevelReco.length > 0
+  )
+})
+
+const hasActionChildren = computed(() => {
+  return actionTree.value.actions.length > 0 || actionTree.value.actionLevelReco.length > 0
 })
 </script>
 
@@ -145,17 +194,18 @@ const flatNestedActions = computed(() => {
     </template>
 
     <!-- Action 树 -->
-    <template v-if="node.action_details">
+    <template v-if="hasActionSection">
       <div style="margin-top: 4px">
         <n-flex align="center" style="gap: 4px">
           <span
-            v-if="flatNestedActions.length > 0"
+            v-if="hasActionChildren"
             class="tree-toggle"
             :class="{ 'tree-toggle-collapsed': !isActionExpanded }"
             @click="emit('toggle-action')"
           />
           <n-text depth="3" style="font-size: 12px">Action: </n-text>
           <n-button
+            v-if="node.action_details"
             text
             size="tiny"
             :type="isActionFailed ? 'error' : 'success'"
@@ -167,13 +217,32 @@ const flatNestedActions = computed(() => {
             </template>
             {{ node.action_details.name }}
           </n-button>
+          <n-text v-else depth="3" style="font-size: 12px">sub-flow only</n-text>
         </n-flex>
       </div>
 
       <!-- 嵌套 action 节点 -->
-      <ul v-if="isActionExpanded && flatNestedActions.length > 0" class="tree-list">
+      <ul v-if="isActionExpanded && (actionTree.actions.length > 0 || actionTree.actionLevelReco.length > 0)" class="tree-list">
         <li
-          v-for="(item, idx) in flatNestedActions"
+          v-for="(item, idx) in actionTree.actionLevelReco"
+          :key="`tree-action-reco-${idx}`"
+          class="tree-item"
+        >
+          <n-button
+            text
+            size="tiny"
+            :type="item.status === 'success' ? 'success' : 'warning'"
+            @click="emit('select-action-recognition', node, idx)"
+          >
+            <template #icon>
+              <check-circle-outlined v-if="item.status === 'success'" />
+              <close-circle-outlined v-else />
+            </template>
+            {{ item.name }}
+          </n-button>
+        </li>
+        <li
+          v-for="(item, idx) in actionTree.actions"
           :key="`tree-action-${idx}`"
           class="tree-item"
         >
@@ -187,8 +256,29 @@ const flatNestedActions = computed(() => {
               <check-circle-outlined v-if="item.status === 'success'" />
               <close-circle-outlined v-else />
             </template>
-            {{ item.name }}
+            {{ item.name }}{{ item.recognitionCount > 0 ? ` (${item.recognitionCount})` : '' }}
           </n-button>
+
+          <ul v-if="item.recognitionItems.length > 0" class="tree-list">
+            <li
+              v-for="(reco, recoIdx) in item.recognitionItems"
+              :key="`tree-action-${idx}-reco-${recoIdx}`"
+              class="tree-item"
+            >
+              <n-button
+                text
+                size="tiny"
+                :type="reco.status === 'success' ? 'success' : 'warning'"
+                @click="emit('select-nested-action-recognition', node, item.groupIdx, item.nestedIdx, recoIdx)"
+              >
+                <template #icon>
+                  <check-circle-outlined v-if="reco.status === 'success'" />
+                  <close-circle-outlined v-else />
+                </template>
+                {{ reco.name }}
+              </n-button>
+            </li>
+          </ul>
         </li>
       </ul>
     </template>

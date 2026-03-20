@@ -21,6 +21,8 @@ const emit = defineEmits<{
   'select-recognition': [node: NodeInfo, attemptIndex: number]
   'select-nested': [node: NodeInfo, attemptIndex: number, nestedIndex: number]
   'select-nested-action': [node: NodeInfo, actionIndex: number, nestedIndex: number]
+  'select-action-recognition': [node: NodeInfo, attemptIndex: number]
+  'select-nested-action-recognition': [node: NodeInfo, actionIndex: number, nestedIndex: number, attemptIndex: number]
 }>()
 
 // 跟踪哪些识别尝试的嵌套节点是展开的
@@ -224,6 +226,8 @@ const actionButtonType = computed<ButtonType>(() => {
           @select-recognition="(n, i) => emit('select-recognition', n, i)"
           @select-nested="(n, ai, ni) => emit('select-nested', n, ai, ni)"
           @select-nested-action="(n, ai, ni) => emit('select-nested-action', n, ai, ni)"
+          @select-action-recognition="(n, i) => emit('select-action-recognition', n, i)"
+          @select-nested-action-recognition="(n, ai, ni, i) => emit('select-nested-action-recognition', n, ai, ni, i)"
           @toggle-recognition="recognitionExpanded = !recognitionExpanded"
           @toggle-action="actionExpanded = !actionExpanded"
           @toggle-nested="toggleNestedNodes"
@@ -237,6 +241,8 @@ const actionButtonType = computed<ButtonType>(() => {
           @select-recognition="(n, i) => emit('select-recognition', n, i)"
           @select-nested="(n, ai, ni) => emit('select-nested', n, ai, ni)"
           @select-nested-action="(n, ai, ni) => emit('select-nested-action', n, ai, ni)"
+          @select-action-recognition="(n, i) => emit('select-action-recognition', n, i)"
+          @select-nested-action-recognition="(n, ai, ni, i) => emit('select-nested-action-recognition', n, ai, ni, i)"
         />
         <node-card-tree
           v-else
@@ -250,6 +256,8 @@ const actionButtonType = computed<ButtonType>(() => {
           @select-recognition="(n, i) => emit('select-recognition', n, i)"
           @select-nested="(n, ai, ni) => emit('select-nested', n, ai, ni)"
           @select-nested-action="(n, ai, ni) => emit('select-nested-action', n, ai, ni)"
+          @select-action-recognition="(n, i) => emit('select-action-recognition', n, i)"
+          @select-nested-action-recognition="(n, ai, ni, i) => emit('select-nested-action-recognition', n, ai, ni, i)"
           @toggle-recognition="recognitionExpanded = !recognitionExpanded"
           @toggle-action="actionExpanded = !actionExpanded"
           @toggle-nested="toggleNestedNodes"

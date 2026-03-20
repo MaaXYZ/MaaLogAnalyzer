@@ -29,12 +29,24 @@ const props = defineProps<{
   selectedNestedIndex?: number | null
   selectedActionIndex?: number | null
   selectedNestedActionIndex?: number | null
+  selectedActionRecognitionIndex?: number | null
+  selectedNestedActionRecognitionIndex?: number | null
   isActionOnlyView?: boolean
 }>()
 
 // 是否选中了嵌套动作节点
 const isNestedActionSelected = computed(() => {
   return props.selectedActionIndex != null && props.selectedNestedActionIndex != null
+})
+
+// 是否选中了 Action 内识别（node.nested_recognition_in_action）
+const isActionRecognitionSelected = computed(() => {
+  return props.selectedActionRecognitionIndex != null
+})
+
+// 是否选中了嵌套动作中的识别尝试（nested_action.recognition_attempts）
+const isNestedActionRecognitionSelected = computed(() => {
+  return isNestedActionSelected.value && props.selectedNestedActionRecognitionIndex != null
 })
 
 // 节点状态标签类型
@@ -57,10 +69,21 @@ const statusInfo = computed(() => {
 const currentAttempt = computed(() => {
   if (!props.selectedNode) return null
 
+  if (isActionRecognitionSelected.value) {
+    return props.selectedNode.nested_recognition_in_action?.[props.selectedActionRecognitionIndex!] || null
+  }
+
   // 如果选中了嵌套动作节点
   if (isNestedActionSelected.value) {
     const nestedActionGroup = props.selectedNode.nested_action_nodes?.[props.selectedActionIndex!]
     const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex!]
+    if (props.selectedNestedActionRecognitionIndex != null) {
+      return nestedAction?.recognition_attempts?.[props.selectedNestedActionRecognitionIndex] || null
+    }
+    const latestAttempt = nestedAction?.recognition_attempts?.length
+      ? nestedAction.recognition_attempts[nestedAction.recognition_attempts.length - 1]
+      : null
+    if (latestAttempt) return latestAttempt
     return nestedAction || null
   }
 
@@ -79,6 +102,18 @@ const pickStartTime = (startTimestamp?: string | null, fallbackTimestamp?: strin
   return startTimestamp || fallbackTimestamp || finalFallback || '-'
 }
 
+const toFallbackRecognition = (source: any) => {
+  if (!source) return null
+  const recoId = typeof source.reco_id === 'number' ? source.reco_id : Number(source.reco_id)
+  return {
+    reco_id: Number.isFinite(recoId) ? recoId : 0,
+    algorithm: 'Unknown',
+    box: null,
+    detail: source.detail ?? {},
+    name: source.name || '',
+  }
+}
+
 const recognitionExecutionTime = computed(() => {
   const attempt = currentAttempt.value as any
   return pickStartTime(attempt?.start_timestamp, attempt?.timestamp, attempt?.end_timestamp)
@@ -88,11 +123,23 @@ const recognitionExecutionTime = computed(() => {
 const currentRecognition = computed(() => {
   if (!props.selectedNode) return null
 
+  if (isActionRecognitionSelected.value) {
+    const attempt = props.selectedNode.nested_recognition_in_action?.[props.selectedActionRecognitionIndex!]
+    return attempt?.reco_details || toFallbackRecognition(attempt)
+  }
+
   // 如果选中了嵌套动作节点
   if (isNestedActionSelected.value) {
     const nestedActionGroup = props.selectedNode.nested_action_nodes?.[props.selectedActionIndex!]
     const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex!]
-    return nestedAction?.reco_details || null
+    if (props.selectedNestedActionRecognitionIndex != null) {
+      const attempt = nestedAction?.recognition_attempts?.[props.selectedNestedActionRecognitionIndex]
+      return attempt?.reco_details || toFallbackRecognition(attempt)
+    }
+    const latestAttempt = nestedAction?.recognition_attempts?.length
+      ? nestedAction.recognition_attempts[nestedAction.recognition_attempts.length - 1]
+      : null
+    return latestAttempt?.reco_details || nestedAction?.reco_details || toFallbackRecognition(latestAttempt || nestedAction)
   }
 
   // 如果选中了特定的识别尝试
@@ -102,11 +149,11 @@ const currentRecognition = computed(() => {
     // 如果选中了嵌套节点，显示嵌套节点的详情
     if (props.selectedNestedIndex != null) {
       const nested = attempt?.nested_nodes?.[props.selectedNestedIndex]
-      return nested?.reco_details || null
+      return nested?.reco_details || toFallbackRecognition(nested)
     }
 
     // 否则显示识别尝试的详情
-    return attempt?.reco_details || null
+    return attempt?.reco_details || toFallbackRecognition(attempt)
   }
 
   // 否则显示节点的最终识别详情
@@ -120,11 +167,16 @@ const hasRecognition = computed(() => {
 
 // 是否有动作详情（节点最终动作，与当前识别尝试解耦）
 const hasAction = computed(() => {
+  // 显式选中识别时，不展示 Action 详情，避免“点了识别还显示动作”
+  if (isActionRecognitionSelected.value || isNestedActionRecognitionSelected.value) {
+    return false
+  }
+
   // 如果选中了嵌套动作节点，检查是否有动作详情
   if (isNestedActionSelected.value) {
     const nestedActionGroup = props.selectedNode?.nested_action_nodes?.[props.selectedActionIndex!]
     const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex!]
-    return !!nestedAction?.action_details
+    return !!nestedAction
   }
   return !!props.selectedNode?.action_details
 })
@@ -137,7 +189,17 @@ const currentActionDetails = computed(() => {
   if (isNestedActionSelected.value) {
     const nestedActionGroup = props.selectedNode.nested_action_nodes?.[props.selectedActionIndex!]
     const nestedAction = nestedActionGroup?.nested_actions?.[props.selectedNestedActionIndex!]
-    return nestedAction?.action_details || null
+    if (!nestedAction) return null
+    if (nestedAction.action_details) return nestedAction.action_details
+    // 某些日志不会在 PipelineNode 细节里附带 action_details，这里给一个兜底显示
+    return {
+      action_id: nestedAction.node_id,
+      action: 'Unknown',
+      box: [0, 0, 0, 0],
+      detail: {},
+      name: nestedAction.name,
+      success: nestedAction.status === 'success',
+    }
   }
 
   return props.selectedNode.action_details || null
@@ -145,6 +207,14 @@ const currentActionDetails = computed(() => {
 
 const actionExecutionTime = computed(() => {
   if (!props.selectedNode) return '-'
+  if (isNestedActionSelected.value) {
+    const nestedAction = currentNestedAction.value as any
+    const actionDetails = currentActionDetails.value as any
+    if (actionDetails?.start_timestamp || actionDetails?.end_timestamp) {
+      return pickStartTime(actionDetails.start_timestamp, actionDetails.end_timestamp)
+    }
+    return pickStartTime(nestedAction?.start_timestamp, nestedAction?.timestamp, nestedAction?.end_timestamp)
+  }
   const actionDetails = currentActionDetails.value as any
   if (actionDetails?.start_timestamp || actionDetails?.end_timestamp) {
     return pickStartTime(actionDetails.start_timestamp, actionDetails.end_timestamp)
@@ -158,7 +228,12 @@ const actionExecutionTime = computed(() => {
 
 // 是否选中了特定的识别尝试或嵌套动作节点
 const isRecognitionAttemptSelected = computed(() => {
-  return props.selectedRecognitionIndex != null || isNestedActionSelected.value
+  return (
+    props.selectedRecognitionIndex != null ||
+    isActionRecognitionSelected.value ||
+    isNestedActionSelected.value ||
+    isNestedActionRecognitionSelected.value
+  )
 })
 
 // 当前选中的嵌套动作节点（用于 fallback 显示）
@@ -192,6 +267,100 @@ const nestedActionErrorImage = computed(() => {
   return null
 })
 
+// 渲染结构快照（用于排查层级归属问题）
+const renderStructureSnapshot = computed(() => {
+  if (!props.selectedNode) return null
+  const node = props.selectedNode
+
+  return {
+    node: {
+      node_id: node.node_id,
+      name: node.name,
+      status: node.status,
+      task_id: node.task_id,
+      timestamp: node.timestamp,
+      start_timestamp: node.start_timestamp ?? null,
+      end_timestamp: node.end_timestamp ?? null,
+    },
+    selection: {
+      selectedRecognitionIndex: props.selectedRecognitionIndex ?? null,
+      selectedNestedIndex: props.selectedNestedIndex ?? null,
+      selectedActionIndex: props.selectedActionIndex ?? null,
+      selectedNestedActionIndex: props.selectedNestedActionIndex ?? null,
+      selectedActionRecognitionIndex: props.selectedActionRecognitionIndex ?? null,
+      selectedNestedActionRecognitionIndex: props.selectedNestedActionRecognitionIndex ?? null,
+      isActionOnlyView: !!props.isActionOnlyView,
+    },
+    recognition_attempts: (node.recognition_attempts ?? []).map((attempt, index) => ({
+      index,
+      reco_id: attempt.reco_id,
+      name: attempt.name,
+      status: attempt.status,
+      timestamp: attempt.timestamp,
+      start_timestamp: attempt.start_timestamp ?? null,
+      end_timestamp: attempt.end_timestamp ?? null,
+      nested_nodes: (attempt.nested_nodes ?? []).map((nested, nestedIndex) => ({
+        index: nestedIndex,
+        reco_id: nested.reco_id,
+        name: nested.name,
+        status: nested.status,
+        timestamp: nested.timestamp,
+      })),
+    })),
+    nested_recognition_in_action: (node.nested_recognition_in_action ?? []).map((attempt, index) => ({
+      index,
+      reco_id: attempt.reco_id,
+      name: attempt.name,
+      status: attempt.status,
+      timestamp: attempt.timestamp,
+      start_timestamp: attempt.start_timestamp ?? null,
+      end_timestamp: attempt.end_timestamp ?? null,
+      nested_nodes: (attempt.nested_nodes ?? []).map((nested, nestedIndex) => ({
+        index: nestedIndex,
+        reco_id: nested.reco_id,
+        name: nested.name,
+        status: nested.status,
+        timestamp: nested.timestamp,
+      })),
+    })),
+    nested_action_nodes: (node.nested_action_nodes ?? []).map((group, groupIndex) => ({
+      group_index: groupIndex,
+      task_id: group.task_id,
+      name: group.name,
+      status: group.status,
+      timestamp: group.timestamp,
+      nested_actions: group.nested_actions.map((action, actionIndex) => ({
+        index: actionIndex,
+        node_id: action.node_id,
+        name: action.name,
+        status: action.status,
+        timestamp: action.timestamp,
+        start_timestamp: action.start_timestamp ?? null,
+        end_timestamp: action.end_timestamp ?? null,
+        reco_details: action.reco_details ?? null,
+        action_details: action.action_details ?? null,
+        recognition_attempts: (action.recognition_attempts ?? []).map((attempt, attemptIndex) => ({
+          index: attemptIndex,
+          reco_id: attempt.reco_id,
+          name: attempt.name,
+          status: attempt.status,
+          timestamp: attempt.timestamp,
+          start_timestamp: attempt.start_timestamp ?? null,
+          end_timestamp: attempt.end_timestamp ?? null,
+          reco_details: attempt.reco_details ?? null,
+          nested_nodes: (attempt.nested_nodes ?? []).map((nested, nestedIndex) => ({
+            index: nestedIndex,
+            reco_id: nested.reco_id,
+            name: nested.name,
+            status: nested.status,
+            timestamp: nested.timestamp,
+          })),
+        })),
+      })),
+    })),
+  }
+})
+
 // 格式化 JSON
 const formatJson = (obj: any) => {
   return JSON.stringify(obj, null, 2)
@@ -203,6 +372,11 @@ const descriptionColumns = computed(() => isMobile.value ? 1 : 2)
 // 复制到剪贴板
 const copyToClipboard = (text: string) => {
   navigator.clipboard.writeText(text)
+}
+
+const copyRenderStructureSnapshot = () => {
+  if (!renderStructureSnapshot.value) return
+  copyToClipboard(formatJson(renderStructureSnapshot.value))
 }
 </script>
 
@@ -218,6 +392,23 @@ const copyToClipboard = (text: string) => {
 
       <!-- 已选择节点 -->
       <template v-else>
+
+        <!-- 渲染结构快照 -->
+        <n-card size="small" title="🧩 渲染结构快照">
+          <n-flex align="center" justify="space-between" :wrap="true" style="gap: 8px">
+            <n-text depth="3" style="font-size: 12px">
+              reco={{ selectedNode.recognition_attempts.length }}
+              · actionReco={{ selectedNode.nested_recognition_in_action?.length || 0 }}
+              · nestedActionGroup={{ selectedNode.nested_action_nodes?.length || 0 }}
+            </n-text>
+            <n-button size="tiny" @click="copyRenderStructureSnapshot">
+              <template #icon>
+                <n-icon><copy-outlined /></n-icon>
+              </template>
+              复制结构快照
+            </n-button>
+          </n-flex>
+        </n-card>
 
         <!-- 识别详情 (仅在点击识别尝试时显示) -->
         <n-card v-if="hasRecognition && isRecognitionAttemptSelected" title="🔍 识别详情">

@@ -1453,6 +1453,7 @@ const buildQuestionNodeDiagnostics = (
       const recoStats = new Map<string, { failed: number; success: number; total: number }>()
       const jumpBackCandidateStats = new Map<string, { referencedCount: number; anchorCount: number }>()
       const actionKindStats = new Map<string, number>()
+      const nestedRecognitionNodeNames: string[] = []
       let nestedActionGroupCount = 0
       let nestedActionNodeCount = 0
       let nestedActionFailedNodeCount = 0
@@ -1480,6 +1481,11 @@ const buildQuestionNodeDiagnostics = (
         }
 
         const nestedGroups = row.nested_action_nodes ?? []
+        const nestedRecognitionNodes = row.nested_recognition_in_action ?? []
+        nestedRecognitionInActionCount += nestedRecognitionNodes.length
+        for (const nestedReco of nestedRecognitionNodes) {
+          if (nestedReco?.name) nestedRecognitionNodeNames.push(nestedReco.name)
+        }
         nestedActionGroupCount += nestedGroups.length
         for (const group of nestedGroups) {
           const nestedActions = group.nested_actions ?? []
@@ -1573,6 +1579,7 @@ const buildQuestionNodeDiagnostics = (
         nestedActionNodeCount,
         nestedActionFailedNodeCount,
         nestedRecognitionInActionCount,
+        nestedRecognitionNodeTopNames: toTopNameCounts(nestedRecognitionNodeNames, 6),
         hitAsJumpBackTargetTotalCount: hitAsJumpBackTargetStats.totalHitCount,
         hitAsJumpBackTargetTerminalBounceCount: hitAsJumpBackTargetStats.terminalBounceCount,
         hitAsJumpBackTargetFromNodes: Array.from(new Set(hitAsJumpBackTargetStats.fromNodes.filter(Boolean))).slice(0, 6),
@@ -2458,21 +2465,26 @@ export function buildAiAnalysisContext(input: BuildAiContextInput): Record<strin
       ...(() => {
         const nestedGroups = node.nested_action_nodes ?? []
         const nestedActions = nestedGroups.flatMap(group => group.nested_actions ?? [])
+        const nestedRecognitionNodes = node.nested_recognition_in_action ?? []
         const nestedActionNames = nestedActions.map(item => item.name).filter(Boolean)
-        const nestedRecognitionNames = nestedActions
-          .flatMap(item => item.recognition_attempts ?? [])
-          .map(item => item.name)
-          .filter(Boolean)
+        const nestedRecognitionNames = [
+          ...nestedActions
+            .flatMap(item => item.recognition_attempts ?? [])
+            .map(item => item.name)
+            .filter(Boolean),
+          ...nestedRecognitionNodes
+            .map(item => item.name)
+            .filter(Boolean),
+        ]
         return {
           action: node.action_details?.action || '',
           actionName: node.action_details?.name || '',
           nestedActionGroupCount: nestedGroups.length,
           nestedActionNodeCount: nestedActions.length,
           nestedActionFailedNodeCount: nestedActions.filter(item => item.status === 'failed').length,
-          nestedRecognitionInActionCount: nestedActions.reduce(
-            (sum, item) => sum + (item.recognition_attempts?.length ?? 0),
-            0
-          ),
+          nestedRecognitionInActionCount:
+            nestedActions.reduce((sum, item) => sum + (item.recognition_attempts?.length ?? 0), 0) +
+            nestedRecognitionNodes.length,
           nestedActionTopNames: toTopNameCounts(nestedActionNames),
           nestedRecognitionTopNames: toTopNameCounts(nestedRecognitionNames),
         }

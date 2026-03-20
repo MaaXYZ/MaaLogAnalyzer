@@ -15,6 +15,8 @@ const emit = defineEmits<{
   'select-recognition': [node: NodeInfo, attemptIndex: number]
   'select-nested': [node: NodeInfo, attemptIndex: number, nestedIndex: number]
   'select-nested-action': [node: NodeInfo, actionIndex: number, nestedIndex: number]
+  'select-action-recognition': [node: NodeInfo, attemptIndex: number]
+  'select-nested-action-recognition': [node: NodeInfo, actionIndex: number, nestedIndex: number, attemptIndex: number]
 }>()
 
 // Recognition 摘要
@@ -34,13 +36,16 @@ const recognitionSummary = computed(() => {
 // Action 嵌套摘要
 const nestedActionSummary = computed(() => {
   const groups = props.node.nested_action_nodes
-  if (!groups || groups.length === 0) return null
+  const nestedRecognitionCount = props.node.nested_recognition_in_action?.length ?? 0
+  if ((!groups || groups.length === 0) && nestedRecognitionCount === 0) return null
   let totalNodes = 0
   let successNodes = 0
-  for (const g of groups) {
-    for (const n of g.nested_actions) {
-      totalNodes++
-      if (n.status === 'success') successNodes++
+  if (groups) {
+    for (const g of groups) {
+      for (const n of g.nested_actions) {
+        totalNodes++
+        if (n.status === 'success') successNodes++
+      }
     }
   }
   return {
@@ -73,9 +78,10 @@ const nestedActionSummary = computed(() => {
     </n-flex>
 
     <!-- Action 摘要行 -->
-    <n-flex v-if="node.action_details" align="center" style="gap: 6px">
+    <n-flex v-if="node.action_details || nestedActionSummary" align="center" style="gap: 6px">
       <n-text depth="3" style="font-size: 12px">Action:</n-text>
       <n-button
+        v-if="node.action_details"
         text
         size="tiny"
         :type="node.action_details.success ? 'success' : 'error'"
@@ -87,6 +93,7 @@ const nestedActionSummary = computed(() => {
         </template>
         {{ node.action_details.name }}
       </n-button>
+      <n-text v-else style="font-size: 12px">sub-flow only</n-text>
       <n-text v-if="nestedActionSummary" style="font-size: 12px">
         · {{ nestedActionSummary.totalNodes }} sub-nodes, {{ nestedActionSummary.allSuccess ? 'all ✓' : 'some ✗' }}
       </n-text>
