@@ -408,14 +408,11 @@ async function prepareContextMenuAssets(context: vscode.ExtensionContext): Promi
   await mkdir(targetDir, { recursive: true })
 
   const sourceVbs = path.join(sourceScriptDir, 'open-folder-in-maa-analyzer.vbs')
-  const sourcePs1 = path.join(sourceScriptDir, 'open-folder-in-maa-analyzer.ps1')
 
   const targetVbs = path.join(targetDir, 'open-folder-in-maa-analyzer.vbs')
-  const targetPs1 = path.join(targetDir, 'open-folder-in-maa-analyzer.ps1')
   const targetIcon = path.join(targetDir, 'favicon.ico')
 
   await copyFile(sourceVbs, targetVbs)
-  await copyFile(sourcePs1, targetPs1)
   await copyFile(sourceIconPath, targetIcon)
 
   return { helperScript: targetVbs, iconPath: targetIcon }
