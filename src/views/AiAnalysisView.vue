@@ -708,6 +708,20 @@ const scrollConversationToBottom = async (behavior: ScrollBehavior = 'auto') => 
   aiOutputScrollbarRef.value?.scrollTo?.({ top: Number.MAX_SAFE_INTEGER, behavior })
 }
 
+const waitForUiPaint = async () => {
+  await nextTick()
+  await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+}
+
+const appendUsageNote = (note: string) => {
+  const text = note.trim()
+  if (!text) return
+  if (usageText.value.includes(text)) return
+  usageText.value = usageText.value
+    ? `${usageText.value} | ${text}`
+    : text
+}
+
 watch(
   () => [conversationTurnViews.value.length, showStreamingTurn.value, currentContextKey.value],
   () => {
@@ -1702,6 +1716,7 @@ const runRequest = async (mode: 'test' | 'analyze') => {
 
   if (mode === 'analyze' && outputTruncated && settings.truncateAutoRetryEnabled) {
       message.warning('检测到输出被截断，已自动发起一次精简重试。')
+      await waitForUiPaint()
       try {
       const conciseBase = (() => {
         if (useMemoryForThisRound) {
@@ -1744,16 +1759,22 @@ const runRequest = async (mode: 'test' | 'analyze') => {
   let parsed = tryParseStructuredOutput(response.text)
   if (!parsed && !outputTruncated) {
     markPostprocess()
+    appendUsageNote('检测到非JSON，修复中')
+    message.info('检测到返回不是标准 JSON，正在自动修复...')
+    await waitForUiPaint()
     try {
       parsed = await repairStructuredOutput(response.text, key, trackRoundTokenUsage)
       updateUsageText(response, ' | JSON修复')
       if (parsed) {
         message.warning('模型原始输出不是标准 JSON，已自动修复后继续。')
+        await waitForUiPaint()
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
       console.warn('[AI][structured-repair] failed:', error)
+      appendUsageNote('JSON修复失败')
       message.warning(`JSON 自动修复失败：${msg}`)
+      await waitForUiPaint()
     }
   }
 
@@ -1762,22 +1783,29 @@ const runRequest = async (mode: 'test' | 'analyze') => {
     if (conflictIssue) {
       const relationFacts = collectParentRelationFacts(props.selectedTask)
       markPostprocess()
+      appendUsageNote('检测到术语冲突，修正中')
+      message.info('检测到“直接父节点/上游来源”术语冲突，正在自动修正...')
+      await waitForUiPaint()
       try {
         const repaired = await repairParentRelationConsistency(parsed, key, conflictIssue, relationFacts, trackRoundTokenUsage)
         updateUsageText(response, ' | 术语修正')
         if (repaired) {
           parsed = repaired
           message.warning('检测到“直接父节点/上游来源”术语冲突，已自动修正。')
+          await waitForUiPaint()
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
         console.warn('[AI][parent-relation-repair] failed:', error)
+        appendUsageNote('术语修正失败')
         message.warning(`术语修正请求失败：${msg}`)
+        await waitForUiPaint()
       }
 
       const stillConflict = detectParentRelationConflict(parsed.answer)
       if (stillConflict) {
         message.warning(`检测到术语冲突，远程修正未生效：${stillConflict.reason}`)
+        await waitForUiPaint()
       }
     }
   }
