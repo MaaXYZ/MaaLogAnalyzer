@@ -129,6 +129,49 @@ const splitSize = ref(clamp(appLayoutState.analysisSplitSize, 0.4, 1, 0.65))
 const splitVerticalSize = ref(clamp(appLayoutState.splitVerticalSize, 0.2, 0.8, 0.5))
 const parser = new LogParser()
 
+let activeErrorImages: Map<string, string> = new Map()
+let activeVisionImages: Map<string, string> = new Map()
+let activeWaitFreezesImages: Map<string, string> = new Map()
+
+const revokeBlobUrls = (images?: Map<string, string> | null) => {
+  if (!images) return
+  for (const value of images.values()) {
+    if (typeof value === 'string' && value.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(value)
+      } catch {
+        // ignore revoke failures
+      }
+    }
+  }
+}
+
+const resetParserDebugAssets = (
+  errorImages?: Map<string, string>,
+  visionImages?: Map<string, string>,
+  waitFreezesImages?: Map<string, string>,
+) => {
+  // Release previous blob URLs before replacing references.
+  if (activeErrorImages !== errorImages) {
+    revokeBlobUrls(activeErrorImages)
+  }
+  if (activeVisionImages !== visionImages) {
+    revokeBlobUrls(activeVisionImages)
+  }
+  if (activeWaitFreezesImages !== waitFreezesImages) {
+    revokeBlobUrls(activeWaitFreezesImages)
+  }
+
+  activeErrorImages = errorImages ?? new Map()
+  activeVisionImages = visionImages ?? new Map()
+  activeWaitFreezesImages = waitFreezesImages ?? new Map()
+
+  // Always reset parser maps, avoid carrying stale image mappings across reloads.
+  parser.setErrorImages(activeErrorImages)
+  parser.setVisionImages(activeVisionImages)
+  parser.setWaitFreezesImages(activeWaitFreezesImages)
+}
+
 interface TextSearchLoadedTarget {
   id: string
   label: string
@@ -505,9 +548,7 @@ const handleRealtimeStart = (params: unknown) => {
   }
   realtimeStreaming.value = true
 
-  parser.setErrorImages(new Map())
-  parser.setVisionImages(new Map())
-  parser.setWaitFreezesImages(new Map())
+  resetParserDebugAssets()
   resetAnalysisState()
   selectedProcessId.value = ''
   selectedThreadId.value = ''
@@ -1129,6 +1170,9 @@ const processLogContent = async (
   // 清空所有状态，确保重新上传文件时不会显示旧数据
   resetAnalysisState()
 
+  // 先断开旧文本目标引用，避免新旧大字符串在响应式树上同时停留。
+  setTextSearchLoadedTargets([])
+
   // 更新文本搜索默认数据源（优先使用调用方提供的目标列表）
   const fallbackTargets: TextSearchLoadedTarget[] = [{
     id: 'loaded:fallback',
@@ -1146,20 +1190,8 @@ const processLogContent = async (
   parseProgress.value = 0
 
   try {
-    // 设置错误截图
-    if (errorImages) {
-      parser.setErrorImages(errorImages)
-    }
-
-    // 设置 vision 调试截图
-    if (visionImages) {
-      parser.setVisionImages(visionImages)
-    }
-
-    // 设置 wait_freezes 调试截图
-    if (waitFreezesImages) {
-      parser.setWaitFreezesImages(waitFreezesImages)
-    }
+    // 统一切换并回收旧调试资源（包括 blob URL）。
+    resetParserDebugAssets(errorImages, visionImages, waitFreezesImages)
 
     // 异步解析，带进度回调
     await parser.parseFile(content, (progress) => {
@@ -1438,6 +1470,7 @@ onBeforeUnmount(() => {
     window.clearTimeout(realtimeParseTimer)
     realtimeParseTimer = null
   }
+  resetParserDebugAssets()
 })
 </script>
 
