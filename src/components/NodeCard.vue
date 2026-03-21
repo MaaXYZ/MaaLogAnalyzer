@@ -252,6 +252,7 @@ const actionButtonType = computed<ButtonType>(() => {
           @select-nested-action="(n, ai, ni) => emit('select-nested-action', n, ai, ni)"
           @select-action-recognition="(n, i) => emit('select-action-recognition', n, i)"
           @select-nested-action-recognition="(n, ai, ni, i) => emit('select-nested-action-recognition', n, ai, ni, i)"
+          @select-flow-item="(n, id) => emit('select-flow-item', n, id)"
         />
         <node-card-tree
           v-else

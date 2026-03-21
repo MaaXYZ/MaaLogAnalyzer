@@ -17,6 +17,7 @@ const emit = defineEmits<{
   'select-nested-action': [node: NodeInfo, actionIndex: number, nestedIndex: number]
   'select-action-recognition': [node: NodeInfo, attemptIndex: number]
   'select-nested-action-recognition': [node: NodeInfo, actionIndex: number, nestedIndex: number, attemptIndex: number]
+  'select-flow-item': [node: NodeInfo, flowItemId: string]
 }>()
 
 // Recognition 摘要
@@ -51,6 +52,17 @@ const taskSummary = computed(() => {
     totalNodes,
     allSuccess: totalNodes === successNodes
   }
+})
+
+const taskGroups = computed(() => {
+  const groups = props.node.nested_action_nodes
+  if (!groups || groups.length === 0) return []
+  return groups.map((group, groupIdx) => ({
+    groupIdx,
+    taskId: group.task_id,
+    name: group.name,
+    status: group.status,
+  }))
 })
 
 const actionSummary = computed(() => {
@@ -143,6 +155,20 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
         <n-text style="font-size: 12px">
           {{ taskSummary.totalNodes }} nodes, {{ taskSummary.allSuccess ? 'all ✓' : 'some ✗' }}
         </n-text>
+        <n-button
+          v-for="group in taskGroups"
+          :key="`compact-task-${group.groupIdx}-${group.taskId}`"
+          text
+          size="tiny"
+          :type="group.status === 'success' ? 'success' : 'error'"
+          @click="emit('select-flow-item', node, `node.task.${group.groupIdx}.${group.taskId}`)"
+        >
+          <template #icon>
+            <check-circle-outlined v-if="group.status === 'success'" />
+            <close-circle-outlined v-else />
+          </template>
+          {{ group.name }}
+        </n-button>
       </n-flex>
 
       <n-flex v-else-if="section === 'action' && actionSummary" align="center" style="gap: 6px">

@@ -162,6 +162,17 @@ const showTaskFallback = computed(() => {
   return selectedFlowItem.value?.type === 'task' && !hasRecognition.value && !hasAction.value
 })
 
+const showNodeCompletedRow = computed(() => {
+  const node = props.selectedNode
+  const details = node?.node_details
+  if (!node || !details) return false
+  // 当节点已明确标记为 failed 且 completed=false 时，语义重复，隐藏“是否完成”行。
+  if (node.status === 'failed' && !details.completed) return false
+  return true
+})
+
+const nodeCompletedValue = computed(() => props.selectedNode?.node_details?.completed ?? false)
+
 const selectedFlowErrorImage = computed(() => {
   const selected = selectedFlowItem.value
   if (!selected) return null
@@ -334,9 +345,9 @@ const copyToClipboard = (text: string) => {
         </n-card>
 
         <!-- Task fallback（无识别/动作详情时显示基本信息） -->
-        <n-card title="📍 Task 节点" v-if="showTaskFallback && selectedFlowItem">
-          <n-descriptions :column="1" label-placement="left">
-            <n-descriptions-item label="节点名称">
+        <n-card title="🧩 任务详情" v-if="showTaskFallback && selectedFlowItem">
+          <n-descriptions :column="descriptionColumns" size="small" label-placement="left" bordered>
+            <n-descriptions-item label="任务名称" :span="descriptionColumns">
               <n-flex align="center" style="gap: 8px">
                 <span style="font-weight: 500; font-size: 15px">
                   {{ selectedFlowItem.name }}
@@ -363,14 +374,14 @@ const copyToClipboard = (text: string) => {
               {{ selectedFlowItem.children?.length || 0 }}
             </n-descriptions-item>
 
-            <n-descriptions-item label="错误截图" v-if="selectedFlowErrorImage" :span="2">
+            <n-descriptions-item label="错误截图" v-if="selectedFlowErrorImage" :span="descriptionColumns">
               <img :src="convertFileSrc(selectedFlowErrorImage)" style="max-width: 100%; border-radius: 4px; margin-top: 8px" alt="错误截图" />
             </n-descriptions-item>
           </n-descriptions>
 
           <!-- 原始数据 -->
           <n-collapse style="margin-top: 16px" :default-expanded-names="rawJsonDefaultExpanded">
-            <n-collapse-item title="原始 JSON 数据" name="node-json">
+            <n-collapse-item title="原始任务数据" name="task-json">
               <template #header-extra>
                 <n-button
                   size="tiny"
@@ -394,8 +405,8 @@ const copyToClipboard = (text: string) => {
 
         <!-- 节点详情 (仅在点击节点名称时显示) -->
         <n-card title="📍 节点详情" v-if="!isFlowItemSelected">
-          <n-descriptions :column="1" label-placement="left">
-            <n-descriptions-item label="节点名称">
+          <n-descriptions :column="descriptionColumns" size="small" label-placement="left" bordered>
+            <n-descriptions-item label="节点名称" :span="descriptionColumns">
               <n-flex align="center" style="gap: 8px">
                 <span style="font-weight: 500; font-size: 15px">
                   {{ selectedNode.name }}
@@ -417,39 +428,33 @@ const copyToClipboard = (text: string) => {
               {{ selectedNode.node_id }}
             </n-descriptions-item>
 
-            <n-descriptions-item label="节点截图" v-if="selectedNode.error_image" :span="2">
-              <img :src="convertFileSrc(selectedNode.error_image)" style="max-width: 100%; border-radius: 4px; margin-top: 8px" alt="节点截图" />
-            </n-descriptions-item>
-          </n-descriptions>
-        </n-card>
-
-        <!-- 节点详细信息 (仅在点击节点名称时显示) -->
-        <n-card title="📋 节点详细信息" v-if="!isFlowItemSelected && selectedNode.node_details">
-          <n-descriptions :column="descriptionColumns" size="small" label-placement="left" bordered>
-            <n-descriptions-item label="节点 ID">
-              {{ selectedNode.node_details.node_id }}
-            </n-descriptions-item>
-
-            <n-descriptions-item label="识别 ID">
+            <n-descriptions-item
+              label="识别 ID"
+              v-if="selectedNode.node_details && selectedNode.node_details.reco_id != null"
+            >
               {{ selectedNode.node_details.reco_id }}
             </n-descriptions-item>
 
-            <n-descriptions-item label="动作 ID">
+            <n-descriptions-item
+              label="动作 ID"
+              v-if="selectedNode.node_details && selectedNode.node_details.action_id != null"
+            >
               {{ selectedNode.node_details.action_id }}
             </n-descriptions-item>
 
-            <n-descriptions-item label="是否完成">
-              <n-tag :type="selectedNode.node_details.completed ? 'success' : 'warning'" size="small">
-                {{ selectedNode.node_details.completed ? '已完成' : '未完成' }}
+            <n-descriptions-item label="是否完成" v-if="showNodeCompletedRow">
+              <n-tag :type="nodeCompletedValue ? 'success' : 'warning'" size="small">
+                {{ nodeCompletedValue ? '已完成' : '未完成' }}
               </n-tag>
             </n-descriptions-item>
-          </n-descriptions>
-        </n-card>
 
-        <!-- 完整节点数据 (仅在点击节点名称时显示) -->
-        <n-card title="📄 完整节点数据" v-if="!isFlowItemSelected">
-          <n-collapse :default-expanded-names="rawJsonDefaultExpanded">
-            <n-collapse-item title="原始 JSON 数据" name="node-json">
+            <n-descriptions-item label="节点截图" v-if="selectedNode.error_image" :span="descriptionColumns">
+              <img :src="convertFileSrc(selectedNode.error_image)" style="max-width: 100%; border-radius: 4px; margin-top: 8px" alt="节点截图" />
+            </n-descriptions-item>
+          </n-descriptions>
+
+          <n-collapse style="margin-top: 16px" :default-expanded-names="rawJsonDefaultExpanded">
+            <n-collapse-item title="原始节点数据" name="node-json">
               <template #header-extra>
                 <n-button
                   size="tiny"

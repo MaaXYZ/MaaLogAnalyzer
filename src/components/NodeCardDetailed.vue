@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NCard, NButton, NFlex, NTag, NImage } from 'naive-ui'
+import { NCard, NButton, NFlex, NTag, NImage, NText } from 'naive-ui'
 import { CheckCircleOutlined, CloseCircleOutlined } from '@vicons/antd'
 import type { NodeInfo, MergedRecognitionItem, NestedActionNode, RecognitionAttempt } from '../types'
 import { isTauri } from '../utils/platform'
@@ -50,6 +50,19 @@ interface FlattenedNestedRecognition {
   attempt: RecognitionAttempt
   flowItemId: string
   depth: number
+}
+
+interface TaskGroupItem {
+  groupIdx: number
+  taskId: number
+  name: string
+  status: 'success' | 'failed'
+  actions: Array<{
+    groupIdx: number
+    nestedIdx: number
+    nested: NestedActionNode
+    recognitionItems: RecognitionAttempt[]
+  }>
 }
 
 const flattenNestedRecognitionNodes = (
@@ -108,12 +121,23 @@ const actionTree = computed(() => {
   }
 })
 
+const taskGroups = computed<TaskGroupItem[]>(() => {
+  if (!props.node.nested_action_nodes || props.node.nested_action_nodes.length === 0) return []
+  return props.node.nested_action_nodes.map((group, groupIdx) => ({
+    groupIdx,
+    taskId: group.task_id,
+    name: group.name,
+    status: group.status,
+    actions: actionTree.value.actions.filter(item => item.groupIdx === groupIdx),
+  }))
+})
+
 const hasRecognitionSection = computed(() => {
   return props.mergedRecognitionList.length > 0 || actionTree.value.actionLevelReco.length > 0
 })
 
 const hasTaskSection = computed(() => {
-  return actionTree.value.actions.length > 0
+  return taskGroups.value.length > 0
 })
 
 const hasActionSection = computed(() => {
@@ -364,69 +388,97 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
 
       <n-flex v-if="actionExpanded" vertical style="gap: 12px">
         <n-card
-          v-for="(item, idx) in actionTree.actions"
-          :key="`nested-action-${idx}`"
+          v-for="group in taskGroups"
+          :key="`task-group-${group.groupIdx}-${group.taskId}`"
           size="small"
         >
           <template #header>
             <n-flex justify="space-between" align="center">
               <n-button
                 size="small"
-                @click="emit('select-nested-action', node, item.groupIdx, item.nestedIdx)"
+                :type="group.status === 'success' ? 'success' : 'error'"
+                ghost
+                @click="emit('select-flow-item', node, `node.task.${group.groupIdx}.${group.taskId}`)"
               >
-                {{ item.nested.name }}
+                {{ group.name }}
               </n-button>
-              <n-tag size="small" :type="item.nested.status === 'success' ? 'success' : 'error'">
-                {{ item.nested.status === 'success' ? '成功' : '失败' }}
+              <n-tag size="small" :type="group.status === 'success' ? 'success' : 'error'">
+                {{ group.status === 'success' ? '成功' : '失败' }}
               </n-tag>
             </n-flex>
           </template>
 
-          <n-flex vertical style="gap: 8px">
-            <n-card v-if="item.recognitionItems.length > 0" size="small" title="Recognition">
-              <n-flex wrap style="gap: 8px">
-                <n-button
-                  v-for="(attempt, attemptIdx) in item.recognitionItems"
-                  :key="`nested-reco-${idx}-${attemptIdx}`"
-                  size="small"
-                  :type="attempt.status === 'success' ? 'success' : 'warning'"
-                  ghost
-                  @click="emit('select-nested-action-recognition', node, item.groupIdx, item.nestedIdx, attemptIdx)"
-                >
-                  <template #icon>
-                    <check-circle-outlined v-if="attempt.status === 'success'" />
-                    <close-circle-outlined v-else />
-                  </template>
-                  {{ attempt.name }}
-                </n-button>
+          <n-flex vertical style="gap: 10px">
+            <n-card
+              v-for="(item, idx) in group.actions"
+              :key="`nested-action-${group.groupIdx}-${idx}`"
+              size="small"
+            >
+              <template #header>
+                <n-flex justify="space-between" align="center">
+                  <n-button
+                    size="small"
+                    @click="emit('select-nested-action', node, item.groupIdx, item.nestedIdx)"
+                  >
+                    {{ item.nested.name }}
+                  </n-button>
+                  <n-tag size="small" :type="item.nested.status === 'success' ? 'success' : 'error'">
+                    {{ item.nested.status === 'success' ? '成功' : '失败' }}
+                  </n-tag>
+                </n-flex>
+              </template>
+
+              <n-flex vertical style="gap: 8px">
+                <n-card v-if="item.recognitionItems.length > 0" size="small" title="Recognition">
+                  <n-flex wrap style="gap: 8px">
+                    <n-button
+                      v-for="(attempt, attemptIdx) in item.recognitionItems"
+                      :key="`nested-reco-${group.groupIdx}-${idx}-${attemptIdx}`"
+                      size="small"
+                      :type="attempt.status === 'success' ? 'success' : 'warning'"
+                      ghost
+                      @click="emit('select-nested-action-recognition', node, item.groupIdx, item.nestedIdx, attemptIdx)"
+                    >
+                      <template #icon>
+                        <check-circle-outlined v-if="attempt.status === 'success'" />
+                        <close-circle-outlined v-else />
+                      </template>
+                      {{ attempt.name }}
+                    </n-button>
+                  </n-flex>
+                </n-card>
+
+                <n-card size="small" title="Action">
+                  <n-button
+                    v-if="item.nested.action_details"
+                    size="small"
+                    :type="item.nested.action_details.success ? 'success' : 'error'"
+                    ghost
+                    @click="emit('select-nested-action', node, item.groupIdx, item.nestedIdx)"
+                  >
+                    <template #icon>
+                      <check-circle-outlined v-if="item.nested.action_details.success" />
+                      <close-circle-outlined v-else />
+                    </template>
+                    {{ item.nested.action_details.name }}
+                  </n-button>
+                  <n-flex v-else align="center" style="gap: 8px">
+                    <n-tag size="small" type="default">No action detail</n-tag>
+                    <n-button
+                      size="tiny"
+                      ghost
+                      @click="emit('select-nested-action', node, item.groupIdx, item.nestedIdx)"
+                    >
+                      查看节点
+                    </n-button>
+                  </n-flex>
+                </n-card>
               </n-flex>
             </n-card>
 
-            <n-card size="small" title="Action">
-              <n-button
-                v-if="item.nested.action_details"
-                size="small"
-                :type="item.nested.action_details.success ? 'success' : 'error'"
-                ghost
-                @click="emit('select-nested-action', node, item.groupIdx, item.nestedIdx)"
-              >
-                <template #icon>
-                  <check-circle-outlined v-if="item.nested.action_details.success" />
-                  <close-circle-outlined v-else />
-                </template>
-                {{ item.nested.action_details.name }}
-              </n-button>
-              <n-flex v-else align="center" style="gap: 8px">
-                <n-tag size="small" type="default">No action detail</n-tag>
-                <n-button
-                  size="tiny"
-                  ghost
-                  @click="emit('select-nested-action', node, item.groupIdx, item.nestedIdx)"
-                >
-                  查看节点
-                </n-button>
-              </n-flex>
-            </n-card>
+            <n-flex v-if="group.actions.length === 0" align="center" style="gap: 8px">
+              <n-tag size="small" type="default">No nested action</n-tag>
+            </n-flex>
           </n-flex>
         </n-card>
       </n-flex>

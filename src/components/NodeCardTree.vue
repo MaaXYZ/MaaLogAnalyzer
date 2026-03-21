@@ -38,6 +38,7 @@ const isActionExpanded = computed(() => props.actionExpanded ?? true)
 
 const actionSectionRecoExpanded = ref<Record<number, boolean>>({})
 const actionTaskExpanded = ref<Record<string, boolean>>({})
+const taskGroupExpanded = ref<Record<number, boolean>>({})
 
 const isActionSectionRecoExpanded = (index: number) => {
   return actionSectionRecoExpanded.value[index] ?? true
@@ -59,13 +60,23 @@ const toggleActionTask = (groupIdx: number, nestedIdx: number) => {
   actionTaskExpanded.value[key] = !isActionTaskExpanded(groupIdx, nestedIdx)
 }
 
+const isTaskGroupExpanded = (groupIdx: number) => {
+  return taskGroupExpanded.value[groupIdx] ?? true
+}
+
+const toggleTaskGroup = (groupIdx: number) => {
+  taskGroupExpanded.value[groupIdx] = !isTaskGroupExpanded(groupIdx)
+}
+
 watch(() => props.node?.node_id, () => {
   actionSectionRecoExpanded.value = {}
   actionTaskExpanded.value = {}
+  taskGroupExpanded.value = {}
 }, { flush: 'sync' })
 
 watch(() => props.defaultCollapseNestedActionNodes, () => {
   actionTaskExpanded.value = {}
+  taskGroupExpanded.value = {}
 }, { flush: 'sync' })
 
 // action 是否失败（仅看主 action）
@@ -86,6 +97,14 @@ interface ActionTreeItem {
   name: string
   status: string
   recognitionItems: RecognitionAttempt[]
+}
+
+interface TaskGroupItem {
+  groupIdx: number
+  taskId: number
+  name: string
+  status: 'success' | 'failed'
+  actions: ActionTreeItem[]
 }
 
 const dedupeRecognitionAttempts = (items: RecognitionAttempt[]) => {
@@ -152,6 +171,17 @@ const actionTree = computed(() => {
   }
 })
 
+const taskGroups = computed<TaskGroupItem[]>(() => {
+  if (!props.node.nested_action_nodes || props.node.nested_action_nodes.length === 0) return []
+  return props.node.nested_action_nodes.map((group, groupIdx) => ({
+    groupIdx,
+    taskId: group.task_id,
+    name: group.name,
+    status: group.status,
+    actions: actionTree.value.actions.filter(item => item.groupIdx === groupIdx),
+  }))
+})
+
 const shouldShowActionSectionRecoToggle = (attempt: RecognitionAttempt) => {
   return !!attempt.nested_nodes && attempt.nested_nodes.length > 0
 }
@@ -175,7 +205,7 @@ const hasRecognitionSection = computed(() => {
 })
 
 const hasTaskSection = computed(() => {
-  return actionTree.value.actions.length > 0
+  return taskGroups.value.length > 0
 })
 
 const hasActionSection = computed(() => {
@@ -354,54 +384,86 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
           </n-flex>
         </div>
 
-        <ul v-if="isActionExpanded && actionTree.actions.length > 0" class="tree-list">
+        <ul v-if="isActionExpanded && taskGroups.length > 0" class="tree-list">
           <li
-            v-for="(item, idx) in actionTree.actions"
-            :key="`tree-action-${idx}`"
+            v-for="group in taskGroups"
+            :key="`tree-task-group-${group.groupIdx}-${group.taskId}`"
             class="tree-item"
           >
             <n-flex align="center" style="gap: 4px">
               <span
-                v-if="item.recognitionItems.length > 0"
+                v-if="group.actions.length > 0"
                 class="tree-toggle"
-                :class="{ 'tree-toggle-collapsed': !isActionTaskExpanded(item.groupIdx, item.nestedIdx) }"
-                @click="toggleActionTask(item.groupIdx, item.nestedIdx)"
+                :class="{ 'tree-toggle-collapsed': !isTaskGroupExpanded(group.groupIdx) }"
+                @click="toggleTaskGroup(group.groupIdx)"
               />
               <n-button
                 text
                 size="tiny"
-                :type="item.status === 'success' ? 'success' : 'error'"
-                @click="emit('select-nested-action', node, item.groupIdx, item.nestedIdx)"
+                :type="group.status === 'success' ? 'success' : 'error'"
+                @click="emit('select-flow-item', node, `node.task.${group.groupIdx}.${group.taskId}`)"
               >
                 <template #icon>
-                  <check-circle-outlined v-if="item.status === 'success'" />
+                  <check-circle-outlined v-if="group.status === 'success'" />
                   <close-circle-outlined v-else />
                 </template>
-                {{ item.name }}
+                {{ group.name }}
               </n-button>
             </n-flex>
 
             <ul
-              v-if="item.recognitionItems.length > 0 && isActionTaskExpanded(item.groupIdx, item.nestedIdx)"
+              v-if="group.actions.length > 0 && isTaskGroupExpanded(group.groupIdx)"
               class="tree-list"
             >
               <li
-                v-for="(reco, recoIdx) in item.recognitionItems"
-                :key="`tree-action-${idx}-reco-${recoIdx}`"
+                v-for="item in group.actions"
+                :key="`tree-task-group-${group.groupIdx}-action-${item.nestedIdx}`"
                 class="tree-item"
               >
-                <n-button
-                  text
-                  size="tiny"
-                  :type="reco.status === 'success' ? 'success' : 'warning'"
-                  @click="emit('select-nested-action-recognition', node, item.groupIdx, item.nestedIdx, recoIdx)"
+                <n-flex align="center" style="gap: 4px">
+                  <span
+                    v-if="item.recognitionItems.length > 0"
+                    class="tree-toggle"
+                    :class="{ 'tree-toggle-collapsed': !isActionTaskExpanded(item.groupIdx, item.nestedIdx) }"
+                    @click="toggleActionTask(item.groupIdx, item.nestedIdx)"
+                  />
+                  <n-button
+                    text
+                    size="tiny"
+                    :type="item.status === 'success' ? 'success' : 'error'"
+                    @click="emit('select-nested-action', node, item.groupIdx, item.nestedIdx)"
+                  >
+                    <template #icon>
+                      <check-circle-outlined v-if="item.status === 'success'" />
+                      <close-circle-outlined v-else />
+                    </template>
+                    {{ item.name }}
+                  </n-button>
+                </n-flex>
+
+                <ul
+                  v-if="item.recognitionItems.length > 0 && isActionTaskExpanded(item.groupIdx, item.nestedIdx)"
+                  class="tree-list"
                 >
-                  <template #icon>
-                    <check-circle-outlined v-if="reco.status === 'success'" />
-                    <close-circle-outlined v-else />
-                  </template>
-                  {{ reco.name }}
-                </n-button>
+                  <li
+                    v-for="(reco, recoIdx) in item.recognitionItems"
+                    :key="`tree-task-group-${group.groupIdx}-action-${item.nestedIdx}-reco-${recoIdx}`"
+                    class="tree-item"
+                  >
+                    <n-button
+                      text
+                      size="tiny"
+                      :type="reco.status === 'success' ? 'success' : 'warning'"
+                      @click="emit('select-nested-action-recognition', node, item.groupIdx, item.nestedIdx, recoIdx)"
+                    >
+                      <template #icon>
+                        <check-circle-outlined v-if="reco.status === 'success'" />
+                        <close-circle-outlined v-else />
+                      </template>
+                      {{ reco.name }}
+                    </n-button>
+                  </li>
+                </ul>
               </li>
             </ul>
           </li>
@@ -489,72 +551,104 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
           </li>
 
           <li
-            v-for="(item, idx) in actionTree.actions"
-            :key="`tree-action-section-task-${idx}`"
+            v-for="group in taskGroups"
+            :key="`tree-action-section-task-group-${group.groupIdx}-${group.taskId}`"
             class="tree-item"
           >
             <n-flex align="center" style="gap: 4px">
               <span
-                v-if="shouldShowActionTaskToggle(item)"
+                v-if="group.actions.length > 0"
                 class="tree-toggle"
-                :class="{ 'tree-toggle-collapsed': !isActionTaskExpanded(item.groupIdx, item.nestedIdx) }"
-                @click="toggleActionTask(item.groupIdx, item.nestedIdx)"
+                :class="{ 'tree-toggle-collapsed': !isTaskGroupExpanded(group.groupIdx) }"
+                @click="toggleTaskGroup(group.groupIdx)"
               />
               <n-button
                 text
                 size="tiny"
-                :type="item.status === 'success' ? 'success' : 'error'"
-                @click="emit('select-nested-action', node, item.groupIdx, item.nestedIdx)"
+                :type="group.status === 'success' ? 'success' : 'error'"
+                @click="emit('select-flow-item', node, `node.task.${group.groupIdx}.${group.taskId}`)"
               >
                 <template #icon>
-                  <check-circle-outlined v-if="item.status === 'success'" />
+                  <check-circle-outlined v-if="group.status === 'success'" />
                   <close-circle-outlined v-else />
                 </template>
-                {{ item.name }}
+                {{ group.name }}
               </n-button>
             </n-flex>
 
             <ul
-              v-if="item.recognitionItems.length > 0 && isActionTaskExpanded(item.groupIdx, item.nestedIdx)"
+              v-if="group.actions.length > 0 && isTaskGroupExpanded(group.groupIdx)"
               class="tree-list"
             >
               <li
-                v-for="(reco, recoIdx) in item.recognitionItems"
-                :key="`tree-action-section-task-${idx}-reco-${recoIdx}`"
+                v-for="(item, idx) in group.actions"
+                :key="`tree-action-section-task-${group.groupIdx}-${idx}`"
                 class="tree-item"
               >
-                <n-button
-                  text
-                  size="tiny"
-                  :type="reco.status === 'success' ? 'success' : 'warning'"
-                  @click="emit('select-nested-action-recognition', node, item.groupIdx, item.nestedIdx, recoIdx)"
-                >
-                  <template #icon>
-                    <check-circle-outlined v-if="reco.status === 'success'" />
-                    <close-circle-outlined v-else />
-                  </template>
-                  {{ reco.name }}
-                </n-button>
+                <n-flex align="center" style="gap: 4px">
+                  <span
+                    v-if="shouldShowActionTaskToggle(item)"
+                    class="tree-toggle"
+                    :class="{ 'tree-toggle-collapsed': !isActionTaskExpanded(item.groupIdx, item.nestedIdx) }"
+                    @click="toggleActionTask(item.groupIdx, item.nestedIdx)"
+                  />
+                  <n-button
+                    text
+                    size="tiny"
+                    :type="item.status === 'success' ? 'success' : 'error'"
+                    @click="emit('select-nested-action', node, item.groupIdx, item.nestedIdx)"
+                  >
+                    <template #icon>
+                      <check-circle-outlined v-if="item.status === 'success'" />
+                      <close-circle-outlined v-else />
+                    </template>
+                    {{ item.name }}
+                  </n-button>
+                </n-flex>
 
-                <ul v-if="reco.nested_nodes && reco.nested_nodes.length > 0" class="tree-list">
+                <ul
+                  v-if="item.recognitionItems.length > 0 && isActionTaskExpanded(item.groupIdx, item.nestedIdx)"
+                  class="tree-list"
+                >
                   <li
-                    v-for="nested in flattenNestedRecognitionNodes(reco.nested_nodes, `task.${item.groupIdx}.action.${item.nestedIdx}.reco.${recoIdx}`)"
-                    :key="`tree-action-section-task-${idx}-reco-${recoIdx}-nested-${nested.flowItemId}`"
+                    v-for="(reco, recoIdx) in item.recognitionItems"
+                    :key="`tree-action-section-task-${group.groupIdx}-${idx}-reco-${recoIdx}`"
                     class="tree-item"
                   >
                     <n-button
                       text
                       size="tiny"
-                      :type="nested.attempt.status === 'success' ? 'success' : 'warning'"
-                      :style="{ marginLeft: `${(nested.depth - 1) * 12}px` }"
-                      @click="emit('select-flow-item', node, nested.flowItemId)"
+                      :type="reco.status === 'success' ? 'success' : 'warning'"
+                      @click="emit('select-nested-action-recognition', node, item.groupIdx, item.nestedIdx, recoIdx)"
                     >
                       <template #icon>
-                        <check-circle-outlined v-if="nested.attempt.status === 'success'" />
+                        <check-circle-outlined v-if="reco.status === 'success'" />
                         <close-circle-outlined v-else />
                       </template>
-                      {{ nested.attempt.name }}
+                      {{ reco.name }}
                     </n-button>
+
+                    <ul v-if="reco.nested_nodes && reco.nested_nodes.length > 0" class="tree-list">
+                      <li
+                        v-for="nested in flattenNestedRecognitionNodes(reco.nested_nodes, `task.${item.groupIdx}.action.${item.nestedIdx}.reco.${recoIdx}`)"
+                        :key="`tree-action-section-task-${group.groupIdx}-${idx}-reco-${recoIdx}-nested-${nested.flowItemId}`"
+                        class="tree-item"
+                      >
+                        <n-button
+                          text
+                          size="tiny"
+                          :type="nested.attempt.status === 'success' ? 'success' : 'warning'"
+                          :style="{ marginLeft: `${(nested.depth - 1) * 12}px` }"
+                          @click="emit('select-flow-item', node, nested.flowItemId)"
+                        >
+                          <template #icon>
+                            <check-circle-outlined v-if="nested.attempt.status === 'success'" />
+                            <close-circle-outlined v-else />
+                          </template>
+                          {{ nested.attempt.name }}
+                        </n-button>
+                      </li>
+                    </ul>
                   </li>
                 </ul>
               </li>
