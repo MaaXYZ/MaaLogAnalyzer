@@ -14,7 +14,11 @@ const { isMobile } = useIsMobile()
 const settings = getSettings()
 
 // 原始 JSON 折叠默认展开名称
-const rawJsonDefaultExpanded = computed(() => settings.defaultExpandRawJson ? ['reco-json', 'action-json', 'node-json'] : [])
+const rawJsonDefaultExpanded = computed(() =>
+  settings.defaultExpandRawJson
+    ? ['reco-json', 'action-json', 'task-json', 'node-json']
+    : []
+)
 
 // 转换文件路径为 Tauri 可访问的 URL
 const convertFileSrc = (filePath: string) => {
