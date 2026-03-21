@@ -12,6 +12,7 @@ import {
 } from '../ai/contextBuilder'
 import { tryParseStructuredOutput, type StructuredAiOutput } from '../ai/structuredOutput'
 import { getAiSettings, getSessionApiKey, saveAiSettings, setSessionApiKey } from '../utils/aiSettings'
+import { saveFile } from '../utils/fileDialog'
 
 interface Props {
   tasks: TaskInfo[]
@@ -691,6 +692,83 @@ const conversationTurnViews = computed<ConversationTurnView[]>(() => {
       answerHtml: renderMarkdown(item.answer),
     }))
 })
+
+const pad2num = (value: number) => String(value).padStart(2, '0')
+
+const formatExportTime = (timestamp: number) => {
+  const date = new Date(timestamp)
+  return `${date.getFullYear()}-${pad2num(date.getMonth() + 1)}-${pad2num(date.getDate())} ${pad2num(date.getHours())}:${pad2num(date.getMinutes())}:${pad2num(date.getSeconds())}`
+}
+
+const buildExportStamp = () => {
+  const date = new Date()
+  return `${date.getFullYear()}${pad2num(date.getMonth() + 1)}${pad2num(date.getDate())}-${pad2num(date.getHours())}${pad2num(date.getMinutes())}${pad2num(date.getSeconds())}`
+}
+
+const sanitizeFilenameSegment = (value: string) => {
+  const normalized = value.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_').trim()
+  if (!normalized) return 'task'
+  return normalized.slice(0, 48)
+}
+
+const buildConversationExportText = () => {
+  const turns = conversationTurnViews.value
+  if (!turns.length && !showStreamingTurn.value) return ''
+
+  const lines: string[] = []
+  lines.push('MAA Log Analyzer - AI Conversation Export')
+  lines.push(`导出时间: ${formatExportTime(Date.now())}`)
+  lines.push(`任务: ${selectedTaskTitle.value}`)
+  lines.push(`日志源: ${sourceLabel.value}`)
+  lines.push(`上下文Key: ${currentContextKey.value}`)
+  lines.push(`已完成轮数: ${turns.length}`)
+  lines.push('')
+  lines.push('============================================================')
+  lines.push('')
+
+  for (const turn of turns) {
+    lines.push(`[第 ${turn.turn} 轮] ${formatExportTime(turn.timestamp)} | ${turn.usedMemory ? '记忆上下文' : '全量上下文'}`)
+    lines.push('[用户]')
+    lines.push(turn.question || '(空)')
+    lines.push('')
+    lines.push('[助手]')
+    lines.push(turn.answer || '(空)')
+    lines.push('')
+    lines.push('------------------------------------------------------------')
+    lines.push('')
+  }
+
+  if (showStreamingTurn.value) {
+    lines.push('[进行中轮次]')
+    lines.push('[用户]')
+    lines.push(activeRoundQuestion.value || '(空)')
+    lines.push('')
+    lines.push('[助手-流式片段]')
+    lines.push(streamingRenderText.value || '(空)')
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}
+
+const handleExportConversation = async () => {
+  const content = buildConversationExportText()
+  if (!content) {
+    message.warning('当前没有可导出的对话内容')
+    return
+  }
+
+  const task = props.selectedTask
+  const taskIdPart = task ? `task-${task.task_id}` : 'task-none'
+  const taskNamePart = sanitizeFilenameSegment(task?.entry ?? 'unknown')
+  const filename = `ai-conversation-${taskIdPart}-${taskNamePart}-${buildExportStamp()}.txt`
+  const ok = await saveFile(content, filename)
+  if (ok) {
+    message.success('对话导出成功')
+  } else {
+    message.warning('对话导出已取消')
+  }
+}
 
 const scrollConversationToBottom = async (behavior: ScrollBehavior = 'auto') => {
   if (!conversationFollowMode.value) return
@@ -2183,15 +2261,20 @@ const handleAnalyze = async () => {
           </n-flex>
         </n-card>
 
-        <div v-if="conversationTurnViews.length" class="conversation-frozen-toolbar">
+        <div v-if="conversationTurnViews.length || showStreamingTurn" class="conversation-frozen-toolbar">
           <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
             <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
               <n-text depth="3" style="font-size: 12px">多轮对话（聊天气泡模式）</n-text>
               <n-tag size="small" type="info">共 {{ conversationTurnViews.length }} 轮</n-tag>
             </n-flex>
-            <n-checkbox v-model:checked="conversationFollowMode" size="small">
-              跟随最新
-            </n-checkbox>
+            <n-flex align="center" style="gap: 8px; flex-wrap: wrap">
+              <n-checkbox v-model:checked="conversationFollowMode" size="small">
+                跟随最新
+              </n-checkbox>
+              <n-button size="tiny" @click="handleExportConversation">
+                导出对话
+              </n-button>
+            </n-flex>
           </n-flex>
         </div>
 
