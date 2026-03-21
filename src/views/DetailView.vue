@@ -39,19 +39,6 @@ const flattenFlowItems = (items: UnifiedFlowItem[] | undefined, output: UnifiedF
   return output
 }
 
-const pickLatestRecognitionItem = (items: UnifiedFlowItem[] | undefined): UnifiedFlowItem | null => {
-  const flattened = flattenFlowItems(items)
-  const recognitions = flattened.filter(item => item.type === 'recognition')
-  if (recognitions.length === 0) return null
-  recognitions.sort((a, b) => {
-    const an = Date.parse((a.start_timestamp || a.timestamp || '').replace(' ', 'T'))
-    const bn = Date.parse((b.start_timestamp || b.timestamp || '').replace(' ', 'T'))
-    if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn
-    return a.id.localeCompare(b.id)
-  })
-  return recognitions[recognitions.length - 1] || null
-}
-
 const pickFirstErrorImage = (items: UnifiedFlowItem[] | undefined): string | null => {
   const flattened = flattenFlowItems(items)
   for (const item of flattened) {
@@ -106,8 +93,7 @@ const currentRecognitionItem = computed<UnifiedFlowItem | null>(() => {
   const selected = selectedFlowItem.value
   if (!selected) return null
   if (selected.type === 'recognition') return selected
-  if (selected.reco_details) return selected
-  return pickLatestRecognitionItem(selected.children)
+  return null
 })
 
 const currentAttempt = computed(() => currentRecognitionItem.value)
