@@ -28,6 +28,28 @@ const parseEventTimestampMs = (timestamp: string): number => {
   return Number.isFinite(parsed) ? parsed : NaN
 }
 
+const pad2 = (value: number) => String(value).padStart(2, '0')
+const pad3 = (value: number) => String(value).padStart(3, '0')
+
+const formatEventTimestampMs = (timestampMs: number): string => {
+  const date = new Date(timestampMs)
+  if (!Number.isFinite(date.getTime())) return ''
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}.${pad3(date.getMilliseconds())}`
+}
+
+/**
+ * 强制复制字符串，避免 V8 sliced string 长时间持有整段日志 backing store。
+ * 说明：日志很大时，子串若不复制可能导致旧日志内容在多次重载后难以及时释放。
+ */
+const forceCopyString = (value: string): string => {
+  if (!value) return ''
+  let copied = ''
+  for (let i = 0; i < value.length; i += 1) {
+    copied += String.fromCharCode(value.charCodeAt(i))
+  }
+  return copied
+}
+
 /**
  * 子任务事件收集器
  * 统一管理非当前 task_id 的 Recognition/Action/PipelineNode 事件
@@ -250,7 +272,15 @@ export class LogParser {
     const match = line.match(EVENT_LINE_REGEX)
     if (!match) return null
 
-    const [, timestamp, level, processId, threadId, msg, detailsJson] = match
+    const [, rawTimestamp, rawLevel, rawProcessId, rawThreadId, rawMsg, detailsJson] = match
+    const timestampMs = parseEventTimestampMs(rawTimestamp)
+    const timestamp = Number.isFinite(timestampMs)
+      ? formatEventTimestampMs(timestampMs)
+      : forceCopyString(rawTimestamp)
+    const level = forceCopyString(rawLevel)
+    const processId = forceCopyString(rawProcessId)
+    const threadId = forceCopyString(rawThreadId)
+    const msg = forceCopyString(rawMsg)
 
     let details: Record<string, any> = {}
     try {
@@ -268,7 +298,7 @@ export class LogParser {
       threadId,
       _lineNumber: lineNum,
       _dedupSignature: `${msg}|${fnv1aHash(detailsJson)}`,
-      _timestampMs: parseEventTimestampMs(timestamp)
+      _timestampMs: timestampMs
     }
   }
 

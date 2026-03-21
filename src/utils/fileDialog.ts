@@ -10,6 +10,7 @@ export { isTauri, isVSCode }
 const MAIN_LOG_CANDIDATES = ['maa.log', 'maafw.log'] as const
 const BAK_LOG_CANDIDATES = ['maa.bak.log', 'maafw.bak.log'] as const
 const TEXT_SEARCH_EXTENSIONS = ['.log', '.txt', '.jsonl'] as const
+const PRIMARY_LOG_NAME_SET = new Set<string>([...MAIN_LOG_CANDIDATES, ...BAK_LOG_CANDIDATES].map(name => name.toLowerCase()))
 
 export interface LoadedTextFile {
   path: string
@@ -29,6 +30,8 @@ const isTextSearchFileName = (name: string) => {
   const lower = name.toLowerCase()
   return TEXT_SEARCH_EXTENSIONS.some(ext => lower.endsWith(ext))
 }
+
+const shouldSkipCollectedTextFile = (name: string) => PRIMARY_LOG_NAME_SET.has(name.toLowerCase())
 
 const toPosixPath = (value: string) => value.replace(/\\/g, '/')
 
@@ -380,6 +383,7 @@ async function collectTextFilesTauri(rootPath: string): Promise<LoadedTextFile[]
         continue
       }
       if (!isTextSearchFileName(entry.name)) continue
+      if (shouldSkipCollectedTextFile(entry.name)) continue
       const path = normalizeLoadedPath(fullPath, rootPath) || entry.name
       if (seen.has(path)) continue
       seen.add(path)
@@ -404,6 +408,7 @@ async function collectTextFilesWeb(rootHandle: FileSystemDirectoryHandle): Promi
         continue
       }
       if (!isTextSearchFileName(entry.name)) continue
+      if (shouldSkipCollectedTextFile(entry.name)) continue
       const path = normalizeLoadedPath(nextPath) || entry.name
       if (seen.has(path)) continue
       seen.add(path)
@@ -511,7 +516,7 @@ async function openFolderDialogTauri(): Promise<OpenFolderResult | null> {
     const waitFreezesImages = await readWaitFreezesImages(debugPath)
     let textFiles: LoadedTextFile[] = []
     try {
-      textFiles = await collectTextFilesTauri(selected)
+      textFiles = await collectTextFilesTauri(debugPath)
     } catch (error) {
       console.warn('[文件夹] 收集文本文件失败(Tauri):', error)
     }
@@ -736,7 +741,7 @@ async function openFolderDialogWeb(): Promise<OpenFolderResult | null> {
     const waitFreezesImages = await readWaitFreezesImagesWeb(debugHandle)
     let textFiles: LoadedTextFile[] = []
     try {
-      textFiles = await collectTextFilesWeb(dirHandle)
+      textFiles = await collectTextFilesWeb(debugHandle)
     } catch (error) {
       console.warn('[文件夹] 收集文本文件失败(Web):', error)
     }
