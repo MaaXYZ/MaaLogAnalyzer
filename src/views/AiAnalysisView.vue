@@ -1983,9 +1983,13 @@ const handleAnalyze = async () => {
           <n-flex vertical style="gap: 12px" class="left-panel-content">
           <n-flex align="center" justify="space-between" style="gap: 8px; flex-wrap: wrap">
             <n-text depth="3" style="font-size: 12px">API Key（会话内）</n-text>
-            <n-button text size="tiny" @click="showApiKeyHint = !showApiKeyHint">
-              {{ showApiKeyHint ? '隐藏说明' : '显示说明' }}
-            </n-button>
+            <n-flex align="center" style="gap: 6px; flex-wrap: wrap">
+              <n-button text size="tiny" @click="showApiKeyHint = !showApiKeyHint">
+                {{ showApiKeyHint ? '隐藏说明' : '显示说明' }}
+              </n-button>
+              <n-button text size="tiny" @click="clearApiKey">清空 Key</n-button>
+              <n-button text size="tiny" :loading="testing" @click="handleTest">测试连接</n-button>
+            </n-flex>
           </n-flex>
           <n-text v-if="showApiKeyHint" depth="3" style="font-size: 12px">
             纯前端 BYOK 模式：API Key 仅保存到当前会话，不写入本地长期存储。
@@ -2041,11 +2045,6 @@ const handleAnalyze = async () => {
             <n-tag :type="memoryApplicable ? 'success' : 'default'">{{ memoryStatusText }}</n-tag>
             <n-button size="tiny" @click="clearCurrentTaskMemory">清空当前任务记忆</n-button>
             <n-button size="tiny" @click="clearMemory">清空记忆</n-button>
-          </n-flex>
-
-          <n-flex style="gap: 8px; flex-wrap: wrap">
-            <n-button @click="clearApiKey">清空 Key</n-button>
-            <n-button :loading="testing" @click="handleTest">测试连接</n-button>
           </n-flex>
 
           <n-card size="small" :bordered="true">
@@ -2420,7 +2419,7 @@ const handleAnalyze = async () => {
 .left-panel-content {
   flex: 0 1 auto;
   min-height: 0;
-  max-height: calc(100% - 210px);
+  max-height: calc(100% - 198px);
   overflow: auto;
   padding-right: 2px;
   padding-bottom: 4px;
