@@ -138,6 +138,7 @@ const embedProfile = resolveEmbedProfile(embedMode)
 const isVscodeLaunchEmbed = embedProfile.mode === EMBED_MODE_VSCODE_LAUNCH
 const bridgeEnabled = embedProfile.bridgeEnabled
 const tutorialAutoStartEnabled = embedProfile.ui.autoStartTutorial
+const showProcessThreadFilters = embedProfile.ui.showProcessThreadFilters
 const appEmbedMode = embedProfile.mode
 
 let activeErrorImages: Map<string, string> = new Map()
@@ -1400,7 +1401,7 @@ onBeforeUnmount(() => {
 
           <!-- 进程过滤器 -->
           <n-select
-            v-if="availableProcessIds.length > 0"
+            v-if="showProcessThreadFilters"
             v-model:value="selectedProcessId"
             :options="processIdOptions"
             placeholder="选择进程"
@@ -1411,7 +1412,7 @@ onBeforeUnmount(() => {
 
           <!-- 线程过滤器 -->
           <n-select
-            v-if="availableThreadIds.length > 0"
+            v-if="showProcessThreadFilters"
             v-model:value="selectedThreadId"
             :options="threadIdOptions"
             placeholder="选择线程"
@@ -1422,7 +1423,7 @@ onBeforeUnmount(() => {
 
           <!-- 清除过滤按钮 -->
           <n-button
-            v-if="selectedProcessId || selectedThreadId"
+            v-if="showProcessThreadFilters && (selectedProcessId || selectedThreadId)"
             @click="clearFilters"
             size="small"
             secondary

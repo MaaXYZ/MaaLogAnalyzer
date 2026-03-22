@@ -9,6 +9,7 @@ export interface EmbedUiProfile {
   showHeader: boolean
   showSettings: boolean
   showAbout: boolean
+  showProcessThreadFilters: boolean
 }
 
 export interface EmbedProfile {
@@ -25,6 +26,7 @@ const STANDALONE_PROFILE: EmbedProfile = {
     showHeader: true,
     showSettings: true,
     showAbout: true,
+    showProcessThreadFilters: true,
   },
 }
 
@@ -36,6 +38,7 @@ const VSCODE_LAUNCH_PROFILE: EmbedProfile = {
     showHeader: true,
     showSettings: true,
     showAbout: true,
+    showProcessThreadFilters: false,
   },
 }
 
