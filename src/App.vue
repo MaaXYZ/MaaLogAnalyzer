@@ -15,6 +15,9 @@ import { buildNodeFlowItems, buildNodeRecognitionFlowItems } from './utils/nodeF
 import TourOverlay from './components/TourOverlay.vue'
 import { TOUR_STEPS, TOUR_STORAGE_KEY, TOUR_VERSION } from './tutorial/steps'
 import tutorialSampleLog from './assets/tutorial-sample.log?raw'
+import { useBridge, type BridgeController, type JsonRpcId } from './composables/useBridge'
+import { resolveEmbedProfile } from './embed/profiles'
+import { EMBED_MODE_VSCODE_LAUNCH, parseEmbedMode } from './utils/embedMode'
 
 // Props
 interface Props {
@@ -130,6 +133,13 @@ const splitSize = ref(clamp(appLayoutState.analysisSplitSize, 0.4, 1, 0.65))
 const splitVerticalSize = ref(clamp(appLayoutState.splitVerticalSize, 0.2, 0.8, 0.5))
 const parser = new LogParser()
 
+const embedMode = typeof window !== 'undefined' ? parseEmbedMode(window.location.search) : null
+const embedProfile = resolveEmbedProfile(embedMode)
+const isVscodeLaunchEmbed = embedProfile.mode === EMBED_MODE_VSCODE_LAUNCH
+const bridgeEnabled = embedProfile.bridgeEnabled
+const tutorialAutoStartEnabled = embedProfile.ui.autoStartTutorial
+const appEmbedMode = embedProfile.mode
+
 let activeErrorImages: Map<string, string> = new Map()
 let activeVisionImages: Map<string, string> = new Map()
 let activeWaitFreezesImages: Map<string, string> = new Map()
@@ -187,39 +197,6 @@ const setTextSearchLoadedTargets = (targets: TextSearchLoadedTarget[], defaultId
   textSearchLoadedTargets.value = targets
   textSearchLoadedDefaultTargetId.value = defaultId ?? (targets[0]?.id ?? '')
 }
-type JsonRpcId = string | number | null
-
-interface JsonRpcNotification {
-  jsonrpc: '2.0'
-  method: string
-  params?: unknown
-}
-
-interface JsonRpcRequest {
-  jsonrpc: '2.0'
-  id: JsonRpcId
-  method: string
-  params?: unknown
-}
-
-interface JsonRpcResponseSuccess {
-  jsonrpc: '2.0'
-  id: JsonRpcId
-  result: unknown
-}
-
-interface JsonRpcResponseError {
-  jsonrpc: '2.0'
-  id: JsonRpcId
-  error: {
-    code: number
-    message: string
-    data?: unknown
-  }
-}
-
-type JsonRpcResponse = JsonRpcResponseSuccess | JsonRpcResponseError
-type JsonRpcMessage = JsonRpcNotification | JsonRpcRequest | JsonRpcResponse
 
 interface RealtimeEventItem {
   seq: number
@@ -326,49 +303,6 @@ const syncRealtimeLoadedTarget = (session: RealtimeSessionState) => {
     }],
     targetId,
   )
-}
-
-const postToParent = (payload: JsonRpcMessage) => {
-  if (window.parent === window) return
-  window.parent.postMessage(JSON.stringify(payload), '*')
-}
-
-const sendJsonRpcNotification = (method: string, params?: unknown) => {
-  const payload: JsonRpcNotification = { jsonrpc: '2.0', method }
-  if (params !== undefined) payload.params = params
-  postToParent(payload)
-}
-
-const sendJsonRpcResult = (id: JsonRpcId, result: unknown) => {
-  postToParent({ jsonrpc: '2.0', id, result })
-}
-
-const sendJsonRpcError = (id: JsonRpcId, code: number, messageText: string, data?: unknown) => {
-  const payload: JsonRpcResponseError = {
-    jsonrpc: '2.0',
-    id,
-    error: {
-      code,
-      message: messageText,
-    },
-  }
-  if (data !== undefined) payload.error.data = data
-  postToParent(payload)
-}
-
-const sendBridgeReady = () => {
-  sendJsonRpcNotification('bridge.ready', {
-    protocolVersion: 1,
-    from: 'maa-log-analyzer',
-    capabilities: [
-      'bridge.updateTheme',
-      'bridge.keydown',
-      'realtime.start',
-      'realtime.push',
-      'realtime.end',
-      'realtime.snapshot.end',
-    ],
-  })
 }
 const pickPreferredLogTargetId = (targets: TextSearchLoadedTarget[]): string => {
   if (targets.length === 0) return ''
@@ -661,113 +595,66 @@ const handleBridgeKeydown = (params: unknown) => {
   document.dispatchEvent(keydownEvent)
 }
 
-const toJsonRpcMessage = (raw: unknown): JsonRpcMessage | null => {
-  let parsed: unknown = raw
-  if (typeof raw === 'string') {
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      return null
-    }
-  }
-
-  const record = asRecord(parsed)
-  if (!record || record.jsonrpc !== '2.0') return null
-
-  if (typeof record.method === 'string') {
-    if (Object.prototype.hasOwnProperty.call(record, 'id')) {
-      return {
-        jsonrpc: '2.0',
-        id: (record.id as JsonRpcId) ?? null,
-        method: record.method,
-        params: record.params,
-      }
-    }
-    return {
-      jsonrpc: '2.0',
-      method: record.method,
-      params: record.params,
-    }
-  }
-
-  if (Object.prototype.hasOwnProperty.call(record, 'id')) {
-    if (Object.prototype.hasOwnProperty.call(record, 'error')) {
-      const errorRecord = asRecord(record.error)
-      if (!errorRecord || typeof errorRecord.code !== 'number' || typeof errorRecord.message !== 'string') {
-        return null
-      }
-      return {
-        jsonrpc: '2.0',
-        id: (record.id as JsonRpcId) ?? null,
-        error: {
-          code: errorRecord.code,
-          message: errorRecord.message,
-          data: errorRecord.data,
-        },
-      }
-    }
-    if (Object.prototype.hasOwnProperty.call(record, 'result')) {
-      return {
-        jsonrpc: '2.0',
-        id: (record.id as JsonRpcId) ?? null,
-        result: record.result,
-      }
-    }
-  }
-
-  return null
-}
-
 const handleJsonRpcMethod = async (method: string, params: unknown, id?: JsonRpcId) => {
   switch (method) {
     case 'bridge.hello':
-      sendBridgeReady()
-      if (id !== undefined) sendJsonRpcResult(id, { ok: true })
+      bridge?.sendReady()
+      if (id !== undefined) bridge?.sendResult(id, { ok: true })
       return
     case 'bridge.updateTheme':
       handleBridgeUpdateTheme(params)
-      if (id !== undefined) sendJsonRpcResult(id, { ok: true })
+      if (id !== undefined) bridge?.sendResult(id, { ok: true })
       return
     case 'bridge.keydown':
       handleBridgeKeydown(params)
-      if (id !== undefined) sendJsonRpcResult(id, { ok: true })
+      if (id !== undefined) bridge?.sendResult(id, { ok: true })
       return
     case 'realtime.start':
       handleRealtimeStart(params)
-      if (id !== undefined) sendJsonRpcResult(id, { ok: true })
+      if (id !== undefined) bridge?.sendResult(id, { ok: true })
       return
     case 'realtime.push':
       handleRealtimePush(params)
-      if (id !== undefined) sendJsonRpcResult(id, { ok: true })
+      if (id !== undefined) bridge?.sendResult(id, { ok: true })
       return
     case 'realtime.end':
       handleRealtimeEnd(params)
-      if (id !== undefined) sendJsonRpcResult(id, { ok: true })
+      if (id !== undefined) bridge?.sendResult(id, { ok: true })
       return
     case 'realtime.snapshot.end':
-      if (id !== undefined) sendJsonRpcResult(id, { ok: true })
+      if (id !== undefined) bridge?.sendResult(id, { ok: true })
       return
     default:
       if (id !== undefined) {
-        sendJsonRpcError(id, -32601, `Method not found: ${method}`)
+        bridge?.sendError(id, -32601, `Method not found: ${method}`)
       }
   }
 }
 
-const handleRpcMessageEvent = (event: MessageEvent) => {
-  // 嵌入 iframe 时，优先接收 parent 消息；同时允许本窗口 postMessage 便于本地调试
-  if (window.parent !== window && event.source !== window.parent && event.source !== window) return
-  const message = toJsonRpcMessage(event.data)
-  if (!message) return
+const bridgeCapabilities = [
+  'bridge.updateTheme',
+  'bridge.keydown',
+  'realtime.start',
+  'realtime.push',
+  'realtime.end',
+  'realtime.snapshot.end',
+]
 
-  if ('method' in message) {
-    if ('id' in message) {
-      void handleJsonRpcMethod(message.method, message.params, message.id)
-    } else {
-      void handleJsonRpcMethod(message.method, message.params)
-    }
-  }
-}
+let bridge: BridgeController | null = null
+bridge = useBridge({
+  enabled: bridgeEnabled,
+  from: 'maa-log-analyzer',
+  capabilities: bridgeCapabilities,
+  readyPayload: {
+    embed: {
+      mode: embedMode,
+      bridgeEnabled,
+    },
+  },
+  onMethod: async (method, params, id) => {
+    await handleJsonRpcMethod(method, params, id)
+  },
+})
 // 过滤器状态
 const selectedProcessId = ref<string>('')
 const selectedThreadId = ref<string>('')
@@ -1429,10 +1316,8 @@ watch([splitSize, detailViewCollapsed, splitVerticalSize], ([currentSplitSize, c
 onMounted(() => {
   window.addEventListener('resize', handleTourViewportChange)
   window.addEventListener('scroll', handleTourViewportChange, true)
-  window.addEventListener('message', handleRpcMessageEvent)
-  sendBridgeReady()
 
-  if (!tutorialAutoStarted.value && !hasCompletedCurrentTutorialVersion()) {
+  if (tutorialAutoStartEnabled && !tutorialAutoStarted.value && !hasCompletedCurrentTutorialVersion()) {
     tutorialAutoStarted.value = true
     void startTour(true)
   }
@@ -1441,7 +1326,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleTourViewportChange)
   window.removeEventListener('scroll', handleTourViewportChange, true)
-  window.removeEventListener('message', handleRpcMessageEvent)
   if (realtimeParseTimer != null) {
     window.clearTimeout(realtimeParseTimer)
     realtimeParseTimer = null
@@ -1451,7 +1335,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div style="height: 100vh; display: flex; flex-direction: column">
+  <div
+    class="app-root"
+    :class="{ 'app-root--embed-vscode-launch': isVscodeLaunchEmbed }"
+    :data-embed-mode="appEmbedMode"
+    style="height: 100vh; display: flex; flex-direction: column"
+  >
     <!-- 顶部菜单栏 -->
     <n-card
       size="small"
