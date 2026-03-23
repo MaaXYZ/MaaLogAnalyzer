@@ -107,6 +107,8 @@ const props = defineProps<{
   isMobile?: boolean
   pendingScrollNodeId?: number | null
   isRealtimeStreaming?: boolean
+  showRealtimeStatus?: boolean
+  showReloadControls?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -127,6 +129,8 @@ const emit = defineEmits<{
 const activeTaskIndex = ref(0)
 const followLast = ref(true)
 const isRealtimeStreaming = computed(() => props.isRealtimeStreaming === true)
+const showRealtimeStatus = computed(() => props.showRealtimeStatus === true)
+const showReloadControls = computed(() => props.showReloadControls === true)
 
 // 文件读取加载状态
 const fileLoading = ref(false)
@@ -811,34 +815,9 @@ const handleFlowItemClick = (node: NodeInfo, flowItemId: string) => {
 <template>
   <n-card
     data-tour="analysis-process-root"
-    :title="isMobile ? undefined : 'MAA 日志分析器'"
     style="height: 100%"
     content-style="display: flex; flex-direction: column; gap: 12px; min-height: 0"
   >
-    <template #header-extra>
-      <n-flex v-if="!isMobile" align="center" style="gap: 8px">
-        <n-tag v-if="isRealtimeStreaming" type="info" size="small">实时解析中</n-tag>
-        <n-button
-          size="small"
-          :type="isRealtimeStreaming && followLast ? 'primary' : 'default'"
-          :disabled="!isRealtimeStreaming"
-          @click="toggleFollowLast"
-        >
-          {{ isRealtimeStreaming ? (followLast ? '跟随中' : '跟随最新') : '未实时' }}
-        </n-button>
-        <n-dropdown :options="reloadOptions" @select="handleReloadSelect">
-          <n-button size="small">
-            <template #icon>
-              <n-icon>
-                <folder-open-outlined v-if="isInTauri || isInVSCode" />
-                <cloud-upload-outlined v-else />
-              </n-icon>
-            </template>
-            重新加载
-          </n-button>
-        </n-dropdown>
-      </n-flex>
-    </template>
     <!-- 移动端工具栏 -->
     <n-flex v-if="isMobile && tasks.length > 0" align="center" style="gap: 8px">
       <n-button text style="font-size: 20px" @click="emit('open-task-drawer')">
@@ -848,6 +827,7 @@ const handleFlowItemClick = (node: NodeInfo, flowItemId: string) => {
         {{ selectedTask?.entry || '选择任务' }}
       </n-text>
       <n-button
+        v-if="showRealtimeStatus"
         size="small"
         :type="isRealtimeStreaming && followLast ? 'primary' : 'default'"
         :disabled="!isRealtimeStreaming"
@@ -855,7 +835,7 @@ const handleFlowItemClick = (node: NodeInfo, flowItemId: string) => {
       >
         {{ isRealtimeStreaming ? (followLast ? '跟随中' : '跟随最新') : '未实时' }}
       </n-button>
-      <n-dropdown :options="reloadOptions" @select="handleReloadSelect">
+      <n-dropdown v-if="showReloadControls" :options="reloadOptions" @select="handleReloadSelect">
         <n-button size="small">
           <template #icon>
             <n-icon><folder-open-outlined /></n-icon>
@@ -947,7 +927,7 @@ const handleFlowItemClick = (node: NodeInfo, flowItemId: string) => {
           <n-text depth="3" style="font-size: 14px; display: block; margin-bottom: 12px">
             支持 maa.log / maafw.log、.zip 压缩包，文件夹需包含日志文件
           </n-text>
-          <n-dropdown :options="reloadOptions" @select="handleReloadSelect">
+          <n-dropdown v-if="showReloadControls" :options="reloadOptions" @select="handleReloadSelect">
             <n-button type="primary" size="large">
               <template #icon>
                 <n-icon><folder-open-outlined /></n-icon>
@@ -1092,7 +1072,35 @@ const handleFlowItemClick = (node: NodeInfo, flowItemId: string) => {
 
         <!-- 右侧：节点详情 -->
         <template #2>
-          <n-card size="small" data-tour="analysis-node-timeline" title="节点时间线" style="height: 100%; display: flex; flex-direction: column; position: relative" content-style="padding: 0; flex: 1; min-height: 0; overflow: hidden">
+          <n-card size="small" data-tour="analysis-node-timeline" style="height: 100%; display: flex; flex-direction: column; position: relative" content-style="padding: 0; flex: 1; min-height: 0; overflow: hidden">
+            <template #header>
+              <n-flex align="center" justify="space-between" style="padding-right: 16px">
+                <n-text style="font-size: 14px; font-weight: 500">节点时间线</n-text>
+                <n-flex align="center" style="gap: 8px">
+                  <n-tag v-if="showRealtimeStatus && isRealtimeStreaming" type="info" size="small">实时解析中</n-tag>
+                  <n-button
+                    v-if="showRealtimeStatus"
+                    size="small"
+                    :type="isRealtimeStreaming && followLast ? 'primary' : 'default'"
+                    :disabled="!isRealtimeStreaming"
+                    @click="toggleFollowLast"
+                  >
+                    {{ isRealtimeStreaming ? (followLast ? '跟随中' : '跟随最新') : '未实时' }}
+                  </n-button>
+                  <n-dropdown v-if="showReloadControls" :options="reloadOptions" @select="handleReloadSelect">
+                    <n-button size="small">
+                      <template #icon>
+                        <n-icon>
+                          <folder-open-outlined v-if="isInTauri || isInVSCode" />
+                          <cloud-upload-outlined v-else />
+                        </n-icon>
+                      </template>
+                      重新加载
+                    </n-button>
+                  </n-dropdown>
+                </n-flex>
+              </n-flex>
+            </template>
             <!-- 展开任务列表按钮（仅在任务列表折叠时显示） -->
             <n-button
               v-if="taskListCollapsed"
