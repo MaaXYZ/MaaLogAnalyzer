@@ -258,6 +258,8 @@ interface SelectedRecognitionQueryTarget {
   recoId: number
 }
 
+const BRIDGE_IMAGE_CACHE_MAX_ITEMS = 50
+
 const realtimeSession = ref<RealtimeSessionState | null>(null)
 let realtimeParseTimer: number | null = null
 const realtimeParsing = ref(false)
@@ -547,6 +549,7 @@ const stopRealtimeSession = () => {
   realtimeReparseRequested.value = false
   realtimeParsing.value = false
   realtimeStreaming.value = false
+  clearBridgeImageCache()
   if (realtimeParseTimer != null) {
     window.clearTimeout(realtimeParseTimer)
     realtimeParseTimer = null
@@ -605,6 +608,7 @@ const handleRealtimeStart = (params: unknown) => {
     realtimeParseTimer = null
   }
   realtimeReparseRequested.value = false
+  clearBridgeImageCache()
 
   realtimeSession.value = {
     sessionId,
@@ -786,6 +790,38 @@ bridge = useBridge({
 })
 
 let bridgeRecoLoadToken = 0
+const bridgeImageDataUrlCache = new Map<string, string>()
+
+const toBridgeImageCacheKey = (sessionId: string, taskId: number, imageRefId: number): string => {
+  return `${sessionId}:${taskId}:${imageRefId}`
+}
+
+const clearBridgeImageCache = () => {
+  bridgeImageDataUrlCache.clear()
+}
+
+const getBridgeImageFromCache = (key: string): string | null => {
+  const cached = bridgeImageDataUrlCache.get(key)
+  if (!cached) return null
+  // LRU touch: move hit entry to the newest position.
+  bridgeImageDataUrlCache.delete(key)
+  bridgeImageDataUrlCache.set(key, cached)
+  return cached
+}
+
+const saveBridgeImageToCache = (key: string, dataUrl: string) => {
+  if (!dataUrl) return
+  if (bridgeImageDataUrlCache.has(key)) {
+    bridgeImageDataUrlCache.delete(key)
+  }
+  bridgeImageDataUrlCache.set(key, dataUrl)
+
+  while (bridgeImageDataUrlCache.size > BRIDGE_IMAGE_CACHE_MAX_ITEMS) {
+    const oldestKey = bridgeImageDataUrlCache.keys().next().value as string | undefined
+    if (oldestKey === undefined) break
+    bridgeImageDataUrlCache.delete(oldestKey)
+  }
+}
 
 const clearBridgeRecognitionState = () => {
   bridgeRecognitionImages.value = null
@@ -817,6 +853,10 @@ const queryBridgeDetail = async (params: QueryDetailParams): Promise<QueryDetail
 }
 
 const loadCachedImageDataUrl = async (sessionId: string, taskId: number, imageRefId: number): Promise<string | null> => {
+  const cacheKey = toBridgeImageCacheKey(sessionId, taskId, imageRefId)
+  const cached = getBridgeImageFromCache(cacheKey)
+  if (cached) return cached
+
   const result = await queryBridgeDetail({
     sessionId,
     target: 'cached_image',
@@ -824,7 +864,11 @@ const loadCachedImageDataUrl = async (sessionId: string, taskId: number, imageRe
     taskId,
     task_id: taskId,
   })
-  return toImageDataUrl(result.data)
+  const dataUrl = toImageDataUrl(result.data)
+  if (dataUrl) {
+    saveBridgeImageToCache(cacheKey, dataUrl)
+  }
+  return dataUrl
 }
 
 const loadBridgeRecognitionImages = async () => {
@@ -1558,6 +1602,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   bridgeRecoLoadToken += 1
   clearBridgeRecognitionState()
+  clearBridgeImageCache()
   window.removeEventListener('resize', handleTourViewportChange)
   window.removeEventListener('scroll', handleTourViewportChange, true)
   if (realtimeParseTimer != null) {
