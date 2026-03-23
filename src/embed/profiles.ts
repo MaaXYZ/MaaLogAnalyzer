@@ -12,6 +12,8 @@ export interface EmbedUiProfile {
   showProcessThreadFilters: boolean
   showRealtimeStatus: boolean
   showReloadControls: boolean
+  showTextSearchView: boolean
+  showSplitView: boolean
 }
 
 export interface EmbedProfile {
@@ -31,6 +33,8 @@ const STANDALONE_PROFILE: EmbedProfile = {
     showProcessThreadFilters: true,
     showRealtimeStatus: false,
     showReloadControls: true,
+    showTextSearchView: true,
+    showSplitView: true,
   },
 }
 
@@ -45,6 +49,8 @@ const VSCODE_LAUNCH_PROFILE: EmbedProfile = {
     showProcessThreadFilters: false,
     showRealtimeStatus: true,
     showReloadControls: false,
+    showTextSearchView: false,
+    showSplitView: false,
   },
 }
 

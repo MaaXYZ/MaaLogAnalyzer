@@ -45,6 +45,20 @@ const AiAnalysisView = defineAsyncComponent(() => import('./views/AiAnalysisView
 const showTaskDrawer = ref(false)
 const showDetailDrawer = ref(false)
 
+const embedMode = typeof window !== 'undefined' ? parseEmbedMode(window.location.search) : null
+const embedProfile = resolveEmbedProfile(embedMode)
+const isEmbeddedContext = typeof window !== 'undefined' && window.parent !== window
+const hasEmbedQueryFlag = typeof window !== 'undefined' && /(?:[?#&])embed=/.test(window.location.href)
+const isVscodeLaunchEmbed = embedProfile.mode === EMBED_MODE_VSCODE_LAUNCH
+const bridgeEnabled = embedProfile.bridgeEnabled
+const tutorialAutoStartEnabled = embedProfile.ui.autoStartTutorial && !isEmbeddedContext && !hasEmbedQueryFlag
+const showProcessThreadFilters = embedProfile.ui.showProcessThreadFilters
+const showRealtimeStatus = embedProfile.ui.showRealtimeStatus
+const showReloadControls = embedProfile.ui.showReloadControls
+const showTextSearchView = embedProfile.ui.showTextSearchView
+const showSplitView = embedProfile.ui.showSplitView
+const appEmbedMode = embedProfile.mode
+
 // 视图模式
 type ViewMode = 'analysis' | 'search' | 'statistics' | 'flowchart' | 'ai' | 'split'
 const viewMode = ref<ViewMode>('analysis')
@@ -84,11 +98,17 @@ const allViewModeOptions = [
 ]
 
 // 视图模式选项
-const viewModeOptions = computed(() => allViewModeOptions)
+const isViewModeEnabled = (mode: ViewMode): boolean => {
+  if (mode === 'search') return showTextSearchView
+  if (mode === 'split') return showSplitView
+  return true
+}
+
+const viewModeOptions = computed(() => allViewModeOptions.filter(option => isViewModeEnabled(option.key)))
 
 // 当前视图模式的显示文本
 const currentViewLabel = computed(() => {
-  const option = viewModeOptions.value.find(opt => opt.key === viewMode.value)
+  const option = allViewModeOptions.find(opt => opt.key === viewMode.value)
   return option?.label || '视图'
 })
 
@@ -132,18 +152,6 @@ const appLayoutState = readAppLayoutState()
 const splitSize = ref(clamp(appLayoutState.analysisSplitSize, 0.4, 1, 0.65))
 const splitVerticalSize = ref(clamp(appLayoutState.splitVerticalSize, 0.2, 0.8, 0.5))
 const parser = new LogParser()
-
-const embedMode = typeof window !== 'undefined' ? parseEmbedMode(window.location.search) : null
-const embedProfile = resolveEmbedProfile(embedMode)
-const isEmbeddedContext = typeof window !== 'undefined' && window.parent !== window
-const hasEmbedQueryFlag = typeof window !== 'undefined' && /(?:[?#&])embed=/.test(window.location.href)
-const isVscodeLaunchEmbed = embedProfile.mode === EMBED_MODE_VSCODE_LAUNCH
-const bridgeEnabled = embedProfile.bridgeEnabled
-const tutorialAutoStartEnabled = embedProfile.ui.autoStartTutorial && !isEmbeddedContext && !hasEmbedQueryFlag
-const showProcessThreadFilters = embedProfile.ui.showProcessThreadFilters
-const showRealtimeStatus = embedProfile.ui.showRealtimeStatus
-const showReloadControls = embedProfile.ui.showReloadControls
-const appEmbedMode = embedProfile.mode
 
 let activeErrorImages: Map<string, string> = new Map()
 let activeVisionImages: Map<string, string> = new Map()
