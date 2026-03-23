@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { darkTheme, NConfigProvider, NMessageProvider } from 'naive-ui'
+import type { GlobalThemeOverrides } from 'naive-ui'
 import App from './App.vue'
 import hljs from 'highlight.js/lib/core'
 import json from 'highlight.js/lib/languages/json'
@@ -14,6 +15,39 @@ const getSystemTheme = () => {
 }
 
 const isDark = ref(getSystemTheme())
+const vscodeThemeVersion = ref(0)
+
+const refreshVscodeTheme = () => {
+  vscodeThemeVersion.value++
+}
+
+const isValidCssColor = (value: string): boolean => {
+  if (!value) return false
+  if (typeof CSS !== 'undefined' && typeof CSS.supports === 'function') {
+    return CSS.supports('color', value)
+  }
+  return /^(#|rgb|hsl|lab|lch|oklab|oklch|color\()/i.test(value)
+}
+
+const pickCssVarColor = (styleDecl: CSSStyleDeclaration | null, names: string[], fallback: string): string => {
+  if (!styleDecl) return fallback
+  for (const name of names) {
+    const value = styleDecl.getPropertyValue(name).trim()
+    if (value && isValidCssColor(value)) return value
+  }
+  return fallback
+}
+
+const handleSystemThemeChange = (e: MediaQueryListEvent) => {
+  // 只有在用户没有手动设置过主题时才跟随系统
+  if (!localStorage.getItem('theme')) {
+    isDark.value = e.matches
+    updateThemeColor(isDark.value)
+  }
+  refreshVscodeTheme()
+}
+
+let mediaQuery: MediaQueryList | null = null
 
 // 从 localStorage 加载主题偏好，如果没有则跟随系统
 onMounted(() => {
@@ -25,16 +59,19 @@ onMounted(() => {
     isDark.value = getSystemTheme()
   }
   updateThemeColor(isDark.value)
-  
-  // 监听系统主题变化（仅在没有用户偏好时生效）
-  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  mediaQuery.addEventListener('change', (e) => {
-    // 只有在用户没有手动设置过主题时才跟随系统
-    if (!localStorage.getItem('theme')) {
-      isDark.value = e.matches
-      updateThemeColor(isDark.value)
-    }
-  })
+  refreshVscodeTheme()
+
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  mediaQuery.addEventListener('change', handleSystemThemeChange)
+  window.addEventListener('maa-bridge-theme-updated', refreshVscodeTheme)
+})
+
+onBeforeUnmount(() => {
+  if (mediaQuery) {
+    mediaQuery.removeEventListener('change', handleSystemThemeChange)
+    mediaQuery = null
+  }
+  window.removeEventListener('maa-bridge-theme-updated', refreshVscodeTheme)
 })
 
 // 更新浏览器主题颜色和 body 类
@@ -59,18 +96,55 @@ const toggleTheme = () => {
   isDark.value = !isDark.value
   localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
   updateThemeColor(isDark.value)
+  refreshVscodeTheme()
 }
 
 // 主题配置
 const theme = computed(() => isDark.value ? darkTheme : null)
-const themeOverrides = {
-  common: {
-    primaryColor: '#63e2b7',
-    primaryColorHover: '#7fe7c4',
-    primaryColorPressed: '#5acea7',
-    borderRadius: '2px'
+const themeOverrides = computed<GlobalThemeOverrides>(() => {
+  // 让 bridge 主题更新事件触发重算
+  void vscodeThemeVersion.value
+
+  const fallbackBg = isDark.value ? '#18181c' : '#ffffff'
+  const fallbackText = isDark.value ? 'rgba(255, 255, 255, 0.82)' : 'rgba(0, 0, 0, 0.82)'
+  const fallbackBorder = isDark.value ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'
+  const styleDecl = typeof window !== 'undefined' ? getComputedStyle(document.documentElement) : null
+
+  const primaryColor = pickCssVarColor(styleDecl, ['--vscode-button-background'], '#63e2b7')
+  const primaryColorHover = pickCssVarColor(styleDecl, ['--vscode-button-hoverBackground'], '#7fe7c4')
+  const bodyColor = pickCssVarColor(styleDecl, ['--vscode-editor-background'], fallbackBg)
+  const widgetColor = pickCssVarColor(styleDecl, ['--vscode-editorWidget-background', '--vscode-editor-background'], bodyColor)
+  const inputColor = pickCssVarColor(styleDecl, ['--vscode-input-background', '--vscode-editor-background'], bodyColor)
+  const borderColor = pickCssVarColor(styleDecl, ['--vscode-panel-border', '--vscode-widget-border'], fallbackBorder)
+  const textColor = pickCssVarColor(styleDecl, ['--vscode-editor-foreground'], fallbackText)
+  const subTextColor = pickCssVarColor(styleDecl, ['--vscode-descriptionForeground', '--vscode-editor-foreground'], textColor)
+  const inputTextColor = pickCssVarColor(styleDecl, ['--vscode-input-foreground', '--vscode-editor-foreground'], textColor)
+  const placeholderColor = pickCssVarColor(styleDecl, ['--vscode-input-placeholderForeground', '--vscode-descriptionForeground'], subTextColor)
+
+  return {
+    common: {
+      // 解析成真实颜色值，避免 Naive UI 在 seemly/rgba 中处理 var(...) 报错。
+      primaryColor,
+      primaryColorHover,
+      primaryColorPressed: primaryColor,
+      borderRadius: '2px',
+      bodyColor,
+      cardColor: widgetColor,
+      modalColor: widgetColor,
+      popoverColor: widgetColor,
+      tableColor: widgetColor,
+      inputColor,
+      borderColor,
+      dividerColor: borderColor,
+      textColorBase: textColor,
+      textColor1: textColor,
+      textColor2: subTextColor,
+      textColor3: subTextColor,
+      inputTextColor,
+      placeholderColor,
+    }
   }
-}
+})
 </script>
 
 

@@ -22,8 +22,8 @@ body {
 
 /* 滚动条样式 - 深色模式 */
 body {
-  background: #18181c;
-  color: rgba(255, 255, 255, 0.82);
+  background: var(--vscode-editor-background, #18181c);
+  color: var(--vscode-editor-foreground, rgba(255, 255, 255, 0.82));
 }
 
 ::-webkit-scrollbar {
@@ -36,48 +36,48 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--vscode-scrollbarSlider-background, rgba(255, 255, 255, 0.2));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(255, 255, 255, 0.3));
 }
 
 /* 浅色模式 - 系统偏好 */
 @media (prefers-color-scheme: light) {
   body:not(.force-dark) {
-    background: #ffffff;
-    color: rgba(0, 0, 0, 0.82);
+    background: var(--vscode-editor-background, #ffffff);
+    color: var(--vscode-editor-foreground, rgba(0, 0, 0, 0.82));
   }
   
   body:not(.force-dark) ::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--vscode-scrollbarSlider-background, rgba(0, 0, 0, 0.2));
   }
 
   body:not(.force-dark) ::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--vscode-scrollbarSlider-hoverBackground, rgba(0, 0, 0, 0.3));
   }
 }
 
 /* 强制浅色模式 */
 body.force-light {
-  background: #ffffff !important;
-  color: rgba(0, 0, 0, 0.82) !important;
+  background: var(--vscode-editor-background, #ffffff) !important;
+  color: var(--vscode-editor-foreground, rgba(0, 0, 0, 0.82)) !important;
 }
 
 body.force-light ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2) !important;
+  background: var(--vscode-scrollbarSlider-background, rgba(0, 0, 0, 0.2)) !important;
 }
 
 body.force-light ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3) !important;
+  background: var(--vscode-scrollbarSlider-hoverBackground, rgba(0, 0, 0, 0.3)) !important;
 }
 
 /* 强制深色模式 */
 body.force-dark {
-  background: #18181c !important;
-  color: rgba(255, 255, 255, 0.82) !important;
+  background: var(--vscode-editor-background, #18181c) !important;
+  color: var(--vscode-editor-foreground, rgba(255, 255, 255, 0.82)) !important;
 }
 
 @media (max-width: 768px) {

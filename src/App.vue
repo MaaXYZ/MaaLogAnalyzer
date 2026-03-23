@@ -586,6 +586,8 @@ const handleBridgeUpdateTheme = (params: unknown) => {
   if (typeof payload.bodyClass === 'string') {
     document.body.setAttribute('class', payload.bodyClass)
   }
+
+  window.dispatchEvent(new Event('maa-bridge-theme-updated'))
 }
 
 const handleBridgeKeydown = (params: unknown) => {
