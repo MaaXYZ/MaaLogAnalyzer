@@ -114,6 +114,7 @@ const toJsonRpcMessage = (raw: unknown): JsonRpcMessage | null => {
 
 export const useBridge = (options: UseBridgeOptions): BridgeController => {
   const postToParent = (payload: JsonRpcMessage) => {
+    if (!options.enabled) return
     if (window.parent === window) return
     window.parent.postMessage(JSON.stringify(payload), '*')
   }
