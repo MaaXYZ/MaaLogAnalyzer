@@ -135,9 +135,10 @@ const parser = new LogParser()
 
 const embedMode = typeof window !== 'undefined' ? parseEmbedMode(window.location.search) : null
 const embedProfile = resolveEmbedProfile(embedMode)
+const isEmbeddedContext = typeof window !== 'undefined' && window.parent !== window
 const isVscodeLaunchEmbed = embedProfile.mode === EMBED_MODE_VSCODE_LAUNCH
 const bridgeEnabled = embedProfile.bridgeEnabled
-const tutorialAutoStartEnabled = embedProfile.ui.autoStartTutorial
+const tutorialAutoStartEnabled = embedProfile.ui.autoStartTutorial && !isEmbeddedContext
 const showProcessThreadFilters = embedProfile.ui.showProcessThreadFilters
 const showRealtimeStatus = embedProfile.ui.showRealtimeStatus
 const showReloadControls = embedProfile.ui.showReloadControls
