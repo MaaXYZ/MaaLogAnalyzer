@@ -5,6 +5,7 @@ import type { GlobalThemeOverrides } from 'naive-ui'
 import App from './App.vue'
 import hljs from 'highlight.js/lib/core'
 import json from 'highlight.js/lib/languages/json'
+import { BRIDGE_THEME_UPDATED_EVENT } from './utils/bridgeEvents'
 
 // 注册 JSON 语言支持
 hljs.registerLanguage('json', json)
@@ -21,12 +22,32 @@ const refreshVscodeTheme = () => {
   vscodeThemeVersion.value++
 }
 
+const hasCssSupportsApi = typeof CSS !== 'undefined' && typeof CSS.supports === 'function'
+const cssColorValidationCache = new Map<string, boolean>()
+const cssColorCandidatePattern = /^(#|[a-z]+|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\()/i
+
 const isValidCssColor = (value: string): boolean => {
-  if (!value) return false
-  if (typeof CSS !== 'undefined' && typeof CSS.supports === 'function') {
-    return CSS.supports('color', value)
+  const normalized = value.trim()
+  if (!normalized) return false
+
+  const cached = cssColorValidationCache.get(normalized)
+  if (cached !== undefined) return cached
+
+  // Naive UI 内部会用 rgba 处理主题色，var(...) 会报错，直接判无效并回退。
+  if (normalized.includes('var(')) {
+    cssColorValidationCache.set(normalized, false)
+    return false
   }
-  return /^(#|rgb|hsl|lab|lch|oklab|oklch|color\()/i.test(value)
+
+  // 先做快速前置过滤，避免对明显无效值调用 CSS.supports。
+  if (!cssColorCandidatePattern.test(normalized)) {
+    cssColorValidationCache.set(normalized, false)
+    return false
+  }
+
+  const valid = hasCssSupportsApi ? CSS.supports('color', normalized) : true
+  cssColorValidationCache.set(normalized, valid)
+  return valid
 }
 
 const pickCssVarColor = (styleDecl: CSSStyleDeclaration | null, names: string[], fallback: string): string => {
@@ -63,7 +84,7 @@ onMounted(() => {
 
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   mediaQuery.addEventListener('change', handleSystemThemeChange)
-  window.addEventListener('maa-bridge-theme-updated', refreshVscodeTheme)
+  window.addEventListener(BRIDGE_THEME_UPDATED_EVENT, refreshVscodeTheme)
 })
 
 onBeforeUnmount(() => {
@@ -71,7 +92,7 @@ onBeforeUnmount(() => {
     mediaQuery.removeEventListener('change', handleSystemThemeChange)
     mediaQuery = null
   }
-  window.removeEventListener('maa-bridge-theme-updated', refreshVscodeTheme)
+  window.removeEventListener(BRIDGE_THEME_UPDATED_EVENT, refreshVscodeTheme)
 })
 
 // 更新浏览器主题颜色和 body 类

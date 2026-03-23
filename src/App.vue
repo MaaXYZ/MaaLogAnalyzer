@@ -18,6 +18,7 @@ import tutorialSampleLog from './assets/tutorial-sample.log?raw'
 import { useBridge, type BridgeController, type JsonRpcId } from './composables/useBridge'
 import { resolveEmbedProfile } from './embed/profiles'
 import { EMBED_MODE_VSCODE_LAUNCH, parseEmbedMode } from './utils/embedMode'
+import { BRIDGE_THEME_UPDATED_EVENT } from './utils/bridgeEvents'
 
 // Props
 interface Props {
@@ -587,7 +588,7 @@ const handleBridgeUpdateTheme = (params: unknown) => {
     document.body.setAttribute('class', payload.bodyClass)
   }
 
-  window.dispatchEvent(new Event('maa-bridge-theme-updated'))
+  window.dispatchEvent(new Event(BRIDGE_THEME_UPDATED_EVENT))
 }
 
 const handleBridgeKeydown = (params: unknown) => {
