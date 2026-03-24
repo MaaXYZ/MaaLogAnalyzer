@@ -30,6 +30,7 @@ const props = defineProps<{
   defaultCollapseNestedRecognition?: boolean
   defaultCollapseNestedActionNodes?: boolean
   isExpanded: (attemptIndex: number) => boolean
+  forceExpandRelatedWhileRunning?: boolean
   getButtonType: (status: string) => 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error'
   actionButtonType: 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error'
 }>()
@@ -41,6 +42,7 @@ const toDetailOffset = (depth: number): string => `${depth * DETAIL_INDENT_PX}px
 const expandedNestedRecognitionItems = ref<Map<string, boolean>>(new Map())
 
 const isNestedRecognitionFlowItemExpanded = (flowItemId: string): boolean => {
+  if (props.forceExpandRelatedWhileRunning) return true
   const value = expandedNestedRecognitionItems.value.get(flowItemId)
   if (value !== undefined) return value
   return !(props.defaultCollapseNestedRecognition ?? true)
@@ -53,6 +55,7 @@ const toggleNestedRecognitionFlowItemExpand = (flowItemId: string) => {
 const expandedActionFlowItems = ref<Map<string, boolean>>(new Map())
 
 const isActionFlowItemExpanded = (flowItemId: string): boolean => {
+  if (props.forceExpandRelatedWhileRunning) return true
   const value = expandedActionFlowItems.value.get(flowItemId)
   if (value !== undefined) return value
   return !(props.defaultCollapseNestedActionNodes ?? true)

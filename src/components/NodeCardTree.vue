@@ -15,6 +15,7 @@ const props = defineProps<{
   defaultCollapseNestedRecognition?: boolean
   defaultCollapseNestedActionNodes?: boolean
   isExpanded?: (attemptIndex: number) => boolean
+  forceExpandRelatedWhileRunning?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +39,7 @@ const isRecognitionNestedExpanded = (attemptIndex: number): boolean => {
 const expandedNestedRecognitionItems = ref<Map<string, boolean>>(new Map())
 
 const isNestedRecognitionFlowItemExpanded = (flowItemId: string): boolean => {
+  if (props.forceExpandRelatedWhileRunning) return true
   const value = expandedNestedRecognitionItems.value.get(flowItemId)
   if (value !== undefined) return value
   return !(props.defaultCollapseNestedRecognition ?? true)
@@ -50,6 +52,7 @@ const toggleNestedRecognitionFlowItemExpand = (flowItemId: string) => {
 const expandedFlowItems = ref<Map<string, boolean>>(new Map())
 
 const isFlowItemExpanded = (flowItemId: string): boolean => {
+  if (props.forceExpandRelatedWhileRunning) return true
   const value = expandedFlowItems.value.get(flowItemId)
   if (value !== undefined) return value
   return !(props.defaultCollapseNestedActionNodes ?? true)

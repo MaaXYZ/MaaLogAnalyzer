@@ -32,6 +32,10 @@ const recognitionExpanded = ref(!settings.defaultCollapseRecognition)
 // 跟踪 Action 部分是否展开
 const actionExpanded = ref(!settings.defaultCollapseNestedActionNodes)
 
+const forceExpandRelatedWhileRunning = computed(() => props.node.status === 'running')
+const effectiveRecognitionExpanded = computed(() => forceExpandRelatedWhileRunning.value || recognitionExpanded.value)
+const effectiveActionExpanded = computed(() => forceExpandRelatedWhileRunning.value || actionExpanded.value)
+
 // 监听node变化，清空展开状态
 watch(() => props.node?.node_id, () => {
   expandedAttempts.value.clear()
@@ -66,6 +70,7 @@ const toggleNestedNodes = (attemptIndex: number) => {
 
 // 检查嵌套识别节点是否展开
 const isExpanded = (attemptIndex: number) => {
+  if (forceExpandRelatedWhileRunning.value) return true
   const value = expandedAttempts.value.get(attemptIndex)
   return value !== undefined ? value : !settings.defaultCollapseNestedRecognition
 }
@@ -223,11 +228,12 @@ const actionButtonType = computed<ButtonType>(() => {
           v-if="settings.displayMode === 'detailed'"
           :node="node"
           :merged-recognition-list="mergedRecognitionList"
-          :recognition-expanded="recognitionExpanded"
-          :action-expanded="actionExpanded"
+          :recognition-expanded="effectiveRecognitionExpanded"
+          :action-expanded="effectiveActionExpanded"
           :default-collapse-nested-recognition="settings.defaultCollapseNestedRecognition"
           :default-collapse-nested-action-nodes="settings.defaultCollapseNestedActionNodes"
           :is-expanded="isExpanded"
+          :force-expand-related-while-running="forceExpandRelatedWhileRunning"
           :get-button-type="getButtonType"
           :action-button-type="actionButtonType"
           @select-action="emit('select-action', $event)"
@@ -249,11 +255,12 @@ const actionButtonType = computed<ButtonType>(() => {
           v-else
           :node="node"
           :merged-recognition-list="mergedRecognitionList"
-          :recognition-expanded="recognitionExpanded"
-          :action-expanded="actionExpanded"
+          :recognition-expanded="effectiveRecognitionExpanded"
+          :action-expanded="effectiveActionExpanded"
           :default-collapse-nested-recognition="settings.defaultCollapseNestedRecognition"
           :default-collapse-nested-action-nodes="settings.defaultCollapseNestedActionNodes"
           :is-expanded="isExpanded"
+          :force-expand-related-while-running="forceExpandRelatedWhileRunning"
           @select-action="emit('select-action', $event)"
           @select-recognition="(n, i) => emit('select-recognition', n, i)"
           @select-flow-item="(n, id) => emit('select-flow-item', n, id)"
