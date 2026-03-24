@@ -224,6 +224,7 @@ interface RealtimeSessionState {
   startedAt: number
   lastSeq: number
   lines: string[]
+  pendingLines: string[]
 }
 
 type QueryDetailTarget = 'reco' | 'action' | 'cached_image'
@@ -259,6 +260,7 @@ interface SelectedRecognitionQueryTarget {
 }
 
 const BRIDGE_IMAGE_CACHE_MAX_ITEMS = 50
+const REALTIME_PARSE_INTERVAL_MS = 16
 
 const realtimeSession = ref<RealtimeSessionState | null>(null)
 let realtimeParseTimer: number | null = null
@@ -567,9 +569,11 @@ const runRealtimeParse = async () => {
 
   realtimeParsing.value = true
   try {
-    const content = session.lines.join('\n')
-    await parser.parseFile(content)
-    const parsedTasks = parser.getTasks()
+    const pendingLines = session.pendingLines.splice(0, session.pendingLines.length)
+    if (pendingLines.length > 0) {
+      parser.appendRealtimeLines(pendingLines)
+    }
+    const parsedTasks = parser.getTasksSnapshot()
     applyParsedTasks(parsedTasks, true)
     syncRealtimeLoadedTarget(session)
   } catch (error) {
@@ -582,7 +586,7 @@ const runRealtimeParse = async () => {
         realtimeParseTimer = window.setTimeout(() => {
           realtimeParseTimer = null
           void runRealtimeParse()
-        }, 80)
+        }, REALTIME_PARSE_INTERVAL_MS)
       }
     }
   }
@@ -593,7 +597,7 @@ const scheduleRealtimeParse = () => {
   realtimeParseTimer = window.setTimeout(() => {
     realtimeParseTimer = null
     void runRealtimeParse()
-  }, 80)
+  }, REALTIME_PARSE_INTERVAL_MS)
 }
 
 const handleRealtimeStart = (params: unknown) => {
@@ -615,10 +619,12 @@ const handleRealtimeStart = (params: unknown) => {
     startedAt: toFiniteNumber(payload.startedAt, Date.now()),
     lastSeq: 0,
     lines: [],
+    pendingLines: [],
   }
   realtimeStreaming.value = true
 
   resetParserDebugAssets()
+  parser.resetParsedEvents()
   resetAnalysisState()
   selectedProcessId.value = ''
   selectedThreadId.value = ''
@@ -669,6 +675,7 @@ const handleRealtimePush = (params: unknown) => {
     const line = toSyntheticEventLine(event)
     if (!line) continue
     session.lines.push(line)
+    session.pendingLines.push(line)
     session.lastSeq = event.seq
     appended++
   }

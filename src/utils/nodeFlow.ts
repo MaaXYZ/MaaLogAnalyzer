@@ -98,7 +98,7 @@ export const buildRecognitionFlowItems = (attempts: RecognitionAttempt[]): Unifi
 const mapActionItem = (
   id: string,
   name: string,
-  status: 'success' | 'failed',
+  status: 'success' | 'failed' | 'running',
   startTimestamp: string | undefined,
   endTimestamp: string | undefined,
   actionDetails: UnifiedFlowItem['action_details'],
@@ -132,7 +132,11 @@ const mapNestedPipelineNode = (
     ? mapActionItem(
         `${baseId}.action.${nestedNode.action_details.action_id ?? nestedNode.node_id}`,
         nestedNode.action_details.name || nestedNode.name,
-        nestedNode.action_details.success ? 'success' : 'failed',
+        nestedNode.status === 'running'
+          ? 'running'
+          : nestedNode.action_details.success
+            ? 'success'
+            : 'failed',
         nestedNode.action_details.ts || nestedNode.ts,
         nestedNode.action_details.end_ts || nestedNode.end_ts,
         nestedNode.action_details,

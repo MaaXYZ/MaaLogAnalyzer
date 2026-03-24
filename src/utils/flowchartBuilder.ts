@@ -4,7 +4,7 @@ import type { TaskInfo, NodeInfo } from '../types'
 
 export interface FlowNodeData {
   label: string
-  status: 'success' | 'failed' | 'not-executed'
+  status: 'success' | 'failed' | 'running' | 'not-executed'
   executionOrder: number[]
   nodeInfos: NodeInfo[]
 }
@@ -13,7 +13,7 @@ export interface FlowEdgeData {
   executed: boolean
   anchor: boolean
   jump_back: boolean
-  edgeStatus: 'success' | 'failed' | 'topology'
+  edgeStatus: 'success' | 'failed' | 'running' | 'topology'
   flowMode?: 'none' | 'chevron' | 'dash'
   routePoints?: Array<{ x: number; y: number }>
 }
@@ -76,7 +76,11 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
     let status: FlowNodeData['status'] = 'not-executed'
     if (executed) {
       const lastInfo = executed.infos[executed.infos.length - 1]
-      status = lastInfo.status === 'failed' ? 'failed' : 'success'
+      status = lastInfo.status === 'failed'
+        ? 'failed'
+        : lastInfo.status === 'running'
+          ? 'running'
+          : 'success'
     }
 
     flowNodes.push({
@@ -125,7 +129,11 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
     const edgeId = `${from}->${to}`
 
     const existing = flowEdges.find(e => e.id === edgeId)
-    const toNodeStatus = task.nodes[i + 1].status === 'failed' ? 'failed' : 'success'
+    const toNodeStatus: FlowEdgeData['edgeStatus'] = task.nodes[i + 1].status === 'failed'
+      ? 'failed'
+      : task.nodes[i + 1].status === 'running'
+        ? 'running'
+        : 'success'
 
     if (existing) {
       // Mark topology edge as executed

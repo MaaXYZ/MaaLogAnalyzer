@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { NButton, NFlex, NText } from 'naive-ui'
-import { CheckCircleOutlined, CloseCircleOutlined } from '@vicons/antd'
+import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@vicons/antd'
 import type { NodeInfo, MergedRecognitionItem } from '../types'
-import { buildNodeActionFlowItems, buildNodeActionLevelRecognitionItems } from '../utils/nodeFlow'
+import { buildNodeActionFlowItems, buildNodeActionLevelRecognitionItems, buildNodeActionRootItem } from '../utils/nodeFlow'
 import { getFlowItemButtonType, getFlowItemShortLabel } from '../utils/flowLabels'
 import { flattenFlowItems, flattenNestedRecognitionNodes } from '../utils/flowTree'
 
@@ -76,13 +76,25 @@ const actionLevelRecognitionItems = computed(() => buildNodeActionLevelRecogniti
 const taskFlowItems = computed(() =>
   buildNodeActionFlowItems(props.node).filter(item => item.type !== 'recognition_node')
 )
+const actionRootItem = computed(() => buildNodeActionRootItem(props.node))
 const flowRows = computed(() => flattenFlowItems(taskFlowItems.value, isFlowItemExpanded))
 const isRecognitionExpanded = computed(() => props.recognitionExpanded ?? true)
 const isActionExpanded = computed(() => props.actionExpanded ?? true)
 const hasActionNestedChildren = computed(() => actionLevelRecognitionItems.value.length > 0 || flowRows.value.length > 0)
+const actionStatus = computed(() => {
+  if (actionRootItem.value) return actionRootItem.value.status
+  if (props.node.status === 'running' && props.node.action_details) return 'running'
+  if (!props.node.action_details) return null
+  return props.node.action_details.success ? 'success' : 'failed'
+})
+const actionName = computed(() => {
+  if (actionRootItem.value) return actionRootItem.value.name
+  return props.node.action_details?.name ?? ''
+})
 
-const getRecognitionButtonType = (status: MergedRecognitionItem['status']): 'success' | 'warning' | 'default' => {
+const getRecognitionButtonType = (status: MergedRecognitionItem['status']): 'success' | 'warning' | 'info' | 'default' => {
   if (status === 'success') return 'success'
+  if (status === 'running') return 'info'
   if (status === 'failed') return 'warning'
   return 'default'
 }
@@ -138,6 +150,7 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
             >
               <template #icon>
                 <check-circle-outlined v-if="item.status === 'success'" />
+                <loading-outlined v-else-if="item.status === 'running'" />
                 <close-circle-outlined v-else />
               </template>
               {{ item.name }}
@@ -170,11 +183,12 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
                 <n-button
                   text
                   size="tiny"
-                  :type="nested.attempt.status === 'success' ? 'success' : 'warning'"
+                  :type="nested.attempt.status === 'success' ? 'success' : nested.attempt.status === 'running' ? 'info' : 'warning'"
                   @click="emit('select-flow-item', node, nested.flowItemId)"
                 >
                   <template #icon>
                     <check-circle-outlined v-if="nested.attempt.status === 'success'" />
+                    <loading-outlined v-else-if="nested.attempt.status === 'running'" />
                     <close-circle-outlined v-else />
                   </template>
                   {{ recognitionNodeShortLabel }} · {{ nested.attempt.name }}
@@ -193,7 +207,7 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
       </n-flex>
     </div>
 
-    <ul v-if="node.action_details" class="tree-list">
+    <ul v-if="actionStatus" class="tree-list">
       <li class="tree-item">
         <n-flex align="center" style="gap: 4px">
           <span
@@ -206,14 +220,15 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
           <n-button
             text
             size="tiny"
-            :type="node.action_details.success ? 'success' : 'error'"
-            @click="emit('select-action', node)"
+            :type="actionStatus === 'success' ? 'success' : actionStatus === 'running' ? 'warning' : 'error'"
+            @click="actionRootItem ? emit('select-flow-item', node, actionRootItem.id) : emit('select-action', node)"
           >
             <template #icon>
-              <check-circle-outlined v-if="node.action_details.success" />
+              <check-circle-outlined v-if="actionStatus === 'success'" />
+              <loading-outlined v-else-if="actionStatus === 'running'" />
               <close-circle-outlined v-else />
             </template>
-            {{ node.action_details.name }}
+            {{ actionName }}
           </n-button>
         </n-flex>
 
@@ -229,11 +244,12 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
               <n-button
                 text
                 size="tiny"
-                :type="item.status === 'success' ? 'success' : 'warning'"
+                :type="item.status === 'success' ? 'success' : item.status === 'running' ? 'info' : 'warning'"
                 @click="emit('select-flow-item', node, item.id)"
               >
                 <template #icon>
                   <check-circle-outlined v-if="item.status === 'success'" />
+                  <loading-outlined v-else-if="item.status === 'running'" />
                   <close-circle-outlined v-else />
                 </template>
                 {{ recognitionNodeShortLabel }} · {{ item.name }}
@@ -268,6 +284,7 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
               >
                 <template #icon>
                   <check-circle-outlined v-if="row.item.status === 'success'" />
+                  <loading-outlined v-else-if="row.item.status === 'running'" />
                   <close-circle-outlined v-else />
                 </template>
                 {{ getFlowItemShortLabel(row.item.type) }} · {{ row.item.name }}

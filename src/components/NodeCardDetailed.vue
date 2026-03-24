@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { NCard, NButton, NFlex, NImage, NText } from 'naive-ui'
-import { CheckCircleOutlined, CloseCircleOutlined } from '@vicons/antd'
+import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@vicons/antd'
 import type { NodeInfo, MergedRecognitionItem } from '../types'
 import { isTauri } from '../utils/platform'
 import { buildNodeActionRootItem } from '../utils/nodeFlow'
@@ -116,7 +116,7 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
             {{ item.name }}
           </n-button>
 
-          <template v-else-if="recognitionExpanded || item.status === 'success'">
+          <template v-else-if="recognitionExpanded || item.status === 'success' || item.status === 'running'">
             <n-flex align="center" style="gap: 8px; align-self: flex-start">
               <n-button
                 size="small"
@@ -126,6 +126,7 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
               >
                 <template #icon>
                   <check-circle-outlined v-if="item.status === 'success'" />
+                  <loading-outlined v-else-if="item.status === 'running'" />
                   <close-circle-outlined v-else />
                 </template>
                 {{ item.name }}
@@ -185,12 +186,13 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
                 >
                   <n-button
                     size="small"
-                    :type="nested.attempt.status === 'success' ? 'success' : 'warning'"
+                    :type="nested.attempt.status === 'success' ? 'success' : nested.attempt.status === 'running' ? 'info' : 'warning'"
                     ghost
                     @click="emit('select-flow-item', node, nested.flowItemId)"
                   >
                     <template #icon>
                       <check-circle-outlined v-if="nested.attempt.status === 'success'" />
+                      <loading-outlined v-else-if="nested.attempt.status === 'running'" />
                       <close-circle-outlined v-else />
                     </template>
                     [{{ recognitionNodeShortLabel }}] {{ nested.attempt.name }}
@@ -240,12 +242,13 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
         <n-button
           v-if="actionRootItem"
           size="small"
-          :type="actionRootItem.status === 'success' ? 'success' : 'error'"
+          :type="actionRootItem.status === 'success' ? 'success' : actionRootItem.status === 'running' ? 'warning' : 'error'"
           ghost
           @click="emit('select-flow-item', node, actionRootItem.id)"
         >
           <template #icon>
             <check-circle-outlined v-if="actionRootItem.status === 'success'" />
+            <loading-outlined v-else-if="actionRootItem.status === 'running'" />
             <close-circle-outlined v-else />
           </template>
           {{ actionRootItem.name }}
@@ -257,12 +260,13 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
           :type="actionButtonType"
           ghost
           @click="emit('select-action', node)"
-        >
-          <template #icon>
-            <check-circle-outlined v-if="actionButtonType === 'success'" />
-            <close-circle-outlined v-else />
-          </template>
-          {{ node.action_details.name }}
+          >
+            <template #icon>
+              <check-circle-outlined v-if="actionButtonType === 'success'" />
+              <loading-outlined v-else-if="actionButtonType === 'warning'" />
+              <close-circle-outlined v-else />
+            </template>
+            {{ node.action_details.name }}
         </n-button>
 
         <n-button v-if="actionFlowRows.length > 0" size="small" @click="emit('toggle-action')">
@@ -286,6 +290,7 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
           >
             <template #icon>
               <check-circle-outlined v-if="row.item.status === 'success'" />
+              <loading-outlined v-else-if="row.item.status === 'running'" />
               <close-circle-outlined v-else />
             </template>
             [{{ getFlowItemShortLabel(row.item.type) }}] {{ row.item.name }}

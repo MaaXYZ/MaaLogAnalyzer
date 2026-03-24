@@ -91,6 +91,9 @@ export class NodeStatisticsAnalyzer {
         if (duration < 0 || duration > 3600000) { // 超过1小时视为异常
           continue
         }
+        if (node.status === 'running') {
+          continue
+        }
 
         // 获取或创建统计记录
         if (!statsMap.has(node.name)) {
@@ -106,7 +109,7 @@ export class NodeStatisticsAnalyzer {
 
         if (node.status === 'success') {
           stats.successCount++
-        } else {
+        } else if (node.status === 'failed') {
           stats.failCount++
         }
       }
@@ -125,7 +128,8 @@ export class NodeStatisticsAnalyzer {
       const avgDuration = totalDuration / count
       const minDuration = Math.min(...durations)
       const maxDuration = Math.max(...durations)
-      const successRate = (stats.successCount / (stats.successCount + stats.failCount)) * 100
+      const settledCount = stats.successCount + stats.failCount
+      const successRate = settledCount > 0 ? (stats.successCount / settledCount) * 100 : 0
 
       result.push({
         name,
@@ -232,10 +236,10 @@ export class NodeStatisticsAnalyzer {
           }
         }
 
-        // 统计成功/失败
+        // 统计成功/失败（运行中节点不计入）
         if (node.status === 'success') {
           stats.successCount++
-        } else {
+        } else if (node.status === 'failed') {
           stats.failCount++
         }
       }

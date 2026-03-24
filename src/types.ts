@@ -50,7 +50,7 @@ export interface RecognitionAttempt {
   name: string
   ts: string
   end_ts?: string
-  status: 'success' | 'failed'
+  status: 'success' | 'failed' | 'running'
   reco_details?: RecognitionDetail
   nested_nodes?: RecognitionAttempt[]
   error_image?: string
@@ -63,7 +63,7 @@ export interface NestedActionGroup {
   name: string
   ts: string
   end_ts?: string
-  status: 'success' | 'failed'
+  status: 'success' | 'failed' | 'running'
   nested_actions: NestedActionNode[]
   task_details?: {
     task_id: number
@@ -86,7 +86,7 @@ export interface NestedActionNode {
   name: string
   ts: string
   end_ts?: string
-  status: 'success' | 'failed'
+  status: 'success' | 'failed' | 'running'
   reco_details?: RecognitionDetail
   action_details?: ActionDetail
   recognitions?: RecognitionAttempt[]
@@ -98,7 +98,7 @@ export interface NodeInfo {
   name: string
   ts: string
   end_ts?: string
-  status: 'success' | 'failed'
+  status: 'success' | 'failed' | 'running'
   task_id: number
   reco_details?: RecognitionDetail
   action_details?: ActionDetail
@@ -128,7 +128,7 @@ export interface RecognitionDetail {
 // 合并后的识别项（供 NodeCard 子组件共用）
 export interface MergedRecognitionItem {
   name: string
-  status: 'success' | 'failed' | 'not-recognized'
+  status: 'success' | 'failed' | 'running' | 'not-recognized'
   isRoundSeparator?: boolean
   roundIndex?: number
   attemptIndex?: number  // 在 recognition flow 中的索引
@@ -160,7 +160,7 @@ export interface UnifiedFlowItem {
   id: string
   type: UnifiedFlowType
   name: string
-  status: 'success' | 'failed'
+  status: 'success' | 'failed' | 'running'
   ts: string
   end_ts?: string
   task_id?: number

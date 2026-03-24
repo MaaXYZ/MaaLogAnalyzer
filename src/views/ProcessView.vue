@@ -12,6 +12,7 @@ import type { TaskInfo, NodeInfo } from '../types'
 import type { LogParser } from '../utils/logParser'
 import { isTauri, isVSCode } from '../utils/platform'
 import { formatDuration, extractTime } from '../utils/formatDuration'
+import { getRuntimeStatusTagType, getRuntimeStatusText } from '../utils/runtimeStatus'
 import { getSettings } from '../utils/settings'
 
 const settings = getSettings()
@@ -124,6 +125,12 @@ const emit = defineEmits<{
   'open-task-drawer': []
   'scroll-done': []
 }>()
+
+const getNodeNavDotClass = (status: NodeInfo['status']) => {
+  if (status === 'success') return 'nav-dot-success'
+  if (status === 'running') return 'nav-dot-running'
+  return 'nav-dot-failed'
+}
 
 // 当前选中的任务索引
 const activeTaskIndex = ref(0)
@@ -1167,8 +1174,8 @@ const handleFlowItemClick = (node: NodeInfo, flowItemId: string) => {
                             </n-text>
                           </n-flex>
                           <n-flex align="center" style="gap: 8px">
-                            <n-tag size="small" :type="node.status === 'success' ? 'success' : 'error'">
-                              {{ node.status === 'success' ? '成功' : '失败' }}
+                            <n-tag size="small" :type="getRuntimeStatusTagType(node.status)">
+                              {{ getRuntimeStatusText(node.status) }}
                             </n-tag>
                             <n-text depth="3" style="font-size: 11px">
                               #{{ index + 1 }}
@@ -1178,14 +1185,14 @@ const handleFlowItemClick = (node: NodeInfo, flowItemId: string) => {
 
                         <!-- 紧凑模式：单行，小字号 -->
                         <n-flex v-else-if="settings.displayMode === 'compact'" align="center" style="gap: 6px">
-                          <span class="nav-status-dot" :class="node.status === 'success' ? 'nav-dot-success' : 'nav-dot-failed'" />
+                          <span class="nav-status-dot" :class="getNodeNavDotClass(node.status)" />
                           <n-text style="font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ node.name || '未命名节点' }}</n-text>
                           <n-text depth="3" style="font-size: 10px; flex-shrink: 0">{{ extractTime(node.ts) }}</n-text>
                         </n-flex>
 
                         <!-- 树形模式：紧凑，带时间 -->
                         <n-flex v-else align="center" style="gap: 4px">
-                          <span class="nav-status-dot" :class="node.status === 'success' ? 'nav-dot-success' : 'nav-dot-failed'" />
+                          <span class="nav-status-dot" :class="getNodeNavDotClass(node.status)" />
                           <n-text style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1">{{ node.name || '未命名节点' }}</n-text>
                           <n-text depth="3" style="font-size: 10px; flex-shrink: 0">{{ extractTime(node.ts) }}</n-text>
                         </n-flex>
@@ -1276,6 +1283,10 @@ const handleFlowItemClick = (node: NodeInfo, flowItemId: string) => {
 
 .nav-dot-success {
   background: #63e2b7;
+}
+
+.nav-dot-running {
+  background: #f0a020;
 }
 
 .nav-dot-failed {

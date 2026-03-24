@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { NButton, NFlex, NText } from 'naive-ui'
-import { CheckCircleOutlined, CloseCircleOutlined } from '@vicons/antd'
+import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@vicons/antd'
 import type { NodeInfo, MergedRecognitionItem } from '../types'
 import {
   buildNodeActionLevelRecognitionItems,
+  buildNodeActionRootItem,
   buildNodeRecognitionAttempts,
   buildNodeTaskFlowItems,
 } from '../utils/nodeFlow'
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 const recognitionAttempts = computed(() => buildNodeRecognitionAttempts(props.node))
 const actionLevelRecoItems = computed(() => buildNodeActionLevelRecognitionItems(props.node))
 const taskItems = computed(() => buildNodeTaskFlowItems(props.node))
+const actionRootItem = computed(() => buildNodeActionRootItem(props.node))
 
 // Recognition 摘要
 const recognitionSummary = computed(() => {
@@ -46,16 +48,22 @@ const taskSummary = computed(() => {
   if (groups.length === 0) return null
   let totalNodes = 0
   let successNodes = 0
+  let failedNodes = 0
+  let runningNodes = 0
   for (const g of groups) {
     const nestedNodes = (g.children ?? []).filter(item => item.type === 'pipeline_node')
     for (const n of nestedNodes) {
       totalNodes++
       if (n.status === 'success') successNodes++
+      else if (n.status === 'failed') failedNodes++
+      else if (n.status === 'running') runningNodes++
     }
   }
   return {
     totalNodes,
-    allSuccess: totalNodes === successNodes
+    allSuccess: totalNodes === successNodes,
+    failedNodes,
+    runningNodes,
   }
 })
 
@@ -72,10 +80,20 @@ const taskGroups = computed(() => {
 })
 
 const actionSummary = computed(() => {
+  if (actionRootItem.value) {
+    return {
+      name: actionRootItem.value.name,
+      status: actionRootItem.value.status,
+      flowItemId: actionRootItem.value.id,
+      useFlowItem: true,
+    }
+  }
   if (!props.node.action_details) return null
   return {
     name: props.node.action_details.name,
-    success: props.node.action_details.success,
+    status: props.node.status === 'running' ? 'running' : (props.node.action_details.success ? 'success' : 'failed'),
+    flowItemId: null,
+    useFlowItem: false,
   }
 })
 
@@ -159,22 +177,23 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
       <n-flex v-else-if="section === 'task' && taskSummary" align="center" style="gap: 6px">
         <n-text depth="3" style="font-size: 12px">Task:</n-text>
         <n-text style="font-size: 12px">
-          {{ taskSummary.totalNodes }} nodes, {{ taskSummary.allSuccess ? 'all ✓' : 'some ✗' }}
+          {{ taskSummary.totalNodes }} nodes, {{ taskSummary.allSuccess ? 'all ✓' : taskSummary.failedNodes > 0 ? 'some ✗' : taskSummary.runningNodes > 0 ? 'running…' : 'partial' }}
         </n-text>
-        <n-button
-          v-for="group in taskGroups"
-          :key="`compact-task-${group.groupIdx}-${group.taskId}`"
-          text
-          size="tiny"
-          :type="group.status === 'success' ? 'success' : 'error'"
-          @click="emit('select-flow-item', node, group.flowItemId)"
-        >
-          <template #icon>
-            <check-circle-outlined v-if="group.status === 'success'" />
-            <close-circle-outlined v-else />
-          </template>
-          {{ group.name }}
-        </n-button>
+          <n-button
+            v-for="group in taskGroups"
+            :key="`compact-task-${group.groupIdx}-${group.taskId}`"
+            text
+            size="tiny"
+            :type="group.status === 'success' ? 'success' : group.status === 'running' ? 'warning' : 'error'"
+            @click="emit('select-flow-item', node, group.flowItemId)"
+          >
+            <template #icon>
+              <check-circle-outlined v-if="group.status === 'success'" />
+              <loading-outlined v-else-if="group.status === 'running'" />
+              <close-circle-outlined v-else />
+            </template>
+            {{ group.name }}
+          </n-button>
       </n-flex>
 
       <n-flex v-else-if="section === 'action' && actionSummary" align="center" style="gap: 6px">
@@ -182,11 +201,12 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
         <n-button
           text
           size="tiny"
-          :type="actionSummary.success ? 'success' : 'error'"
-          @click="emit('select-action', node)"
+          :type="actionSummary.status === 'success' ? 'success' : actionSummary.status === 'running' ? 'warning' : 'error'"
+          @click="actionSummary.useFlowItem && actionSummary.flowItemId ? emit('select-flow-item', node, actionSummary.flowItemId) : emit('select-action', node)"
         >
           <template #icon>
-            <check-circle-outlined v-if="actionSummary.success" />
+            <check-circle-outlined v-if="actionSummary.status === 'success'" />
+            <loading-outlined v-else-if="actionSummary.status === 'running'" />
             <close-circle-outlined v-else />
           </template>
           {{ actionSummary.name }}

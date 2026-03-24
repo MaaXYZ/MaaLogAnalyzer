@@ -19,6 +19,7 @@ export const getFlowItemButtonType = (
   item: Pick<UnifiedFlowItem, 'status' | 'type'>
 ): FlowItemButtonType => {
   if (item.status === 'success') return 'success'
+  if (item.status === 'running') return 'info'
   if (item.type === 'recognition' || item.type === 'recognition_node') return 'warning'
   return 'error'
 }

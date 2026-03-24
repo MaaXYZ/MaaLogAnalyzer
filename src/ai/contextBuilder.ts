@@ -36,7 +36,7 @@ interface SignalLineItem {
 interface TimelineRecoItem {
   reco_id: number
   name: string
-  status: 'success' | 'failed'
+  status: 'success' | 'failed' | 'running'
 }
 
 interface TimelineNextItem {
@@ -48,7 +48,7 @@ interface TimelineNextItem {
 interface TimelineNodeItem {
   node_id: number
   name: string
-  status: 'success' | 'failed'
+  status: 'success' | 'failed' | 'running'
   ts: string
   action: string
   actionName: string

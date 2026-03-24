@@ -182,6 +182,7 @@ type ButtonType = 'default' | 'primary' | 'info' | 'success' | 'warning' | 'erro
 // 获取按钮类型
 const getButtonType = (status: string): ButtonType => {
   if (status === 'success') return 'success'
+  if (status === 'running') return 'info'
   if (status === 'failed') return 'warning'
   return 'default'
 }
@@ -189,6 +190,7 @@ const getButtonType = (status: string): ButtonType => {
 // 动作按钮类型
 const actionButtonType = computed<ButtonType>(() => {
   if (!props.node.action_details) return 'default'
+  if (props.node.status === 'running') return 'warning'
   return props.node.action_details.success ? 'success' : 'error'
 })
 
@@ -285,6 +287,10 @@ const actionButtonType = computed<ButtonType>(() => {
 
 .node-card-success::before {
   background: #63e2b7;
+}
+
+.node-card-running::before {
+  background: #f0a020;
 }
 
 .node-card-failed::before {

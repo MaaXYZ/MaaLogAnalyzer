@@ -10,6 +10,7 @@ import { isTauri } from '../utils/platform'
 import { useIsMobile } from '../composables/useIsMobile'
 import { getSettings } from '../utils/settings'
 import { buildNodeFlowItems } from '../utils/nodeFlow'
+import { getRuntimeStatusTagType, getRuntimeStatusText } from '../utils/runtimeStatus'
 
 const { isMobile } = useIsMobile()
 const settings = getSettings()
@@ -76,7 +77,7 @@ const resolveSyntheticFlowItem = (node: NodeInfo, flowItemId: string): UnifiedFl
       id: flowItemId,
       type: 'action',
       name: action.name || node.name,
-      status: action.success ? 'success' : 'failed',
+      status: node.status === 'running' ? 'running' : (action.success ? 'success' : 'failed'),
       ts: action.ts || action.end_ts || node.end_ts || node.ts,
       end_ts: action.end_ts,
       action_id: action.action_id,
@@ -100,15 +101,21 @@ const isFlowItemSelected = computed(() => !!selectedFlowItem.value)
 // 节点状态标签类型
 const statusType = computed(() => {
   if (!props.selectedNode) return 'default'
-  return props.selectedNode.status === 'success' ? 'success' : 'error'
+  return getRuntimeStatusTagType(props.selectedNode.status)
 })
 
 // 状态文本和图标
 const statusInfo = computed(() => {
   if (!props.selectedNode) return { text: '未选择', icon: null }
   const status = props.selectedNode.status
+  if (status === 'running') {
+    return {
+      text: getRuntimeStatusText(status),
+      icon: null
+    }
+  }
   return {
-    text: status === 'success' ? '成功' : '失败',
+    text: getRuntimeStatusText(status),
     icon: status === 'success' ? CheckCircleOutlined : CloseCircleOutlined
   }
 })
@@ -181,6 +188,14 @@ const currentActionDetails = computed(() => {
 })
 
 const hasAction = computed(() => !!currentActionDetails.value)
+const currentActionStatus = computed(() => {
+  const action = currentActionItem.value
+  if (action) return action.status
+  if (currentActionDetails.value) {
+    return currentActionDetails.value.success ? 'success' : 'failed'
+  }
+  return null
+})
 
 const actionExecutionTime = computed(() => {
   const actionItem = currentActionItem.value as any
@@ -382,8 +397,8 @@ const copyToClipboard = (text: string) => {
             </n-descriptions-item>
 
             <n-descriptions-item label="执行结果">
-              <n-tag :type="currentActionDetails?.success ? 'success' : 'error'" size="small">
-                {{ currentActionDetails?.success ? '成功' : '失败' }}
+              <n-tag :type="currentActionStatus ? getRuntimeStatusTagType(currentActionStatus) : 'default'" size="small">
+                {{ currentActionStatus ? getRuntimeStatusText(currentActionStatus) : '-' }}
               </n-tag>
             </n-descriptions-item>
 
@@ -444,8 +459,8 @@ const copyToClipboard = (text: string) => {
                 <span style="font-weight: 500; font-size: 15px">
                   {{ selectedFlowItem.name }}
                 </span>
-                <n-tag :type="selectedFlowItem.status === 'success' ? 'success' : 'error'" size="small">
-                  {{ selectedFlowItem.status === 'success' ? '成功' : '失败' }}
+                <n-tag :type="getRuntimeStatusTagType(selectedFlowItem.status)" size="small">
+                  {{ getRuntimeStatusText(selectedFlowItem.status) }}
                 </n-tag>
               </n-flex>
             </n-descriptions-item>

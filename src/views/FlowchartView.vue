@@ -14,6 +14,7 @@ import { useIsMobile } from '../composables/useIsMobile'
 import { isTauri } from '../utils/platform'
 import { getSettings, saveSettings } from '../utils/settings'
 import { buildNodeFlowItems, buildNodeRecognitionAttempts } from '../utils/nodeFlow'
+import { getRuntimeStatusTagType, getRuntimeStatusText } from '../utils/runtimeStatus'
 
 const convertFileSrc = (filePath: string) => {
   if (!isTauri()) return filePath
@@ -299,6 +300,12 @@ const executionTimeline = computed(() => {
   }))
 })
 
+const getTimelineDotClass = (status: NodeInfo['status']) => {
+  if (status === 'success') return 'dot-success'
+  if (status === 'running') return 'dot-running'
+  return 'dot-failed'
+}
+
 // The canvas node ID that corresponds to the selected timeline item
 const selectedFlowNodeId = computed(() => {
   if (selectedTimelineIndex.value == null) return null
@@ -442,7 +449,11 @@ function getBaseEdgeStyle(d: FlowEdgeData) {
     return style
   }
 
-  const color = d.edgeStatus === 'failed' ? '#d03050' : '#18a058'
+  const color = d.edgeStatus === 'failed'
+    ? '#d03050'
+    : d.edgeStatus === 'running'
+      ? '#f0a020'
+      : '#18a058'
   const style: Record<string, string | number> = { stroke: color, strokeWidth: 3, opacity: 1 }
   if (d.jump_back) {
     style.strokeDasharray = '8 4'
@@ -833,7 +844,7 @@ const onPaneClick = () => {
               <span class="nav-name">{{ item.name }}</span>
               <span
                 class="nav-status-dot"
-                :class="item.status === 'success' ? 'dot-success' : 'dot-failed'"
+                :class="getTimelineDotClass(item.status)"
               />
             </div>
           </div>
@@ -897,8 +908,8 @@ const onPaneClick = () => {
                 执行 #{{ popoverNodeData.executionOrder[idx] ?? idx + 1 }}
               </div>
               <div class="popover-row">
-                <n-tag size="tiny" :type="info.status === 'success' ? 'success' : 'error'">
-                  {{ info.status === 'success' ? '成功' : '失败' }}
+                <n-tag size="tiny" :type="getRuntimeStatusTagType(info.status)">
+                  {{ getRuntimeStatusText(info.status) }}
                 </n-tag>
                 <span class="popover-time">{{ info.ts }}</span>
                 <span class="popover-locate" @click="navigateToNode(info)">定位</span>
@@ -913,8 +924,8 @@ const onPaneClick = () => {
               <div v-if="info.action_details" class="popover-row">
                 <span class="popover-label">动作</span>
                 <span>{{ info.action_details.action }}</span>
-                <n-tag size="tiny" :type="info.action_details.success ? 'success' : 'error'" style="margin-left: 4px">
-                  {{ info.action_details.success ? '成功' : '失败' }}
+                <n-tag size="tiny" :type="info.status === 'running' ? 'warning' : info.action_details.success ? 'success' : 'error'" style="margin-left: 4px">
+                  {{ info.status === 'running' ? getRuntimeStatusText(info.status) : info.action_details.success ? '成功' : '失败' }}
                 </n-tag>
               </div>
               <img
@@ -953,7 +964,7 @@ const onPaneClick = () => {
               <span class="nav-name">{{ item.name }}</span>
               <span
                 class="nav-status-dot"
-                :class="item.status === 'success' ? 'dot-success' : 'dot-failed'"
+                :class="getTimelineDotClass(item.status)"
               />
             </div>
           </div>
@@ -1044,6 +1055,10 @@ const onPaneClick = () => {
 
 .nav-status-dot.dot-success {
   background: #18a058;
+}
+
+.nav-status-dot.dot-running {
+  background: #f0a020;
 }
 
 .nav-status-dot.dot-failed {
@@ -1190,6 +1205,9 @@ body {
   --flowchart-success-bg: #1a3a2a;
   --flowchart-success-border: #18a058;
   --flowchart-success-text: #a0d8b0;
+  --flowchart-running-bg: #3a331a;
+  --flowchart-running-border: #f0a020;
+  --flowchart-running-text: #f5d38f;
   --flowchart-failed-bg: #3a1a1a;
   --flowchart-failed-border: #d03050;
   --flowchart-failed-text: #d8a0a0;
@@ -1222,6 +1240,9 @@ body {
     --flowchart-success-bg: #e8f5e9;
     --flowchart-success-border: #18a058;
     --flowchart-success-text: #1a3a1a;
+    --flowchart-running-bg: #fff6e5;
+    --flowchart-running-border: #f0a020;
+    --flowchart-running-text: #5c3b00;
     --flowchart-failed-bg: #fdecea;
     --flowchart-failed-border: #d03050;
     --flowchart-failed-text: #3a1a1a;
@@ -1253,6 +1274,9 @@ body.force-light {
   --flowchart-success-bg: #e8f5e9;
   --flowchart-success-border: #18a058;
   --flowchart-success-text: #1a3a1a;
+  --flowchart-running-bg: #fff6e5;
+  --flowchart-running-border: #f0a020;
+  --flowchart-running-text: #5c3b00;
   --flowchart-failed-bg: #fdecea;
   --flowchart-failed-border: #d03050;
   --flowchart-failed-text: #3a1a1a;

@@ -73,6 +73,12 @@ defineProps<{
   color: var(--flowchart-failed-text);
 }
 
+.flowchart-node.status-running {
+  background: var(--flowchart-running-bg);
+  border: 2px solid var(--flowchart-running-border);
+  color: var(--flowchart-running-text);
+}
+
 .flowchart-node.status-not-executed {
   background: var(--flowchart-notexec-bg);
   border: 2px dashed var(--flowchart-notexec-border);
