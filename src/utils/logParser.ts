@@ -738,16 +738,89 @@ export class LogParser {
       finishedRecognitionKeys.add(key)
       return attempt
     }
-    const dedupeRecognitionAttempts = (items: RecognitionAttempt[]) => {
-      const seen = new Set<string>()
-      const result: RecognitionAttempt[] = []
-      for (const item of items) {
-        const key = `${item.reco_id}|${item.name}|${item.ts}|${item.status}`
-        if (seen.has(key)) continue
-        seen.add(key)
-        result.push(item)
+    const mergeRecognitionOrderMeta = (target: RecognitionAttempt, source: RecognitionAttempt) => {
+      const targetMeta = recognitionOrderMeta.get(target)
+      const sourceMeta = recognitionOrderMeta.get(source)
+      if (!targetMeta && !sourceMeta) return
+      recognitionOrderMeta.set(target, {
+        startSeq:
+          targetMeta && sourceMeta
+            ? Math.min(targetMeta.startSeq, sourceMeta.startSeq)
+            : (targetMeta?.startSeq ?? sourceMeta!.startSeq),
+        endSeq:
+          targetMeta && sourceMeta
+            ? Math.max(targetMeta.endSeq, sourceMeta.endSeq)
+            : (targetMeta?.endSeq ?? sourceMeta!.endSeq)
+      })
+    }
+    const mergeRecognitionAttempts = (
+      left: RecognitionAttempt,
+      right: RecognitionAttempt
+    ): RecognitionAttempt => {
+      const leftEnded = left.status !== 'running'
+      const rightEnded = right.status !== 'running'
+      const leftEndTs = left.end_ts ?? ''
+      const rightEndTs = right.end_ts ?? ''
+
+      let preferred = left
+      let secondary = right
+
+      if (rightEnded && !leftEnded) {
+        preferred = right
+        secondary = left
+      } else if (rightEnded === leftEnded && rightEndTs > leftEndTs) {
+        preferred = right
+        secondary = left
       }
-      return result
+
+      if (!preferred.name && secondary.name) {
+        preferred.name = secondary.name
+      }
+      if (!preferred.ts && secondary.ts) {
+        preferred.ts = secondary.ts
+      }
+      if (secondary.end_ts && (!preferred.end_ts || secondary.end_ts > preferred.end_ts)) {
+        preferred.end_ts = secondary.end_ts
+      }
+      if (preferred.status === 'running' && secondary.status !== 'running') {
+        preferred.status = secondary.status
+      }
+      if (!preferred.reco_details && secondary.reco_details) {
+        preferred.reco_details = secondary.reco_details
+      }
+      if (!preferred.error_image && secondary.error_image) {
+        preferred.error_image = secondary.error_image
+      }
+      if (!preferred.vision_image && secondary.vision_image) {
+        preferred.vision_image = secondary.vision_image
+      }
+
+      const mergedNestedNodes = [
+        ...(preferred.nested_nodes ?? []),
+        ...(secondary.nested_nodes ?? [])
+      ]
+      preferred.nested_nodes = mergedNestedNodes.length > 0
+        ? dedupeRecognitionAttempts(mergedNestedNodes)
+        : undefined
+
+      mergeRecognitionOrderMeta(preferred, secondary)
+      return preferred
+    }
+    const dedupeRecognitionAttempts = (items: RecognitionAttempt[]) => {
+      const mergedByRecoId = new Map<number, RecognitionAttempt>()
+      const order: number[] = []
+      for (const item of items) {
+        const existing = mergedByRecoId.get(item.reco_id)
+        if (!existing) {
+          mergedByRecoId.set(item.reco_id, item)
+          order.push(item.reco_id)
+          continue
+        }
+        mergedByRecoId.set(item.reco_id, mergeRecognitionAttempts(existing, item))
+      }
+      return order
+        .map((recoId) => mergedByRecoId.get(recoId))
+        .filter((item): item is RecognitionAttempt => !!item)
     }
     const hasRecognitionByRecoId = (items: RecognitionAttempt[], recoId: number): boolean => {
       return items.some(item => item.reco_id === recoId)
