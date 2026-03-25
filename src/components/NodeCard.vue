@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { NCard, NButton, NFlex, NText } from 'naive-ui'
+import { NCard, NButton, NFlex, NText, NPopover } from 'naive-ui'
 import type { NodeInfo, RecognitionAttempt, MergedRecognitionItem } from '../types'
 import { getSettings } from '../utils/settings'
 import { extractTime } from '../utils/formatDuration'
@@ -14,6 +14,9 @@ const settings = getSettings()
 
 const props = defineProps<{
   node: NodeInfo
+  isVscodeLaunchEmbed?: boolean
+  bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
+  bridgeRevealTask?: ((task: string) => Promise<void>) | null
 }>()
 
 const emit = defineEmits<{
@@ -60,6 +63,84 @@ const cardClass = computed(() => {
 // 点击节点
 const handleNodeClick = () => {
   emit('select-node', props.node)
+}
+
+const taskDocPopoverVisible = ref(false)
+const taskDocHovering = ref(false)
+const taskDocLoading = ref(false)
+const taskDocLoaded = ref(false)
+const taskDocText = ref('')
+let taskDocLoadToken = 0
+
+const normalizeTaskName = (value: unknown): string => {
+  if (typeof value !== 'string') return ''
+  return value.trim()
+}
+
+const nodeTaskName = computed(() => normalizeTaskName(props.node.name))
+
+const resetTaskDocPopover = () => {
+  taskDocPopoverVisible.value = false
+  taskDocHovering.value = false
+  taskDocLoading.value = false
+  taskDocLoaded.value = false
+  taskDocText.value = ''
+}
+
+watch(() => props.node.node_id, () => {
+  resetTaskDocPopover()
+}, { flush: 'sync' })
+
+const handleTaskDocHoverEnter = () => {
+  taskDocHovering.value = true
+  if (!props.isVscodeLaunchEmbed || !props.bridgeRequestTaskDoc) return
+  if (taskDocText.value) {
+    taskDocPopoverVisible.value = true
+    return
+  }
+  if (taskDocLoading.value || taskDocLoaded.value) return
+
+  const task = nodeTaskName.value
+  if (!task) return
+
+  taskDocLoading.value = true
+  const token = ++taskDocLoadToken
+  void props.bridgeRequestTaskDoc(task)
+    .then((doc) => {
+      if (token !== taskDocLoadToken) return
+      const normalized = normalizeTaskName(doc)
+      taskDocLoaded.value = true
+      if (!normalized) {
+        taskDocPopoverVisible.value = false
+        return
+      }
+      taskDocText.value = normalized
+      if (taskDocHovering.value) {
+        taskDocPopoverVisible.value = true
+      }
+    })
+    .catch(() => {
+      if (token !== taskDocLoadToken) return
+      taskDocLoaded.value = false
+      taskDocPopoverVisible.value = false
+    })
+    .finally(() => {
+      if (token === taskDocLoadToken) {
+        taskDocLoading.value = false
+      }
+    })
+}
+
+const handleTaskDocHoverLeave = () => {
+  taskDocHovering.value = false
+  taskDocPopoverVisible.value = false
+}
+
+const handleRevealClick = () => {
+  if (!props.isVscodeLaunchEmbed || !props.bridgeRevealTask) return
+  const task = nodeTaskName.value
+  if (!task) return
+  void props.bridgeRevealTask(task)
 }
 
 // 切换嵌套节点的显示/隐藏
@@ -210,11 +291,34 @@ const actionButtonType = computed<ButtonType>(() => {
       <!-- Header: 节点名称按钮 + 时间 -->
       <template #header>
         <n-flex align="center" style="gap: 8px">
-          <n-button
-            size="small"
-            @click="handleNodeClick"
+          <n-popover
+            trigger="manual"
+            :show="taskDocPopoverVisible"
+            :disabled="!taskDocText"
+            :show-arrow="true"
+            style="max-width: 420px"
           >
-            {{ node.name }}
+            <template #trigger>
+              <span @mouseenter="handleTaskDocHoverEnter" @mouseleave="handleTaskDocHoverLeave">
+                <n-button
+                  size="small"
+                  @click="handleNodeClick"
+                >
+                  {{ node.name }}
+                </n-button>
+              </span>
+            </template>
+            <n-text style="white-space: pre-wrap; line-height: 1.5; font-size: 12px">
+              {{ taskDocText }}
+            </n-text>
+          </n-popover>
+          <n-button
+            v-if="isVscodeLaunchEmbed"
+            size="small"
+            secondary
+            @click.stop="handleRevealClick"
+          >
+            Reveal
           </n-button>
           <n-text depth="3" style="font-size: 12px">
             {{ extractTime(node.ts) }}
@@ -228,6 +332,8 @@ const actionButtonType = computed<ButtonType>(() => {
           v-if="settings.displayMode === 'detailed'"
           :node="node"
           :merged-recognition-list="mergedRecognitionList"
+          :is-vscode-launch-embed="isVscodeLaunchEmbed"
+          :bridge-request-task-doc="bridgeRequestTaskDoc"
           :recognition-expanded="effectiveRecognitionExpanded"
           :action-expanded="effectiveActionExpanded"
           :default-collapse-nested-recognition="settings.defaultCollapseNestedRecognition"
@@ -247,6 +353,8 @@ const actionButtonType = computed<ButtonType>(() => {
           v-else-if="settings.displayMode === 'compact'"
           :node="node"
           :merged-recognition-list="mergedRecognitionList"
+          :is-vscode-launch-embed="isVscodeLaunchEmbed"
+          :bridge-request-task-doc="bridgeRequestTaskDoc"
           @select-action="emit('select-action', $event)"
           @select-recognition="(n, i) => emit('select-recognition', n, i)"
           @select-flow-item="(n, id) => emit('select-flow-item', n, id)"
@@ -255,6 +363,8 @@ const actionButtonType = computed<ButtonType>(() => {
           v-else
           :node="node"
           :merged-recognition-list="mergedRecognitionList"
+          :is-vscode-launch-embed="isVscodeLaunchEmbed"
+          :bridge-request-task-doc="bridgeRequestTaskDoc"
           :recognition-expanded="effectiveRecognitionExpanded"
           :action-expanded="effectiveActionExpanded"
           :default-collapse-nested-recognition="settings.defaultCollapseNestedRecognition"

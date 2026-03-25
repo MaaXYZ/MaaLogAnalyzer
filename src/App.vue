@@ -255,6 +255,16 @@ interface QueryDetailResult {
   data: unknown
 }
 
+interface QueryNodeResult {
+  task: string
+  data: string | null
+}
+
+interface QueryTaskDocResult {
+  task: string
+  doc: string
+}
+
 interface BridgeCachedImageRefs {
   raw: number | null
   draws: number[]
@@ -271,7 +281,15 @@ interface SelectedRecognitionQueryTarget {
   recoId: number
 }
 
+interface BridgeOpenCropRequest {
+  cachedImageId?: number | null
+  dataUrl?: string | null
+  taskId?: number | null
+  recoId?: number | null
+}
+
 const BRIDGE_IMAGE_CACHE_MAX_ITEMS = 50
+const BRIDGE_TASK_DOC_CACHE_MAX_ITEMS = 80
 const REALTIME_PARSE_INTERVAL_MS = 16
 const shouldMaintainRealtimeTextTargets = showTextSearchView
 
@@ -386,8 +404,12 @@ const selectedTask = ref<TaskInfo | null>(null)
 const selectedNode = ref<NodeInfo | null>(null)
 const selectedFlowItemId = ref<string | null>(null)
 const bridgeRecognitionImages = ref<BridgeRecognitionImageState | null>(null)
+const bridgeRecognitionImageRefs = ref<BridgeCachedImageRefs | null>(null)
 const bridgeRecognitionLoading = ref(false)
 const bridgeRecognitionError = ref<string | null>(null)
+const bridgeNodeDefinition = ref<string | null>(null)
+const bridgeNodeDefinitionLoading = ref(false)
+const bridgeNodeDefinitionError = ref<string | null>(null)
 const loading = ref(false)
 const pendingScrollNodeId = ref<number | null>(null)
 const parseProgress = ref(0)
@@ -505,6 +527,12 @@ const toPositiveIntegerArray = (value: unknown): number[] => {
     result.push(normalized)
   }
   return result
+}
+
+const toTrimmedNonEmptyString = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized ? normalized : null
 }
 
 const getSelectedRecognitionTarget = (): SelectedRecognitionQueryTarget | null => {
@@ -666,7 +694,9 @@ const stopRealtimeSession = () => {
   realtimeReparseRequested.value = false
   realtimeParsing.value = false
   realtimeStreaming.value = false
+  clearBridgeNodeDefinitionState()
   clearBridgeImageCache()
+  clearBridgeTaskDocCache()
   if (realtimeParseTimer != null) {
     window.clearTimeout(realtimeParseTimer)
     realtimeParseTimer = null
@@ -728,6 +758,8 @@ const handleRealtimeStart = (params: unknown) => {
   }
   realtimeReparseRequested.value = false
   clearBridgeImageCache()
+  clearBridgeTaskDocCache()
+  clearBridgeNodeDefinitionState()
   clearDeferredTextSearchTargets()
   setTextSearchLoadedTargets([])
 
@@ -917,13 +949,22 @@ bridge = useBridge({
 
 let bridgeRecoLoadToken = 0
 const bridgeImageDataUrlCache = new Map<string, string>()
+const bridgeTaskDocCache = new Map<string, string | null>()
 
 const toBridgeImageCacheKey = (sessionId: string, taskId: number, imageRefId: number): string => {
   return `${sessionId}:${taskId}:${imageRefId}`
 }
 
+const toBridgeTaskDocCacheKey = (sessionId: string, task: string): string => {
+  return `${sessionId}:${task}`
+}
+
 const clearBridgeImageCache = () => {
   bridgeImageDataUrlCache.clear()
+}
+
+const clearBridgeTaskDocCache = () => {
+  bridgeTaskDocCache.clear()
 }
 
 const getBridgeImageFromCache = (key: string): string | null => {
@@ -933,6 +974,14 @@ const getBridgeImageFromCache = (key: string): string | null => {
   bridgeImageDataUrlCache.delete(key)
   bridgeImageDataUrlCache.set(key, cached)
   return cached
+}
+
+const getBridgeTaskDocFromCache = (key: string): string | null | undefined => {
+  if (!bridgeTaskDocCache.has(key)) return undefined
+  const cached = bridgeTaskDocCache.get(key)
+  bridgeTaskDocCache.delete(key)
+  bridgeTaskDocCache.set(key, cached ?? null)
+  return cached ?? null
 }
 
 const saveBridgeImageToCache = (key: string, dataUrl: string) => {
@@ -949,10 +998,141 @@ const saveBridgeImageToCache = (key: string, dataUrl: string) => {
   }
 }
 
+const saveBridgeTaskDocToCache = (key: string, doc: string | null) => {
+  if (bridgeTaskDocCache.has(key)) {
+    bridgeTaskDocCache.delete(key)
+  }
+  bridgeTaskDocCache.set(key, doc)
+
+  while (bridgeTaskDocCache.size > BRIDGE_TASK_DOC_CACHE_MAX_ITEMS) {
+    const oldestKey = bridgeTaskDocCache.keys().next().value as string | undefined
+    if (oldestKey === undefined) break
+    bridgeTaskDocCache.delete(oldestKey)
+  }
+}
+
 const clearBridgeRecognitionState = () => {
+  bridgeRecognitionImageRefs.value = null
   bridgeRecognitionImages.value = null
   bridgeRecognitionLoading.value = false
   bridgeRecognitionError.value = null
+}
+
+const clearBridgeNodeDefinitionState = () => {
+  bridgeNodeDefinition.value = null
+  bridgeNodeDefinitionLoading.value = false
+  bridgeNodeDefinitionError.value = null
+}
+
+const getBridgeSessionId = (): string | null => {
+  if (!isVscodeLaunchEmbed || !bridge?.enabled) return null
+  return toTrimmedNonEmptyString(realtimeSession.value?.sessionId)
+}
+
+const queryBridgeNode = async (sessionId: string, task: string): Promise<QueryNodeResult> => {
+  if (!bridge?.enabled) {
+    throw new Error('Bridge is disabled')
+  }
+  const result = await bridge.sendRequest('query.node', {
+    sessionId,
+    task,
+  }, { timeoutMs: 12000 })
+  const record = asRecord(result)
+  if (!record) {
+    throw new Error('Invalid query.node response')
+  }
+  const returnedTask = toTrimmedNonEmptyString(record.task) ?? task
+  const data = record.data
+  return {
+    task: returnedTask,
+    data: typeof data === 'string' ? data : data == null ? null : JSON.stringify(data, null, 2),
+  }
+}
+
+const queryBridgeTaskDoc = async (sessionId: string, task: string): Promise<QueryTaskDocResult> => {
+  if (!bridge?.enabled) {
+    throw new Error('Bridge is disabled')
+  }
+  const result = await bridge.sendRequest('query.taskDoc', {
+    sessionId,
+    task,
+  }, { timeoutMs: 12000 })
+  const record = asRecord(result)
+  if (!record) {
+    throw new Error('Invalid query.taskDoc response')
+  }
+  return {
+    task: toTrimmedNonEmptyString(record.task) ?? task,
+    doc: typeof record.doc === 'string' ? record.doc : '',
+  }
+}
+
+const bridgeRequestTaskDoc = async (task: string): Promise<string | null> => {
+  const sessionId = getBridgeSessionId()
+  const normalizedTask = toTrimmedNonEmptyString(task)
+  if (!sessionId || !normalizedTask) return null
+
+  const cacheKey = toBridgeTaskDocCacheKey(sessionId, normalizedTask)
+  const cached = getBridgeTaskDocFromCache(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+
+  const result = await queryBridgeTaskDoc(sessionId, normalizedTask)
+  const doc = result.doc.trim()
+  const normalizedDoc = doc || null
+  saveBridgeTaskDocToCache(cacheKey, normalizedDoc)
+  return normalizedDoc
+}
+
+const bridgeRevealTask = async (task: string): Promise<void> => {
+  const sessionId = getBridgeSessionId()
+  const normalizedTask = toTrimmedNonEmptyString(task)
+  if (!sessionId || !normalizedTask || !bridge?.enabled) return
+  try {
+    await bridge.sendRequest('command.reveal', {
+      sessionId,
+      task: normalizedTask,
+    }, { timeoutMs: 10000 })
+  } catch {
+    // reveal 按需求静默失败
+  }
+}
+
+const bridgeOpenCrop = async (request: BridgeOpenCropRequest): Promise<void> => {
+  const sessionId = getBridgeSessionId()
+  if (!sessionId || !bridge?.enabled) return
+
+  const params: Record<string, unknown> = { sessionId }
+  const cachedImageId = toPositiveInteger(request.cachedImageId)
+  const dataUrl = toTrimmedNonEmptyString(request.dataUrl)
+  const taskId = toPositiveInteger(request.taskId)
+  const recoId = toPositiveInteger(request.recoId)
+
+  if (cachedImageId != null) {
+    params.cachedImageId = cachedImageId
+    params.cached_image_id = cachedImageId
+  } else if (dataUrl) {
+    params.dataUrl = dataUrl
+    params.data_url = dataUrl
+  } else {
+    return
+  }
+
+  if (taskId != null) {
+    params.taskId = taskId
+    params.task_id = taskId
+  }
+  if (recoId != null) {
+    params.recoId = recoId
+    params.reco_id = recoId
+  }
+
+  try {
+    await bridge.sendRequest('command.openCrop', params, { timeoutMs: 12000 })
+  } catch {
+    // 当前阶段保持静默，后续按 UI 方案再补反馈
+  }
 }
 
 const queryBridgeDetail = async (params: QueryDetailParams): Promise<QueryDetailResult> => {
@@ -1008,6 +1188,7 @@ const loadBridgeRecognitionImages = async () => {
 
   bridgeRecognitionLoading.value = true
   bridgeRecognitionError.value = null
+  bridgeRecognitionImageRefs.value = null
   bridgeRecognitionImages.value = null
 
   try {
@@ -1022,6 +1203,7 @@ const loadBridgeRecognitionImages = async () => {
     if (requestToken !== bridgeRecoLoadToken) return
 
     const refs = parseCachedImageRefs(recoResult.data)
+    bridgeRecognitionImageRefs.value = refs
     const inlineImages = parseInlineRecoImages(recoResult.data)
     const rawPromise = inlineImages.raw
       ? Promise.resolve<string | null>(inlineImages.raw)
@@ -1077,6 +1259,48 @@ const bridgeRecognitionQueryKey = computed(() => {
 
 watch(bridgeRecognitionQueryKey, () => {
   void loadBridgeRecognitionImages()
+}, { immediate: true })
+
+let bridgeNodeDefinitionLoadToken = 0
+
+const loadBridgeNodeDefinition = async () => {
+  const requestToken = ++bridgeNodeDefinitionLoadToken
+  const sessionId = getBridgeSessionId()
+  const node = selectedNode.value
+  const task = toTrimmedNonEmptyString(node?.name)
+  const nodeId = toPositiveInteger(node?.node_id)
+  if (!sessionId || !task || nodeId == null || selectedFlowItemId.value) {
+    clearBridgeNodeDefinitionState()
+    return
+  }
+
+  bridgeNodeDefinitionLoading.value = true
+  bridgeNodeDefinitionError.value = null
+  bridgeNodeDefinition.value = null
+  try {
+    const result = await queryBridgeNode(sessionId, task)
+    if (requestToken !== bridgeNodeDefinitionLoadToken) return
+    bridgeNodeDefinition.value = result.data
+  } catch (error) {
+    if (requestToken !== bridgeNodeDefinitionLoadToken) return
+    bridgeNodeDefinitionError.value = getErrorMessage(error)
+  } finally {
+    if (requestToken === bridgeNodeDefinitionLoadToken) {
+      bridgeNodeDefinitionLoading.value = false
+    }
+  }
+}
+
+const bridgeNodeDefinitionQueryKey = computed(() => {
+  const sessionId = getBridgeSessionId()
+  const node = selectedNode.value
+  const nodeId = toPositiveInteger(node?.node_id)
+  if (!sessionId || nodeId == null || selectedFlowItemId.value) return ''
+  return `${sessionId}:${nodeId}`
+})
+
+watch(bridgeNodeDefinitionQueryKey, () => {
+  void loadBridgeNodeDefinition()
 }, { immediate: true })
 // 过滤器状态
 const selectedProcessId = ref<string>('')
@@ -1772,7 +1996,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   bridgeRecoLoadToken += 1
   clearBridgeRecognitionState()
+  clearBridgeNodeDefinitionState()
   clearBridgeImageCache()
+  clearBridgeTaskDocCache()
   window.removeEventListener('resize', handleTourViewportChange)
   window.removeEventListener('scroll', handleTourViewportChange, true)
   if (realtimeParseTimer != null) {
@@ -1928,14 +2154,17 @@ onBeforeUnmount(() => {
       <div v-show="viewMode === 'analysis'" data-tour="analysis-main" style="height: 100%">
         <!-- 移动端布局 -->
         <template v-if="isMobile">
-          <process-view
-            :tasks="filteredTasks"
-            :selected-task="selectedTask"
-            :loading="loading"
-            :parser="parser"
-            :is-mobile="true"
-            :pending-scroll-node-id="pendingScrollNodeId"
-            :is-realtime-streaming="isRealtimeContext"
+            <process-view
+              :tasks="filteredTasks"
+              :selected-task="selectedTask"
+              :loading="loading"
+              :parser="parser"
+              :is-vscode-launch-embed="isVscodeLaunchEmbed"
+              :bridge-request-task-doc="bridgeRequestTaskDoc"
+              :bridge-reveal-task="bridgeRevealTask"
+              :is-mobile="true"
+              :pending-scroll-node-id="pendingScrollNodeId"
+              :is-realtime-streaming="isRealtimeContext"
             :show-realtime-status="showRealtimeStatus"
             :show-reload-controls="showReloadControls"
             @select-task="handleSelectTask"
@@ -2010,8 +2239,14 @@ onBeforeUnmount(() => {
                 :selected-node="selectedNode"
                 :selected-flow-item-id="selectedFlowItemId"
                 :bridge-recognition-images="bridgeRecognitionImages"
+                :bridge-recognition-image-refs="bridgeRecognitionImageRefs"
                 :bridge-recognition-loading="bridgeRecognitionLoading"
                 :bridge-recognition-error="bridgeRecognitionError"
+                :is-vscode-launch-embed="isVscodeLaunchEmbed"
+                :bridge-node-definition="bridgeNodeDefinition"
+                :bridge-node-definition-loading="bridgeNodeDefinitionLoading"
+                :bridge-node-definition-error="bridgeNodeDefinitionError"
+                :bridge-open-crop="bridgeOpenCrop"
                 style="height: 100%"
               />
             </n-drawer-content>
@@ -2032,6 +2267,9 @@ onBeforeUnmount(() => {
               :selected-task="selectedTask"
               :loading="loading"
               :parser="parser"
+              :is-vscode-launch-embed="isVscodeLaunchEmbed"
+              :bridge-request-task-doc="bridgeRequestTaskDoc"
+              :bridge-reveal-task="bridgeRevealTask"
               :detail-view-collapsed="detailViewCollapsed"
               :on-expand-detail-view="toggleDetailView"
               :pending-scroll-node-id="pendingScrollNodeId"
@@ -2066,8 +2304,14 @@ onBeforeUnmount(() => {
                 :selected-node="selectedNode"
                 :selected-flow-item-id="selectedFlowItemId"
                 :bridge-recognition-images="bridgeRecognitionImages"
+                :bridge-recognition-image-refs="bridgeRecognitionImageRefs"
                 :bridge-recognition-loading="bridgeRecognitionLoading"
                 :bridge-recognition-error="bridgeRecognitionError"
+                :is-vscode-launch-embed="isVscodeLaunchEmbed"
+                :bridge-node-definition="bridgeNodeDefinition"
+                :bridge-node-definition-loading="bridgeNodeDefinitionLoading"
+                :bridge-node-definition-error="bridgeNodeDefinitionError"
+                :bridge-open-crop="bridgeOpenCrop"
                 style="height: 100%"
               />
             </n-card>
@@ -2146,6 +2390,9 @@ onBeforeUnmount(() => {
                   :selected-task="selectedTask"
                   :loading="loading"
                   :parser="parser"
+                  :is-vscode-launch-embed="isVscodeLaunchEmbed"
+                  :bridge-request-task-doc="bridgeRequestTaskDoc"
+                  :bridge-reveal-task="bridgeRevealTask"
                   :is-mobile="true"
                   :pending-scroll-node-id="pendingScrollNodeId"
                   :is-realtime-streaming="isRealtimeContext"
@@ -2237,8 +2484,14 @@ onBeforeUnmount(() => {
                 :selected-node="selectedNode"
                 :selected-flow-item-id="selectedFlowItemId"
                 :bridge-recognition-images="bridgeRecognitionImages"
+                :bridge-recognition-image-refs="bridgeRecognitionImageRefs"
                 :bridge-recognition-loading="bridgeRecognitionLoading"
                 :bridge-recognition-error="bridgeRecognitionError"
+                :is-vscode-launch-embed="isVscodeLaunchEmbed"
+                :bridge-node-definition="bridgeNodeDefinition"
+                :bridge-node-definition-loading="bridgeNodeDefinitionLoading"
+                :bridge-node-definition-error="bridgeNodeDefinitionError"
+                :bridge-open-crop="bridgeOpenCrop"
                 style="height: 100%"
               />
             </n-drawer-content>
@@ -2267,6 +2520,9 @@ onBeforeUnmount(() => {
                   :selected-task="selectedTask"
                   :loading="loading"
                   :parser="parser"
+                  :is-vscode-launch-embed="isVscodeLaunchEmbed"
+                  :bridge-request-task-doc="bridgeRequestTaskDoc"
+                  :bridge-reveal-task="bridgeRevealTask"
                   :detail-view-collapsed="detailViewCollapsed"
                   :on-expand-detail-view="toggleDetailView"
                   :pending-scroll-node-id="pendingScrollNodeId"
@@ -2301,8 +2557,14 @@ onBeforeUnmount(() => {
                     :selected-node="selectedNode"
                     :selected-flow-item-id="selectedFlowItemId"
                     :bridge-recognition-images="bridgeRecognitionImages"
+                    :bridge-recognition-image-refs="bridgeRecognitionImageRefs"
                     :bridge-recognition-loading="bridgeRecognitionLoading"
                     :bridge-recognition-error="bridgeRecognitionError"
+                    :is-vscode-launch-embed="isVscodeLaunchEmbed"
+                    :bridge-node-definition="bridgeNodeDefinition"
+                    :bridge-node-definition-loading="bridgeNodeDefinitionLoading"
+                    :bridge-node-definition-error="bridgeNodeDefinitionError"
+                    :bridge-open-crop="bridgeOpenCrop"
                     style="height: 100%"
                   />
                 </n-card>

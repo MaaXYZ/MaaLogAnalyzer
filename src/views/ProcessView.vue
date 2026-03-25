@@ -110,6 +110,9 @@ const props = defineProps<{
   isRealtimeStreaming?: boolean
   showRealtimeStatus?: boolean
   showReloadControls?: boolean
+  isVscodeLaunchEmbed?: boolean
+  bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
+  bridgeRevealTask?: ((task: string) => Promise<void>) | null
 }>()
 
 const emit = defineEmits<{
@@ -1055,6 +1058,9 @@ const handleFlowItemClick = (node: NodeInfo, flowItemId: string) => {
               <div style="padding: 8px 4px">
                 <node-card
                   :node="item"
+                  :is-vscode-launch-embed="props.isVscodeLaunchEmbed"
+                  :bridge-request-task-doc="props.bridgeRequestTaskDoc"
+                  :bridge-reveal-task="props.bridgeRevealTask"
                   @select-node="handleNodeClick"
                   @select-action="handleActionClick"
                   @select-recognition="handleRecognitionClick"
@@ -1310,6 +1316,9 @@ const handleFlowItemClick = (node: NodeInfo, flowItemId: string) => {
                         <div style="padding: 12px">
                           <node-card
                             :node="item"
+                            :is-vscode-launch-embed="props.isVscodeLaunchEmbed"
+                            :bridge-request-task-doc="props.bridgeRequestTaskDoc"
+                            :bridge-reveal-task="props.bridgeRevealTask"
                             @select-node="handleNodeClick"
                             @select-action="handleActionClick"
                             @select-recognition="handleRecognitionClick"

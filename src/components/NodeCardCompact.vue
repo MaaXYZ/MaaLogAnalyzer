@@ -9,10 +9,13 @@ import {
   buildNodeRecognitionAttempts,
   buildNodeTaskFlowItems,
 } from '../utils/nodeFlow'
+import TaskDocHoverPopover from './TaskDocHoverPopover.vue'
 
 const props = defineProps<{
   node: NodeInfo
   mergedRecognitionList: MergedRecognitionItem[]
+  isVscodeLaunchEmbed?: boolean
+  bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
 }>()
 
 const emit = defineEmits<{
@@ -157,18 +160,24 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
         <n-text style="font-size: 12px">
           {{ recognitionSummary.tried }} tried{{ recognitionSummary.matchedName ? ',' : '' }}
         </n-text>
-        <n-button
+        <task-doc-hover-popover
           v-if="recognitionSummary.matchedName"
-          text
-          size="tiny"
-          type="success"
-          @click="emit('select-recognition', node, recognitionSummary.matchedIndex!)"
+          :enabled="isVscodeLaunchEmbed === true"
+          :request-task-doc="bridgeRequestTaskDoc"
+          :task-name="recognitionSummary.matchedName"
         >
-          <template #icon>
-            <check-circle-outlined />
-          </template>
-          {{ recognitionSummary.matchedName }} matched
-        </n-button>
+          <n-button
+            text
+            size="tiny"
+            type="success"
+            @click="emit('select-recognition', node, recognitionSummary.matchedIndex!)"
+          >
+            <template #icon>
+              <check-circle-outlined />
+            </template>
+            {{ recognitionSummary.matchedName }} matched
+          </n-button>
+        </task-doc-hover-popover>
         <n-text v-if="recognitionSummary.actionLevelRecoCount > 0" style="font-size: 12px">
           · action-reco {{ recognitionSummary.actionLevelRecoCount }}
         </n-text>
@@ -179,38 +188,50 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
         <n-text style="font-size: 12px">
           {{ taskSummary.totalNodes }} nodes, {{ taskSummary.allSuccess ? 'all ✓' : taskSummary.failedNodes > 0 ? 'some ✗' : taskSummary.runningNodes > 0 ? 'running…' : 'partial' }}
         </n-text>
-          <n-button
+          <task-doc-hover-popover
             v-for="group in taskGroups"
             :key="`compact-task-${group.groupIdx}-${group.taskId}`"
-            text
-            size="tiny"
-            :type="group.status === 'success' ? 'success' : group.status === 'running' ? 'warning' : 'error'"
-            @click="emit('select-flow-item', node, group.flowItemId)"
+            :enabled="isVscodeLaunchEmbed === true"
+            :request-task-doc="bridgeRequestTaskDoc"
+            :task-name="group.name"
           >
-            <template #icon>
-              <check-circle-outlined v-if="group.status === 'success'" />
-              <loading-outlined v-else-if="group.status === 'running'" />
-              <close-circle-outlined v-else />
-            </template>
-            {{ group.name }}
-          </n-button>
+            <n-button
+              text
+              size="tiny"
+              :type="group.status === 'success' ? 'success' : group.status === 'running' ? 'warning' : 'error'"
+              @click="emit('select-flow-item', node, group.flowItemId)"
+            >
+              <template #icon>
+                <check-circle-outlined v-if="group.status === 'success'" />
+                <loading-outlined v-else-if="group.status === 'running'" />
+                <close-circle-outlined v-else />
+              </template>
+              {{ group.name }}
+            </n-button>
+          </task-doc-hover-popover>
       </n-flex>
 
       <n-flex v-else-if="section === 'action' && actionSummary" align="center" style="gap: 6px">
         <n-text depth="3" style="font-size: 12px">Action:</n-text>
-        <n-button
-          text
-          size="tiny"
-          :type="actionSummary.status === 'success' ? 'success' : actionSummary.status === 'running' ? 'warning' : 'error'"
-          @click="actionSummary.useFlowItem && actionSummary.flowItemId ? emit('select-flow-item', node, actionSummary.flowItemId) : emit('select-action', node)"
+        <task-doc-hover-popover
+          :enabled="isVscodeLaunchEmbed === true"
+          :request-task-doc="bridgeRequestTaskDoc"
+          :task-name="actionSummary.name"
         >
-          <template #icon>
-            <check-circle-outlined v-if="actionSummary.status === 'success'" />
-            <loading-outlined v-else-if="actionSummary.status === 'running'" />
-            <close-circle-outlined v-else />
-          </template>
-          {{ actionSummary.name }}
-        </n-button>
+          <n-button
+            text
+            size="tiny"
+            :type="actionSummary.status === 'success' ? 'success' : actionSummary.status === 'running' ? 'warning' : 'error'"
+            @click="actionSummary.useFlowItem && actionSummary.flowItemId ? emit('select-flow-item', node, actionSummary.flowItemId) : emit('select-action', node)"
+          >
+            <template #icon>
+              <check-circle-outlined v-if="actionSummary.status === 'success'" />
+              <loading-outlined v-else-if="actionSummary.status === 'running'" />
+              <close-circle-outlined v-else />
+            </template>
+            {{ actionSummary.name }}
+          </n-button>
+        </task-doc-hover-popover>
       </n-flex>
     </template>
   </n-flex>

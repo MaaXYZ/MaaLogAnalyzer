@@ -6,6 +6,7 @@ import type { NodeInfo, MergedRecognitionItem } from '../types'
 import { buildNodeActionFlowItems, buildNodeActionLevelRecognitionItems, buildNodeActionRootItem } from '../utils/nodeFlow'
 import { getFlowItemButtonType, getFlowItemShortLabel } from '../utils/flowLabels'
 import { flattenFlowItems, flattenNestedRecognitionNodes } from '../utils/flowTree'
+import TaskDocHoverPopover from './TaskDocHoverPopover.vue'
 
 const props = defineProps<{
   node: NodeInfo
@@ -16,6 +17,8 @@ const props = defineProps<{
   defaultCollapseNestedActionNodes?: boolean
   isExpanded?: (attemptIndex: number) => boolean
   forceExpandRelatedWhileRunning?: boolean
+  isVscodeLaunchEmbed?: boolean
+  bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
 }>()
 
 const emit = defineEmits<{
@@ -144,20 +147,26 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
             >
               {{ item.name }}
             </n-button>
-            <n-button
+            <task-doc-hover-popover
               v-else
-              text
-              size="tiny"
-              :type="getRecognitionButtonType(item.status)"
-              @click="item.attemptIndex != null ? emit('select-recognition', node, item.attemptIndex) : undefined"
+              :enabled="isVscodeLaunchEmbed === true"
+              :request-task-doc="bridgeRequestTaskDoc"
+              :task-name="item.attempt?.name ?? item.name"
             >
-              <template #icon>
-                <check-circle-outlined v-if="item.status === 'success'" />
-                <loading-outlined v-else-if="item.status === 'running'" />
-                <close-circle-outlined v-else />
-              </template>
-              {{ item.name }}
-            </n-button>
+              <n-button
+                text
+                size="tiny"
+                :type="getRecognitionButtonType(item.status)"
+                @click="item.attemptIndex != null ? emit('select-recognition', node, item.attemptIndex) : undefined"
+              >
+                <template #icon>
+                  <check-circle-outlined v-if="item.status === 'success'" />
+                  <loading-outlined v-else-if="item.status === 'running'" />
+                  <close-circle-outlined v-else />
+                </template>
+                {{ item.name }}
+              </n-button>
+            </task-doc-hover-popover>
           </n-flex>
 
           <ul
@@ -183,19 +192,25 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
                   class="tree-toggle-placeholder"
                   :style="{ marginLeft: toTreeOffset(nested.depth) }"
                 />
-                <n-button
-                  text
-                  size="tiny"
-                  :type="nested.attempt.status === 'success' ? 'success' : nested.attempt.status === 'running' ? 'info' : 'warning'"
-                  @click="emit('select-flow-item', node, nested.flowItemId)"
+                <task-doc-hover-popover
+                  :enabled="isVscodeLaunchEmbed === true"
+                  :request-task-doc="bridgeRequestTaskDoc"
+                  :task-name="nested.attempt.name"
                 >
-                  <template #icon>
-                    <check-circle-outlined v-if="nested.attempt.status === 'success'" />
-                    <loading-outlined v-else-if="nested.attempt.status === 'running'" />
-                    <close-circle-outlined v-else />
-                  </template>
-                  {{ recognitionNodeShortLabel }} · {{ nested.attempt.name }}
-                </n-button>
+                  <n-button
+                    text
+                    size="tiny"
+                    :type="nested.attempt.status === 'success' ? 'success' : nested.attempt.status === 'running' ? 'info' : 'warning'"
+                    @click="emit('select-flow-item', node, nested.flowItemId)"
+                  >
+                    <template #icon>
+                      <check-circle-outlined v-if="nested.attempt.status === 'success'" />
+                      <loading-outlined v-else-if="nested.attempt.status === 'running'" />
+                      <close-circle-outlined v-else />
+                    </template>
+                    {{ recognitionNodeShortLabel }} · {{ nested.attempt.name }}
+                  </n-button>
+                </task-doc-hover-popover>
               </n-flex>
             </li>
           </ul>
@@ -220,19 +235,25 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
             @click="emit('toggle-action')"
           />
           <span v-else class="tree-toggle-placeholder" />
-          <n-button
-            text
-            size="tiny"
-            :type="actionStatus === 'success' ? 'success' : actionStatus === 'running' ? 'warning' : 'error'"
-            @click="actionRootItem ? emit('select-flow-item', node, actionRootItem.id) : emit('select-action', node)"
+          <task-doc-hover-popover
+            :enabled="isVscodeLaunchEmbed === true"
+            :request-task-doc="bridgeRequestTaskDoc"
+            :task-name="actionName"
           >
-            <template #icon>
-              <check-circle-outlined v-if="actionStatus === 'success'" />
-              <loading-outlined v-else-if="actionStatus === 'running'" />
-              <close-circle-outlined v-else />
-            </template>
-            {{ actionName }}
-          </n-button>
+            <n-button
+              text
+              size="tiny"
+              :type="actionStatus === 'success' ? 'success' : actionStatus === 'running' ? 'warning' : 'error'"
+              @click="actionRootItem ? emit('select-flow-item', node, actionRootItem.id) : emit('select-action', node)"
+            >
+              <template #icon>
+                <check-circle-outlined v-if="actionStatus === 'success'" />
+                <loading-outlined v-else-if="actionStatus === 'running'" />
+                <close-circle-outlined v-else />
+              </template>
+              {{ actionName }}
+            </n-button>
+          </task-doc-hover-popover>
         </n-flex>
 
         <ul v-if="isActionExpanded && hasActionNestedChildren" class="tree-list">
@@ -244,19 +265,25 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
           >
             <n-flex align="center" style="gap: 4px">
               <span class="tree-toggle-placeholder" style="margin-left: 0px" />
-              <n-button
-                text
-                size="tiny"
-                :type="item.status === 'success' ? 'success' : item.status === 'running' ? 'info' : 'warning'"
-                @click="emit('select-flow-item', node, item.id)"
+              <task-doc-hover-popover
+                :enabled="isVscodeLaunchEmbed === true"
+                :request-task-doc="bridgeRequestTaskDoc"
+                :task-name="item.name"
               >
-                <template #icon>
-                  <check-circle-outlined v-if="item.status === 'success'" />
-                  <loading-outlined v-else-if="item.status === 'running'" />
-                  <close-circle-outlined v-else />
-                </template>
-                {{ recognitionNodeShortLabel }} · {{ item.name }}
-              </n-button>
+                <n-button
+                  text
+                  size="tiny"
+                  :type="item.status === 'success' ? 'success' : item.status === 'running' ? 'info' : 'warning'"
+                  @click="emit('select-flow-item', node, item.id)"
+                >
+                  <template #icon>
+                    <check-circle-outlined v-if="item.status === 'success'" />
+                    <loading-outlined v-else-if="item.status === 'running'" />
+                    <close-circle-outlined v-else />
+                  </template>
+                  {{ recognitionNodeShortLabel }} · {{ item.name }}
+                </n-button>
+              </task-doc-hover-popover>
             </n-flex>
           </li>
 
@@ -279,19 +306,25 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
                 class="tree-toggle-placeholder"
                 :style="{ marginLeft: toTreeOffset(row.depth) }"
               />
-              <n-button
-                text
-                size="tiny"
-                :type="getFlowItemButtonType(row.item)"
-                @click="emit('select-flow-item', node, row.item.id)"
+              <task-doc-hover-popover
+                :enabled="isVscodeLaunchEmbed === true"
+                :request-task-doc="bridgeRequestTaskDoc"
+                :task-name="row.item.name"
               >
-                <template #icon>
-                  <check-circle-outlined v-if="row.item.status === 'success'" />
-                  <loading-outlined v-else-if="row.item.status === 'running'" />
-                  <close-circle-outlined v-else />
-                </template>
-                {{ getFlowItemShortLabel(row.item.type) }} · {{ row.item.name }}
-              </n-button>
+                <n-button
+                  text
+                  size="tiny"
+                  :type="getFlowItemButtonType(row.item)"
+                  @click="emit('select-flow-item', node, row.item.id)"
+                >
+                  <template #icon>
+                    <check-circle-outlined v-if="row.item.status === 'success'" />
+                    <loading-outlined v-else-if="row.item.status === 'running'" />
+                    <close-circle-outlined v-else />
+                  </template>
+                  {{ getFlowItemShortLabel(row.item.type) }} · {{ row.item.name }}
+                </n-button>
+              </task-doc-hover-popover>
             </n-flex>
           </li>
         </ul>

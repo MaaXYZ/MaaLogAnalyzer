@@ -12,13 +12,20 @@ import { getSettings } from '../utils/settings'
 import { buildNodeFlowItems } from '../utils/nodeFlow'
 import { getRuntimeStatusTagType, getRuntimeStatusText } from '../utils/runtimeStatus'
 
+interface BridgeOpenCropRequest {
+  cachedImageId?: number | null
+  dataUrl?: string | null
+  taskId?: number | null
+  recoId?: number | null
+}
+
 const { isMobile } = useIsMobile()
 const settings = getSettings()
 
 // 原始 JSON 折叠默认展开名称
 const rawJsonDefaultExpanded = computed(() =>
   settings.defaultExpandRawJson
-    ? ['reco-json', 'action-json', 'task-json', 'node-json']
+    ? ['reco-json', 'action-json', 'task-json', 'node-definition', 'node-json']
     : []
 )
 
@@ -45,8 +52,17 @@ const props = defineProps<{
     raw: string | null
     draws: string[]
   } | null
+  bridgeRecognitionImageRefs?: {
+    raw: number | null
+    draws: number[]
+  } | null
   bridgeRecognitionLoading?: boolean
   bridgeRecognitionError?: string | null
+  isVscodeLaunchEmbed?: boolean
+  bridgeNodeDefinition?: string | null
+  bridgeNodeDefinitionLoading?: boolean
+  bridgeNodeDefinitionError?: string | null
+  bridgeOpenCrop?: ((request: BridgeOpenCropRequest) => Promise<void>) | null
 }>()
 
 const flattenFlowItems = (items: UnifiedFlowItem[] | undefined, output: UnifiedFlowItem[] = []): UnifiedFlowItem[] => {
@@ -262,6 +278,58 @@ const bridgeRecognitionDrawImages = computed(() => {
   return draws.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
 })
 
+const isVscodeLaunchEmbed = computed(() => props.isVscodeLaunchEmbed === true)
+
+const toPositiveInteger = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const normalized = Math.trunc(value)
+    return normalized > 0 ? normalized : null
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return null
+    const normalized = Math.trunc(parsed)
+    return normalized > 0 ? normalized : null
+  }
+  return null
+}
+
+const toTrimmedNonEmptyString = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized ? normalized : null
+}
+
+const openRecognitionInCrop = async () => {
+  if (!isVscodeLaunchEmbed.value || !props.bridgeOpenCrop) return
+
+  const recoId = toPositiveInteger(currentRecognition.value?.reco_id)
+  const taskId = toPositiveInteger((currentRecognitionItem.value as any)?.task_id ?? props.selectedNode?.task_id)
+  const cachedImageId = toPositiveInteger(props.bridgeRecognitionImageRefs?.raw)
+  const dataUrl = toTrimmedNonEmptyString(props.bridgeRecognitionImages?.raw)
+
+  if (cachedImageId == null && !dataUrl) return
+
+  await props.bridgeOpenCrop({
+    cachedImageId,
+    dataUrl,
+    taskId,
+    recoId,
+  })
+}
+
+const formattedBridgeNodeDefinition = computed(() => {
+  const raw = props.bridgeNodeDefinition
+  if (!raw) return ''
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2)
+  } catch {
+    return trimmed
+  }
+})
+
 // 格式化 JSON
 const formatJson = (obj: any) => {
   return JSON.stringify(obj, null, 2)
@@ -290,7 +358,21 @@ const copyToClipboard = (text: string) => {
       <template v-else>
 
         <!-- 识别详情 -->
-        <n-card v-if="hasRecognition" title="🔍 识别详情">
+        <n-card v-if="hasRecognition">
+          <template #header>
+            🔍 识别详情
+          </template>
+          <template #header-extra>
+            <n-flex v-if="isVscodeLaunchEmbed" align="center" style="gap: 6px">
+              <n-button
+                size="tiny"
+                :disabled="!bridgeRecognitionRawImage && !(bridgeRecognitionImageRefs && bridgeRecognitionImageRefs.raw)"
+                @click.stop="openRecognitionInCrop"
+              >
+                打开截图工具
+              </n-button>
+            </n-flex>
+          </template>
           <n-descriptions :column="descriptionColumns" size="small" label-placement="left" bordered>
             <n-descriptions-item label="识别 ID">
               {{ currentRecognition?.reco_id }}
@@ -380,7 +462,10 @@ const copyToClipboard = (text: string) => {
         </n-card>
 
         <!-- 动作详情 -->
-        <n-card title="⚡ 动作详情" v-if="hasAction">
+        <n-card v-if="hasAction">
+          <template #header>
+            ⚡ 动作详情
+          </template>
           <n-descriptions :column="descriptionColumns" size="small" label-placement="left" bordered>
             <n-descriptions-item label="动作 ID">
               {{ currentActionDetails?.action_id }}
@@ -515,7 +600,10 @@ const copyToClipboard = (text: string) => {
         </n-card>
 
         <!-- 节点详情 (仅在点击节点名称时显示) -->
-        <n-card title="📍 节点详情" v-if="!isFlowItemSelected">
+        <n-card v-if="!isFlowItemSelected">
+          <template #header>
+            📍 节点详情
+          </template>
           <n-descriptions :column="descriptionColumns" size="small" label-placement="left" bordered>
             <n-descriptions-item label="节点名称" :span="descriptionColumns">
               <n-flex align="center" style="gap: 8px">
@@ -565,6 +653,30 @@ const copyToClipboard = (text: string) => {
           </n-descriptions>
 
           <n-collapse style="margin-top: 16px" :default-expanded-names="rawJsonDefaultExpanded">
+            <n-collapse-item v-if="isVscodeLaunchEmbed" title="节点定义" name="node-definition">
+              <template #header-extra>
+                <n-button
+                  v-if="formattedBridgeNodeDefinition"
+                  size="tiny"
+                  @click.stop="copyToClipboard(formattedBridgeNodeDefinition)"
+                >
+                  <template #icon>
+                    <n-icon><copy-outlined /></n-icon>
+                  </template>
+                  复制
+                </n-button>
+              </template>
+              <n-text v-if="bridgeNodeDefinitionLoading" depth="3" style="font-size: 13px">正在加载节点定义...</n-text>
+              <n-text v-else-if="bridgeNodeDefinitionError" type="error" style="font-size: 13px">{{ bridgeNodeDefinitionError }}</n-text>
+              <n-code
+                v-else-if="formattedBridgeNodeDefinition"
+                :code="formattedBridgeNodeDefinition"
+                language="json"
+                :word-wrap="true"
+                style="max-height: 500px; overflow: auto; max-width: 100%"
+              />
+              <n-empty v-else description="未获取到节点定义" />
+            </n-collapse-item>
             <n-collapse-item title="原始节点数据" name="node-json">
               <template #header-extra>
                 <n-button
