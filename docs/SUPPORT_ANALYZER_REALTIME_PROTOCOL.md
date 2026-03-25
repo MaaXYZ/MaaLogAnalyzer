@@ -100,7 +100,11 @@
 ### 4.2 Analyzer -> Support（Request）
 
 1. `query.detail`
-2. `realtime.snapshot.request`
+2. `query.node`
+3. `query.taskDoc`
+4. `command.reveal`
+5. `command.openCrop`
+6. `realtime.snapshot.request`
 
 ### 4.3 Analyzer -> Support（Notification）
 
@@ -282,7 +286,108 @@ interface QueryDetailCachedImageData {
    3) 对每个图片引用 id 调 `query.detail(target='cached_image', id=<refId>, taskId=task_id)`
 5. `cached_image.id` 与 `reco_id/action_id` 语义不同，禁止混用。
 
-### 5.9 realtime.snapshot.request（Request）
+### 5.9 query.node（Request）
+
+Analyzer -> Support，查询任务节点定义数据。
+
+请求参数：
+
+```ts
+interface QueryNodeParams {
+  sessionId: string
+  task: string
+}
+```
+
+返回：
+
+```ts
+interface QueryNodeResult {
+  task: string
+  data: string | null
+}
+```
+
+### 5.10 query.taskDoc（Request）
+
+Analyzer -> Support，查询任务文档文本（同旧版 TaskDoc 展示逻辑）。
+
+请求参数：
+
+```ts
+interface QueryTaskDocParams {
+  sessionId: string
+  task: string
+}
+```
+
+返回：
+
+```ts
+interface QueryTaskDocResult {
+  task: string
+  doc: string
+}
+```
+
+### 5.11 command.reveal（Request）
+
+Analyzer -> Support，请求在工程中定位并跳转任务（旧版 `gotoTask`）。
+
+请求参数：
+
+```ts
+interface CommandRevealParams {
+  sessionId: string
+  task: string
+}
+```
+
+返回：
+
+```ts
+interface CommandRevealResult {
+  ok: true
+}
+```
+
+### 5.12 command.openCrop（Request）
+
+Analyzer -> Support，请求打开 Crop 工具并展示图像（可选附带 reco 详情）。
+
+请求参数：
+
+```ts
+interface CommandOpenCropParams {
+  sessionId: string
+  cachedImageId?: number
+  cached_image_id?: number
+  dataUrl?: string
+  data_url?: string
+  taskId?: number
+  task_id?: number
+  recoId?: number
+  reco_id?: number
+}
+```
+
+字段语义：
+
+1. `cachedImageId/cached_image_id` 与 `dataUrl/data_url` 至少提供一组。
+2. 两种图片来源同时提供时，以 `cachedImageId/cached_image_id` 为准。
+3. 传 `cachedImageId/cached_image_id` 时，若同时传 `taskId/task_id`，Support 可做上下文校验。
+4. `recoId/reco_id` 用于附带 reco 详情到 Crop；传该字段时必须同时提供 `taskId/task_id` 以避免串数据。
+
+返回：
+
+```ts
+interface CommandOpenCropResult {
+  ok: true
+  detailAttached: boolean
+}
+```
+
+### 5.13 realtime.snapshot.request（Request）
 
 Analyzer -> Support，请求断线恢复（V2）。
 
@@ -310,7 +415,7 @@ interface SnapshotRequestResult {
 
 返回 `accepted=true` 后，Support 通过多次 `realtime.push(mode='snapshot')` 回放，再发送 `realtime.snapshot.end`。
 
-### 5.10 realtime.snapshot.end（Notification）
+### 5.14 realtime.snapshot.end（Notification）
 
 Support -> Analyzer，快照回放结束。
 
@@ -373,6 +478,8 @@ Analyzer 应映射为标准名：
 3. `bridge.keydown` 生效，常用快捷键在嵌套 iframe 下可用。
 4. `query.detail` 可按 `reco/action/cached_image` 返回结果。
 5. `realtime.snapshot.request` 可触发分批回放并以 `realtime.snapshot.end` 收尾。
+6. `query.node / query.taskDoc` 可返回任务定义与文档文本。
+7. `command.reveal / command.openCrop` 可触发 Support 侧跳转与打开 Crop。
 
 ---
 
