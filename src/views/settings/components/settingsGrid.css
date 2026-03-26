@@ -1,0 +1,31 @@
+.settings-grid {
+  --settings-border-color: var(--n-border-color, #5a5a5a);
+  position: relative;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  border: 1px solid var(--settings-border-color);
+}
+
+.settings-grid td {
+  width: 50%;
+  text-align: center;
+  vertical-align: middle;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--settings-border-color);
+}
+
+.settings-grid tr:last-child td {
+  border-bottom: none;
+}
+
+.settings-grid::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-0.5px);
+  border-left: 1px solid var(--settings-border-color);
+  pointer-events: none;
+}

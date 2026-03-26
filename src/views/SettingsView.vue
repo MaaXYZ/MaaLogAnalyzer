@@ -1,285 +1,31 @@
 <script setup lang="ts">
-import { NCard, NSwitch, NButton, NFlex, NText, NSelect, NRadioGroup, NRadioButton, NInputNumber, NInput, useMessage } from 'naive-ui'
-import { getSettings, saveSettings, getDefaultSettings } from '../utils/settings'
-import { getAiSettings, saveAiSettings, getDefaultAiSettings } from '../utils/aiSettings'
+import { NCard, NButton, NFlex } from 'naive-ui'
+import { useSettingsState } from './settings/composables/useSettingsState'
+import LogAnalysisSettingsCard from './settings/components/LogAnalysisSettingsCard.vue'
+import FlowchartSettingsCard from './settings/components/FlowchartSettingsCard.vue'
+import AiBaseSettingsCard from './settings/components/AiBaseSettingsCard.vue'
+import AiDiagnosticSettingsCard from './settings/components/AiDiagnosticSettingsCard.vue'
 
-const message = useMessage()
-const settings = getSettings()
-const aiSettings = getAiSettings()
-
-const playbackSpeedOptions = [
-  { label: '慢速 1500ms', value: 1500 },
-  { label: '标准 900ms', value: 900 },
-  { label: '快速 600ms', value: 600 },
-  { label: '极速 350ms', value: 350 },
-]
-
-const focusZoomOptions = [
-  { label: '0.8x', value: 0.8 },
-  { label: '1.0x', value: 1.0 },
-  { label: '1.2x', value: 1.2 },
-  { label: '1.4x', value: 1.4 },
-  { label: '1.6x', value: 1.6 },
-]
-
-const handleSave = () => {
-  saveSettings(settings)
-  saveAiSettings(aiSettings)
-  message.success('设置已保存')
-}
-
-const handleReset = () => {
-  Object.assign(settings, getDefaultSettings())
-  Object.assign(aiSettings, getDefaultAiSettings())
-  saveSettings(settings)
-  saveAiSettings(aiSettings)
-  message.success('已恢复默认设置')
-}
+const {
+  settings,
+  aiSettings,
+  playbackSpeedOptions,
+  focusZoomOptions,
+  handleSave,
+  handleReset,
+} = useSettingsState()
 </script>
 
 <template>
   <n-card style="height: 100%">
-    <n-card size="small" :bordered="true" style="margin-bottom: 12px">
-      <n-text strong style="font-size: 16px; display: block; margin-bottom: 16px">日志分析</n-text>
-
-      <table class="settings-grid" role="presentation">
-        <tbody>
-          <tr>
-            <td>节点显示模式</td>
-            <td>
-              <n-radio-group v-model:value="settings.displayMode">
-                <n-radio-button value="detailed">详细</n-radio-button>
-                <n-radio-button value="compact">紧凑</n-radio-button>
-                <n-radio-button value="tree">树形</n-radio-button>
-              </n-radio-group>
-            </td>
-          </tr>
-
-          <tr v-if="settings.displayMode === 'detailed' || settings.displayMode === 'tree'">
-            <td>默认折叠根部识别列表</td>
-            <td><n-switch v-model:value="settings.defaultCollapseRecognition" /></td>
-          </tr>
-
-          <tr v-if="settings.displayMode === 'detailed' || settings.displayMode === 'tree'">
-            <td>默认折叠嵌套识别节点</td>
-            <td><n-switch v-model:value="settings.defaultCollapseNestedRecognition" /></td>
-          </tr>
-
-          <tr v-if="settings.displayMode === 'detailed' || settings.displayMode === 'tree'">
-            <td>默认折叠嵌套动作节点</td>
-            <td><n-switch v-model:value="settings.defaultCollapseNestedActionNodes" /></td>
-          </tr>
-
-          <tr>
-            <td>默认展开原始 JSON 数据</td>
-            <td><n-switch v-model:value="settings.defaultExpandRawJson" /></td>
-          </tr>
-        </tbody>
-      </table>
-    </n-card>
-
-    <n-card size="small" :bordered="true" style="margin-bottom: 12px">
-      <n-text strong style="font-size: 16px; display: block; margin-bottom: 16px">流程图</n-text>
-
-      <table class="settings-grid" role="presentation">
-        <tbody>
-          <tr>
-            <td>连线方式</td>
-            <td>
-              <n-radio-group v-model:value="settings.flowchartEdgeStyle">
-                <n-radio-button value="orthogonal">避障折线</n-radio-button>
-                <n-radio-button value="default">平滑曲线</n-radio-button>
-              </n-radio-group>
-            </td>
-          </tr>
-
-          <tr>
-            <td>连线流动动画</td>
-            <td><n-switch v-model:value="settings.flowchartEdgeFlowEnabled" /></td>
-          </tr>
-
-          <tr>
-            <td>拖动后自动重排</td>
-            <td><n-switch v-model:value="settings.flowchartRelayoutAfterDrag" /></td>
-          </tr>
-
-          <tr>
-            <td>忽略未经过节点</td>
-            <td><n-switch v-model:value="settings.flowchartIgnoreUnexecutedNodes" /></td>
-          </tr>
-
-          <tr>
-            <td>回放速度</td>
-            <td>
-              <n-select
-                v-model:value="settings.flowchartPlaybackIntervalMs"
-                :options="playbackSpeedOptions"
-                style="width: 180px; margin: 0 auto"
-              />
-            </td>
-          </tr>
-
-          <tr>
-            <td>聚焦缩放</td>
-            <td>
-              <n-select
-                v-model:value="settings.flowchartFocusZoom"
-                :options="focusZoomOptions"
-                style="width: 180px; margin: 0 auto"
-              />
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </n-card>
-
-    <n-card size="small" :bordered="true" style="margin-bottom: 12px">
-      <n-text strong style="font-size: 16px; display: block; margin-bottom: 16px">AI 基础</n-text>
-
-      <table class="settings-grid" role="presentation">
-        <tbody>
-          <tr>
-            <td>API Base URL</td>
-            <td>
-              <n-input
-                v-model:value="aiSettings.baseUrl"
-                placeholder="https://api.openai.com/v1"
-                style="width: 280px; margin: 0 auto"
-              />
-            </td>
-          </tr>
-
-          <tr>
-            <td>模型名称</td>
-            <td>
-              <n-input
-                v-model:value="aiSettings.model"
-                placeholder="gpt-5.4"
-                style="width: 280px; margin: 0 auto"
-              />
-            </td>
-          </tr>
-
-          <tr>
-            <td>温度</td>
-            <td>
-              <n-input-number
-                v-model:value="aiSettings.temperature"
-                :min="0"
-                :max="2"
-                :step="0.1"
-                style="width: 180px; margin: 0 auto"
-              />
-            </td>
-          </tr>
-
-          <tr>
-            <td>最大输出 token</td>
-            <td>
-              <n-flex align="center" justify="center" style="gap: 8px; flex-wrap: wrap">
-                <n-input-number
-                  v-model:value="aiSettings.maxTokens"
-                  :min="256"
-                  :max="8192"
-                  :step="64"
-                  style="width: 180px"
-                />
-              </n-flex>
-            </td>
-          </tr>
-
-          <tr>
-            <td>自动截断重试（提额）</td>
-            <td><n-switch v-model:value="aiSettings.maxTokensAuto" /></td>
-          </tr>
-
-          <tr>
-            <td>注入 Maa 领域知识包</td>
-            <td><n-switch v-model:value="aiSettings.includeKnowledgePack" /></td>
-          </tr>
-
-          <tr>
-            <td>注入 [WRN]/[ERR] 信号线</td>
-            <td><n-switch v-model:value="aiSettings.includeSignalLines" /></td>
-          </tr>
-
-          <tr>
-            <td>注入选中节点焦点上下文</td>
-            <td><n-switch v-model:value="aiSettings.includeSelectedNodeFocus" /></td>
-          </tr>
-
-          <tr>
-            <td>分析请求启用流式</td>
-            <td><n-switch v-model:value="aiSettings.streamResponse" /></td>
-          </tr>
-        </tbody>
-      </table>
-    </n-card>
-
-    <n-card size="small" :bordered="true" style="margin-bottom: 12px">
-      <n-text strong style="font-size: 16px; display: block; margin-bottom: 16px">AI 诊断输出</n-text>
-
-      <table class="settings-grid" role="presentation">
-        <tbody>
-          <tr>
-            <td>截断后自动精简重试</td>
-            <td><n-switch v-model:value="aiSettings.truncateAutoRetryEnabled" /></td>
-          </tr>
-
-          <tr>
-            <td>精简答案长度上限</td>
-            <td>
-              <n-input-number
-                v-model:value="aiSettings.conciseAnswerMaxChars"
-                :min="800"
-                :max="5000"
-                :step="100"
-                style="width: 180px; margin: 0 auto"
-              />
-            </td>
-          </tr>
-
-          <tr>
-            <td>根因候选条数上限</td>
-            <td>
-              <n-input-number
-                v-model:value="aiSettings.conciseMaxRootCauses"
-                :min="2"
-                :max="6"
-                :step="1"
-                style="width: 180px; margin: 0 auto"
-              />
-            </td>
-          </tr>
-
-          <tr>
-            <td>证据条数上限</td>
-            <td>
-              <n-input-number
-                v-model:value="aiSettings.conciseMaxEvidence"
-                :min="3"
-                :max="12"
-                :step="1"
-                style="width: 180px; margin: 0 auto"
-              />
-            </td>
-          </tr>
-
-          <tr>
-            <td>排查步骤条数</td>
-            <td>
-              <n-input-number
-                v-model:value="aiSettings.conciseFixedSteps"
-                :min="3"
-                :max="8"
-                :step="1"
-                style="width: 180px; margin: 0 auto"
-              />
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </n-card>
+    <log-analysis-settings-card :settings="settings" />
+    <flowchart-settings-card
+      :settings="settings"
+      :playback-speed-options="playbackSpeedOptions"
+      :focus-zoom-options="focusZoomOptions"
+    />
+    <ai-base-settings-card :ai-settings="aiSettings" />
+    <ai-diagnostic-settings-card :ai-settings="aiSettings" />
 
     <n-flex style="margin-top: 24px; gap: 12px">
       <n-button type="primary" @click="handleSave">保存设置</n-button>
@@ -287,37 +33,3 @@ const handleReset = () => {
     </n-flex>
   </n-card>
 </template>
-
-<style scoped>
-.settings-grid {
-  --settings-border-color: var(--n-border-color, #5a5a5a);
-  position: relative;
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-  border: 1px solid var(--settings-border-color);
-}
-
-.settings-grid td {
-  width: 50%;
-  text-align: center;
-  vertical-align: middle;
-  padding: 12px 10px;
-  border-bottom: 1px solid var(--settings-border-color);
-}
-
-.settings-grid tr:last-child td {
-  border-bottom: none;
-}
-
-.settings-grid::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-0.5px);
-  border-left: 1px solid var(--settings-border-color);
-  pointer-events: none;
-}
-</style>

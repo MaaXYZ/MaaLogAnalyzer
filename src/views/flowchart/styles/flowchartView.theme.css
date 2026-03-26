@@ -1,0 +1,101 @@
+/* Default: dark theme (project default is dark) */
+body {
+  --flowchart-success-bg: #1a3a2a;
+  --flowchart-success-border: #18a058;
+  --flowchart-success-text: #a0d8b0;
+  --flowchart-running-bg: #3a331a;
+  --flowchart-running-border: #f0a020;
+  --flowchart-running-text: #f5d38f;
+  --flowchart-failed-bg: #3a1a1a;
+  --flowchart-failed-border: #d03050;
+  --flowchart-failed-text: #d8a0a0;
+  --flowchart-notexec-bg: #2a2a2a;
+  --flowchart-notexec-border: #666;
+  --flowchart-notexec-text: #888;
+  --flowchart-badge-bg: rgba(255, 255, 255, 0.1);
+  --flowchart-badge-text: #aaa;
+  --flowchart-hover-ring: rgba(24, 160, 88, 0.5);
+  --flowchart-selected-ring: rgba(24, 160, 88, 0.9);
+  --flowchart-nav-hover: rgba(255, 255, 255, 0.06);
+  --flowchart-nav-active: rgba(24, 160, 88, 0.2);
+  --flowchart-popover-bg: #2a2a2a;
+  --flowchart-popover-border: #444;
+  --flowchart-popover-close: #888;
+  --flowchart-popover-close-hover: #ddd;
+  --flowchart-popover-secondary: #999;
+  --flowchart-chevron-fill: #ffffff;
+  --flowchart-chevron-stroke-width: 1;
+}
+
+/* Vue Flow canvas: dark background (default) */
+.vue-flow {
+  background: #1a1a1a;
+}
+
+/* Light theme — system preference when not forced dark */
+@media (prefers-color-scheme: light) {
+  body:not(.force-dark) {
+    --flowchart-success-bg: #e8f5e9;
+    --flowchart-success-border: #18a058;
+    --flowchart-success-text: #1a3a1a;
+    --flowchart-running-bg: #fff6e5;
+    --flowchart-running-border: #f0a020;
+    --flowchart-running-text: #5c3b00;
+    --flowchart-failed-bg: #fdecea;
+    --flowchart-failed-border: #d03050;
+    --flowchart-failed-text: #3a1a1a;
+    --flowchart-notexec-bg: #f5f5f5;
+    --flowchart-notexec-border: #999;
+    --flowchart-notexec-text: #888;
+    --flowchart-badge-bg: rgba(0, 0, 0, 0.08);
+    --flowchart-badge-text: #666;
+    --flowchart-hover-ring: rgba(24, 160, 88, 0.4);
+    --flowchart-selected-ring: rgba(24, 160, 88, 0.8);
+    --flowchart-nav-hover: rgba(0, 0, 0, 0.04);
+    --flowchart-nav-active: rgba(24, 160, 88, 0.1);
+    --flowchart-popover-bg: #fff;
+    --flowchart-popover-border: #e0e0e0;
+    --flowchart-popover-close: #999;
+    --flowchart-popover-close-hover: #333;
+    --flowchart-popover-secondary: #888;
+    --flowchart-chevron-fill: #000000;
+    --flowchart-chevron-stroke-width: 0;
+  }
+
+  body:not(.force-dark) .vue-flow {
+    background: #fff;
+  }
+}
+
+/* Forced light theme */
+body.force-light {
+  --flowchart-success-bg: #e8f5e9;
+  --flowchart-success-border: #18a058;
+  --flowchart-success-text: #1a3a1a;
+  --flowchart-running-bg: #fff6e5;
+  --flowchart-running-border: #f0a020;
+  --flowchart-running-text: #5c3b00;
+  --flowchart-failed-bg: #fdecea;
+  --flowchart-failed-border: #d03050;
+  --flowchart-failed-text: #3a1a1a;
+  --flowchart-notexec-bg: #f5f5f5;
+  --flowchart-notexec-border: #999;
+  --flowchart-notexec-text: #888;
+  --flowchart-badge-bg: rgba(0, 0, 0, 0.08);
+  --flowchart-badge-text: #666;
+  --flowchart-hover-ring: rgba(24, 160, 88, 0.4);
+  --flowchart-selected-ring: rgba(24, 160, 88, 0.8);
+  --flowchart-nav-hover: rgba(0, 0, 0, 0.04);
+  --flowchart-nav-active: rgba(24, 160, 88, 0.1);
+  --flowchart-popover-bg: #fff;
+  --flowchart-popover-border: #e0e0e0;
+  --flowchart-popover-close: #999;
+  --flowchart-popover-close-hover: #333;
+  --flowchart-popover-secondary: #888;
+  --flowchart-chevron-fill: #000000;
+  --flowchart-chevron-stroke-width: 0;
+}
+
+body.force-light .vue-flow {
+  background: #fff;
+}

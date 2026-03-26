@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, toRef } from 'vue'
 import { NCard, NButton, NFlex, NText, NPopover } from 'naive-ui'
 import type { NodeInfo, RecognitionAttempt, MergedRecognitionItem } from '../types'
 import { getSettings } from '../utils/settings'
 import { extractTime } from '../utils/formatDuration'
 import { buildNodeRecognitionAttempts } from '../utils/nodeFlow'
+import { useNodeCardTaskDoc } from './nodeCard/useNodeCardTaskDoc'
 import NodeCardDetailed from './NodeCardDetailed.vue'
 import NodeCardCompact from './NodeCardCompact.vue'
 import NodeCardTree from './NodeCardTree.vue'
@@ -65,83 +66,18 @@ const handleNodeClick = () => {
   emit('select-node', props.node)
 }
 
-const taskDocPopoverVisible = ref(false)
-const taskDocHovering = ref(false)
-const taskDocLoading = ref(false)
-const taskDocLoaded = ref(false)
-const taskDocText = ref('')
-let taskDocLoadToken = 0
-
-const normalizeTaskName = (value: unknown): string => {
-  if (typeof value !== 'string') return ''
-  return value.trim()
-}
-
-const nodeTaskName = computed(() => normalizeTaskName(props.node.name))
-
-const resetTaskDocPopover = () => {
-  taskDocPopoverVisible.value = false
-  taskDocHovering.value = false
-  taskDocLoading.value = false
-  taskDocLoaded.value = false
-  taskDocText.value = ''
-}
-
-watch(() => props.node.node_id, () => {
-  resetTaskDocPopover()
-}, { flush: 'sync' })
-
-const handleTaskDocHoverEnter = () => {
-  taskDocHovering.value = true
-  if (!props.isVscodeLaunchEmbed || !props.bridgeRequestTaskDoc) return
-  if (taskDocText.value) {
-    taskDocPopoverVisible.value = true
-    return
-  }
-  if (taskDocLoading.value || taskDocLoaded.value) return
-
-  const task = nodeTaskName.value
-  if (!task) return
-
-  taskDocLoading.value = true
-  const token = ++taskDocLoadToken
-  void props.bridgeRequestTaskDoc(task)
-    .then((doc) => {
-      if (token !== taskDocLoadToken) return
-      const normalized = normalizeTaskName(doc)
-      taskDocLoaded.value = true
-      if (!normalized) {
-        taskDocPopoverVisible.value = false
-        return
-      }
-      taskDocText.value = normalized
-      if (taskDocHovering.value) {
-        taskDocPopoverVisible.value = true
-      }
-    })
-    .catch(() => {
-      if (token !== taskDocLoadToken) return
-      taskDocLoaded.value = false
-      taskDocPopoverVisible.value = false
-    })
-    .finally(() => {
-      if (token === taskDocLoadToken) {
-        taskDocLoading.value = false
-      }
-    })
-}
-
-const handleTaskDocHoverLeave = () => {
-  taskDocHovering.value = false
-  taskDocPopoverVisible.value = false
-}
-
-const handleRevealClick = () => {
-  if (!props.isVscodeLaunchEmbed || !props.bridgeRevealTask) return
-  const task = nodeTaskName.value
-  if (!task) return
-  void props.bridgeRevealTask(task)
-}
+const {
+  taskDocPopoverVisible,
+  taskDocText,
+  handleTaskDocHoverEnter,
+  handleTaskDocHoverLeave,
+  handleRevealClick,
+} = useNodeCardTaskDoc({
+  node: toRef(props, 'node'),
+  isVscodeLaunchEmbed: toRef(props, 'isVscodeLaunchEmbed'),
+  bridgeRequestTaskDoc: toRef(props, 'bridgeRequestTaskDoc'),
+  bridgeRevealTask: toRef(props, 'bridgeRevealTask'),
+})
 
 // 切换嵌套节点的显示/隐藏
 const toggleNestedNodes = (attemptIndex: number) => {
