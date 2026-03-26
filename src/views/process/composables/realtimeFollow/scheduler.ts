@@ -28,10 +28,9 @@ export const createFollowScheduler = (options: CreateFollowSchedulerOptions) => 
       options.activeTaskIndex.value = latestIndex
       options.onSelectTask(latestTask)
       await nextTick()
+      options.taskListPanelRef.value?.scrollToBottom()
+      options.nodeNavPanelRef.value?.scrollToBottom()
     }
-
-    options.taskListPanelRef.value?.scrollToBottom()
-    options.nodeNavPanelRef.value?.scrollToBottom()
 
     void options.scrollToLatestNodeBottom()
   }

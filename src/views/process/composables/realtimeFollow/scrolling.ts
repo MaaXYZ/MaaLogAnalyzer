@@ -13,6 +13,13 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export const createRealtimeFollowScrolling = (
   options: RealtimeFollowScrollingOptions,
 ) => {
+  let lastAlignedLatestIndex = -1
+  let lastScrollerElement: HTMLElement | null = null
+
+  const getScrollerElement = () => {
+    return (options.virtualScroller.value?.$el ?? null) as HTMLElement | null
+  }
+
   // 动态高度 + 高频更新下，scrollToItem 可能在尺寸缓存未就绪时抛错（accumulator undefined）
   const safeScrollToItem = async (index: number, retry = 0): Promise<boolean> => {
     const scroller = options.virtualScroller.value
@@ -46,12 +53,16 @@ export const createRealtimeFollowScrolling = (
   }
 
   const scrollNodeTimelineToBottom = () => {
-    const scrollerEl = (options.virtualScroller.value?.$el ?? null) as HTMLElement | null
+    const scrollerEl = getScrollerElement()
     if (!scrollerEl) return
+    const maxScrollTop = scrollerEl.scrollHeight - scrollerEl.clientHeight
+    if (maxScrollTop <= 0) return
+    // 已经贴底时不重复滚动，避免高频触发 overlay scrollbar（mac 下会很明显）
+    if (Math.abs(maxScrollTop - scrollerEl.scrollTop) <= 1) return
     if (typeof scrollerEl.scrollTo === 'function') {
-      scrollerEl.scrollTo({ top: scrollerEl.scrollHeight, behavior: 'auto' })
+      scrollerEl.scrollTo({ top: maxScrollTop, behavior: 'auto' })
     } else {
-      scrollerEl.scrollTop = scrollerEl.scrollHeight
+      scrollerEl.scrollTop = maxScrollTop
     }
   }
 
@@ -59,7 +70,18 @@ export const createRealtimeFollowScrolling = (
     const latestNodeIndex = options.currentNodeCount.value - 1
     if (latestNodeIndex < 0) return
 
-    await safeScrollToItem(latestNodeIndex)
+    const scrollerEl = getScrollerElement()
+    if (scrollerEl !== lastScrollerElement) {
+      lastScrollerElement = scrollerEl
+      lastAlignedLatestIndex = -1
+    }
+
+    // 只有索引变化（新节点）时才对齐到 item，避免同一节点状态更新导致重复 scrollToItem
+    if (latestNodeIndex !== lastAlignedLatestIndex) {
+      await safeScrollToItem(latestNodeIndex)
+      lastAlignedLatestIndex = latestNodeIndex
+    }
+
     await nextTick()
     scrollNodeTimelineToBottom()
 
