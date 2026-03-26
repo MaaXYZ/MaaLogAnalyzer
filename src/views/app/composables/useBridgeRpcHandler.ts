@@ -34,26 +34,6 @@ export const useBridgeRpcHandler = (options: UseBridgeRpcHandlerOptions) => {
     window.dispatchEvent(new Event(options.bridgeThemeUpdatedEvent))
   }
 
-  const handleBridgeKeydown = (params: unknown) => {
-    const payload = asRecord(params)
-    if (!payload) return
-
-    const eventInit: KeyboardEventInit = {
-      key: typeof payload.key === 'string' ? payload.key : '',
-      code: typeof payload.code === 'string' ? payload.code : '',
-      altKey: payload.altKey === true,
-      ctrlKey: payload.ctrlKey === true,
-      shiftKey: payload.shiftKey === true,
-      metaKey: payload.metaKey === true,
-      repeat: payload.repeat === true,
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-    }
-    const keydownEvent = new KeyboardEvent('keydown', eventInit)
-    document.dispatchEvent(keydownEvent)
-  }
-
   const handleJsonRpcMethod = async (method: string, params: unknown, id?: JsonRpcId) => {
     const bridge = options.getBridge()
     switch (method) {
@@ -63,10 +43,6 @@ export const useBridgeRpcHandler = (options: UseBridgeRpcHandlerOptions) => {
         return
       case 'bridge.updateTheme':
         handleBridgeUpdateTheme(params)
-        if (id !== undefined) bridge?.sendResult(id, { ok: true })
-        return
-      case 'bridge.keydown':
-        handleBridgeKeydown(params)
         if (id !== undefined) bridge?.sendResult(id, { ok: true })
         return
       case 'realtime.start':

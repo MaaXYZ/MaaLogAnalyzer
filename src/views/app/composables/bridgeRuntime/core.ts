@@ -1,4 +1,4 @@
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import type { TaskInfo } from '../../../../types'
 import { useBridge, type BridgeController } from '../../../../composables/useBridge'
 import { useRealtimeSession } from '../useRealtimeSession'
@@ -19,8 +19,58 @@ const BRIDGE_CAPABILITIES = [
   'realtime.snapshot.end',
 ]
 
+const FORWARDED_SHORTCUT_KEYS = new Set(['w', 'p', 't'])
+
+const execDocumentCommand = (command: 'paste' | 'copy' | 'cut' | 'selectAll' | 'undo') => {
+  try {
+    document.execCommand(command)
+  } catch {
+    // ignore unsupported commands in restricted environments
+  }
+}
+
 export const useBridgeRuntimeCore = (options: UseBridgeRuntimeCoreOptions) => {
   let bridge: BridgeController | null = null
+
+  const forwardBridgeKeydown = (event: KeyboardEvent) => {
+    if (!bridge?.enabled) return
+
+    const hasMeta = event.ctrlKey || event.metaKey
+    const code = event.keyCode
+    let handled = false
+
+    if ((hasMeta && code === 86) || (event.shiftKey && code === 45)) {
+      execDocumentCommand('paste')
+      handled = true
+    } else if (hasMeta && code === 67) {
+      execDocumentCommand('copy')
+      handled = true
+    } else if (hasMeta && code === 88) {
+      execDocumentCommand('cut')
+      handled = true
+    } else if (hasMeta && code === 65) {
+      execDocumentCommand('selectAll')
+      handled = true
+    } else if (hasMeta && code === 90) {
+      execDocumentCommand('undo')
+      handled = true
+    } else if (hasMeta && FORWARDED_SHORTCUT_KEYS.has(event.key.toLowerCase())) {
+      bridge.sendNotification('bridge.keydown', {
+        key: event.key,
+        code: event.code,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        metaKey: event.metaKey,
+        repeat: event.repeat,
+      })
+      handled = true
+    }
+
+    if (handled) {
+      event.preventDefault()
+    }
+  }
 
   const {
     realtimeSession,
@@ -79,6 +129,16 @@ export const useBridgeRuntimeCore = (options: UseBridgeRuntimeCoreOptions) => {
     onMethod: async (method, params, id) => {
       await handleJsonRpcMethod(method, params, id)
     },
+  })
+
+  onMounted(() => {
+    if (!options.runtime.bridgeEnabled) return
+    window.addEventListener('keydown', forwardBridgeKeydown)
+  })
+
+  onBeforeUnmount(() => {
+    if (!options.runtime.bridgeEnabled) return
+    window.removeEventListener('keydown', forwardBridgeKeydown)
   })
 
   return {

@@ -16,14 +16,15 @@
 
 1. 采集运行时事件（已有 `pushNotify` 链路）。
 2. 批量发送实时事件给 Analyzer。
-3. 发送主题与按键透传消息。
+3. 发送主题同步消息，并接收 Analyzer 的按键透传消息。
 4. 提供反向查询（详情查询、快照回放）。
 
 ### 1.2 Analyzer 插件负责
 
 1. 接收并处理 Support 的 JSON-RPC 通知。
 2. 发起 JSON-RPC 请求（详情查询、快照请求）。
-3. 做消息名规范化并增量更新 UI 状态。
+3. 监听 iframe 内快捷键并按需透传给 Support。
+4. 做消息名规范化并增量更新 UI 状态。
 
 ---
 
@@ -91,11 +92,10 @@
 
 1. `bridge.hello`
 2. `bridge.updateTheme`
-3. `bridge.keydown`
-4. `realtime.start`
-5. `realtime.push`
-6. `realtime.end`
-7. `realtime.snapshot.end`
+3. `realtime.start`
+4. `realtime.push`
+5. `realtime.end`
+6. `realtime.snapshot.end`
 
 ### 4.2 Analyzer -> Support（Request）
 
@@ -109,6 +109,7 @@
 ### 4.3 Analyzer -> Support（Notification）
 
 1. `bridge.ready`
+2. `bridge.keydown`
 
 ---
 
@@ -156,7 +157,7 @@ Analyzer 收到后执行：
 
 ### 5.4 bridge.keydown（Notification）
 
-Support -> Analyzer，按键透传。
+Analyzer -> Support，按键透传。
 
 ```ts
 interface BridgeKeydownParams {
@@ -169,6 +170,12 @@ interface BridgeKeydownParams {
   repeat: boolean
 }
 ```
+
+实现约束（当前版本）：
+
+1. Analyzer 仅向 Support 透传 `Ctrl/Cmd + W/P/T`。
+2. `Ctrl/Cmd + C/X/V/A/Z` 由 iframe 内本地处理（例如复制、粘贴、全选、撤销），不透传给 Support。
+3. Analyzer 在命中上述快捷键后会调用 `preventDefault()`，避免同一按键在内外层重复处理。
 
 ### 5.5 realtime.start（Notification）
 
@@ -475,7 +482,7 @@ Analyzer 应映射为标准名：
 
 1. Support 发 `realtime.start/push/end` 后，Analyzer 能实时显示任务与节点变化。
 2. `bridge.updateTheme` 生效，iframe 主题与 VS Code 保持一致。
-3. `bridge.keydown` 生效，常用快捷键在嵌套 iframe 下可用。
+3. `bridge.keydown` 生效，iframe 内快捷键可透传给 Support 且不影响本地复制。
 4. `query.detail` 可按 `reco/action/cached_image` 返回结果。
 5. `realtime.snapshot.request` 可触发分批回放并以 `realtime.snapshot.end` 收尾。
 6. `query.node / query.taskDoc` 可返回任务定义与文档文本。
