@@ -350,10 +350,6 @@ const actionButtonType = computed<ButtonType>(() => {
   background: #d03050;
 }
 
-.node-card:hover {
-  transform: translateX(4px);
-}
-
 .node-card :deep(.n-card) {
   transition: box-shadow 0.3s;
 }
@@ -364,7 +360,6 @@ const actionButtonType = computed<ButtonType>(() => {
 
 @media (max-width: 768px) {
   .node-card { padding-left: 12px; }
-  .node-card:hover { transform: none; }
   .node-card::before { width: 8px; height: 8px; }
 }
 </style>
