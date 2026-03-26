@@ -7,12 +7,19 @@ interface VSCodeApi {
   setState(state: any): void
 }
 
+interface UmamiApi {
+  track?: (eventName?: string, data?: Record<string, unknown>) => void
+  identify?: (data: Record<string, unknown>) => void
+}
+
 declare global {
   interface Window {
     $message: MessageApi | undefined
     // VS Code 环境
     vscodeApi?: VSCodeApi
     isVSCode?: boolean
+    // Umami 统计
+    umami?: UmamiApi
   }
   // 构建时定义的常量
   const __VSCODE__: boolean | undefined
