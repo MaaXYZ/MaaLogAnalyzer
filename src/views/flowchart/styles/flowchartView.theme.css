@@ -29,7 +29,7 @@ body {
 
 /* Vue Flow canvas: dark background (default) */
 .vue-flow {
-  background: #1a1a1a;
+  background: var(--vscode-panel-background);
 }
 
 /* Light theme — system preference when not forced dark */
@@ -63,7 +63,7 @@ body {
   }
 
   body:not(.force-dark) .vue-flow {
-    background: #fff;
+    background: var(--vscode-panel-background);
   }
 }
 
@@ -97,5 +97,5 @@ body.force-light {
 }
 
 body.force-light .vue-flow {
-  background: #fff;
+  background: var(--vscode-panel-background);
 }

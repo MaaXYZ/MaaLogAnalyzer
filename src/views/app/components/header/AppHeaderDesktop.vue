@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { NFlex, NButton, NIcon, NDropdown, NSelect, NText } from 'naive-ui'
 import {
   BarChartOutlined,
@@ -52,6 +53,34 @@ const handleProcessUpdate = (value: string | number | null) => {
 const handleThreadUpdate = (value: string | number | null) => {
   emit('update:selected-thread-id', normalizeSelectValue(value))
 }
+
+const isNativeVSCodeHost = typeof window !== 'undefined'
+  && (window.isVSCode === true || typeof window.vscodeApi !== 'undefined')
+
+const useNonVscodeDarkSelectStyle = computed(() => (
+  props.isDark
+  && !props.isVscodeLaunchEmbed
+  && !isNativeVSCodeHost
+))
+
+const processThreadSelectStyle = computed(() => {
+  if (!useNonVscodeDarkSelectStyle.value) return 'width: 150px'
+  return [
+    'width: 150px',
+    '--n-color: rgba(255, 255, 255, 0.06)',
+    '--n-color-active: rgba(255, 255, 255, 0.08)',
+    '--n-border: 1px solid rgba(255, 255, 255, 0.26)',
+    '--n-border-hover: 1px solid rgba(255, 255, 255, 0.42)',
+    '--n-border-focus: 1px solid #63e2b7',
+    '--n-border-active: 1px solid #63e2b7',
+    '--n-box-shadow-hover: 0 0 0 1px rgba(255, 255, 255, 0.12)',
+    '--n-box-shadow-focus: 0 0 0 2px rgba(99, 226, 183, 0.24)',
+    '--n-box-shadow-active: 0 0 0 2px rgba(99, 226, 183, 0.24)',
+    '--n-text-color: rgba(255, 255, 255, 0.9)',
+    '--n-placeholder-color: rgba(255, 255, 255, 0.58)',
+    '--n-arrow-color: rgba(255, 255, 255, 0.72)',
+  ].join('; ')
+})
 </script>
 
 <template>
@@ -88,7 +117,7 @@ const handleThreadUpdate = (value: string | number | null) => {
         placeholder="选择进程"
         clearable
         size="small"
-        style="width: 150px"
+        :style="processThreadSelectStyle"
         @update:value="handleProcessUpdate"
       />
 
@@ -99,7 +128,7 @@ const handleThreadUpdate = (value: string | number | null) => {
         placeholder="选择线程"
         clearable
         size="small"
-        style="width: 150px"
+        :style="processThreadSelectStyle"
         @update:value="handleThreadUpdate"
       />
 

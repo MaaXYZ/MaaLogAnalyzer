@@ -29,6 +29,10 @@ export const useBridgeRpcHandler = (options: UseBridgeRpcHandlerOptions) => {
 
     if (typeof payload.bodyClass === 'string') {
       document.body.setAttribute('class', payload.bodyClass)
+      if (payload.bodyClass.includes('vscode-')) {
+        // VS Code theme should be driven by class + CSS vars, not stale inline styles.
+        document.body.removeAttribute('style')
+      }
     }
 
     window.dispatchEvent(new Event(options.bridgeThemeUpdatedEvent))

@@ -27,9 +27,30 @@ body {
   background-color: transparent !important;
 }
 
+.n-split,
+.n-split .n-split-pane {
+  background-color: var(--app-panel-bg, var(--vscode-panel-background, #18181c)) !important;
+}
+
 /* 滚动条样式 - 深色模式 */
 body {
-  background: var(--vscode-panel-background, #18181c);
+  --app-panel-bg: var(--vscode-panel-background, #18181c);
+  background: var(--app-panel-bg);
+  color: var(--vscode-editor-foreground, rgba(255, 255, 255, 0.82));
+}
+
+/* VS Code bridge class fallback when CSS vars are incomplete */
+body.vscode-light:not(.force-dark),
+body.vscode-high-contrast-light:not(.force-dark) {
+  --app-panel-bg: var(--vscode-panel-background, #ffffff);
+  background: var(--app-panel-bg);
+  color: var(--vscode-editor-foreground, rgba(0, 0, 0, 0.82));
+}
+
+body.vscode-dark:not(.force-light),
+body.vscode-high-contrast:not(.force-light) {
+  --app-panel-bg: var(--vscode-panel-background, #18181c);
+  background: var(--app-panel-bg);
   color: var(--vscode-editor-foreground, rgba(255, 255, 255, 0.82));
 }
 
@@ -54,7 +75,8 @@ body {
 /* 浅色模式 - 系统偏好 */
 @media (prefers-color-scheme: light) {
   body:not(.force-dark) {
-    background: var(--vscode-panel-background, #ffffff);
+    --app-panel-bg: var(--vscode-panel-background, #ffffff);
+    background: var(--app-panel-bg);
     color: var(--vscode-editor-foreground, rgba(0, 0, 0, 0.82));
   }
   
@@ -69,7 +91,8 @@ body {
 
 /* 强制浅色模式 */
 body.force-light {
-  background: var(--vscode-panel-background, #ffffff) !important;
+  --app-panel-bg: var(--vscode-panel-background, #ffffff);
+  background: var(--app-panel-bg) !important;
   color: var(--vscode-editor-foreground, rgba(0, 0, 0, 0.82)) !important;
 }
 
@@ -83,7 +106,8 @@ body.force-light ::-webkit-scrollbar-thumb:hover {
 
 /* 强制深色模式 */
 body.force-dark {
-  background: var(--vscode-panel-background, #18181c) !important;
+  --app-panel-bg: var(--vscode-panel-background, #18181c);
+  background: var(--app-panel-bg) !important;
   color: var(--vscode-editor-foreground, rgba(255, 255, 255, 0.82)) !important;
 }
 

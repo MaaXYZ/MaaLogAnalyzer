@@ -85,9 +85,11 @@ const {
 
 <template>
   <n-card
+    class="statistics-root-card"
     size="small"
     data-tour="statistics-root"
     title="节点性能统计"
+    :bordered="false"
     style="height: 100%; display: flex; flex-direction: column"
     content-style="padding: 16px; flex: 1; min-height: 0; display: flex; flex-direction: column"
   >
@@ -151,4 +153,12 @@ const {
     />
   </n-card>
 </template>
+
+<style scoped>
+:deep(.statistics-root-card.n-card) {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+</style>
 

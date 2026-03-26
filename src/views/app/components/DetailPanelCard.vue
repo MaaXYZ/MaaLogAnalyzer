@@ -36,8 +36,10 @@ const handleToggleCollapse = () => {
 
 <template>
   <n-card
+    class="detail-shell-card"
     size="small"
     :title="title"
+    :bordered="false"
     style="height: 100%; display: flex; flex-direction: column; position: relative"
     content-style="padding: 0; flex: 1; min-height: 0; overflow: hidden"
   >
@@ -66,3 +68,11 @@ const handleToggleCollapse = () => {
     />
   </n-card>
 </template>
+
+<style scoped>
+:deep(.detail-shell-card.n-card) {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+</style>

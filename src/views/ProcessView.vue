@@ -114,7 +114,9 @@ void fileInputRef
 
 <template>
   <n-card
+    class="analysis-root-card"
     data-tour="analysis-process-root"
+    :bordered="false"
     style="height: 100%; overflow: visible"
     content-style="display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: visible"
   >
@@ -219,6 +221,12 @@ void fileInputRef
 
 :deep(.n-card__content) {
   background-color: transparent !important;
+}
+
+:deep(.analysis-root-card.n-card) {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 </style>
 
