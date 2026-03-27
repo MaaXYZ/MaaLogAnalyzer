@@ -34,7 +34,10 @@ export const useVSCodeBridge = (
     const message = event.data as VSCodeBridgePayload
     if (message.type === 'loadFile' && message.content) {
       options.onFileLoadingStart()
-      options.onUploadContent(message.content)
+      const errorImages = decodeBase64ImageEntries(message.errorImages, 'image/png')
+      const visionImages = decodeBase64ImageEntries(message.visionImages, 'image/jpeg')
+      const waitFreezesImages = decodeBase64ImageEntries(message.waitFreezesImages, 'image/jpeg')
+      options.onUploadContent(message.content, errorImages, visionImages, waitFreezesImages)
       options.onFileLoadingEnd()
       return
     }

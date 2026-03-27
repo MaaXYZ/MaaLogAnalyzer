@@ -1135,6 +1135,15 @@ export class LogParser {
         activeNode.action_details?.action_id ??
         activeNode.node_details?.action_id ??
         activeNode.node_id
+      const runtimeActionErrorImage = actionRootStatus === 'failed'
+        ? this.findErrorImageByNames(nowTimestamp, [
+            runtimeActionState?.name,
+            activeNode.action_details?.name,
+            activeNode.node_details?.name,
+            activeNode.reco_details?.name,
+            activeNode.name,
+          ])
+        : undefined
       const actionRoot: UnifiedFlowItem | null = actionRootStatus
         ? {
             id: `node.action.${resolvedActionId}`,
@@ -1148,6 +1157,7 @@ export class LogParser {
             end_ts: runtimeActionState?.end_ts || activeNode.action_details?.end_ts || nowTimestamp,
             action_id: resolvedActionId,
             action_details: activeNode.action_details,
+            error_image: runtimeActionErrorImage,
             children: actionFlow.length > 0 ? actionFlow : undefined,
           }
         : null
@@ -1671,6 +1681,15 @@ export class LogParser {
             const actionStatus: 'success' | 'failed' = mergedActionDetails
               ? (mergedActionDetails.success ? 'success' : 'failed')
               : (message === 'Node.PipelineNode.Succeeded' ? 'success' : 'failed')
+            const resolvedActionErrorImage = actionStatus === 'failed'
+              ? this.findErrorImageByNames(event.timestamp, [
+                  mergedActionDetails?.name,
+                  details.action_details?.name,
+                  details.node_details?.name,
+                  details.reco_details?.name,
+                  nodeName,
+                ])
+              : undefined
             const actionRoot: UnifiedFlowItem | null = hasActionRoot
               ? {
                   id: `node.action.${resolvedActionId}`,
@@ -1681,6 +1700,7 @@ export class LogParser {
                   end_ts: mergedActionDetails?.end_ts,
                   action_id: resolvedActionId,
                   action_details: mergedActionDetails,
+                  error_image: resolvedActionErrorImage,
                   children: actionFlow.length > 0 ? actionFlow : undefined,
                 }
               : null
@@ -1699,7 +1719,12 @@ export class LogParser {
             const resolvedFocus = details.focus ? markRaw(details.focus) : undefined
             const resolvedNodeDetails = details.node_details ? markRaw(details.node_details) : undefined
             const resolvedNodeFlow = nodeFlow.length > 0 ? nodeFlow : undefined
-            const resolvedErrorImage = this.findErrorImage(event.timestamp, nodeName)
+            const resolvedErrorImage = this.findErrorImageByNames(event.timestamp, [
+              details.action_details?.name,
+              details.node_details?.name,
+              details.reco_details?.name,
+              nodeName,
+            ])
             const resolvedWaitFreezesImages = this.findWaitFreezesImages(
               event.timestamp,
               details.action_details?.name || details.node_details?.name || nodeName
@@ -2124,6 +2149,17 @@ export class LogParser {
       if (key.includes(`${secondsOnly}.`) && key.endsWith(suffix)) {
         return path
       }
+    }
+    return undefined
+  }
+
+  findErrorImageByNames(timestamp: string, candidateNames: Array<string | null | undefined>): string | undefined {
+    const seen = new Set<string>()
+    for (const candidate of candidateNames) {
+      if (!candidate || seen.has(candidate)) continue
+      seen.add(candidate)
+      const matched = this.findErrorImage(timestamp, candidate)
+      if (matched) return matched
     }
     return undefined
   }

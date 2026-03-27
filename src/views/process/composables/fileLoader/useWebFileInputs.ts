@@ -3,6 +3,7 @@ import {
   isMainLogFileName,
   isBakLogFileName,
   collectTextFilesFromFiles,
+  collectDebugAssetsFromFiles,
   readDirectoryFiles,
 } from '../../utils/fileLoadingHelpers'
 import type { UseProcessFileLoaderOptions } from './types'
@@ -56,7 +57,14 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
       const combinedContent = await readCombinedLogContent(bakLogFile, mainLogFile)
       if (combinedContent) {
         const textFiles = await collectTextFilesFromFiles(files)
-        options.onUploadContent(combinedContent, undefined, undefined, undefined, textFiles)
+        const debugAssets = await collectDebugAssetsFromFiles(files)
+        options.onUploadContent(
+          combinedContent,
+          debugAssets.errorImages,
+          debugAssets.visionImages,
+          debugAssets.waitFreezesImages,
+          textFiles,
+        )
       }
     } catch (error) {
       alert('读取文件夹失败: ' + error)
@@ -109,7 +117,14 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
       const combinedContent = await readCombinedLogContent(bakLogFile, mainLogFile)
       if (combinedContent) {
         const textFiles = await collectTextFilesFromFiles(files)
-        options.onUploadContent(combinedContent, undefined, undefined, undefined, textFiles)
+        const debugAssets = await collectDebugAssetsFromFiles(files)
+        options.onUploadContent(
+          combinedContent,
+          debugAssets.errorImages,
+          debugAssets.visionImages,
+          debugAssets.waitFreezesImages,
+          textFiles,
+        )
       }
     } catch (error) {
       alert('读取文件失败: ' + error)

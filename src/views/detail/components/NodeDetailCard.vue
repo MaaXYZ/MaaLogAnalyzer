@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import {
   NCard, NDescriptions, NDescriptionsItem, NFlex, NTag, NIcon, NText,
-  NCollapse, NCollapseItem, NButton, NCode, NEmpty,
+  NCollapse, NCollapseItem, NButton, NCode, NEmpty, NImage,
 } from 'naive-ui'
 import { CopyOutlined } from '@vicons/antd'
 import type { NodeInfo } from '../../../types'
 
 const props = defineProps<{
   selectedNode: NodeInfo | null
+  nodeErrorImage: string | null
   descriptionColumns: number
   statusType: 'default' | 'success' | 'warning' | 'error' | 'info' | 'primary'
   statusInfo: {
@@ -76,10 +77,15 @@ const props = defineProps<{
         </n-tag>
       </n-descriptions-item>
 
-      <n-descriptions-item label="节点截图" v-if="props.selectedNode.error_image" :span="props.descriptionColumns">
-        <img :src="props.resolveImageSrc(props.selectedNode.error_image)" style="max-width: 100%; border-radius: 4px; margin-top: 8px" alt="节点截图" />
-      </n-descriptions-item>
     </n-descriptions>
+
+    <div v-if="props.nodeErrorImage" style="margin-top: 12px">
+      <n-text depth="3" style="font-size: 13px; display: block; margin-bottom: 8px">节点截图</n-text>
+      <n-image
+        :src="props.resolveImageSrc(props.nodeErrorImage)"
+        class="detail-preview-image"
+      />
+    </div>
 
     <n-collapse style="margin-top: 16px" :default-expanded-names="props.rawJsonDefaultExpanded">
       <n-collapse-item v-if="props.isVscodeLaunchEmbed" title="节点定义" name="node-definition">
@@ -128,3 +134,19 @@ const props = defineProps<{
     </n-collapse>
   </n-card>
 </template>
+
+<style scoped>
+.detail-preview-image {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+}
+
+.detail-preview-image :deep(img) {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+</style>

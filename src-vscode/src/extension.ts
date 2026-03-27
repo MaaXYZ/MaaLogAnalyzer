@@ -198,23 +198,7 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
           })
 
           if (fileUri && fileUri[0]) {
-            const filePath = fileUri[0].fsPath
-            if (filePath.toLowerCase().endsWith('.zip')) {
-              await handleZipFile(fileUri[0])
-            } else {
-              try {
-                const fileContent = await vscode.workspace.fs.readFile(fileUri[0])
-                const content = new TextDecoder('utf-8').decode(fileContent)
-
-                currentPanel?.webview.postMessage({
-                  type: 'loadFile',
-                  content: content,
-                  fileName: path.basename(filePath)
-                })
-              } catch (error) {
-                vscode.window.showErrorMessage(`无法读取文件: ${error}`)
-              }
-            }
+            await analyzeFileUri(fileUri[0])
           }
           break
 
@@ -261,11 +245,15 @@ async function analyzeFileUri(uri: vscode.Uri): Promise<void> {
   try {
     const fileContent = await vscode.workspace.fs.readFile(uri)
     const content = new TextDecoder('utf-8').decode(fileContent)
+    const debugAssets = await collectDebugAssetsForBaseDirectory(vscode.Uri.file(path.dirname(uri.fsPath)))
 
     currentPanel?.webview.postMessage({
       type: 'loadFile',
       content,
       fileName: path.basename(uri.fsPath),
+      errorImages: debugAssets.errorImages,
+      visionImages: debugAssets.visionImages,
+      waitFreezesImages: debugAssets.waitFreezesImages,
     })
   } catch (error) {
     vscode.window.showErrorMessage(`无法读取文件: ${error}`)
@@ -377,16 +365,84 @@ async function analyzeFolderUri(folderUri: vscode.Uri): Promise<void> {
     }
 
     const sourceName = targetMain ? path.basename(path.dirname(targetMain.fsPath)) : path.basename(folderUri.fsPath)
+    const contentBaseDir = targetMain
+      ? vscode.Uri.file(path.dirname(targetMain.fsPath))
+      : folderUri
+    const debugAssets = await collectDebugAssetsForBaseDirectory(contentBaseDir)
 
     currentPanel?.webview.postMessage({
       type: 'loadFile',
       content: combinedContent,
       fileName: sourceName,
+      errorImages: debugAssets.errorImages,
+      visionImages: debugAssets.visionImages,
+      waitFreezesImages: debugAssets.waitFreezesImages,
     })
   } catch (error) {
     vscode.window.showErrorMessage(`无法读取文件夹: ${error}`)
   }
 }
+
+async function pathExists(uri: vscode.Uri): Promise<boolean> {
+  try {
+    await vscode.workspace.fs.stat(uri)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function readImageDirectoryEntries(
+  dirUri: vscode.Uri,
+  parser: (fileName: string) => string | null,
+): Promise<Array<{ key: string; base64: string }>> {
+  const results: Array<{ key: string; base64: string }> = []
+  if (!(await pathExists(dirUri))) return results
+
+  const entries = await vscode.workspace.fs.readDirectory(dirUri)
+  for (const [name, type] of entries) {
+    if (type !== vscode.FileType.File) continue
+    const key = parser(name)
+    if (!key) continue
+    const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(dirUri, name))
+    results.push({
+      key,
+      base64: Buffer.from(bytes).toString('base64'),
+    })
+  }
+
+  return results
+}
+
+async function collectDebugAssetsForBaseDirectory(baseDirUri: vscode.Uri): Promise<{
+  errorImages: Array<{ key: string; base64: string }>
+  visionImages: Array<{ key: string; base64: string }>
+  waitFreezesImages: Array<{ key: string; base64: string }>
+}> {
+  const baseName = path.posix.basename(baseDirUri.path).toLowerCase()
+  const debugDirUri = baseName === 'debug'
+    ? baseDirUri
+    : vscode.Uri.joinPath(baseDirUri, 'debug')
+
+  if (!(await pathExists(debugDirUri))) {
+    return { errorImages: [], visionImages: [], waitFreezesImages: [] }
+  }
+
+  const errorImages = await readImageDirectoryEntries(
+    vscode.Uri.joinPath(debugDirUri, 'on_error'),
+    parseErrorImageKey,
+  )
+  const visionDirUri = vscode.Uri.joinPath(debugDirUri, 'vision')
+  const visionEntries = await readImageDirectoryEntries(visionDirUri, parseVisionImageKey)
+  const waitFreezesImages = await readImageDirectoryEntries(visionDirUri, parseWaitFreezesKey)
+
+  return {
+    errorImages,
+    visionImages: visionEntries,
+    waitFreezesImages,
+  }
+}
+
 async function execReg(args: string[]): Promise<{ stdout: string; stderr: string }> {
   return execFileAsync('reg.exe', args, { windowsHide: true }) as Promise<{ stdout: string; stderr: string }>
 }

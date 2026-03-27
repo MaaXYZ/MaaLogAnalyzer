@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   NCard, NDescriptions, NDescriptionsItem, NTag,
-  NText, NFlex, NCollapse, NCollapseItem, NButton, NIcon, NCode,
+  NText, NFlex, NCollapse, NCollapseItem, NButton, NIcon, NCode, NImage,
 } from 'naive-ui'
 import { CopyOutlined } from '@vicons/antd'
 import type { NodeInfo } from '../../../types'
@@ -10,6 +10,7 @@ import { getRuntimeStatusTagType, getRuntimeStatusText } from '../../../utils/ru
 const props = defineProps<{
   currentActionDetails: any
   currentActionStatus: 'success' | 'failed' | 'running' | null
+  actionErrorImage: string | null
   actionExecutionTime: string
   descriptionColumns: number
   selectedNode: NodeInfo | null
@@ -60,14 +61,21 @@ const props = defineProps<{
     <div v-if="props.selectedNode?.wait_freezes_images?.length" style="margin-top: 12px">
       <n-text depth="3" style="font-size: 13px; display: block; margin-bottom: 8px">Wait Freezes 截图 ({{ props.selectedNode.wait_freezes_images.length }})</n-text>
       <n-flex vertical style="gap: 8px">
-        <img
+        <n-image
           v-for="(img, idx) in props.selectedNode.wait_freezes_images"
           :key="idx"
           :src="props.resolveImageSrc(img)"
-          style="max-width: 100%; border-radius: 4px"
-          :alt="`Wait Freezes 截图 ${idx + 1}`"
+          class="detail-preview-image"
         />
       </n-flex>
+    </div>
+
+    <div v-if="props.currentActionStatus === 'failed' && props.actionErrorImage" style="margin-top: 12px">
+      <n-text depth="3" style="font-size: 13px; display: block; margin-bottom: 8px">失败截图</n-text>
+      <n-image
+        :src="props.resolveImageSrc(props.actionErrorImage)"
+        class="detail-preview-image"
+      />
     </div>
 
     <n-collapse style="margin-top: 16px" :default-expanded-names="props.rawJsonDefaultExpanded">
@@ -93,3 +101,19 @@ const props = defineProps<{
     </n-collapse>
   </n-card>
 </template>
+
+<style scoped>
+.detail-preview-image {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+}
+
+.detail-preview-image :deep(img) {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+</style>

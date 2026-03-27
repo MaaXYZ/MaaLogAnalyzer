@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   NCard, NDescriptions, NDescriptionsItem, NFlex, NTag,
-  NCollapse, NCollapseItem, NButton, NIcon, NCode,
+  NCollapse, NCollapseItem, NButton, NIcon, NCode, NImage, NText,
 } from 'naive-ui'
 import { CopyOutlined } from '@vicons/antd'
 import type { UnifiedFlowItem } from '../../../types'
@@ -54,10 +54,12 @@ const props = defineProps<{
         {{ props.selectedFlowItem.children?.length || 0 }}
       </n-descriptions-item>
 
-      <n-descriptions-item label="错误截图" v-if="props.selectedFlowErrorImage" :span="props.descriptionColumns">
-        <img :src="props.resolveImageSrc(props.selectedFlowErrorImage)" style="max-width: 100%; border-radius: 4px; margin-top: 8px" alt="错误截图" />
-      </n-descriptions-item>
     </n-descriptions>
+
+    <div v-if="props.selectedFlowErrorImage" style="margin-top: 12px">
+      <n-text depth="3" style="font-size: 13px; display: block; margin-bottom: 8px">错误截图</n-text>
+      <n-image :src="props.resolveImageSrc(props.selectedFlowErrorImage)" class="detail-preview-image" />
+    </div>
 
     <n-collapse style="margin-top: 16px" :default-expanded-names="props.rawJsonDefaultExpanded">
       <n-collapse-item title="原始事件数据" name="task-json">
@@ -82,3 +84,19 @@ const props = defineProps<{
     </n-collapse>
   </n-card>
 </template>
+
+<style scoped>
+.detail-preview-image {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+}
+
+.detail-preview-image :deep(img) {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+</style>

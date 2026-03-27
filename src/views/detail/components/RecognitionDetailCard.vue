@@ -72,12 +72,12 @@ const props = defineProps<{
 
     <div v-if="props.currentAttempt?.vision_image" style="margin-top: 12px">
       <n-text depth="3" style="font-size: 13px; display: block; margin-bottom: 8px">调试截图</n-text>
-      <img :src="props.resolveImageSrc(props.currentAttempt.vision_image)" style="max-width: 100%; border-radius: 4px" alt="调试截图" />
+      <n-image :src="props.resolveImageSrc(props.currentAttempt.vision_image)" class="detail-preview-image" />
     </div>
 
     <div v-if="props.currentAttempt?.error_image" style="margin-top: 12px">
       <n-text depth="3" style="font-size: 13px; display: block; margin-bottom: 8px">错误截图</n-text>
-      <img :src="props.resolveImageSrc(props.currentAttempt.error_image)" style="max-width: 100%; border-radius: 4px" alt="错误截图" />
+      <n-image :src="props.resolveImageSrc(props.currentAttempt.error_image)" class="detail-preview-image" />
     </div>
 
     <div v-if="props.bridgeRecognitionLoading" style="margin-top: 12px">

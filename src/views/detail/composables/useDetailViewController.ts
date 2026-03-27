@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import type { NodeInfo } from '../../../types'
+import type { NodeInfo, RecognitionAttempt, UnifiedFlowItem } from '../../../types'
 import { useIsMobile } from '../../../composables/useIsMobile'
 import { useDetailPresentationState } from './useDetailPresentationState'
 import { useDetailFlowSelection } from './useDetailFlowSelection'
@@ -8,6 +8,7 @@ import { useDetailBridgeRecognition } from './useDetailBridgeRecognition'
 import { useDetailNodeDefinition } from './useDetailNodeDefinition'
 import { useDetailUiHelpers } from './useDetailUiHelpers'
 import type { BridgeOpenCropRequest } from './types'
+import { buildNodeFlowItems, buildNodeRecognitionAttempts } from '../../../utils/nodeFlow'
 
 interface DetailViewControllerProps {
   selectedNode: NodeInfo | null
@@ -32,6 +33,30 @@ interface DetailViewControllerProps {
 export const useDetailViewController = (
   props: DetailViewControllerProps,
 ) => {
+  const pickRecognitionErrorImage = (attempts: RecognitionAttempt[]): string | null => {
+    for (let index = attempts.length - 1; index >= 0; index -= 1) {
+      const attempt = attempts[index]
+      if (attempt.error_image) return attempt.error_image
+      if (attempt.nested_nodes?.length) {
+        const nested = pickRecognitionErrorImage(attempt.nested_nodes)
+        if (nested) return nested
+      }
+    }
+    return null
+  }
+
+  const pickFlowErrorImage = (items: UnifiedFlowItem[]): string | null => {
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const item = items[index]
+      if (item.error_image) return item.error_image
+      if (item.children?.length) {
+        const nested = pickFlowErrorImage(item.children)
+        if (nested) return nested
+      }
+    }
+    return null
+  }
+
   const { isMobile } = useIsMobile()
   const {
     rawJsonDefaultExpanded,
@@ -106,6 +131,25 @@ export const useDetailViewController = (
     bridgeNodeDefinition: computed(() => props.bridgeNodeDefinition),
   })
 
+  const selectedNodeDisplayErrorImage = computed(() => {
+    const node = props.selectedNode
+    if (!node) return null
+    if (node.error_image) return node.error_image
+    if (node.status !== 'failed') return null
+
+    const recognitionErrorImage = pickRecognitionErrorImage(buildNodeRecognitionAttempts(node))
+    if (recognitionErrorImage) return recognitionErrorImage
+
+    return pickFlowErrorImage(buildNodeFlowItems(node))
+  })
+
+  const currentActionErrorImage = computed(() => {
+    if (!currentActionItem.value) return null
+    if (currentActionStatus.value !== 'failed') return null
+    if (currentActionItem.value.error_image) return currentActionItem.value.error_image
+    return props.selectedNode?.error_image ?? null
+  })
+
   return {
     rawJsonDefaultExpanded,
     resolveImageSrc,
@@ -138,5 +182,7 @@ export const useDetailViewController = (
     bridgeRecognitionDrawImages,
     openRecognitionInCrop,
     formattedBridgeNodeDefinition,
+    selectedNodeDisplayErrorImage,
+    currentActionErrorImage,
   }
 }

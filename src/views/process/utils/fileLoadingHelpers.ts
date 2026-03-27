@@ -6,6 +6,12 @@ export interface LoadedTextFile {
   content: string
 }
 
+interface CollectedDebugAssets {
+  errorImages: Map<string, string>
+  visionImages: Map<string, string>
+  waitFreezesImages: Map<string, string>
+}
+
 export const isMainLogFileName = (name: string) => name === 'maa.log' || name === 'maafw.log'
 export const isBakLogFileName = (name: string) => name === 'maa.bak.log' || name === 'maafw.bak.log'
 
@@ -44,37 +50,130 @@ export const collectTextFilesFromFiles = async (files: Iterable<File>): Promise<
   return result
 }
 
-const getFileFromEntry = (fileEntry: FileSystemFileEntry): Promise<File> => {
+const parseErrorImageKey = (fileName: string): string | null => {
+  const match = fileName.match(/^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+)\.png$/i)
+  if (!match) return null
+  const [, timestamp, ms, nodeName] = match
+  return `${timestamp}.${ms.padEnd(3, '0')}_${nodeName}`
+}
+
+const parseVisionImageKey = (fileName: string): string | null => {
+  const match = fileName.match(/^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+_\d{9,})\.jpg$/i)
+  if (!match) return null
+  const [, timestamp, ms, rest] = match
+  return `${timestamp}.${ms.padEnd(3, '0')}_${rest}`
+}
+
+const parseWaitFreezesKey = (fileName: string): string | null => {
+  const match = fileName.match(/^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+_wait_freezes)\.jpg$/i)
+  if (!match) return null
+  const [, timestamp, ms, rest] = match
+  return `${timestamp}.${ms.padEnd(3, '0')}_${rest}`
+}
+
+export const collectDebugAssetsFromFiles = async (files: Iterable<File>): Promise<CollectedDebugAssets> => {
+  const errorImages = new Map<string, string>()
+  const visionImages = new Map<string, string>()
+  const waitFreezesImages = new Map<string, string>()
+
+  for (const file of files) {
+    const rawPath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+    const normalizedPath = rawPath.replace(/\\/g, '/')
+    const lower = normalizedPath.toLowerCase()
+
+    if ((lower.includes('/on_error/') || lower.startsWith('on_error/')) && lower.endsWith('.png')) {
+      const key = parseErrorImageKey(file.name)
+      if (key) errorImages.set(key, URL.createObjectURL(file))
+      continue
+    }
+
+    if ((lower.includes('/vision/') || lower.startsWith('vision/')) && lower.endsWith('.jpg')) {
+      const waitFreezesKey = parseWaitFreezesKey(file.name)
+      if (waitFreezesKey) {
+        const previous = waitFreezesImages.get(waitFreezesKey)
+        if (previous) URL.revokeObjectURL(previous)
+        waitFreezesImages.set(waitFreezesKey, URL.createObjectURL(file))
+        continue
+      }
+
+      const visionKey = parseVisionImageKey(file.name)
+      if (visionKey) {
+        const previous = visionImages.get(visionKey)
+        if (previous) URL.revokeObjectURL(previous)
+        visionImages.set(visionKey, URL.createObjectURL(file))
+      }
+    }
+  }
+
+  return {
+    errorImages,
+    visionImages,
+    waitFreezesImages,
+  }
+}
+
+const getFileFromEntry = (fileEntry: FileSystemFileEntry, relativePath: string): Promise<File> => {
   return new Promise((resolve, reject) => {
-    fileEntry.file(resolve, reject)
+    fileEntry.file((file) => {
+      try {
+        Object.defineProperty(file, 'webkitRelativePath', {
+          value: relativePath,
+          configurable: true,
+        })
+      } catch {
+        // ignore if browser prevents redefining
+      }
+      resolve(file)
+    }, reject)
   })
 }
 
-export const readDirectoryFiles = (dirEntry: FileSystemDirectoryEntry): Promise<File[]> => {
+const readDirectoryEntries = (reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> => {
   return new Promise((resolve, reject) => {
-    const reader = dirEntry.createReader()
-    const files: File[] = []
+    const entries: FileSystemEntry[] = []
 
-    const readEntries = () => {
-      reader.readEntries(async (entries) => {
-        if (entries.length === 0) {
-          resolve(files)
+    const readBatch = () => {
+      reader.readEntries((batch) => {
+        if (batch.length === 0) {
+          resolve(entries)
           return
         }
-
-        for (const entry of entries) {
-          if (entry.isFile) {
-            const file = await getFileFromEntry(entry as FileSystemFileEntry)
-            files.push(file)
-          }
-        }
-
-        readEntries()
+        entries.push(...batch)
+        readBatch()
       }, reject)
     }
 
-    readEntries()
+    readBatch()
   })
+}
+
+export const readDirectoryFiles = async (
+  dirEntry: FileSystemDirectoryEntry,
+  relativePrefix = '',
+): Promise<File[]> => {
+  const reader = dirEntry.createReader()
+  const entries = await readDirectoryEntries(reader)
+  const files: File[] = []
+
+  for (const entry of entries) {
+    if (entry.isFile) {
+      files.push(await getFileFromEntry(
+        entry as FileSystemFileEntry,
+        `${relativePrefix}${entry.name}`,
+      ))
+      continue
+    }
+
+    if (entry.isDirectory) {
+      const nestedFiles = await readDirectoryFiles(
+        entry as FileSystemDirectoryEntry,
+        `${relativePrefix}${entry.name}/`,
+      )
+      files.push(...nestedFiles)
+    }
+  }
+
+  return files
 }
 
 interface Base64ImageEntry {

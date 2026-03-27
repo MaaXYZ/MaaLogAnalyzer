@@ -60,6 +60,8 @@ const {
   bridgeRecognitionDrawImages,
   openRecognitionInCrop,
   formattedBridgeNodeDefinition,
+  selectedNodeDisplayErrorImage,
+  currentActionErrorImage,
 } = useDetailViewController(props)
 </script>
 
@@ -101,6 +103,7 @@ const {
           v-if="hasAction"
           :current-action-details="currentActionDetails"
           :current-action-status="currentActionStatus"
+          :action-error-image="currentActionErrorImage"
           :action-execution-time="actionExecutionTime"
           :description-columns="descriptionColumns"
           :selected-node="selectedNode"
@@ -128,6 +131,7 @@ const {
         <node-detail-card
           v-if="!isFlowItemSelected"
           :selected-node="selectedNode"
+          :node-error-image="selectedNodeDisplayErrorImage"
           :description-columns="descriptionColumns"
           :status-type="statusType"
           :status-info="statusInfo"
