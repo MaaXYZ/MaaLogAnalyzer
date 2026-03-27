@@ -14,8 +14,8 @@ const includesSearchText = (value: unknown, query: string): boolean => {
 
 const buildNextListDisplayName = (item: NonNullable<NodeInfo['next_list']>[number]): string => {
   const prefixes: string[] = []
-  if (item.anchor) prefixes.push('[Anchor]')
   if (item.jump_back) prefixes.push('[JumpBack]')
+  if (item.anchor) prefixes.push('[Anchor]')
   if (prefixes.length === 0) return item.name || '未命名 Next'
   return `${prefixes.join(' ')} ${item.name || ''}`.trim()
 }

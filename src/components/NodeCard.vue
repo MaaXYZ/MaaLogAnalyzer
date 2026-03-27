@@ -103,8 +103,8 @@ const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
     if (nextList.length > 0) {
       nextList.forEach((nextItem) => {
         const prefixes: string[] = []
-        if (nextItem.anchor) prefixes.push('[Anchor]')
         if (nextItem.jump_back) prefixes.push('[JumpBack]')
+        if (nextItem.anchor) prefixes.push('[Anchor]')
         const displayName = prefixes.length > 0 ? `${prefixes.join('')} ${nextItem.name}` : nextItem.name
         result.push({
           name: displayName,
@@ -117,8 +117,8 @@ const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
 
   const nextEntries = nextList.map((nextItem) => {
     const prefixes: string[] = []
-    if (nextItem.anchor) prefixes.push('[Anchor]')
     if (nextItem.jump_back) prefixes.push('[JumpBack]')
+    if (nextItem.anchor) prefixes.push('[Anchor]')
     const displayName = prefixes.length > 0 ? `${prefixes.join('')} ${nextItem.name}` : nextItem.name
     return {
       name: nextItem.name,
