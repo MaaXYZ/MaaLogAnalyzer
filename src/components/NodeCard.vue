@@ -407,7 +407,6 @@ const actionButtonType = computed<ButtonType>(() => {
 .node-card {
   position: relative;
   padding-left: 20px;
-  transition: all 0.3s;
 }
 
 .node-card::before {

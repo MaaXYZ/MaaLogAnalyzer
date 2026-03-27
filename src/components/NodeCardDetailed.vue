@@ -88,21 +88,38 @@ const hasRecognitionSection = computed(() => props.mergedRecognitionList.length 
 const hasActionSection = computed(() => !!actionRootItem.value || !!props.node.action_details)
 
 const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
+const getRecognitionItemKey = (item: MergedRecognitionItem, idx: number): string => {
+  if (item.isRoundSeparator) {
+    return `round-${item.roundIndex ?? idx}-${item.name}`
+  }
+  if (item.attemptIndex != null) {
+    return `attempt-${item.attemptIndex}`
+  }
+  return `placeholder-${idx}-${item.name}`
+}
 </script>
 
 <template>
-  <n-card v-if="hasRecognitionSection" size="small">
+  <n-card v-if="hasRecognitionSection" key="recognition-section" size="small">
       <template #header>
         <n-flex align="center" style="gap: 8px">
           <span>Recognition</span>
-          <n-button size="small" @click="emit('toggle-recognition')">
+          <n-button
+            size="small"
+            class="fixed-toggle-button"
+            @click="emit('toggle-recognition')"
+          >
             {{ recognitionExpanded ? 'Hide' : 'Show' }}
           </n-button>
         </n-flex>
       </template>
 
       <n-flex vertical style="gap: 8px">
-        <template v-for="(item, idx) in mergedRecognitionList" :key="`merged-${idx}`">
+        <div
+          v-for="(item, idx) in mergedRecognitionList"
+          :key="getRecognitionItemKey(item, idx)"
+          class="recognition-item-fragment"
+        >
           <n-text
             v-if="item.isRoundSeparator && recognitionExpanded"
             depth="3"
@@ -149,6 +166,7 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
               <n-button
                 v-if="item.hasNestedNodes && item.attemptIndex != null"
                 size="small"
+                class="fixed-toggle-button"
                 @click="emit('toggle-nested', item.attemptIndex)"
               >
                 {{ isExpanded(item.attemptIndex) ? 'Hide' : 'Show' }}
@@ -221,6 +239,7 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
                   <n-button
                     v-if="nested.hasChildren"
                     size="small"
+                    class="fixed-toggle-button"
                     @click.stop="toggleNestedRecognitionFlowItemExpand(nested.flowItemId)"
                   >
                     {{ nested.expanded ? 'Hide' : 'Show' }}
@@ -249,11 +268,11 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
               </template>
             </n-flex>
           </template>
-        </template>
+        </div>
       </n-flex>
     </n-card>
 
-  <n-card v-if="hasActionSection" size="small">
+  <n-card v-if="hasActionSection" key="action-section" size="small">
     <template #header>
       <span>Action</span>
     </template>
@@ -302,15 +321,20 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
           </n-button>
         </task-doc-hover-popover>
 
-        <n-button v-if="actionFlowRows.length > 0" size="small" @click="emit('toggle-action')">
+        <n-button
+          v-if="actionFlowRows.length > 0"
+          size="small"
+          class="fixed-toggle-button"
+          @click="emit('toggle-action')"
+        >
           {{ actionExpanded ? 'Hide' : 'Show' }}
         </n-button>
       </n-flex>
 
       <n-flex v-if="actionExpanded && actionFlowRows.length > 0" vertical style="gap: 8px">
         <n-flex
-          v-for="row in actionFlowRows"
-          :key="`detailed-flow-${row.item.id}`"
+          v-for="(row, rowIndex) in actionFlowRows"
+          :key="`detailed-flow-${rowIndex}-${row.item.id}`"
           align="center"
           style="gap: 8px"
           :style="{ marginLeft: toDetailOffset(row.depth) }"
@@ -337,6 +361,7 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
           <n-button
             v-if="row.hasChildren"
             size="small"
+            class="fixed-toggle-button"
             @click.stop="toggleActionFlowItem(row.item.id)"
           >
             {{ row.expanded ? 'Hide' : 'Show' }}
@@ -356,5 +381,13 @@ const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
   text-align: center;
   font-size: 12px;
   letter-spacing: 0.5px;
+}
+
+.fixed-toggle-button {
+  width: 56px;
+}
+
+.recognition-item-fragment {
+  display: contents;
 }
 </style>
