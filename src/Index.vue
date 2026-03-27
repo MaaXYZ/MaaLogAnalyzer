@@ -269,6 +269,16 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   const subTextColor = pickCssVarColor(styleDecl, ['--vscode-descriptionForeground', '--vscode-editor-foreground'], textColor)
   const inputTextColor = pickCssVarColor(styleDecl, ['--vscode-input-foreground', '--vscode-editor-foreground'], textColor)
   const placeholderColor = pickCssVarColor(styleDecl, ['--vscode-input-placeholderForeground', '--vscode-descriptionForeground'], subTextColor)
+  const codeInlineBg = pickCssVarColor(
+    styleDecl,
+    ['--vscode-textCodeBlock-background', '--vscode-textPreformat-background', '--vscode-editor-background'],
+    buttonSecondaryColor,
+  )
+  const codeInlineText = pickCssVarColor(
+    styleDecl,
+    ['--vscode-textPreformat-foreground', '--vscode-editor-foreground'],
+    textColor,
+  )
 
   return {
     common: {
@@ -382,6 +392,25 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
             tdColorPopover: widgetColor,
             tdColorHoverPopover: dataTableHeaderHoverColor,
             tdColorSortingPopover: dataTableHeaderSortingColor,
+          },
+          Descriptions: {
+            titleTextColor: textColor,
+            thColor: dataTableHeaderColor,
+            thColorModal: dataTableHeaderColor,
+            thColorPopover: dataTableHeaderColor,
+            thTextColor: dataTableHeaderTextColor,
+            tdTextColor: textColor,
+            tdColor: widgetColor,
+            tdColorModal: widgetColor,
+            tdColorPopover: widgetColor,
+            borderColor: dataTableBorderColor,
+            borderColorModal: dataTableBorderColor,
+            borderColorPopover: dataTableBorderColor,
+          },
+          Typography: {
+            codeColor: codeInlineBg,
+            codeTextColor: codeInlineText,
+            codeBorder: `1px solid ${dataTableBorderColor}`,
           },
         }
       : {}),
