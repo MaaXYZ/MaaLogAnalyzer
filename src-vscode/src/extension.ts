@@ -218,6 +218,12 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
         case 'showInfo':
           vscode.window.showInformationMessage(message.message)
           break
+
+        case 'copyText':
+          if (typeof message.text === 'string') {
+            await vscode.env.clipboard.writeText(message.text)
+          }
+          break
       }
     },
     undefined,
