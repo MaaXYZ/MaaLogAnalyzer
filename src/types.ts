@@ -51,6 +51,7 @@ export interface RecognitionAttempt {
   ts: string
   end_ts?: string
   status: 'success' | 'failed' | 'running'
+  anchor_name?: string
   reco_details?: RecognitionDetail
   nested_nodes?: RecognitionAttempt[]
   error_image?: string
@@ -163,6 +164,7 @@ export interface UnifiedFlowItem {
   status: 'success' | 'failed' | 'running'
   ts: string
   end_ts?: string
+  anchor_name?: string
   task_id?: number
   node_id?: number
   reco_id?: number

@@ -1,4 +1,9 @@
 import type { NodeInfo, UnifiedFlowItem } from '../../../../types'
+import { buildNodeRecognitionAttempts } from '../../../../utils/nodeFlow'
+import {
+  buildNextListDisplayName,
+  buildRecognitionTargetByNextName,
+} from '../../../../utils/nextListPresentation'
 import type { NodeNavMatchDetail, NodeNavMatchKind } from './types'
 
 export const normalizeSearchText = (value: unknown): string => {
@@ -10,14 +15,6 @@ const includesSearchText = (value: unknown, query: string): boolean => {
   if (!query) return true
   if (typeof value !== 'string') return false
   return value.toLowerCase().includes(query)
-}
-
-const buildNextListDisplayName = (item: NonNullable<NodeInfo['next_list']>[number]): string => {
-  const prefixes: string[] = []
-  if (item.jump_back) prefixes.push('[JumpBack]')
-  if (item.anchor) prefixes.push('[Anchor]')
-  if (prefixes.length === 0) return item.name || '未命名 Next'
-  return `${prefixes.join(' ')} ${item.name || ''}`.trim()
 }
 
 const matchesKeyword = (query: string, keyword: string): boolean => {
@@ -77,6 +74,8 @@ export const collectNodeNavMatchDetails = (node: NodeInfo, query: string): NodeN
   const details: NodeNavMatchDetail[] = []
   const seen = new Set<string>()
   const limit = 6
+  const attempts = buildNodeRecognitionAttempts(node)
+  const recognitionTargetByNextName = buildRecognitionTargetByNextName(attempts, node.next_list ?? [])
 
   if (includesSearchText(node.name, query)) {
     pushUniqueNodeNavMatchDetail(details, seen, { kind: 'node', text: node.name || '未命名节点' })
@@ -84,9 +83,11 @@ export const collectNodeNavMatchDetails = (node: NodeInfo, query: string): NodeN
 
   for (const item of node.next_list ?? []) {
     if (details.length >= limit) break
-    const display = buildNextListDisplayName(item)
+    const resolvedTargetName = recognitionTargetByNextName.get(item.name)
+    const display = buildNextListDisplayName(item, resolvedTargetName)
     if (
       includesSearchText(item.name, query) ||
+      includesSearchText(resolvedTargetName, query) ||
       includesSearchText(display, query) ||
       (item.jump_back && isJumpBackKeyword(query)) ||
       (item.anchor && isAnchorKeyword(query))

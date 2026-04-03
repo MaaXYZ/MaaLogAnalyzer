@@ -5,6 +5,11 @@ import type { NodeInfo, RecognitionAttempt, MergedRecognitionItem } from '../typ
 import { getSettings } from '../utils/settings'
 import { extractTime } from '../utils/formatDuration'
 import { buildNodeRecognitionAttempts } from '../utils/nodeFlow'
+import {
+  buildNextListDisplayName,
+  buildRecognitionTargetByNextName,
+  resolveRecognitionNextListName,
+} from '../utils/nextListPresentation'
 import { useNodeCardTaskDoc } from './nodeCard/useNodeCardTaskDoc'
 import NodeCardDetailed from './NodeCardDetailed.vue'
 import NodeCardCompact from './NodeCardCompact.vue'
@@ -98,14 +103,13 @@ const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
 
   const attempts = buildNodeRecognitionAttempts(props.node)
   const nextList = props.node.next_list ?? []
+  const recognitionTargetByNextName = buildRecognitionTargetByNextName(attempts, nextList)
+  const nextListNames = new Set(nextList.map(item => item.name))
 
   if (!attempts.length) {
     if (nextList.length > 0) {
       nextList.forEach((nextItem) => {
-        const prefixes: string[] = []
-        if (nextItem.jump_back) prefixes.push('[JumpBack]')
-        if (nextItem.anchor) prefixes.push('[Anchor]')
-        const displayName = prefixes.length > 0 ? `${prefixes.join('')} ${nextItem.name}` : nextItem.name
+        const displayName = buildNextListDisplayName(nextItem)
         result.push({
           name: displayName,
           status: 'not-recognized'
@@ -116,13 +120,11 @@ const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
   }
 
   const nextEntries = nextList.map((nextItem) => {
-    const prefixes: string[] = []
-    if (nextItem.jump_back) prefixes.push('[JumpBack]')
-    if (nextItem.anchor) prefixes.push('[Anchor]')
-    const displayName = prefixes.length > 0 ? `${prefixes.join('')} ${nextItem.name}` : nextItem.name
+    const displayName = buildNextListDisplayName(nextItem, recognitionTargetByNextName.get(nextItem.name), '')
     return {
       name: nextItem.name,
       displayName,
+      nextItem,
     }
   })
 
@@ -156,7 +158,8 @@ const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
   let expectedNextIndex = 0
 
   attempts.forEach((attempt, index) => {
-    const nextIndex = nextIndexMap.get(attempt.name)
+    const matchName = resolveRecognitionNextListName(attempt, nextListNames)
+    const nextIndex = nextIndexMap.get(matchName)
     const hasRoundData = rounds[currentRound].length > 0
 
     // 命中 next_list 顺序回退时，认为进入新一轮。
@@ -200,13 +203,14 @@ const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
     const outOfNextList: RoundAttempt[] = []
 
     roundAttempts.forEach((roundAttempt) => {
-      const bucket = roundBuckets.get(roundAttempt.attempt.name)
+      const matchName = resolveRecognitionNextListName(roundAttempt.attempt, nextListNames)
+      const bucket = roundBuckets.get(matchName)
       if (bucket) {
         bucket.push(roundAttempt)
         return
       }
-      if (nextIndexMap.has(roundAttempt.attempt.name)) {
-        roundBuckets.set(roundAttempt.attempt.name, [roundAttempt])
+      if (nextIndexMap.has(matchName)) {
+        roundBuckets.set(matchName, [roundAttempt])
       } else {
         outOfNextList.push(roundAttempt)
       }
@@ -216,8 +220,13 @@ const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
       const bucket = roundBuckets.get(nextEntry.name)
       const matched = bucket?.shift()
       if (matched) {
+        const matchedDisplayName = buildNextListDisplayName(
+          nextEntry.nextItem,
+          matched.attempt.name,
+          ''
+        )
         result.push({
-          name: nextEntry.displayName,
+          name: matchedDisplayName,
           status: matched.attempt.status,
           attemptIndex: matched.index,
           attempt: matched.attempt,
@@ -234,7 +243,8 @@ const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
     const remainingMatched = [...roundBuckets.values()].flat()
     const tail = [...outOfNextList, ...remainingMatched].sort((a, b) => a.index - b.index)
     tail.forEach(({ attempt, index }) => {
-      const name = nextDisplayMap.get(attempt.name) ?? attempt.name
+      const matchName = resolveRecognitionNextListName(attempt, nextListNames)
+      const name = nextDisplayMap.get(matchName) ?? attempt.name
       result.push({
         name,
         status: attempt.status,

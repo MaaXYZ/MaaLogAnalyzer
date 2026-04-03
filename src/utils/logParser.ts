@@ -642,6 +642,12 @@ export class LogParser {
         jump_back: item.jump_back || false
       }))
     }
+    const parseRecognitionAnchorName = (details: Record<string, any>): string | undefined => {
+      if (typeof details.anchor !== 'string') return undefined
+      const trimmed = details.anchor.trim()
+      if (!trimmed) return undefined
+      return this.stringPool.intern(trimmed)
+    }
     const markRawTaskDetails = (details: Record<string, any> | undefined): Record<string, any> | undefined => {
       if (!details) return undefined
       return markRaw({ ...details })
@@ -687,15 +693,23 @@ export class LogParser {
       const key = scopedKey(taskId, recoId)
       if (finishedRecognitionKeys.has(key)) return undefined
       const existing = activeRecognitionAttempts.get(key)
-      if (existing) return existing
+      if (existing) {
+        const parsedAnchorName = parseRecognitionAnchorName(details)
+        if (parsedAnchorName && !existing.anchor_name) {
+          existing.anchor_name = parsedAnchorName
+        }
+        return existing
+      }
 
       const startTimestamp = this.stringPool.intern(timestamp)
+      const parsedAnchorName = parseRecognitionAnchorName(details)
       const attempt: RecognitionAttempt = {
         reco_id: recoId,
         name: this.stringPool.intern(details.name || ''),
         ts: startTimestamp,
         end_ts: startTimestamp,
         status: 'running',
+        ...(parsedAnchorName ? { anchor_name: parsedAnchorName } : {}),
       }
       recognitionOrderMeta.set(attempt, { startSeq: eventOrder, endSeq: eventOrder })
       activeRecognitionAttempts.set(key, attempt)
@@ -728,6 +742,12 @@ export class LogParser {
       attempt.name = attempt.name || this.stringPool.intern(details.name || '')
       attempt.ts = attempt.ts || endTimestamp
       attempt.end_ts = endTimestamp
+      if (!attempt.anchor_name) {
+        const parsedAnchorName = parseRecognitionAnchorName(details)
+        if (parsedAnchorName) {
+          attempt.anchor_name = parsedAnchorName
+        }
+      }
       if (details.reco_details) {
         attempt.reco_details = markRaw(details.reco_details)
       }
@@ -794,6 +814,9 @@ export class LogParser {
       }
       if (!preferred.reco_details && secondary.reco_details) {
         preferred.reco_details = secondary.reco_details
+      }
+      if (!preferred.anchor_name && secondary.anchor_name) {
+        preferred.anchor_name = secondary.anchor_name
       }
       if (!preferred.error_image && secondary.error_image) {
         preferred.error_image = secondary.error_image
