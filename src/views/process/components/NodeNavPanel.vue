@@ -71,7 +71,7 @@ defineExpose({
         <n-list hoverable clickable v-if="props.items.length > 0">
         <n-list-item
           v-for="item in props.items"
-          :key="`nav-${item.node.task_id}-${item.node.node_id}`"
+          :key="`nav-${item.node.task_id}-${item.node.node_id}-${item.originalIndex}`"
           @click="emit('select-node', item.originalIndex)"
             :style="{
               cursor: 'pointer',

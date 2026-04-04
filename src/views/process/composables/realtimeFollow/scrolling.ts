@@ -20,6 +20,28 @@ export const createRealtimeFollowScrolling = (
     return (options.virtualScroller.value?.$el ?? null) as HTMLElement | null
   }
 
+  const findRenderedItemElement = (index: number): HTMLElement | null => {
+    const scrollerEl = getScrollerElement()
+    if (!scrollerEl) return null
+    return scrollerEl.querySelector(`[data-index="${index}"]`) as HTMLElement | null
+  }
+
+  const alignToRenderedItem = async (index: number, retry = 0): Promise<boolean> => {
+    const itemEl = findRenderedItemElement(index)
+    if (itemEl) {
+      itemEl.scrollIntoView({ block: 'center', behavior: 'auto' })
+      return true
+    }
+
+    if (retry >= 4) return false
+
+    await delay(50 * (retry + 1))
+    const ok = await safeScrollToItem(index)
+    if (!ok) return false
+    await nextTick()
+    return alignToRenderedItem(index, retry + 1)
+  }
+
   // 动态高度 + 高频更新下，scrollToItem 可能在尺寸缓存未就绪时抛错（accumulator undefined）
   const safeScrollToItem = async (index: number, retry = 0): Promise<boolean> => {
     const scroller = options.virtualScroller.value
@@ -46,9 +68,13 @@ export const createRealtimeFollowScrolling = (
     const ok = await safeScrollToItem(index)
     if (!ok) return
 
-    // 动态高度内容渲染后再补一次，减少偏移
+    await nextTick()
+    await alignToRenderedItem(index)
+
+    // 动态高度内容渲染后再补一次，减少初次加载时的偏移
     setTimeout(() => {
       void safeScrollToItem(index)
+      void alignToRenderedItem(index)
     }, 80)
   }
 
