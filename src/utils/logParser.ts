@@ -819,12 +819,43 @@ export class LogParser {
     const subTaskActionEndOrders = new Map<string, number>()
     const subTaskActionNodeStartTimes = new Map<string, string>()
     const subTaskSnapshots = new Map<number, SubTaskSnapshot>()
+    const subTaskParentByTaskId = new Map<number, number>()
+    const activeTaskStack: number[] = [task.task_id]
     const activeRecognitionAttempts = new Map<string, RecognitionAttempt>()
     const activeRecognitionStack: Array<{ taskId: number; recoId: number }> = []
     const finishedRecognitionKeys = new Set<string>()
     const recognitionOrderMeta = new WeakMap<RecognitionAttempt, { startSeq: number; endSeq: number }>()
 
     const scopedKey = (taskId: number, id: number): string => `${taskId}:${id}`
+    const toTimestampMs = (value?: string): number => {
+      if (!value) return Number.POSITIVE_INFINITY
+      const normalized = value.includes(' ') ? value.replace(' ', 'T') : value
+      const parsed = Date.parse(normalized)
+      return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY
+    }
+    const removeFromActiveTaskStack = (taskId: number) => {
+      for (let i = activeTaskStack.length - 1; i >= 0; i--) {
+        if (activeTaskStack[i] === taskId) {
+          activeTaskStack.splice(i, 1)
+          return
+        }
+      }
+    }
+    const pushActiveTask = (taskId: number) => {
+      removeFromActiveTaskStack(taskId)
+      activeTaskStack.push(taskId)
+    }
+    const peekActiveTask = (): number => {
+      return activeTaskStack.length > 0
+        ? activeTaskStack[activeTaskStack.length - 1]
+        : task.task_id
+    }
+    const popActiveTask = (taskId: number) => {
+      removeFromActiveTaskStack(taskId)
+      if (activeTaskStack.length === 0) {
+        activeTaskStack.push(task.task_id)
+      }
+    }
     const withActionTimestamps = (
       actionDetails: any,
       startTimestamp?: string,
@@ -1328,39 +1359,51 @@ export class LogParser {
       }
       return undefined
     }
+    const cloneNestedActionGroup = (group: NestedActionGroup): NestedActionGroup => {
+      return {
+        ...group,
+        nested_actions: (group.nested_actions ?? []).map((action) => ({
+          ...action,
+          recognitions: (action.recognitions ?? []).map(cloneRecognitionAttempt),
+          child_tasks: action.child_tasks?.map(cloneNestedActionGroup),
+        })),
+      }
+    }
+    const traverseNestedActionNodes = (
+      groups: NestedActionGroup[],
+      visitor: (action: NestedActionNode) => boolean
+    ): boolean => {
+      for (const group of groups) {
+        for (const action of group.nested_actions ?? []) {
+          if (visitor(action)) return true
+          if (action.child_tasks && action.child_tasks.length > 0) {
+            if (traverseNestedActionNodes(action.child_tasks, visitor)) return true
+          }
+        }
+      }
+      return false
+    }
     const attachActionLevelRecognitionAcrossScopes = (
       topLevelAttempts: RecognitionAttempt[],
-      nestedActionGroups: any[],
+      nestedActionGroups: NestedActionGroup[],
       actionLevelNodes: RecognitionAttempt[],
       actionStartOrder?: number
     ) => {
       const mergedTopLevelAttempts = topLevelAttempts.map(cloneRecognitionAttempt)
-      const mergedNestedGroups = nestedActionGroups.map((group: any) => ({
-        ...group,
-        nested_actions: (group.nested_actions ?? []).map((action: any) => ({
-          ...action,
-          recognitions: (action.recognitions ?? []).map(cloneRecognitionAttempt)
-        }))
-      }))
+      const mergedNestedGroups = nestedActionGroups.map(cloneNestedActionGroup)
       const remaining: RecognitionAttempt[] = []
       const orderedNodes = sortByParseOrderThenRecoId(actionLevelNodes)
 
       for (const node of orderedNodes) {
-        let attached = false
-
         // 1) 优先挂到 nested action 的识别尝试（如 CCUpdate 下的 count_xxx）
-        for (const group of mergedNestedGroups) {
-          for (const action of group.nested_actions ?? []) {
-            const attempts: RecognitionAttempt[] = action.recognitions ?? []
-            if (!attempts.length) continue
-            const idx = pickBestAttemptIndex(attempts, node)
-            if (idx < 0) continue
-            attachNodeToAttempt(attempts[idx], node)
-            attached = true
-            break
-          }
-          if (attached) break
-        }
+        let attached = traverseNestedActionNodes(mergedNestedGroups, (action) => {
+          const attempts: RecognitionAttempt[] = action.recognitions ?? []
+          if (!attempts.length) return false
+          const idx = pickBestAttemptIndex(attempts, node)
+          if (idx < 0) return false
+          attachNodeToAttempt(attempts[idx], node)
+          return true
+        })
         if (attached) continue
 
         // 2) 再挂到顶层识别尝试（如 CCBuyCard 的 custom rec）
@@ -1388,6 +1431,161 @@ export class LogParser {
         nestedActionGroups: mergedNestedGroups,
         remaining: dedupeRecognitionAttempts(remaining)
       }
+    }
+    const pickParentActionNodeForSubTask = (
+      parentGroup: NestedActionGroup,
+      childGroup: NestedActionGroup
+    ): NestedActionNode | null => {
+      const childStartMs = toTimestampMs(childGroup.ts)
+      type Candidate = {
+        node: NestedActionNode
+        bucket: number
+        customPenalty: number
+        distance: number
+        startMs: number
+      }
+      let best: Candidate | null = null
+
+      for (const node of parentGroup.nested_actions ?? []) {
+        const startMs = toTimestampMs(node.action_details?.ts || node.ts)
+        const endMs = toTimestampMs(node.action_details?.end_ts || node.end_ts || node.ts)
+        const inRange = Number.isFinite(childStartMs) &&
+          Number.isFinite(startMs) &&
+          childStartMs >= startMs &&
+          (!Number.isFinite(endMs) || childStartMs <= endMs + 1)
+        const bucket = inRange ? 0 : 1
+        const customPenalty = node.action_details?.action === 'Custom' ? 0 : 1
+        const distance = Number.isFinite(childStartMs) && Number.isFinite(endMs)
+          ? Math.abs(childStartMs - endMs)
+          : Number.POSITIVE_INFINITY
+        const candidate: Candidate = {
+          node,
+          bucket,
+          customPenalty,
+          distance,
+          startMs,
+        }
+
+        if (!best) {
+          best = candidate
+          continue
+        }
+        if (candidate.bucket !== best.bucket) {
+          if (candidate.bucket < best.bucket) best = candidate
+          continue
+        }
+        if (candidate.customPenalty !== best.customPenalty) {
+          if (candidate.customPenalty < best.customPenalty) best = candidate
+          continue
+        }
+        if (candidate.distance !== best.distance) {
+          if (candidate.distance < best.distance) best = candidate
+          continue
+        }
+        if (candidate.startMs > best.startMs) {
+          best = candidate
+        }
+      }
+
+      if (best == null) return null
+      return best.node
+    }
+    const pickParentActionNodeByTimeline = (
+      groups: NestedActionGroup[],
+      childGroup: NestedActionGroup
+    ): NestedActionNode | null => {
+      const childStartMs = toTimestampMs(childGroup.ts)
+      if (!Number.isFinite(childStartMs)) return null
+
+      let bestNode: NestedActionNode | null = null
+      let bestBucket = Number.POSITIVE_INFINITY
+      let bestCustomPenalty = Number.POSITIVE_INFINITY
+      let bestStartMs = Number.NEGATIVE_INFINITY
+
+      const scanGroup = (group: NestedActionGroup) => {
+        for (const node of group.nested_actions ?? []) {
+          const actionStartMs = toTimestampMs(node.action_details?.ts || node.ts)
+          const actionEndMs = toTimestampMs(node.action_details?.end_ts || node.end_ts || node.ts)
+          const contains =
+            Number.isFinite(actionStartMs) &&
+            childStartMs >= actionStartMs &&
+            (!Number.isFinite(actionEndMs) || childStartMs <= actionEndMs + 1)
+          if (contains) {
+            const bucket = 0
+            const customPenalty = node.action_details?.action === 'Custom' ? 0 : 1
+            const isBetter =
+              bucket < bestBucket ||
+              (bucket === bestBucket && customPenalty < bestCustomPenalty) ||
+              (bucket === bestBucket && customPenalty === bestCustomPenalty && actionStartMs > bestStartMs)
+            if (isBetter) {
+              bestNode = node
+              bestBucket = bucket
+              bestCustomPenalty = customPenalty
+              bestStartMs = actionStartMs
+            }
+          }
+
+          if (node.child_tasks && node.child_tasks.length > 0) {
+            for (const childTask of node.child_tasks) {
+              scanGroup(childTask)
+            }
+          }
+        }
+      }
+
+      for (const group of groups) {
+        if (group.task_id === childGroup.task_id) continue
+        scanGroup(group)
+      }
+
+      return bestNode
+    }
+    const sortNestedTaskGroupTree = (group: NestedActionGroup) => {
+      for (const action of group.nested_actions ?? []) {
+        if (action.child_tasks && action.child_tasks.length > 0) {
+          action.child_tasks.sort((a, b) => toTimestampMs(a.ts) - toTimestampMs(b.ts))
+          for (const child of action.child_tasks) {
+            sortNestedTaskGroupTree(child)
+          }
+        }
+      }
+    }
+    const nestSubTaskActionGroups = (groups: NestedActionGroup[]): NestedActionGroup[] => {
+      if (groups.length <= 1) return groups
+
+      const clonedGroups = groups.map(cloneNestedActionGroup)
+      const groupByTaskId = new Map<number, NestedActionGroup>()
+      for (const group of clonedGroups) {
+        groupByTaskId.set(group.task_id, group)
+      }
+
+      const roots: NestedActionGroup[] = []
+      const orderedGroups = [...clonedGroups].sort((a, b) => toTimestampMs(a.ts) - toTimestampMs(b.ts))
+
+      for (const group of orderedGroups) {
+        const parentTaskId = subTaskParentByTaskId.get(group.task_id)
+        const parentGroup = (
+          parentTaskId != null &&
+          parentTaskId !== task.task_id &&
+          parentTaskId !== group.task_id
+        ) ? groupByTaskId.get(parentTaskId) : undefined
+        const parentActionNode = parentGroup
+          ? pickParentActionNodeForSubTask(parentGroup, group)
+          : pickParentActionNodeByTimeline(clonedGroups, group)
+        if (!parentActionNode) {
+          roots.push(group)
+          continue
+        }
+
+        const existing = parentActionNode.child_tasks ?? []
+        parentActionNode.child_tasks = [...existing, group]
+      }
+
+      roots.sort((a, b) => toTimestampMs(a.ts) - toTimestampMs(b.ts))
+      for (const root of roots) {
+        sortNestedTaskGroupTree(root)
+      }
+      return roots
     }
     const getLatestActionRuntimeState = () => {
       let latest: {
@@ -1526,6 +1724,9 @@ export class LogParser {
       waitFreezesRuntimeStates.clear()
       activeSubTaskActionNodes.clear()
       subTasks.clear()
+      subTaskParentByTaskId.clear()
+      activeTaskStack.length = 0
+      activeTaskStack.push(task.task_id)
     }
     const settleCurrentNodeRuntimeStates = (
       fallbackStatus: 'success' | 'failed',
@@ -1594,24 +1795,36 @@ export class LogParser {
       if (
         messageMeta.domain === 'Tasker' &&
         messageMeta.taskerKind === 'Task' &&
-        details.task_id != null &&
-        details.task_id !== task.task_id
+        details.task_id != null
       ) {
-        const subTaskId = details.task_id as number
-        const snapshot = getOrCreateSubTaskSnapshot(subTaskId)
+        const eventTaskId = details.task_id as number
+
         if (messageMeta.phase === 'Starting') {
-          snapshot.entry = this.stringPool.intern(details.entry || '')
-          snapshot.hash = this.stringPool.intern(details.hash || '')
-          snapshot.uuid = this.stringPool.intern(details.uuid || '')
-          snapshot.status = 'running'
-          snapshot.ts = this.stringPool.intern(event.timestamp)
-          snapshot.start_message = this.stringPool.intern(message)
-          snapshot.start_details = markRawTaskDetails(details)
+          const parentTaskId = peekActiveTask()
+          if (eventTaskId !== task.task_id && parentTaskId !== eventTaskId) {
+            subTaskParentByTaskId.set(eventTaskId, parentTaskId)
+          }
+          pushActiveTask(eventTaskId)
         } else if (messageMeta.phase === 'Succeeded' || messageMeta.phase === 'Failed') {
-          snapshot.status = messageMeta.phase === 'Succeeded' ? 'succeeded' : 'failed'
-          snapshot.end_ts = this.stringPool.intern(event.timestamp)
-          snapshot.end_message = this.stringPool.intern(message)
-          snapshot.end_details = markRawTaskDetails(details)
+          popActiveTask(eventTaskId)
+        }
+
+        if (eventTaskId !== task.task_id) {
+          const snapshot = getOrCreateSubTaskSnapshot(eventTaskId)
+          if (messageMeta.phase === 'Starting') {
+            snapshot.entry = this.stringPool.intern(details.entry || '')
+            snapshot.hash = this.stringPool.intern(details.hash || '')
+            snapshot.uuid = this.stringPool.intern(details.uuid || '')
+            snapshot.status = 'running'
+            snapshot.ts = this.stringPool.intern(event.timestamp)
+            snapshot.start_message = this.stringPool.intern(message)
+            snapshot.start_details = markRawTaskDetails(details)
+          } else if (messageMeta.phase === 'Succeeded' || messageMeta.phase === 'Failed') {
+            snapshot.status = messageMeta.phase === 'Succeeded' ? 'succeeded' : 'failed'
+            snapshot.end_ts = this.stringPool.intern(event.timestamp)
+            snapshot.end_message = this.stringPool.intern(message)
+            snapshot.end_details = markRawTaskDetails(details)
+          }
         }
       }
 
@@ -1943,7 +2156,7 @@ export class LogParser {
                 scopedTopLevelRecognitions.push(attempt)
               }
             }
-            const subTaskActionGroups = subTasks.consumeAsNestedActionGroups(this.stringPool).map((group: any) => {
+            const subTaskActionGroups: NestedActionGroup[] = subTasks.consumeAsNestedActionGroups(this.stringPool).map((group: any) => {
               const snapshot = subTaskSnapshots.get(group.task_id)
               if (!snapshot) {
                 return group
@@ -2000,9 +2213,10 @@ export class LogParser {
               actionStartOrder
             )
             const nestedRecognitionInAction = scopedAttachResult.remaining
+            const nestedSubTaskGroups = nestSubTaskActionGroups(scopedAttachResult.nestedActionGroups)
             const resolvedNestedActionGroups: NestedActionGroup[] =
-              scopedAttachResult.nestedActionGroups.length > 0
-                ? scopedAttachResult.nestedActionGroups
+              nestedSubTaskGroups.length > 0
+                ? nestedSubTaskGroups
                 : (
                   nestedActionNodes.length > 0
                     ? [

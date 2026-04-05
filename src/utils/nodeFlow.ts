@@ -149,13 +149,16 @@ const mapActionItem = (
 
 const mapNestedPipelineNode = (
   nestedNode: NestedActionNode,
-  groupIndex: number,
   nodeIndex: number,
+  groupPath: string,
   ownerTaskId: number
 ): UnifiedFlowItem => {
-  const baseId = `task.${groupIndex}.pipeline.${nodeIndex}.${nestedNode.node_id}`
+  const baseId = `${groupPath}.pipeline.${nodeIndex}.${nestedNode.node_id}`
   const recognitionChildren = (nestedNode.recognitions ?? []).map((attempt, attemptIndex) =>
     mapRecognitionAttempt(attempt, `${baseId}.recognition.${attemptIndex}`)
+  )
+  const childTaskItems = (nestedNode.child_tasks ?? []).map((group, childIndex) =>
+    mapNestedTaskGroup(group, `${baseId}.task.${childIndex}.${group.task_id}`)
   )
   const actionChild = nestedNode.action_details
     ? mapActionItem(
@@ -173,9 +176,16 @@ const mapNestedPipelineNode = (
         'action'
       )
     : null
-  const children = actionChild
-    ? sortFlowItems([...recognitionChildren, actionChild])
-    : sortFlowItems(recognitionChildren)
+
+  const actionChildWithNested = actionChild && childTaskItems.length > 0
+    ? { ...actionChild, children: sortFlowItems(childTaskItems) }
+    : actionChild
+
+  const pipelineChildren: UnifiedFlowItem[] = [
+    ...recognitionChildren,
+    ...(actionChildWithNested ? [actionChildWithNested] : childTaskItems),
+  ]
+  const children = sortFlowItems(pipelineChildren)
   return {
     id: baseId,
     type: 'pipeline_node',
@@ -191,23 +201,33 @@ const mapNestedPipelineNode = (
   }
 }
 
-const buildTaskFlowItemsFromGroups = (groups: NestedActionGroup[]): UnifiedFlowItem[] => {
-  return groups.map((group, groupIndex) => {
-    const pipelineChildren = (group.nested_actions ?? []).map((nested, nodeIndex) =>
-      mapNestedPipelineNode(nested, groupIndex, nodeIndex, group.task_id)
-    )
-    return {
-      id: `node.task.${groupIndex}.${group.task_id}`,
-      type: 'task' as const,
-      name: group.name,
-      status: group.status,
-      ts: group.ts,
-      end_ts: group.end_ts,
-      task_id: group.task_id,
-      task_details: group.task_details,
-      children: pipelineChildren.length > 0 ? sortFlowItems(pipelineChildren) : undefined,
-    }
-  })
+const mapNestedTaskGroup = (
+  group: NestedActionGroup,
+  groupPath: string
+): UnifiedFlowItem => {
+  const pipelineChildren = (group.nested_actions ?? []).map((nested, nodeIndex) =>
+    mapNestedPipelineNode(nested, nodeIndex, groupPath, group.task_id)
+  )
+  return {
+    id: groupPath,
+    type: 'task' as const,
+    name: group.name,
+    status: group.status,
+    ts: group.ts,
+    end_ts: group.end_ts,
+    task_id: group.task_id,
+    task_details: group.task_details,
+    children: pipelineChildren.length > 0 ? sortFlowItems(pipelineChildren) : undefined,
+  }
+}
+
+const buildTaskFlowItemsFromGroups = (
+  groups: NestedActionGroup[],
+  idPrefix = 'node.task'
+): UnifiedFlowItem[] => {
+  return groups.map((group, groupIndex) =>
+    mapNestedTaskGroup(group, `${idPrefix}.${groupIndex}.${group.task_id}`)
+  )
 }
 
 export const buildActionFlowItems = (
