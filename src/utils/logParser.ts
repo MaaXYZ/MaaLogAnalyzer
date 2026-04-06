@@ -2182,7 +2182,7 @@ export class LogParser {
       fallbackStatus: 'success' | 'failed'
       eventTimestamp: string
       errorImageCandidates: Array<string | null | undefined>
-      fallbackActionId: number
+      fallbackActionId: number | null | undefined
       fallbackName: string
       fallbackTimestamp: string
     }) => {
@@ -2196,7 +2196,7 @@ export class LogParser {
         const resolvedActionErrorImage = actionStatus === 'failed'
           ? this.findErrorImageByNames(params.eventTimestamp, params.errorImageCandidates)
           : undefined
-        const resolvedActionId = params.actionDetails?.action_id ?? params.fallbackActionId
+        const resolvedActionId = params.actionDetails?.action_id ?? params.fallbackActionId ?? -1
         return createActionRootFlowItem({
           actionId: resolvedActionId,
           name: params.actionDetails?.name || params.fallbackName,
@@ -2207,6 +2207,42 @@ export class LogParser {
           errorImage: resolvedActionErrorImage,
         })
       }
+    }
+    const composeFinalPipelineNodeFlow = (params: {
+      taskId: number
+      topLevelRecognitions: RecognitionAttempt[]
+      actionLevelRecognitions: RecognitionAttempt[]
+      nestedActionGroups: NestedActionGroup[]
+      actionDetails?: NodeInfo['action_details']
+      fallbackStatus: 'success' | 'failed'
+      eventTimestamp: string
+      details: Record<string, any>
+      nodeName: string
+      actionId: number | null | undefined
+      nodeId: number | null | undefined
+      fallbackTimestamp: string
+    }) => {
+      return composePipelineNodeFlow({
+        topLevelRecognitions: params.topLevelRecognitions,
+        actionLevelRecognitions: params.actionLevelRecognitions,
+        nestedActionGroups: params.nestedActionGroups,
+        waitFreezesFlow: buildWaitFreezesFlowItems(params.taskId),
+        createActionRoot: createFinalActionRootFactory({
+          actionDetails: params.actionDetails,
+          fallbackStatus: params.fallbackStatus,
+          eventTimestamp: params.eventTimestamp,
+          errorImageCandidates: [
+            params.actionDetails?.name,
+            params.details.action_details?.name,
+            params.details.node_details?.name,
+            params.details.reco_details?.name,
+            params.nodeName,
+          ],
+          fallbackActionId: params.actionId ?? params.nodeId,
+          fallbackName: params.nodeName,
+          fallbackTimestamp: params.fallbackTimestamp,
+        }),
+      })
     }
     const resolveWaitFreezesStatus = (message: string): 'running' | 'success' | 'failed' => {
       if (message === 'Node.WaitFreezes.Starting') return 'running'
@@ -2510,26 +2546,19 @@ export class LogParser {
         endTimestamp
       )
       const subTaskTopLevelRecognitions = selectAttachedTopLevelRecognitions(attachedRecognitions)
-      const composedSubTaskFlow = composePipelineNodeFlow({
+      const composedSubTaskFlow = composeFinalPipelineNodeFlow({
+        taskId: subTaskId,
         topLevelRecognitions: subTaskTopLevelRecognitions,
         actionLevelRecognitions: [],
         nestedActionGroups: [],
-        waitFreezesFlow: buildWaitFreezesFlowItems(subTaskId),
-        createActionRoot: createFinalActionRootFactory({
-          actionDetails: resolvedActionDetails,
-          fallbackStatus: subTaskPipelineStatus,
-          eventTimestamp: timestamp,
-          errorImageCandidates: [
-            resolvedActionDetails?.name,
-            details.action_details?.name,
-            details.node_details?.name,
-            details.reco_details?.name,
-            resolvedNodeName,
-          ],
-          fallbackActionId: actionId ?? nodeId,
-          fallbackName: resolvedNodeName,
-          fallbackTimestamp: endTimestamp,
-        }),
+        actionDetails: resolvedActionDetails,
+        fallbackStatus: subTaskPipelineStatus,
+        eventTimestamp: timestamp,
+        details,
+        nodeName: resolvedNodeName,
+        actionId,
+        nodeId,
+        fallbackTimestamp: endTimestamp,
       })
       const resolvedNodeFlow = composedSubTaskFlow.nodeFlow.length > 0
         ? composedSubTaskFlow.nodeFlow
@@ -2677,26 +2706,20 @@ export class LogParser {
       )
       const fallbackRecoDetails = resolveFallbackRecoDetails(details, scopedAttachResult.topLevelAttempts)
       const mergedActionDetails = withActionTimestamps(details.action_details, actionStartTimestamp, actionEndTimestamp, endTimestamp)
-      const composedFlow = composePipelineNodeFlow({
+      const resolvedNodeName = this.stringPool.intern(nodeName)
+      const composedFlow = composeFinalPipelineNodeFlow({
+        taskId,
         topLevelRecognitions: scopedAttachResult.topLevelAttempts,
         actionLevelRecognitions: nestedRecognitionInAction,
         nestedActionGroups: resolvedNestedActionGroups,
-        waitFreezesFlow: buildWaitFreezesFlowItems(taskId),
-        createActionRoot: createFinalActionRootFactory({
-          actionDetails: mergedActionDetails,
-          fallbackStatus: pipelineStatus,
-          eventTimestamp: timestamp,
-          errorImageCandidates: [
-            mergedActionDetails?.name,
-            details.action_details?.name,
-            details.node_details?.name,
-            details.reco_details?.name,
-            nodeName,
-          ],
-          fallbackActionId: actionId ?? nodeId,
-          fallbackName: this.stringPool.intern(nodeName),
-          fallbackTimestamp: endTimestamp,
-        }),
+        actionDetails: mergedActionDetails,
+        fallbackStatus: pipelineStatus,
+        eventTimestamp: timestamp,
+        details,
+        nodeName: resolvedNodeName,
+        actionId,
+        nodeId,
+        fallbackTimestamp: endTimestamp,
       })
       const nodeFlow = composedFlow.nodeFlow
       const actionFlow = composedFlow.actionFlow
@@ -2707,7 +2730,6 @@ export class LogParser {
         nodeStatus = 'failed'
       }
 
-      const resolvedName = this.stringPool.intern(nodeName)
       const resolvedRecoDetails = fallbackRecoDetails ? markRaw(fallbackRecoDetails) : undefined
       const resolvedFocus = resolveEventFocus(details, existingNode?.focus)
       const resolvedNodeDetails = details.node_details ? markRaw(details.node_details) : undefined
@@ -2720,7 +2742,7 @@ export class LogParser {
       ])
 
       if (existingNode) {
-        existingNode.name = resolvedName
+        existingNode.name = resolvedNodeName
         existingNode.ts = startTimestamp
         existingNode.end_ts = endTimestamp
         existingNode.status = nodeStatus
@@ -2735,7 +2757,7 @@ export class LogParser {
       } else {
         const node: NodeInfo = {
           node_id: nodeId,
-          name: resolvedName,
+          name: resolvedNodeName,
           ts: startTimestamp,
           end_ts: endTimestamp,
           status: nodeStatus,
@@ -2764,24 +2786,73 @@ export class LogParser {
       }
       resetCurrentNodeAggregation()
     }
+    const handleNextListNodeEvent = (
+      taskId: number | null,
+      message: string,
+      details: Record<string, any>,
+      timestamp: string
+    ): boolean => {
+      if (message !== 'Node.NextList.Starting' && message !== 'Node.NextList.Succeeded' && message !== 'Node.NextList.Failed') {
+        return false
+      }
+      if (taskId != null) {
+        if (message === 'Node.NextList.Failed') {
+          applyTaskNextList(taskId, [])
+        } else {
+          applyTaskNextList(taskId, details.list || [])
+        }
+      }
+      refreshActivePipelineNodePreview(timestamp)
+      return true
+    }
+    const handleWaitFreezesNodeEvent = (params: {
+      taskId: number | null
+      message: string
+      details: Record<string, any>
+      timestamp: string
+      eventOrder: number
+      onUpdated?: () => void
+    }): boolean => {
+      if (
+        params.message !== 'Node.WaitFreezes.Starting' &&
+        params.message !== 'Node.WaitFreezes.Succeeded' &&
+        params.message !== 'Node.WaitFreezes.Failed'
+      ) {
+        return false
+      }
+      if (params.taskId != null) {
+        const waitFreezesStatus = resolveWaitFreezesStatus(params.message)
+        upsertWaitFreezesState(params.taskId, params.details, params.timestamp, waitFreezesStatus, params.eventOrder)
+        params.onUpdated?.()
+      }
+      refreshActivePipelineNodePreview(params.timestamp)
+      return true
+    }
     const handleCurrentTaskSimpleNodeEvent = (
       message: string,
       details: Record<string, any>,
       timestamp: string,
       eventOrder: number
     ): boolean => {
+      if (handleNextListNodeEvent(task.task_id, message, details, timestamp)) {
+        return true
+      }
+      if (handleWaitFreezesNodeEvent({
+        taskId: task.task_id,
+        message,
+        details,
+        timestamp,
+        eventOrder,
+        onUpdated: () => {
+          const activeNode = getActivePipelineNode()
+          if (activeNode) {
+            activeNode.focus = resolveEventFocus(details, activeNode.focus)
+          }
+        },
+      })) {
+        return true
+      }
       switch (message) {
-        case 'Node.NextList.Starting':
-        case 'Node.NextList.Succeeded':
-          applyTaskNextList(task.task_id, details.list || [])
-          refreshActivePipelineNodePreview(timestamp)
-          return true
-
-        case 'Node.NextList.Failed':
-          applyTaskNextList(task.task_id, [])
-          refreshActivePipelineNodePreview(timestamp)
-          return true
-
         case 'Node.Recognition.Starting':
           handleRecognitionStartEvent(
             task.task_id,
@@ -2850,19 +2921,6 @@ export class LogParser {
           refreshActivePipelineNodePreview(timestamp)
           return true
 
-        case 'Node.WaitFreezes.Starting':
-        case 'Node.WaitFreezes.Succeeded':
-        case 'Node.WaitFreezes.Failed': {
-          const waitFreezesStatus = resolveWaitFreezesStatus(message)
-          upsertWaitFreezesState(task.task_id, details, timestamp, waitFreezesStatus, eventOrder)
-          const activeNode = getActivePipelineNode()
-          if (activeNode) {
-            activeNode.focus = resolveEventFocus(details, activeNode.focus)
-          }
-          refreshActivePipelineNodePreview(timestamp)
-          return true
-        }
-
         case 'Node.ActionNode.Starting': {
           const actionId = resolveActionNodeEventId(details)
           if (actionId != null) {
@@ -2893,6 +2951,18 @@ export class LogParser {
       timestamp: string,
       eventOrder: number
     ): boolean => {
+      if (handleNextListNodeEvent(subTaskId, message, details, timestamp)) {
+        return true
+      }
+      if (handleWaitFreezesNodeEvent({
+        taskId: subTaskId,
+        message,
+        details,
+        timestamp,
+        eventOrder,
+      })) {
+        return true
+      }
       switch (message) {
         case 'Node.PipelineNode.Starting':
           if (subTaskId != null) {
@@ -2903,32 +2973,6 @@ export class LogParser {
           }
           refreshActivePipelineNodePreview(timestamp)
           return true
-
-        case 'Node.NextList.Starting':
-        case 'Node.NextList.Succeeded':
-          if (subTaskId != null) {
-            applyTaskNextList(subTaskId, details.list || [])
-          }
-          refreshActivePipelineNodePreview(timestamp)
-          return true
-
-        case 'Node.NextList.Failed':
-          if (subTaskId != null) {
-            applyTaskNextList(subTaskId, [])
-          }
-          refreshActivePipelineNodePreview(timestamp)
-          return true
-
-        case 'Node.WaitFreezes.Starting':
-        case 'Node.WaitFreezes.Succeeded':
-        case 'Node.WaitFreezes.Failed': {
-          if (subTaskId != null) {
-            const waitFreezesStatus = resolveWaitFreezesStatus(message)
-            upsertWaitFreezesState(subTaskId, details, timestamp, waitFreezesStatus, eventOrder)
-          }
-          refreshActivePipelineNodePreview(timestamp)
-          return true
-        }
 
         case 'Node.Recognition.Starting':
           if (subTaskId != null) {
