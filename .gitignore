@@ -36,5 +36,5 @@ src-vscode/dist
 src-vscode/webview
 src-vscode/vsix
 
-
+.codex
 
