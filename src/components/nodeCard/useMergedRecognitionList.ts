@@ -12,19 +12,26 @@ interface UseMergedRecognitionListParams {
   showNotRecognizedNodes: Ref<boolean>
 }
 
+type NextListItem = NodeInfo['next_list'][number]
+type NextEntry = {
+  name: string
+  displayName: string
+  nextItem: NextListItem
+}
+
 export const useMergedRecognitionList = (params: UseMergedRecognitionListParams) => {
   const mergedRecognitionList = computed<MergedRecognitionItem[]>(() => {
     const node = params.node.value
     const result: MergedRecognitionItem[] = []
 
     const attempts = buildNodeRecognitionAttempts(node)
-    const nextList = node.next_list ?? []
+    const nextList: NextListItem[] = node.next_list ?? []
     const recognitionTargetByNextName = buildRecognitionTargetByNextName(attempts, nextList)
-    const nextListNames = new Set(nextList.map(item => item.name))
+    const nextListNames = new Set<string>(nextList.map((item: NextListItem) => item.name))
 
     if (!attempts.length) {
       if (nextList.length > 0) {
-        nextList.forEach((nextItem) => {
+        nextList.forEach((nextItem: NextListItem) => {
           const displayName = buildNextListDisplayName(nextItem)
           result.push({
             name: displayName,
@@ -35,7 +42,7 @@ export const useMergedRecognitionList = (params: UseMergedRecognitionListParams)
       return result
     }
 
-    const nextEntries = nextList.map((nextItem) => {
+    const nextEntries: NextEntry[] = nextList.map((nextItem: NextListItem) => {
       const displayName = buildNextListDisplayName(
         nextItem,
         recognitionTargetByNextName.get(nextItem.name),
@@ -64,7 +71,7 @@ export const useMergedRecognitionList = (params: UseMergedRecognitionListParams)
     // 多轮识别：先按尝试序列切分轮次，再在轮内按 next_list 顺序全量展示。
     const nextIndexMap = new Map<string, number>()
     const nextDisplayMap = new Map<string, string>()
-    nextEntries.forEach((nextEntry, idx) => {
+    nextEntries.forEach((nextEntry: NextEntry, idx: number) => {
       if (!nextIndexMap.has(nextEntry.name)) {
         nextIndexMap.set(nextEntry.name, idx)
         nextDisplayMap.set(nextEntry.name, nextEntry.displayName)
@@ -135,7 +142,7 @@ export const useMergedRecognitionList = (params: UseMergedRecognitionListParams)
         }
       })
 
-      nextEntries.forEach((nextEntry) => {
+      nextEntries.forEach((nextEntry: NextEntry) => {
         const bucket = roundBuckets.get(nextEntry.name)
         const matched = bucket?.shift()
         if (matched) {
@@ -179,9 +186,9 @@ export const useMergedRecognitionList = (params: UseMergedRecognitionListParams)
     const source = mergedRecognitionList.value
     if (params.showNotRecognizedNodes.value) return source
 
-    const hasRoundSeparators = source.some(item => item.isRoundSeparator)
+    const hasRoundSeparators = source.some((item: MergedRecognitionItem) => item.isRoundSeparator)
     if (!hasRoundSeparators) {
-      return source.filter(item => item.status !== 'not-recognized')
+      return source.filter((item: MergedRecognitionItem) => item.status !== 'not-recognized')
     }
 
     const result: MergedRecognitionItem[] = []
@@ -194,7 +201,7 @@ export const useMergedRecognitionList = (params: UseMergedRecognitionListParams)
       result.push(...currentVisibleItems)
     }
 
-    source.forEach((item) => {
+    source.forEach((item: MergedRecognitionItem) => {
       if (item.isRoundSeparator) {
         flushRound()
         currentSeparator = item

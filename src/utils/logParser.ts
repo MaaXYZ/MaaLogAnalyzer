@@ -1280,6 +1280,43 @@ export class LogParser {
         endSeq: eventOrder,
       })
     }
+    const pushCurrentTaskRecognitionAttempt = (attempt: RecognitionAttempt | undefined) => {
+      if (attempt && !currentTaskRecognitions.includes(attempt)) {
+        currentTaskRecognitions.push(attempt)
+      }
+    }
+    const handleRecognitionStartEvent = (
+      taskId: number,
+      details: Record<string, any>,
+      timestamp: string,
+      eventOrder: number,
+      onAttempt?: (attempt: RecognitionAttempt) => void
+    ) => {
+      const attempt = startRecognitionAttempt(taskId, details, timestamp, eventOrder)
+      if (attempt && onAttempt) {
+        onAttempt(attempt)
+      }
+    }
+    const handleRecognitionFinishEvent = (
+      taskId: number,
+      details: Record<string, any>,
+      timestamp: string,
+      status: 'success' | 'failed',
+      eventOrder: number,
+      onAttempt?: (attempt: RecognitionAttempt) => void
+    ) => {
+      const attempt = finishRecognitionAttempt(taskId, details, timestamp, status, eventOrder)
+      if (attempt && onAttempt) {
+        onAttempt(attempt)
+      }
+    }
+    const applyCurrentNextList = (list: any[]) => {
+      currentNextList = list
+      const activeNode = getActivePipelineNode()
+      if (activeNode) {
+        activeNode.next_list = toNextListItems(currentNextList)
+      }
+    }
     const mergeRecognitionOrderMeta = (target: RecognitionAttempt, source: RecognitionAttempt) => {
       const targetMeta = recognitionOrderMeta.get(target)
       const sourceMeta = recognitionOrderMeta.get(source)
@@ -2128,49 +2165,38 @@ export class LogParser {
 
           case 'Node.NextList.Starting':
           case 'Node.NextList.Succeeded':
-            currentNextList = details.list || []
-            {
-              const activeNode = getActivePipelineNode()
-              if (activeNode) {
-                activeNode.next_list = toNextListItems(currentNextList)
-              }
-            }
+            applyCurrentNextList(details.list || [])
             refreshActivePipelineNodePreview(event.timestamp)
             break
 
           case 'Node.NextList.Failed':
-            currentNextList = []
-            {
-              const activeNode = getActivePipelineNode()
-              if (activeNode) {
-                activeNode.next_list = []
-              }
-            }
+            applyCurrentNextList([])
             refreshActivePipelineNodePreview(event.timestamp)
             break
 
           case 'Node.Recognition.Starting':
             {
-              const attempt = startRecognitionAttempt(task.task_id, details, event.timestamp, eventOrder)
-              if (attempt && !currentTaskRecognitions.includes(attempt)) {
-                currentTaskRecognitions.push(attempt)
-              }
+              handleRecognitionStartEvent(
+                task.task_id,
+                details,
+                event.timestamp,
+                eventOrder,
+                pushCurrentTaskRecognitionAttempt
+              )
               refreshActivePipelineNodePreview(event.timestamp)
             }
             break
 
           case 'Node.Recognition.Succeeded':
           case 'Node.Recognition.Failed': {
-            const attempt = finishRecognitionAttempt(
+            handleRecognitionFinishEvent(
               task.task_id,
               details,
               event.timestamp,
               message === 'Node.Recognition.Succeeded' ? 'success' : 'failed',
-              eventOrder
+              eventOrder,
+              pushCurrentTaskRecognitionAttempt
             )
-            if (attempt && !currentTaskRecognitions.includes(attempt)) {
-              currentTaskRecognitions.push(attempt)
-            }
             refreshActivePipelineNodePreview(event.timestamp)
             break
           }
@@ -2609,7 +2635,7 @@ export class LogParser {
 
         case 'Node.Recognition.Starting':
           if (subTaskId != null) {
-            startRecognitionAttempt(subTaskId, details, event.timestamp, eventOrder)
+            handleRecognitionStartEvent(subTaskId, details, event.timestamp, eventOrder)
           }
           refreshActivePipelineNodePreview(event.timestamp)
           break
@@ -2617,16 +2643,16 @@ export class LogParser {
         case 'Node.Recognition.Succeeded':
         case 'Node.Recognition.Failed': {
           if (subTaskId == null) break
-          const attempt = finishRecognitionAttempt(
+          handleRecognitionFinishEvent(
             subTaskId,
             details,
             event.timestamp,
             message === 'Node.Recognition.Succeeded' ? 'success' : 'failed',
-            eventOrder
+            eventOrder,
+            (attempt) => {
+              subTasks.addRecognition(subTaskId, attempt)
+            }
           )
-          if (attempt) {
-            subTasks.addRecognition(subTaskId, attempt)
-          }
           refreshActivePipelineNodePreview(event.timestamp)
           break
         }

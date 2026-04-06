@@ -48,11 +48,11 @@ watch(() => props.node?.node_id, () => {
 }, { flush: 'sync' })
 
 // 设置变化时同步默认折叠状态（无需切换节点）
-watch(() => settings.defaultCollapseRecognition, (val) => {
+watch(() => settings.defaultCollapseRecognition, (val: boolean) => {
   recognitionExpanded.value = !val
 }, { flush: 'sync' })
 
-watch(() => settings.defaultCollapseNestedActionNodes, (val) => {
+watch(() => settings.defaultCollapseNestedActionNodes, (val: boolean) => {
   actionExpanded.value = !val
 }, { flush: 'sync' })
 
@@ -96,6 +96,26 @@ const { visibleRecognitionList } = useMergedRecognitionList({
   node: toRef(props, 'node'),
   showNotRecognizedNodes: computed(() => settings.showNotRecognizedNodes),
 })
+
+const handleSelectAction = (node: NodeInfo) => {
+  emit('select-action', node)
+}
+
+const handleSelectRecognition = (node: NodeInfo, attemptIndex: number) => {
+  emit('select-recognition', node, attemptIndex)
+}
+
+const handleSelectFlowItem = (node: NodeInfo, flowItemId: string) => {
+  emit('select-flow-item', node, flowItemId)
+}
+
+const toggleRecognitionSection = () => {
+  recognitionExpanded.value = !recognitionExpanded.value
+}
+
+const toggleActionSection = () => {
+  actionExpanded.value = !actionExpanded.value
+}
 
 type ButtonType = 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error'
 
@@ -176,11 +196,11 @@ const actionButtonType = computed<ButtonType>(() => {
           :force-expand-related-while-running="forceExpandRelatedWhileRunning"
           :get-button-type="getButtonType"
           :action-button-type="actionButtonType"
-          @select-action="emit('select-action', $event)"
-          @select-recognition="(n, i) => emit('select-recognition', n, i)"
-          @select-flow-item="(n, id) => emit('select-flow-item', n, id)"
-          @toggle-recognition="recognitionExpanded = !recognitionExpanded"
-          @toggle-action="actionExpanded = !actionExpanded"
+          @select-action="handleSelectAction"
+          @select-recognition="handleSelectRecognition"
+          @select-flow-item="handleSelectFlowItem"
+          @toggle-recognition="toggleRecognitionSection"
+          @toggle-action="toggleActionSection"
           @toggle-nested="toggleNestedNodes"
         />
         <node-card-compact
@@ -189,9 +209,9 @@ const actionButtonType = computed<ButtonType>(() => {
           :merged-recognition-list="visibleRecognitionList"
           :is-vscode-launch-embed="isVscodeLaunchEmbed"
           :bridge-request-task-doc="bridgeRequestTaskDoc"
-          @select-action="emit('select-action', $event)"
-          @select-recognition="(n, i) => emit('select-recognition', n, i)"
-          @select-flow-item="(n, id) => emit('select-flow-item', n, id)"
+          @select-action="handleSelectAction"
+          @select-recognition="handleSelectRecognition"
+          @select-flow-item="handleSelectFlowItem"
         />
         <node-card-tree
           v-else
@@ -205,11 +225,11 @@ const actionButtonType = computed<ButtonType>(() => {
           :default-collapse-nested-action-nodes="settings.defaultCollapseNestedActionNodes"
           :is-expanded="isExpanded"
           :force-expand-related-while-running="forceExpandRelatedWhileRunning"
-          @select-action="emit('select-action', $event)"
-          @select-recognition="(n, i) => emit('select-recognition', n, i)"
-          @select-flow-item="(n, id) => emit('select-flow-item', n, id)"
-          @toggle-recognition="recognitionExpanded = !recognitionExpanded"
-          @toggle-action="actionExpanded = !actionExpanded"
+          @select-action="handleSelectAction"
+          @select-recognition="handleSelectRecognition"
+          @select-flow-item="handleSelectFlowItem"
+          @toggle-recognition="toggleRecognitionSection"
+          @toggle-action="toggleActionSection"
           @toggle-nested="toggleNestedNodes"
         />
       </n-flex>
