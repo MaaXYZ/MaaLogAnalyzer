@@ -147,6 +147,55 @@ const mapActionItem = (
   }
 }
 
+const mapEmbeddedFlowItem = (
+  item: UnifiedFlowItem,
+  itemPath: string
+): UnifiedFlowItem => {
+  const mappedChildren = (item.children ?? []).map((child, childIndex) =>
+    mapEmbeddedFlowItem(child, `${itemPath}.child.${childIndex}`)
+  )
+  return {
+    ...item,
+    id: `${itemPath}.${item.type}`,
+    children: mappedChildren.length > 0 ? sortFlowItems(mappedChildren) : undefined,
+  }
+}
+
+const attachChildTasksToActionRoot = (
+  items: UnifiedFlowItem[],
+  childTaskItems: UnifiedFlowItem[]
+): UnifiedFlowItem[] => {
+  if (childTaskItems.length === 0) return items
+
+  let attached = false
+  const attachRecursively = (nodes: UnifiedFlowItem[]): UnifiedFlowItem[] => {
+    return nodes.map((node) => {
+      const mappedChildren = node.children ? attachRecursively(node.children) : undefined
+      if (!attached && node.type === 'action') {
+        attached = true
+        return {
+          ...node,
+          children: sortFlowItems([
+            ...(mappedChildren ?? []),
+            ...childTaskItems,
+          ]),
+        }
+      }
+      if (mappedChildren) {
+        return {
+          ...node,
+          children: mappedChildren,
+        }
+      }
+      return node
+    })
+  }
+
+  const mappedItems = attachRecursively(items)
+  if (attached) return mappedItems
+  return sortFlowItems([...mappedItems, ...childTaskItems])
+}
+
 const mapNestedPipelineNode = (
   nestedNode: NestedActionNode,
   nodeIndex: number,
@@ -154,38 +203,50 @@ const mapNestedPipelineNode = (
   ownerTaskId: number
 ): UnifiedFlowItem => {
   const baseId = `${groupPath}.pipeline.${nodeIndex}.${nestedNode.node_id}`
-  const recognitionChildren = (nestedNode.recognitions ?? []).map((attempt, attemptIndex) =>
-    mapRecognitionAttempt(attempt, `${baseId}.recognition.${attemptIndex}`)
-  )
   const childTaskItems = (nestedNode.child_tasks ?? []).map((group, childIndex) =>
     mapNestedTaskGroup(group, `${baseId}.task.${childIndex}.${group.task_id}`)
   )
-  const actionChild = nestedNode.action_details
-    ? mapActionItem(
-        `${baseId}.action.${nestedNode.action_details.action_id ?? nestedNode.node_id}`,
-        nestedNode.action_details.name || nestedNode.name,
-        nestedNode.status === 'running'
-          ? 'running'
-          : nestedNode.action_details.success
-            ? 'success'
-            : 'failed',
-        nestedNode.action_details.ts || nestedNode.ts,
-        nestedNode.action_details.end_ts || nestedNode.end_ts,
-        nestedNode.action_details,
-        nestedNode.action_details.action_id,
-        'action'
-      )
-    : null
+  let children: UnifiedFlowItem[] = []
 
-  const actionChildWithNested = actionChild && childTaskItems.length > 0
-    ? { ...actionChild, children: sortFlowItems(childTaskItems) }
-    : actionChild
+  if (nestedNode.node_flow && nestedNode.node_flow.length > 0) {
+    const scopedNodeFlowChildren = nestedNode.node_flow.map((item, flowIndex) =>
+      mapEmbeddedFlowItem(item, `${baseId}.flow.${flowIndex}`)
+    )
+    children = attachChildTasksToActionRoot(
+      sortFlowItems(scopedNodeFlowChildren),
+      childTaskItems
+    )
+  } else {
+    const recognitionChildren = (nestedNode.recognitions ?? []).map((attempt, attemptIndex) =>
+      mapRecognitionAttempt(attempt, `${baseId}.recognition.${attemptIndex}`)
+    )
+    const actionChild = nestedNode.action_details
+      ? mapActionItem(
+          `${baseId}.action.${nestedNode.action_details.action_id ?? nestedNode.node_id}`,
+          nestedNode.action_details.name || nestedNode.name,
+          nestedNode.status === 'running'
+            ? 'running'
+            : nestedNode.action_details.success
+              ? 'success'
+              : 'failed',
+          nestedNode.action_details.ts || nestedNode.ts,
+          nestedNode.action_details.end_ts || nestedNode.end_ts,
+          nestedNode.action_details,
+          nestedNode.action_details.action_id,
+          'action'
+        )
+      : null
 
-  const pipelineChildren: UnifiedFlowItem[] = [
-    ...recognitionChildren,
-    ...(actionChildWithNested ? [actionChildWithNested] : childTaskItems),
-  ]
-  const children = sortFlowItems(pipelineChildren)
+    const actionChildWithNested = actionChild && childTaskItems.length > 0
+      ? { ...actionChild, children: sortFlowItems(childTaskItems) }
+      : actionChild
+    const pipelineChildren: UnifiedFlowItem[] = [
+      ...recognitionChildren,
+      ...(actionChildWithNested ? [actionChildWithNested] : childTaskItems),
+    ]
+    children = sortFlowItems(pipelineChildren)
+  }
+
   return {
     id: baseId,
     type: 'pipeline_node',

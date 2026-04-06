@@ -787,9 +787,13 @@ export class LogParser {
       images?: string[]
       order: number
     }
+    type TaskScopedNodeAggregation = {
+      nextList: any[]
+      waitFreezesRuntimeStates: Map<number, WaitFreezesRuntimeState>
+    }
 
     // 当前节点的累积状态
-    let currentNextList: any[] = []
+    const taskScopedNodeAggregationByTaskId = new Map<number, TaskScopedNodeAggregation>()
     const currentTaskRecognitions: RecognitionAttempt[] = []
     const actionLevelRecognitionNodes: RecognitionAttempt[] = []
     const nestedActionNodes: NestedActionNode[] = []
@@ -809,7 +813,6 @@ export class LogParser {
       status: 'running' | 'success' | 'failed'
       order: number
     }>()
-    const waitFreezesRuntimeStates = new Map<number, WaitFreezesRuntimeState>()
     const activeSubTaskActionNodes = new Map<string, NestedActionNode>()
     const subTaskPipelineNodeStartTimes = new Map<string, string>()
     const subTaskRecognitionNodeStartTimes = new Map<string, string>()
@@ -827,6 +830,27 @@ export class LogParser {
     const recognitionOrderMeta = new WeakMap<RecognitionAttempt, { startSeq: number; endSeq: number }>()
 
     const scopedKey = (taskId: number, id: number): string => `${taskId}:${id}`
+    const getOrCreateTaskNodeAggregation = (taskId: number): TaskScopedNodeAggregation => {
+      const existing = taskScopedNodeAggregationByTaskId.get(taskId)
+      if (existing) return existing
+      const created: TaskScopedNodeAggregation = {
+        nextList: [],
+        waitFreezesRuntimeStates: new Map<number, WaitFreezesRuntimeState>(),
+      }
+      taskScopedNodeAggregationByTaskId.set(taskId, created)
+      return created
+    }
+    const getTaskNextList = (taskId: number): any[] => {
+      return taskScopedNodeAggregationByTaskId.get(taskId)?.nextList ?? []
+    }
+    const resetTaskNodeAggregation = (taskId: number) => {
+      const aggregation = getOrCreateTaskNodeAggregation(taskId)
+      aggregation.nextList = []
+      aggregation.waitFreezesRuntimeStates.clear()
+    }
+    const clearTaskNodeAggregation = (taskId: number) => {
+      taskScopedNodeAggregationByTaskId.delete(taskId)
+    }
     const toTimestampMs = (value?: string): number => {
       if (!value) return Number.POSITIVE_INFINITY
       const normalized = value.includes(' ') ? value.replace(' ', 'T') : value
@@ -1066,7 +1090,11 @@ export class LogParser {
         after: sortFlowItemsByTimestamp(after),
       }
     }
-    const buildWaitFreezesFlowItems = (): UnifiedFlowItem[] => {
+    const buildWaitFreezesFlowItems = (taskId: number): UnifiedFlowItem[] => {
+      const waitFreezesRuntimeStates = taskScopedNodeAggregationByTaskId.get(taskId)?.waitFreezesRuntimeStates
+      if (!waitFreezesRuntimeStates || waitFreezesRuntimeStates.size === 0) {
+        return []
+      }
       return Array.from(waitFreezesRuntimeStates.values())
         .sort((a, b) => {
           const delta = a.order - b.order
@@ -1076,6 +1104,7 @@ export class LogParser {
         .map(toWaitFreezesFlowItem)
     }
     const upsertWaitFreezesState = (
+      taskId: number,
       details: Record<string, any>,
       timestamp: string,
       status: 'running' | 'success' | 'failed',
@@ -1084,12 +1113,15 @@ export class LogParser {
       const wfId = normalizeWaitFreezesId(details.wf_id)
       if (wfId == null) return
 
-      const existing = waitFreezesRuntimeStates.get(wfId)
+      const aggregation = getOrCreateTaskNodeAggregation(taskId)
+      const existing = aggregation.waitFreezesRuntimeStates.get(wfId)
       const nowTs = this.stringPool.intern(timestamp)
       const fallbackName = (typeof details.name === 'string' && details.name.trim())
         ? details.name
         : existing?.name
-      const activeNodeName = getActivePipelineNode()?.name
+      const activeNodeName = taskId === task.task_id
+        ? getActivePipelineNode()?.name
+        : undefined
       const name = this.stringPool.intern(fallbackName || activeNodeName || 'WaitFreezes')
       const rawPhase = typeof details.phase === 'string' ? details.phase.trim() : ''
       const phase = rawPhase ? this.stringPool.intern(rawPhase) : existing?.phase
@@ -1100,7 +1132,7 @@ export class LogParser {
       const focus = resolveEventFocus(details, existing?.focus)
       const images = this.findWaitFreezesImages(timestamp, name) ?? existing?.images
 
-      waitFreezesRuntimeStates.set(wfId, {
+      aggregation.waitFreezesRuntimeStates.set(wfId, {
         wf_id: wfId,
         name,
         phase,
@@ -1310,11 +1342,14 @@ export class LogParser {
         onAttempt(attempt)
       }
     }
-    const applyCurrentNextList = (list: any[]) => {
-      currentNextList = list
-      const activeNode = getActivePipelineNode()
-      if (activeNode) {
-        activeNode.next_list = toNextListItems(currentNextList)
+    const applyTaskNextList = (taskId: number, list: any[]) => {
+      const aggregation = getOrCreateTaskNodeAggregation(taskId)
+      aggregation.nextList = list
+      if (taskId === task.task_id) {
+        const activeNode = getActivePipelineNode()
+        if (activeNode) {
+          activeNode.next_list = toNextListItems(aggregation.nextList)
+        }
       }
     }
     const mergeRecognitionOrderMeta = (target: RecognitionAttempt, source: RecognitionAttempt) => {
@@ -1573,11 +1608,19 @@ export class LogParser {
       }
       return undefined
     }
+    const cloneUnifiedFlowItem = (item: UnifiedFlowItem): UnifiedFlowItem => {
+      return {
+        ...item,
+        children: item.children?.map(cloneUnifiedFlowItem),
+      }
+    }
     const cloneNestedActionGroup = (group: NestedActionGroup): NestedActionGroup => {
       return {
         ...group,
         nested_actions: (group.nested_actions ?? []).map((action) => ({
           ...action,
+          next_list: action.next_list ? action.next_list.map((next) => ({ ...next })) : undefined,
+          node_flow: action.node_flow ? action.node_flow.map(cloneUnifiedFlowItem) : undefined,
           recognitions: (action.recognitions ?? []).map(cloneRecognitionAttempt),
           child_tasks: action.child_tasks?.map(cloneNestedActionGroup),
         })),
@@ -1923,7 +1966,7 @@ export class LogParser {
 
       const nowTimestamp = this.stringPool.intern(timestamp)
       activeNode.end_ts = nowTimestamp
-      activeNode.next_list = toNextListItems(currentNextList)
+      activeNode.next_list = toNextListItems(getTaskNextList(task.task_id))
 
       const topLevelRecognitions = dedupeRecognitionAttempts(currentTaskRecognitions)
       const actionRecognitions = dedupeRecognitionAttempts(actionLevelRecognitionNodes)
@@ -1957,7 +2000,7 @@ export class LogParser {
         topLevelRecognitions,
         actionLevelRecognitions: actionRecognitions,
         nestedActionGroups: runtimeNestedActionGroups,
-        waitFreezesFlow: buildWaitFreezesFlowItems(),
+        waitFreezesFlow: buildWaitFreezesFlowItems(task.task_id),
         createActionRoot: (actionFlow) => {
           const inferredActionStatus = summarizeActionFlowStatus(actionFlow)
           const actionRootStatus = runtimeActionState?.status ?? inferredActionStatus
@@ -2008,13 +2051,13 @@ export class LogParser {
       return node
     }
     const resetCurrentNodeAggregation = () => {
-      currentNextList = []
+      taskScopedNodeAggregationByTaskId.clear()
+      resetTaskNodeAggregation(task.task_id)
       currentTaskRecognitions.length = 0
       nestedActionNodes.length = 0
       actionLevelRecognitionNodes.length = 0
       activeRecognitionNodeAttempts.clear()
       actionRuntimeStates.clear()
-      waitFreezesRuntimeStates.clear()
       activeSubTaskActionNodes.clear()
       subTasks.clear()
       subTaskParentByTaskId.clear()
@@ -2062,10 +2105,12 @@ export class LogParser {
         state.status = fallbackStatus
         state.end_ts = endTimestamp
       }
-      for (const state of waitFreezesRuntimeStates.values()) {
-        if (state.status !== 'running') continue
-        state.status = fallbackStatus
-        state.end_ts = endTimestamp
+      for (const aggregation of taskScopedNodeAggregationByTaskId.values()) {
+        for (const state of aggregation.waitFreezesRuntimeStates.values()) {
+          if (state.status !== 'running') continue
+          state.status = fallbackStatus
+          state.end_ts = endTimestamp
+        }
       }
 
       for (const actionNode of activeSubTaskActionNodes.values()) {
@@ -2076,6 +2121,239 @@ export class LogParser {
         if (!nestedActionNodes.includes(actionNode)) {
           nestedActionNodes.push(actionNode)
         }
+      }
+    }
+    const handleCurrentTaskSimpleNodeEvent = (
+      message: string,
+      details: Record<string, any>,
+      timestamp: string,
+      eventOrder: number
+    ): boolean => {
+      switch (message) {
+        case 'Node.NextList.Starting':
+        case 'Node.NextList.Succeeded':
+          applyTaskNextList(task.task_id, details.list || [])
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.NextList.Failed':
+          applyTaskNextList(task.task_id, [])
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.Recognition.Starting':
+          handleRecognitionStartEvent(
+            task.task_id,
+            details,
+            timestamp,
+            eventOrder,
+            pushCurrentTaskRecognitionAttempt
+          )
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.Recognition.Succeeded':
+        case 'Node.Recognition.Failed':
+          handleRecognitionFinishEvent(
+            task.task_id,
+            details,
+            timestamp,
+            message === 'Node.Recognition.Succeeded' ? 'success' : 'failed',
+            eventOrder,
+            pushCurrentTaskRecognitionAttempt
+          )
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.Action.Starting':
+          if (details.action_id != null) {
+            const actionId = details.action_id as number
+            const startTimestamp = this.stringPool.intern(timestamp)
+            actionStartTimes.set(actionId, startTimestamp)
+            actionStartOrders.set(actionId, eventOrder)
+            actionRuntimeStates.set(actionId, {
+              action_id: actionId,
+              name: this.stringPool.intern(details.name || details.action_details?.name || ''),
+              ts: startTimestamp,
+              end_ts: startTimestamp,
+              status: 'running',
+              order: eventOrder,
+            })
+          }
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.Action.Succeeded':
+        case 'Node.Action.Failed':
+          if (details.action_id != null) {
+            const actionId = details.action_id as number
+            const endTimestamp = this.stringPool.intern(timestamp)
+            actionEndTimes.set(actionId, endTimestamp)
+            actionEndOrders.set(actionId, eventOrder)
+            const existing = actionRuntimeStates.get(actionId)
+            if (existing) {
+              existing.status = message === 'Node.Action.Succeeded' ? 'success' : 'failed'
+              existing.end_ts = endTimestamp
+              existing.name = this.stringPool.intern(details.name || details.action_details?.name || existing.name || '')
+            } else {
+              actionRuntimeStates.set(actionId, {
+                action_id: actionId,
+                name: this.stringPool.intern(details.name || details.action_details?.name || ''),
+                ts: endTimestamp,
+                end_ts: endTimestamp,
+                status: message === 'Node.Action.Succeeded' ? 'success' : 'failed',
+                order: eventOrder,
+              })
+            }
+          }
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.WaitFreezes.Starting':
+        case 'Node.WaitFreezes.Succeeded':
+        case 'Node.WaitFreezes.Failed': {
+          const waitFreezesStatus: 'running' | 'success' | 'failed' =
+            message === 'Node.WaitFreezes.Starting'
+              ? 'running'
+              : (message === 'Node.WaitFreezes.Succeeded' ? 'success' : 'failed')
+          upsertWaitFreezesState(task.task_id, details, timestamp, waitFreezesStatus, eventOrder)
+          const activeNode = getActivePipelineNode()
+          if (activeNode) {
+            activeNode.focus = resolveEventFocus(details, activeNode.focus)
+          }
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+        }
+
+        case 'Node.ActionNode.Starting': {
+          const actionId = details.action_details?.action_id ?? details.action_id ?? details.node_id
+          if (actionId != null) {
+            actionNodeStartTimes.set(actionId, this.stringPool.intern(timestamp))
+          }
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+        }
+
+        case 'Node.ActionNode.Succeeded':
+        case 'Node.ActionNode.Failed': {
+          const actionId = details.action_details?.action_id ?? details.action_id ?? details.node_id
+          if (actionId != null) {
+            actionNodeStartTimes.delete(actionId)
+          }
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+        }
+
+        default:
+          return false
+      }
+    }
+    const handleSubTaskSimpleNodeEvent = (
+      subTaskId: number | null,
+      message: string,
+      details: Record<string, any>,
+      timestamp: string,
+      eventOrder: number
+    ): boolean => {
+      switch (message) {
+        case 'Node.PipelineNode.Starting':
+          if (subTaskId != null) {
+            resetTaskNodeAggregation(subTaskId)
+            if (details.node_id != null) {
+              subTaskPipelineNodeStartTimes.set(scopedKey(subTaskId, details.node_id), this.stringPool.intern(timestamp))
+            }
+          }
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.NextList.Starting':
+        case 'Node.NextList.Succeeded':
+          if (subTaskId != null) {
+            applyTaskNextList(subTaskId, details.list || [])
+          }
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.NextList.Failed':
+          if (subTaskId != null) {
+            applyTaskNextList(subTaskId, [])
+          }
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.WaitFreezes.Starting':
+        case 'Node.WaitFreezes.Succeeded':
+        case 'Node.WaitFreezes.Failed': {
+          if (subTaskId != null) {
+            const waitFreezesStatus: 'running' | 'success' | 'failed' =
+              message === 'Node.WaitFreezes.Starting'
+                ? 'running'
+                : (message === 'Node.WaitFreezes.Succeeded' ? 'success' : 'failed')
+            upsertWaitFreezesState(subTaskId, details, timestamp, waitFreezesStatus, eventOrder)
+          }
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+        }
+
+        case 'Node.Recognition.Starting':
+          if (subTaskId != null) {
+            handleRecognitionStartEvent(subTaskId, details, timestamp, eventOrder)
+          }
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.Recognition.Succeeded':
+        case 'Node.Recognition.Failed':
+          if (subTaskId == null) return true
+          handleRecognitionFinishEvent(
+            subTaskId,
+            details,
+            timestamp,
+            message === 'Node.Recognition.Succeeded' ? 'success' : 'failed',
+            eventOrder,
+            (attempt) => {
+              subTasks.addRecognition(subTaskId, attempt)
+            }
+          )
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.Action.Starting':
+          if (subTaskId != null && details.action_id != null) {
+            const actionKey = scopedKey(subTaskId, details.action_id)
+            subTaskActionStartTimes.set(actionKey, this.stringPool.intern(timestamp))
+            subTaskActionStartOrders.set(actionKey, eventOrder)
+          }
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+
+        case 'Node.Action.Succeeded':
+        case 'Node.Action.Failed': {
+          if (subTaskId == null) return true
+          const actionId = details.action_id
+          const actionKey = actionId != null ? scopedKey(subTaskId, actionId) : null
+          const endTimestamp = this.stringPool.intern(timestamp)
+          const startTimestamp = actionKey
+            ? (subTaskActionStartTimes.get(actionKey) || endTimestamp)
+            : endTimestamp
+          if (actionKey) {
+            subTaskActionEndTimes.set(actionKey, endTimestamp)
+            subTaskActionEndOrders.set(actionKey, eventOrder)
+          }
+          subTasks.addAction(subTaskId, {
+            action_id: details.action_id,
+            name: this.stringPool.intern(details.name || ''),
+            ts: startTimestamp,
+            end_ts: endTimestamp,
+            status: message === 'Node.Action.Succeeded' ? 'success' : 'failed',
+            action_details: withActionTimestamps(details.action_details, startTimestamp, endTimestamp, endTimestamp)
+          })
+          refreshActivePipelineNodePreview(timestamp)
+          return true
+        }
+
+        default:
+          return false
       }
     }
 
@@ -2126,6 +2404,9 @@ export class LogParser {
 
       // === 当前任务的事件 ===
       if (isCurrentTask) {
+        if (handleCurrentTaskSimpleNodeEvent(message, details, event.timestamp, eventOrder)) {
+          continue
+        }
         switch (message) {
           case 'Node.PipelineNode.Starting':
             if (details.node_id) {
@@ -2162,44 +2443,6 @@ export class LogParser {
               refreshActivePipelineNodePreview(event.timestamp)
             }
             break
-
-          case 'Node.NextList.Starting':
-          case 'Node.NextList.Succeeded':
-            applyCurrentNextList(details.list || [])
-            refreshActivePipelineNodePreview(event.timestamp)
-            break
-
-          case 'Node.NextList.Failed':
-            applyCurrentNextList([])
-            refreshActivePipelineNodePreview(event.timestamp)
-            break
-
-          case 'Node.Recognition.Starting':
-            {
-              handleRecognitionStartEvent(
-                task.task_id,
-                details,
-                event.timestamp,
-                eventOrder,
-                pushCurrentTaskRecognitionAttempt
-              )
-              refreshActivePipelineNodePreview(event.timestamp)
-            }
-            break
-
-          case 'Node.Recognition.Succeeded':
-          case 'Node.Recognition.Failed': {
-            handleRecognitionFinishEvent(
-              task.task_id,
-              details,
-              event.timestamp,
-              message === 'Node.Recognition.Succeeded' ? 'success' : 'failed',
-              eventOrder,
-              pushCurrentTaskRecognitionAttempt
-            )
-            refreshActivePipelineNodePreview(event.timestamp)
-            break
-          }
 
           case 'Node.RecognitionNode.Starting': {
             const recoId = resolveRecognitionNodeRecoId(details)
@@ -2307,85 +2550,6 @@ export class LogParser {
             }
             if (!isKnownRecognitionRecoId(recoId)) {
               pushActionLevelRecognition(recoNodeAttempt)
-            }
-            refreshActivePipelineNodePreview(event.timestamp)
-            break
-          }
-
-          case 'Node.Action.Starting':
-            if (details.action_id != null) {
-              const actionId = details.action_id as number
-              const startTimestamp = this.stringPool.intern(event.timestamp)
-              actionStartTimes.set(actionId, startTimestamp)
-              actionStartOrders.set(actionId, eventOrder)
-              actionRuntimeStates.set(actionId, {
-                action_id: actionId,
-                name: this.stringPool.intern(details.name || details.action_details?.name || ''),
-                ts: startTimestamp,
-                end_ts: startTimestamp,
-                status: 'running',
-                order: eventOrder,
-              })
-            }
-            refreshActivePipelineNodePreview(event.timestamp)
-            break
-
-          case 'Node.Action.Succeeded':
-          case 'Node.Action.Failed':
-            if (details.action_id != null) {
-              const actionId = details.action_id as number
-              const endTimestamp = this.stringPool.intern(event.timestamp)
-              actionEndTimes.set(actionId, endTimestamp)
-              actionEndOrders.set(actionId, eventOrder)
-              const existing = actionRuntimeStates.get(actionId)
-              if (existing) {
-                existing.status = message === 'Node.Action.Succeeded' ? 'success' : 'failed'
-                existing.end_ts = endTimestamp
-                existing.name = this.stringPool.intern(details.name || details.action_details?.name || existing.name || '')
-              } else {
-                actionRuntimeStates.set(actionId, {
-                  action_id: actionId,
-                  name: this.stringPool.intern(details.name || details.action_details?.name || ''),
-                  ts: endTimestamp,
-                  end_ts: endTimestamp,
-                  status: message === 'Node.Action.Succeeded' ? 'success' : 'failed',
-                  order: eventOrder,
-                })
-              }
-            }
-            refreshActivePipelineNodePreview(event.timestamp)
-            break
-
-          case 'Node.WaitFreezes.Starting':
-          case 'Node.WaitFreezes.Succeeded':
-          case 'Node.WaitFreezes.Failed': {
-            const waitFreezesStatus: 'running' | 'success' | 'failed' =
-              message === 'Node.WaitFreezes.Starting'
-                ? 'running'
-                : (message === 'Node.WaitFreezes.Succeeded' ? 'success' : 'failed')
-            upsertWaitFreezesState(details, event.timestamp, waitFreezesStatus, eventOrder)
-            const activeNode = getActivePipelineNode()
-            if (activeNode) {
-              activeNode.focus = resolveEventFocus(details, activeNode.focus)
-            }
-            refreshActivePipelineNodePreview(event.timestamp)
-            break
-          }
-
-          case 'Node.ActionNode.Starting': {
-            const actionId = details.action_details?.action_id ?? details.action_id ?? details.node_id
-            if (actionId != null) {
-              actionNodeStartTimes.set(actionId, this.stringPool.intern(event.timestamp))
-            }
-            refreshActivePipelineNodePreview(event.timestamp)
-            break
-          }
-
-          case 'Node.ActionNode.Succeeded':
-          case 'Node.ActionNode.Failed': {
-            const actionId = details.action_details?.action_id ?? details.action_id ?? details.node_id
-            if (actionId != null) {
-              actionNodeStartTimes.delete(actionId)
             }
             refreshActivePipelineNodePreview(event.timestamp)
             break
@@ -2513,7 +2677,7 @@ export class LogParser {
               topLevelRecognitions: scopedAttachResult.topLevelAttempts,
               actionLevelRecognitions: nestedRecognitionInAction,
               nestedActionGroups: resolvedNestedActionGroups,
-              waitFreezesFlow: buildWaitFreezesFlowItems(),
+              waitFreezesFlow: buildWaitFreezesFlowItems(task.task_id),
               createActionRoot: (actionFlow) => {
                 const hasActionRoot = !!mergedActionDetails || actionFlow.length > 0
                 if (!hasActionRoot) return null
@@ -2545,7 +2709,7 @@ export class LogParser {
             const nodeFlow = composedFlow.nodeFlow
             const actionFlow = composedFlow.actionFlow
 
-            const resolvedNextList = toNextListItems(currentNextList)
+            const resolvedNextList = toNextListItems(getTaskNextList(task.task_id))
             let nodeStatus: NodeInfo['status'] = pipelineStatus
             if (nodeStatus === 'success' && actionFlow.some(item => item.type === 'task' && item.status === 'failed')) {
               nodeStatus = 'failed'
@@ -2615,82 +2779,10 @@ export class LogParser {
 
       // === 子任务的事件（task_id !== 当前任务） ===
       const subTaskId = details.task_id
+      if (handleSubTaskSimpleNodeEvent(subTaskId, message, details, event.timestamp, eventOrder)) {
+        continue
+      }
       switch (message) {
-        case 'Node.PipelineNode.Starting':
-          if (subTaskId != null && details.node_id != null) {
-            subTaskPipelineNodeStartTimes.set(scopedKey(subTaskId, details.node_id), this.stringPool.intern(event.timestamp))
-          }
-          refreshActivePipelineNodePreview(event.timestamp)
-          break
-
-        case 'Node.NextList.Starting':
-        case 'Node.NextList.Succeeded':
-        case 'Node.NextList.Failed':
-          break
-
-        case 'Node.WaitFreezes.Starting':
-        case 'Node.WaitFreezes.Succeeded':
-        case 'Node.WaitFreezes.Failed':
-          break
-
-        case 'Node.Recognition.Starting':
-          if (subTaskId != null) {
-            handleRecognitionStartEvent(subTaskId, details, event.timestamp, eventOrder)
-          }
-          refreshActivePipelineNodePreview(event.timestamp)
-          break
-
-        case 'Node.Recognition.Succeeded':
-        case 'Node.Recognition.Failed': {
-          if (subTaskId == null) break
-          handleRecognitionFinishEvent(
-            subTaskId,
-            details,
-            event.timestamp,
-            message === 'Node.Recognition.Succeeded' ? 'success' : 'failed',
-            eventOrder,
-            (attempt) => {
-              subTasks.addRecognition(subTaskId, attempt)
-            }
-          )
-          refreshActivePipelineNodePreview(event.timestamp)
-          break
-        }
-
-        case 'Node.Action.Starting':
-          if (subTaskId != null && details.action_id != null) {
-            const actionKey = scopedKey(subTaskId, details.action_id)
-            subTaskActionStartTimes.set(actionKey, this.stringPool.intern(event.timestamp))
-            subTaskActionStartOrders.set(actionKey, eventOrder)
-          }
-          refreshActivePipelineNodePreview(event.timestamp)
-          break
-
-        case 'Node.Action.Succeeded':
-        case 'Node.Action.Failed': {
-          if (subTaskId == null) break
-          const actionId = details.action_id
-          const actionKey = actionId != null ? scopedKey(subTaskId, actionId) : null
-          const endTimestamp = this.stringPool.intern(event.timestamp)
-          const startTimestamp = actionKey
-            ? (subTaskActionStartTimes.get(actionKey) || endTimestamp)
-            : endTimestamp
-          if (actionKey) {
-            subTaskActionEndTimes.set(actionKey, endTimestamp)
-            subTaskActionEndOrders.set(actionKey, eventOrder)
-          }
-          subTasks.addAction(subTaskId, {
-            action_id: details.action_id,
-            name: this.stringPool.intern(details.name || ''),
-            ts: startTimestamp,
-            end_ts: endTimestamp,
-            status: message === 'Node.Action.Succeeded' ? 'success' : 'failed',
-            action_details: withActionTimestamps(details.action_details, startTimestamp, endTimestamp, endTimestamp)
-          })
-          refreshActivePipelineNodePreview(event.timestamp)
-          break
-        }
-
         case 'Node.RecognitionNode.Starting': {
           if (subTaskId == null) break
           const recoId = resolveRecognitionNodeRecoId(details)
@@ -2896,14 +2988,65 @@ export class LogParser {
             (attachedRecognitions.attempts.length > 0
               ? attachedRecognitions.attempts[attachedRecognitions.attempts.length - 1].reco_details
               : undefined)
+          const resolvedNodeName = this.stringPool.intern(
+            details.reco_details?.name || details.action_details?.name || details.name || ''
+          )
+          const resolvedNextList = toNextListItems(getTaskNextList(subTaskId))
+          const resolvedActionDetails = withActionTimestamps(
+            mergedActionDetails,
+            mergedActionStartTimestamp,
+            mergedActionEndTimestamp,
+            endTimestamp
+          )
+          const subTaskTopLevelRecognitions = attachedRecognitions.attempts.length > 0
+            ? attachedRecognitions.attempts
+            : attachedRecognitions.orphans
+          const composedSubTaskFlow = composePipelineNodeFlow({
+            topLevelRecognitions: subTaskTopLevelRecognitions,
+            actionLevelRecognitions: [],
+            nestedActionGroups: [],
+            waitFreezesFlow: buildWaitFreezesFlowItems(subTaskId),
+            createActionRoot: (actionFlow) => {
+              const hasActionRoot = !!resolvedActionDetails || actionFlow.length > 0
+              if (!hasActionRoot) return null
+
+              const actionStatus: 'success' | 'failed' = resolvedActionDetails
+                ? (resolvedActionDetails.success ? 'success' : 'failed')
+                : (message === 'Node.PipelineNode.Succeeded' ? 'success' : 'failed')
+              const resolvedActionErrorImage = actionStatus === 'failed'
+                ? this.findErrorImageByNames(event.timestamp, [
+                    resolvedActionDetails?.name,
+                    details.action_details?.name,
+                    details.node_details?.name,
+                    details.reco_details?.name,
+                    resolvedNodeName,
+                  ])
+                : undefined
+              const resolvedActionId = resolvedActionDetails?.action_id ?? actionId ?? nodeId
+              return createActionRootFlowItem({
+                actionId: resolvedActionId,
+                name: resolvedActionDetails?.name || resolvedNodeName,
+                status: actionStatus,
+                ts: resolvedActionDetails?.ts || resolvedActionDetails?.end_ts || endTimestamp,
+                endTs: resolvedActionDetails?.end_ts,
+                actionDetails: resolvedActionDetails,
+                errorImage: resolvedActionErrorImage,
+              })
+            },
+          })
+          const resolvedNodeFlow = composedSubTaskFlow.nodeFlow.length > 0
+            ? composedSubTaskFlow.nodeFlow
+            : undefined
           subTasks.addPipelineNode(subTaskId, {
             node_id: nodeId,
-            name: this.stringPool.intern(details.reco_details?.name || details.action_details?.name || details.name || ''),
+            name: resolvedNodeName,
             ts: startTimestamp,
             end_ts: endTimestamp,
             status: message === 'Node.PipelineNode.Succeeded' ? 'success' : 'failed',
             reco_details: fallbackRecoDetails ? markRaw(fallbackRecoDetails) : undefined,
-            action_details: withActionTimestamps(mergedActionDetails, mergedActionStartTimestamp, mergedActionEndTimestamp, endTimestamp),
+            action_details: resolvedActionDetails,
+            next_list: resolvedNextList,
+            node_flow: resolvedNodeFlow,
             recognitions: attachedRecognitions.attempts.length > 0
               ? attachedRecognitions.attempts
               : (attachedRecognitions.orphans.length > 0 ? attachedRecognitions.orphans : undefined)
@@ -2928,6 +3071,7 @@ export class LogParser {
               activeRecognitionNodeAttempts.delete(key)
             }
           }
+          clearTaskNodeAggregation(subTaskId)
           refreshActivePipelineNodePreview(event.timestamp)
           break
         }

@@ -90,6 +90,8 @@ export interface NestedActionNode {
   status: 'success' | 'failed' | 'running'
   reco_details?: RecognitionDetail
   action_details?: ActionDetail
+  next_list?: NextListItem[]
+  node_flow?: UnifiedFlowItem[]
   recognitions?: RecognitionAttempt[]
   child_tasks?: NestedActionGroup[]
 }
