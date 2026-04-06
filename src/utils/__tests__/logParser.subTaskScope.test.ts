@@ -238,6 +238,28 @@ describe('LogParser sub task scoped node aggregation', () => {
     expect(mainTask?.nodes[0].next_list).toEqual([])
   })
 
+  it('ignores Node events with unknown phase', async () => {
+    const lines = [
+      makeEventLine(171, 'Tasker.Task.Starting', { task_id: 51, entry: 'MainTask', hash: 'h-main-6', uuid: 'u-main-6' }),
+      makeEventLine(172, 'Node.PipelineNode.Starting', { task_id: 51, node_id: 5101, name: 'MainNode' }),
+      makeEventLine(173, 'Node.NextList.Custom', {
+        task_id: 51,
+        name: 'MainNode',
+        list: [{ name: 'ShouldIgnore', anchor: false, jump_back: false }],
+      }),
+      makeEventLine(174, 'Node.PipelineNode.Succeeded', { task_id: 51, node_id: 5101, name: 'MainNode' }),
+      makeEventLine(175, 'Tasker.Task.Succeeded', { task_id: 51, entry: 'MainTask', hash: 'h-main-6', uuid: 'u-main-6' }),
+    ]
+
+    const parser = new LogParser()
+    await parser.parseFile(lines.join('\n'))
+    const tasks = parser.getTasksSnapshot()
+    const mainTask = tasks.find(item => item.task_id === 51)
+    expect(mainTask).toBeTruthy()
+    expect(mainTask?.nodes.length).toBe(1)
+    expect(mainTask?.nodes[0].next_list).toEqual([])
+  })
+
   it('builds multi-level nested sub tasks by parent task relation', async () => {
     const lines = [
       makeEventLine(201, 'Tasker.Task.Starting', { task_id: 21, entry: 'MainTask', hash: 'h-main-3', uuid: 'u-main-3' }),

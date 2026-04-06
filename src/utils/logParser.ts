@@ -822,6 +822,7 @@ export class LogParser {
     type ScopedSimpleNodeEventHandler = (
       taskId: number | null,
       messageMeta: MaaMessageMeta,
+      phase: KnownMaaPhase | null,
       details: Record<string, any>,
       timestamp: string,
       eventOrder: number
@@ -2287,12 +2288,6 @@ export class LogParser {
       if (phase === 'Starting') return 'running'
       return resolveCompletionStatus(phase)
     }
-    const resolvePipelineNodeFinalStatus = (phase: KnownMaaPhase): 'success' | 'failed' => {
-      return resolveCompletionStatus(phase)
-    }
-    const resolveActionNodeFinalStatus = (phase: KnownMaaPhase): 'success' | 'failed' => {
-      return resolveCompletionStatus(phase)
-    }
     const resolveActionNodeEventId = (details: Record<string, any>) => {
       return details.action_details?.action_id ?? details.action_id ?? details.node_id
     }
@@ -2549,7 +2544,7 @@ export class LogParser {
       phase: KnownMaaPhase,
       timestamp: string
     ) => {
-      const subTaskPipelineStatus = resolvePipelineNodeFinalStatus(phase)
+      const subTaskPipelineStatus = resolveCompletionStatus(phase)
       const nodeId = details.node_id
       const endTimestamp = this.stringPool.intern(timestamp)
       const startTimestamp = nodeId != null
@@ -2729,7 +2724,7 @@ export class LogParser {
       const nodeId = details.node_id
       if (!nodeId) return
 
-      const pipelineStatus = resolvePipelineNodeFinalStatus(phase)
+      const pipelineStatus = resolveCompletionStatus(phase)
       settleCurrentNodeRuntimeStates(pipelineStatus, timestamp)
 
       const nodeName = details.name || ''
@@ -3003,6 +2998,7 @@ export class LogParser {
     const handleSimpleNodeEvent = (
       taskId: number | null,
       messageMeta: MaaMessageMeta,
+      phase: KnownMaaPhase | null,
       details: Record<string, any>,
       timestamp: string,
       eventOrder: number,
@@ -3012,7 +3008,6 @@ export class LogParser {
       onRecognitionAttempt?: (taskId: number, attempt: RecognitionAttempt) => void,
       skipRecognitionRefreshWhenTaskMissingOnFinish?: boolean
     ): boolean => {
-      const phase = toKnownMaaPhase(messageMeta.phase)
       if (!phase) return false
       switch (messageMeta.nodeKind) {
         case 'NextList':
@@ -3049,6 +3044,7 @@ export class LogParser {
     const handleCurrentTaskSimpleNodeEvent: ScopedSimpleNodeEventHandler = (
       _taskId: number | null,
       messageMeta: MaaMessageMeta,
+      phase: KnownMaaPhase | null,
       details: Record<string, any>,
       timestamp: string,
       eventOrder: number
@@ -3056,6 +3052,7 @@ export class LogParser {
       return handleSimpleNodeEvent(
         task.task_id,
         messageMeta,
+        phase,
         details,
         timestamp,
         eventOrder,
@@ -3068,6 +3065,7 @@ export class LogParser {
     const handleSubTaskSimpleNodeEvent: ScopedSimpleNodeEventHandler = (
       subTaskId: number | null,
       messageMeta: MaaMessageMeta,
+      phase: KnownMaaPhase | null,
       details: Record<string, any>,
       timestamp: string,
       eventOrder: number
@@ -3075,6 +3073,7 @@ export class LogParser {
       return handleSimpleNodeEvent(
         subTaskId,
         messageMeta,
+        phase,
         details,
         timestamp,
         eventOrder,
@@ -3137,7 +3136,7 @@ export class LogParser {
             subTaskId,
             details,
             timestamp,
-            resolveActionNodeFinalStatus(phase)
+            resolveCompletionStatus(phase)
           )
         }
       }
@@ -3169,19 +3168,22 @@ export class LogParser {
       ) {
         return
       }
-      if (messageMeta.phase === 'Starting') {
+      const phase = toKnownMaaPhase(messageMeta.phase)
+      if (!phase) return
+
+      if (phase === 'Starting') {
         const parentTaskId = peekActiveTask()
         if (eventTaskId !== task.task_id && parentTaskId !== eventTaskId) {
           subTaskParentByTaskId.set(eventTaskId, parentTaskId)
         }
         pushActiveTask(eventTaskId)
-      } else if (messageMeta.phase === 'Succeeded' || messageMeta.phase === 'Failed') {
+      } else {
         popActiveTask(eventTaskId)
       }
 
       if (eventTaskId === task.task_id) return
       const snapshot = getOrCreateSubTaskSnapshot(eventTaskId)
-      if (messageMeta.phase === 'Starting') {
+      if (phase === 'Starting') {
         snapshot.entry = this.stringPool.intern(details.entry || '')
         snapshot.hash = this.stringPool.intern(details.hash || '')
         snapshot.uuid = this.stringPool.intern(details.uuid || '')
@@ -3189,8 +3191,8 @@ export class LogParser {
         snapshot.ts = this.stringPool.intern(timestamp)
         snapshot.start_message = this.stringPool.intern(message)
         snapshot.start_details = markRawTaskDetails(details)
-      } else if (messageMeta.phase === 'Succeeded' || messageMeta.phase === 'Failed') {
-        snapshot.status = messageMeta.phase === 'Succeeded' ? 'succeeded' : 'failed'
+      } else {
+        snapshot.status = phase === 'Succeeded' ? 'succeeded' : 'failed'
         snapshot.end_ts = this.stringPool.intern(timestamp)
         snapshot.end_message = this.stringPool.intern(message)
         snapshot.end_details = markRawTaskDetails(details)
@@ -3273,13 +3275,13 @@ export class LogParser {
       eventOrder: number,
       config: ScopedNodeDispatchConfig
     ) => {
+      const phase = toKnownMaaPhase(messageMeta.phase)
       const excludeParentTaskId = config.excludeTaskIdFromParentRecognitionLookup
         ? (taskId ?? undefined)
         : undefined
-      if (config.handleSimpleNodeEvent(taskId, messageMeta, details, timestamp, eventOrder)) {
+      if (config.handleSimpleNodeEvent(taskId, messageMeta, phase, details, timestamp, eventOrder)) {
         return
       }
-      const phase = toKnownMaaPhase(messageMeta.phase)
       if (!phase) return
       switch (messageMeta.nodeKind) {
         case 'RecognitionNode':
