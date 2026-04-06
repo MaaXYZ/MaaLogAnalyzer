@@ -1769,19 +1769,6 @@ export class LogParser {
         ? recognitions[recognitions.length - 1].reco_details
         : undefined
     }
-    const selectAttachedTopLevelRecognitions = (params: {
-      attempts: RecognitionAttempt[]
-      orphans: RecognitionAttempt[]
-    }): RecognitionAttempt[] => {
-      return params.attempts.length > 0 ? params.attempts : params.orphans
-    }
-    const selectAttachedNodeRecognitions = (params: {
-      attempts: RecognitionAttempt[]
-      orphans: RecognitionAttempt[]
-    }): RecognitionAttempt[] | undefined => {
-      if (params.attempts.length > 0) return params.attempts
-      return params.orphans.length > 0 ? params.orphans : undefined
-    }
     const cloneRecognitionAttempt = (attempt: RecognitionAttempt): RecognitionAttempt => {
       const cloned: RecognitionAttempt = {
         ...attempt,
@@ -2563,7 +2550,9 @@ export class LogParser {
         mergedActionEndTimestamp,
         endTimestamp
       )
-      const subTaskTopLevelRecognitions = selectAttachedTopLevelRecognitions(attachedRecognitions)
+      const subTaskTopLevelRecognitions = attachedRecognitions.attempts.length > 0
+        ? attachedRecognitions.attempts
+        : attachedRecognitions.orphans
       const composedSubTaskFlow = composeFinalPipelineNodeFlow({
         taskId: subTaskId,
         topLevelRecognitions: subTaskTopLevelRecognitions,
@@ -2591,7 +2580,9 @@ export class LogParser {
         action_details: resolvedActionDetails,
         next_list: resolvedNextList,
         node_flow: resolvedNodeFlow,
-        recognitions: selectAttachedNodeRecognitions(attachedRecognitions)
+        recognitions: attachedRecognitions.attempts.length > 0
+          ? attachedRecognitions.attempts
+          : (attachedRecognitions.orphans.length > 0 ? attachedRecognitions.orphans : undefined)
       })
       clearSubTaskRuntimeStateAfterPipelineFinalize(subTaskId, nodeId, actionKey)
       refreshActivePipelineNodePreview(timestamp)
@@ -2675,54 +2666,14 @@ export class LogParser {
         }
       }
     }
-    const upsertCurrentTaskPipelineNode = (params: {
-      taskId: number
-      nodeId: number
-      name: string
-      ts: string
-      endTs: string
-      status: NodeInfo['status']
-      recoDetails: NodeInfo['reco_details']
-      actionDetails: NodeInfo['action_details']
-      focus: NodeInfo['focus']
-      nextList: NodeInfo['next_list']
-      nodeFlow: NodeInfo['node_flow']
-      nodeDetails: NodeInfo['node_details']
-      errorImage: string | undefined
-    }) => {
-      const existingNode = pipelineNodesById.get(params.nodeId)
+    const upsertCurrentTaskPipelineNode = (node: NodeInfo) => {
+      const existingNode = pipelineNodesById.get(node.node_id)
       if (existingNode) {
-        existingNode.name = params.name
-        existingNode.ts = params.ts
-        existingNode.end_ts = params.endTs
-        existingNode.status = params.status
-        existingNode.task_id = params.taskId
-        existingNode.reco_details = params.recoDetails
-        existingNode.action_details = params.actionDetails
-        existingNode.focus = params.focus
-        existingNode.next_list = params.nextList
-        existingNode.node_flow = params.nodeFlow
-        existingNode.node_details = params.nodeDetails
-        existingNode.error_image = params.errorImage
+        Object.assign(existingNode, node)
         return existingNode
       }
-      const node: NodeInfo = {
-        node_id: params.nodeId,
-        name: params.name,
-        ts: params.ts,
-        end_ts: params.endTs,
-        status: params.status,
-        task_id: params.taskId,
-        reco_details: params.recoDetails,
-        action_details: params.actionDetails,
-        focus: params.focus,
-        next_list: params.nextList,
-        node_flow: params.nodeFlow,
-        node_details: params.nodeDetails,
-        error_image: params.errorImage
-      }
       nodes.push(node)
-      pipelineNodesById.set(params.nodeId, node)
+      pipelineNodesById.set(node.node_id, node)
       return node
     }
     const cleanupCurrentTaskPipelineRuntimeState = (
@@ -2825,19 +2776,19 @@ export class LogParser {
         nodeName,
       ])
       upsertCurrentTaskPipelineNode({
-        taskId,
-        nodeId,
+        node_id: nodeId,
+        task_id: taskId,
+        end_ts: endTimestamp,
         name: resolvedNodeName,
         ts: startTimestamp,
-        endTs: endTimestamp,
         status: nodeStatus,
-        recoDetails: resolvedRecoDetails,
-        actionDetails: mergedActionDetails,
+        reco_details: resolvedRecoDetails,
+        action_details: mergedActionDetails,
         focus: resolvedFocus,
-        nextList: resolvedNextList,
-        nodeFlow: resolvedNodeFlow,
-        nodeDetails: resolvedNodeDetails,
-        errorImage: resolvedErrorImage,
+        next_list: resolvedNextList,
+        node_flow: resolvedNodeFlow,
+        node_details: resolvedNodeDetails,
+        error_image: resolvedErrorImage,
       })
       cleanupCurrentTaskPipelineRuntimeState(nodeId, actionId)
     }

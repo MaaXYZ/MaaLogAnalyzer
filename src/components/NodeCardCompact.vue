@@ -11,6 +11,7 @@ import {
 } from '../utils/nodeFlow'
 import TaskDocHoverPopover from './TaskDocHoverPopover.vue'
 import StatusIcon from './StatusIcon.vue'
+import { resolveResultStatusButtonType } from './nodeCard/statusButtonType'
 
 const props = defineProps<{
   node: NodeInfo
@@ -212,7 +213,7 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
             <n-button
               text
               size="tiny"
-              :type="group.status === 'success' ? 'success' : group.status === 'running' ? 'warning' : 'error'"
+              :type="resolveResultStatusButtonType(group.status)"
               @click="emit('select-flow-item', node, group.flowItemId)"
             >
               <template #icon>
@@ -233,7 +234,7 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
           <n-button
             text
             size="tiny"
-            :type="actionSummary.status === 'success' ? 'success' : actionSummary.status === 'running' ? 'warning' : 'error'"
+            :type="resolveResultStatusButtonType(actionSummary.status)"
             @click="actionSummary.useFlowItem && actionSummary.flowItemId ? emit('select-flow-item', node, actionSummary.flowItemId) : emit('select-action', node)"
           >
             <template #icon>

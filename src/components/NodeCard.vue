@@ -6,7 +6,7 @@ import { getSettings } from '../utils/settings'
 import { extractTime } from '../utils/formatDuration'
 import { useNodeCardTaskDoc } from './nodeCard/useNodeCardTaskDoc'
 import { useMergedRecognitionList } from './nodeCard/useMergedRecognitionList'
-import { resolveStatusButtonType } from './nodeCard/statusButtonType'
+import { resolveResultStatusButtonType, resolveStatusButtonType } from './nodeCard/statusButtonType'
 import NodeCardDetailed from './NodeCardDetailed.vue'
 import NodeCardCompact from './NodeCardCompact.vue'
 import NodeCardTree from './NodeCardTree.vue'
@@ -133,8 +133,10 @@ const getButtonType = (status: string): ButtonType => {
 // 动作按钮类型
 const actionButtonType = computed<ButtonType>(() => {
   if (!props.node.action_details) return 'default'
-  if (props.node.status === 'running') return 'warning'
-  return props.node.action_details.success ? 'success' : 'error'
+  const actionStatus = props.node.status === 'running'
+    ? 'running'
+    : (props.node.action_details.success ? 'success' : 'failed')
+  return resolveResultStatusButtonType(actionStatus)
 })
 
 </script>
