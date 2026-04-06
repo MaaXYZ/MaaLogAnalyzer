@@ -1352,6 +1352,53 @@ export class LogParser {
         }
       }
     }
+    const setRecognitionNodeStartTimestamp = (
+      taskId: number,
+      recoId: number,
+      startTimestamp: string
+    ) => {
+      if (taskId === task.task_id) {
+        recognitionNodeStartTimes.set(recoId, startTimestamp)
+        return
+      }
+      subTaskRecognitionNodeStartTimes.set(scopedKey(taskId, recoId), startTimestamp)
+    }
+    const startRecognitionNodeEvent = (params: {
+      taskId: number
+      details: Record<string, any>
+      timestamp: string
+      eventOrder: number
+      findParentRecognition: () => RecognitionAttempt | undefined
+      dispatchDetachedRecognition?: (attempt: RecognitionAttempt) => void
+    }) => {
+      const {
+        taskId,
+        details,
+        timestamp,
+        eventOrder,
+        findParentRecognition,
+        dispatchDetachedRecognition,
+      } = params
+      const recoId = resolveRecognitionNodeRecoId(details)
+      if (recoId == null) return
+      const startTimestamp = this.stringPool.intern(timestamp)
+      setRecognitionNodeStartTimestamp(taskId, recoId, startTimestamp)
+      const recoNodeAttempt = ensureRecognitionNodeAttempt(
+        taskId,
+        recoId,
+        details,
+        startTimestamp,
+        eventOrder
+      )
+      const parentRecognition = findParentRecognition()
+      if (parentRecognition && parentRecognition.reco_id !== recoId) {
+        attachNodeToAttempt(parentRecognition, recoNodeAttempt)
+        return
+      }
+      if (dispatchDetachedRecognition) {
+        dispatchDetachedRecognition(recoNodeAttempt)
+      }
+    }
     const getRecognitionNodeStartTimestamp = (
       taskId: number,
       recoId: number,
@@ -1560,6 +1607,11 @@ export class LogParser {
     const pushActionLevelRecognition = (attempt: RecognitionAttempt) => {
       if (isKnownRecognitionRecoId(attempt.reco_id)) return
       actionLevelRecognitionNodes.push(attempt)
+    }
+    const pushActionLevelRecognitionIfUnknown = (attempt: RecognitionAttempt) => {
+      if (!isKnownRecognitionRecoId(attempt.reco_id)) {
+        pushActionLevelRecognition(attempt)
+      }
     }
     const sortByParseOrderThenRecoId = (items: RecognitionAttempt[]) => {
       return [...items].sort((a, b) => {
@@ -2557,24 +2609,14 @@ export class LogParser {
             break
 
           case 'Node.RecognitionNode.Starting': {
-            const recoId = resolveRecognitionNodeRecoId(details)
-            if (recoId != null) {
-              const startTimestamp = this.stringPool.intern(event.timestamp)
-              recognitionNodeStartTimes.set(recoId, startTimestamp)
-              const recoNodeAttempt = ensureRecognitionNodeAttempt(
-                task.task_id,
-                recoId,
-                details,
-                startTimestamp,
-                eventOrder
-              )
-              const parentRecognition = findActiveParentRecognition()
-              if (parentRecognition && parentRecognition.reco_id !== recoId) {
-                attachNodeToAttempt(parentRecognition, recoNodeAttempt)
-              } else if (!isKnownRecognitionRecoId(recoId)) {
-                pushActionLevelRecognition(recoNodeAttempt)
-              }
-            }
+            startRecognitionNodeEvent({
+              taskId: task.task_id,
+              details,
+              timestamp: event.timestamp,
+              eventOrder,
+              findParentRecognition: () => findActiveParentRecognition(),
+              dispatchDetachedRecognition: pushActionLevelRecognitionIfUnknown,
+            })
             refreshActivePipelineNodePreview(event.timestamp)
             break
           }
@@ -2590,16 +2632,8 @@ export class LogParser {
               eventOrder,
               pendingRecognitions: subTasks.consumeRecognitions(task.task_id),
               findParentRecognition: () => findActiveParentRecognition(),
-              dispatchPendingRecognition: (recognition) => {
-                if (!isKnownRecognitionRecoId(recognition.reco_id)) {
-                  pushActionLevelRecognition(recognition)
-                }
-              },
-              dispatchStandaloneRecognition: (recognition) => {
-                if (!isKnownRecognitionRecoId(recognition.reco_id)) {
-                  pushActionLevelRecognition(recognition)
-                }
-              },
+              dispatchPendingRecognition: pushActionLevelRecognitionIfUnknown,
+              dispatchStandaloneRecognition: pushActionLevelRecognitionIfUnknown,
             })
             refreshActivePipelineNodePreview(event.timestamp)
             break
@@ -2835,23 +2869,13 @@ export class LogParser {
       switch (message) {
         case 'Node.RecognitionNode.Starting': {
           if (subTaskId == null) break
-          const recoId = resolveRecognitionNodeRecoId(details)
-          if (recoId != null) {
-            const startTimestamp = this.stringPool.intern(event.timestamp)
-            const nodeKey = scopedKey(subTaskId, recoId)
-            subTaskRecognitionNodeStartTimes.set(nodeKey, startTimestamp)
-            const recoNodeAttempt = ensureRecognitionNodeAttempt(
-              subTaskId,
-              recoId,
-              details,
-              startTimestamp,
-              eventOrder
-            )
-            const parentRecognition = findActiveParentRecognition(subTaskId)
-            if (parentRecognition && parentRecognition.reco_id !== recoId) {
-              attachNodeToAttempt(parentRecognition, recoNodeAttempt)
-            }
-          }
+          startRecognitionNodeEvent({
+            taskId: subTaskId,
+            details,
+            timestamp: event.timestamp,
+            eventOrder,
+            findParentRecognition: () => findActiveParentRecognition(subTaskId),
+          })
           refreshActivePipelineNodePreview(event.timestamp)
           break
         }
