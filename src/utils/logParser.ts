@@ -2253,9 +2253,6 @@ export class LogParser {
     const resolvePipelineNodeFinalStatus = (message: string): 'success' | 'failed' => {
       return message === 'Node.PipelineNode.Succeeded' ? 'success' : 'failed'
     }
-    const isPipelineNodeFinalizeMessage = (message: string): boolean => {
-      return message === 'Node.PipelineNode.Succeeded' || message === 'Node.PipelineNode.Failed'
-    }
     const resolveActionNodeFinalStatus = (message: string): 'success' | 'failed' => {
       return message === 'Node.ActionNode.Succeeded' ? 'success' : 'failed'
     }
@@ -2550,12 +2547,15 @@ export class LogParser {
         mergedActionEndTimestamp,
         endTimestamp
       )
-      const subTaskTopLevelRecognitions = attachedRecognitions.attempts.length > 0
+      const attachedTopLevelRecognitions = attachedRecognitions.attempts.length > 0
         ? attachedRecognitions.attempts
         : attachedRecognitions.orphans
+      const attachedNodeRecognitions = attachedRecognitions.attempts.length > 0
+        ? attachedRecognitions.attempts
+        : (attachedRecognitions.orphans.length > 0 ? attachedRecognitions.orphans : undefined)
       const composedSubTaskFlow = composeFinalPipelineNodeFlow({
         taskId: subTaskId,
-        topLevelRecognitions: subTaskTopLevelRecognitions,
+        topLevelRecognitions: attachedTopLevelRecognitions,
         actionLevelRecognitions: [],
         nestedActionGroups: [],
         actionDetails: resolvedActionDetails,
@@ -2580,9 +2580,7 @@ export class LogParser {
         action_details: resolvedActionDetails,
         next_list: resolvedNextList,
         node_flow: resolvedNodeFlow,
-        recognitions: attachedRecognitions.attempts.length > 0
-          ? attachedRecognitions.attempts
-          : (attachedRecognitions.orphans.length > 0 ? attachedRecognitions.orphans : undefined)
+        recognitions: attachedNodeRecognitions
       })
       clearSubTaskRuntimeStateAfterPipelineFinalize(subTaskId, nodeId, actionKey)
       refreshActivePipelineNodePreview(timestamp)
@@ -2775,12 +2773,12 @@ export class LogParser {
         details.reco_details?.name,
         nodeName,
       ])
-      upsertCurrentTaskPipelineNode({
+      const resolvedNode: NodeInfo = {
         node_id: nodeId,
         task_id: taskId,
-        end_ts: endTimestamp,
         name: resolvedNodeName,
         ts: startTimestamp,
+        end_ts: endTimestamp,
         status: nodeStatus,
         reco_details: resolvedRecoDetails,
         action_details: mergedActionDetails,
@@ -2789,7 +2787,8 @@ export class LogParser {
         node_flow: resolvedNodeFlow,
         node_details: resolvedNodeDetails,
         error_image: resolvedErrorImage,
-      })
+      }
+      upsertCurrentTaskPipelineNode(resolvedNode)
       cleanupCurrentTaskPipelineRuntimeState(nodeId, actionId)
     }
     const handleNextListNodeEvent = (
@@ -3011,37 +3010,45 @@ export class LogParser {
       onRecognitionAttempt?: (taskId: number, attempt: RecognitionAttempt) => void,
       skipRecognitionRefreshWhenTaskMissingOnFinish?: boolean
     ): boolean => {
-      if (handleNextListNodeEvent(taskId, message, details, timestamp)) {
-        return true
+      switch (message) {
+        case 'Node.NextList.Starting':
+        case 'Node.NextList.Succeeded':
+        case 'Node.NextList.Failed':
+          return handleNextListNodeEvent(taskId, message, details, timestamp)
+        case 'Node.WaitFreezes.Starting':
+        case 'Node.WaitFreezes.Succeeded':
+        case 'Node.WaitFreezes.Failed':
+          return handleWaitFreezesNodeEvent(
+            taskId,
+            message,
+            details,
+            timestamp,
+            eventOrder,
+            onWaitFreezesUpdated
+          )
+        case 'Node.Recognition.Starting':
+        case 'Node.Recognition.Succeeded':
+        case 'Node.Recognition.Failed':
+          return handleRecognitionNodeEvent(
+            taskId,
+            message,
+            details,
+            timestamp,
+            eventOrder,
+            onRecognitionAttempt,
+            skipRecognitionRefreshWhenTaskMissingOnFinish
+          )
+        case 'Node.Action.Starting':
+        case 'Node.Action.Succeeded':
+        case 'Node.Action.Failed':
+          return handleActionEvent(taskId, message, details, timestamp, eventOrder)
+        case 'Node.ActionNode.Starting':
+        case 'Node.ActionNode.Succeeded':
+        case 'Node.ActionNode.Failed':
+          return handleActionNodeEvent(taskId, message, details, timestamp)
+        default:
+          return false
       }
-      if (handleWaitFreezesNodeEvent(
-        taskId,
-        message,
-        details,
-        timestamp,
-        eventOrder,
-        onWaitFreezesUpdated
-      )) {
-        return true
-      }
-      if (handleRecognitionNodeEvent(
-        taskId,
-        message,
-        details,
-        timestamp,
-        eventOrder,
-        onRecognitionAttempt,
-        skipRecognitionRefreshWhenTaskMissingOnFinish
-      )) {
-        return true
-      }
-      if (handleActionEvent(taskId, message, details, timestamp, eventOrder)) {
-        return true
-      }
-      if (handleActionNodeEvent(taskId, message, details, timestamp)) {
-        return true
-      }
-      return false
     }
     const handleCurrentTaskSimpleNodeEvent: ScopedSimpleNodeEventHandler = (
       _taskId: number | null,
@@ -3092,9 +3099,9 @@ export class LogParser {
       dispatchStandaloneRecognition: (taskId: number, recognition: RecognitionAttempt) => void,
       excludeParentTaskId?: number,
       dispatchDetachedRecognition?: (recognition: RecognitionAttempt) => void
-    ): boolean => {
+    ): void => {
       if (message === 'Node.RecognitionNode.Starting') {
-        if (taskId == null) return true
+        if (taskId == null) return
         startRecognitionNodeEvent(
           taskId,
           details,
@@ -3104,12 +3111,10 @@ export class LogParser {
           dispatchDetachedRecognition
         )
         refreshActivePipelineNodePreview(timestamp)
-        return true
+        return
       }
-      if (message !== 'Node.RecognitionNode.Succeeded' && message !== 'Node.RecognitionNode.Failed') {
-        return false
-      }
-      if (taskId == null) return true
+      if (message !== 'Node.RecognitionNode.Succeeded' && message !== 'Node.RecognitionNode.Failed') return
+      if (taskId == null) return
       finalizeRecognitionNodeEvent(
         taskId,
         details,
@@ -3122,7 +3127,6 @@ export class LogParser {
         excludeParentTaskId
       )
       refreshActivePipelineNodePreview(timestamp)
-      return true
     }
     const handleSubTaskActionNodeLifecycleEvent: ScopedActionNodeEventHandler = (
       subTaskId: number | null,
@@ -3285,25 +3289,31 @@ export class LogParser {
       if (config.handleSimpleNodeEvent(taskId, message, details, timestamp, eventOrder)) {
         return
       }
-      if (handleRecognitionNodeLifecycleEvent(
-        taskId,
-        message,
-        details,
-        timestamp,
-        eventOrder,
-        config.dispatchPendingRecognition,
-        config.dispatchStandaloneRecognition,
-        excludeParentTaskId,
-        config.dispatchDetachedRecognition
-      )) {
-        return
-      }
-      if (message === 'Node.PipelineNode.Starting') {
-        config.handlePipelineNodeStarting(taskId, details, timestamp)
-        return
-      }
-      if (isPipelineNodeFinalizeMessage(message)) {
-        config.handlePipelineNodeFinalize(taskId, details, message, timestamp)
+      switch (message) {
+        case 'Node.RecognitionNode.Starting':
+        case 'Node.RecognitionNode.Succeeded':
+        case 'Node.RecognitionNode.Failed':
+          handleRecognitionNodeLifecycleEvent(
+            taskId,
+            message,
+            details,
+            timestamp,
+            eventOrder,
+            config.dispatchPendingRecognition,
+            config.dispatchStandaloneRecognition,
+            excludeParentTaskId,
+            config.dispatchDetachedRecognition
+          )
+          return
+        case 'Node.PipelineNode.Starting':
+          config.handlePipelineNodeStarting(taskId, details, timestamp)
+          return
+        case 'Node.PipelineNode.Succeeded':
+        case 'Node.PipelineNode.Failed':
+          config.handlePipelineNodeFinalize(taskId, details, message, timestamp)
+          return
+        default:
+          return
       }
     }
     const currentTaskNodeDispatchConfig: ScopedNodeDispatchConfig = {
