@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, toRef } from 'vue'
 import { NButton, NFlex, NText } from 'naive-ui'
-import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@vicons/antd'
 import type { NodeInfo, MergedRecognitionItem } from '../types'
 import { getFlowItemButtonType, getFlowItemShortLabel } from '../utils/flowLabels'
 import TaskDocHoverPopover from './TaskDocHoverPopover.vue'
+import StatusIcon from './StatusIcon.vue'
 import { useNodeCardFlowRows } from './nodeCard/useNodeCardFlowRows'
 import { useFlowItemExpandState } from './nodeCard/useFlowItemExpandState'
+import { buildRecognitionItemKey } from './nodeCard/recognitionListKeys'
+import { resolveStatusButtonType } from './nodeCard/statusButtonType'
 
 const props = defineProps<{
   node: NodeInfo
@@ -76,13 +78,6 @@ const {
 const isRecognitionExpanded = computed(() => props.recognitionExpanded ?? true)
 const isActionExpanded = computed(() => props.actionExpanded ?? true)
 
-const getRecognitionButtonType = (status: MergedRecognitionItem['status']): 'success' | 'warning' | 'info' | 'default' => {
-  if (status === 'success') return 'success'
-  if (status === 'running') return 'info'
-  if (status === 'failed') return 'warning'
-  return 'default'
-}
-
 const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
 const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
 </script>
@@ -101,7 +96,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
     <ul v-if="isRecognitionExpanded && mergedRecognitionList.length > 0" class="tree-list">
       <template
         v-for="(item, index) in mergedRecognitionList"
-        :key="`tree-rec-${index}`"
+        :key="`tree-rec-${buildRecognitionItemKey(item, index)}`"
       >
         <li class="tree-item">
           <n-text v-if="item.isRoundSeparator" depth="3" class="tree-round-separator-text">
@@ -125,7 +120,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
                 style="opacity: 0.5"
               >
                 <template #icon>
-                  <close-circle-outlined />
+                  <status-icon status="not-recognized" />
                 </template>
                 {{ item.name }}
               </n-button>
@@ -138,13 +133,11 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
                 <n-button
                   text
                   size="tiny"
-                  :type="getRecognitionButtonType(item.status)"
+                  :type="resolveStatusButtonType(item.status)"
                   @click="item.attemptIndex != null ? emit('select-recognition', node, item.attemptIndex) : undefined"
                 >
                   <template #icon>
-                    <check-circle-outlined v-if="item.status === 'success'" />
-                    <loading-outlined v-else-if="item.status === 'running'" />
-                    <close-circle-outlined v-else />
+                    <status-icon :status="item.status" />
                   </template>
                   {{ item.name }}
                 </n-button>
@@ -155,7 +148,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
 
         <li
           v-for="nested in item.attemptIndex != null && isRecognitionNestedExpanded(item.attemptIndex) ? getRecognitionNestedRows(item.attemptIndex) : []"
-          :key="`tree-rec-nested-${item.attemptIndex ?? index}-${nested.item.id}`"
+          :key="`tree-rec-nested-${buildRecognitionItemKey(item, index)}-${nested.item.id}`"
           class="tree-item"
           :style="{ '--tree-item-offset': toTreeOffset(nested.depth) }"
         >
@@ -184,9 +177,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
                 @click="emit('select-flow-item', node, nested.item.id)"
               >
                 <template #icon>
-                  <check-circle-outlined v-if="nested.item.status === 'success'" />
-                  <loading-outlined v-else-if="nested.item.status === 'running'" />
-                  <close-circle-outlined v-else />
+                  <status-icon :status="nested.item.status" />
                 </template>
                 <template v-if="nested.item.type === 'wait_freezes'">
                   {{ waitFreezesShortLabel }} · {{ nested.item.name }}{{ formatWaitFreezesMeta(nested.item) }}
@@ -255,9 +246,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
               @click="emit('select-flow-item', node, row.item.id)"
             >
               <template #icon>
-                <check-circle-outlined v-if="row.item.status === 'success'" />
-                <loading-outlined v-else-if="row.item.status === 'running'" />
-                <close-circle-outlined v-else />
+                <status-icon :status="row.item.status" />
               </template>
               <template v-if="row.item.type === 'wait_freezes'">
                 {{ waitFreezesShortLabel }} · {{ row.item.name }}{{ formatWaitFreezesMeta(row.item) }}

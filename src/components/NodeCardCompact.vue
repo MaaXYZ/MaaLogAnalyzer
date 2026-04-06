@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { NButton, NFlex, NText } from 'naive-ui'
-import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@vicons/antd'
 import type { NodeInfo, MergedRecognitionItem } from '../types'
 import {
   buildNodeActionLevelRecognitionItems,
@@ -11,6 +10,7 @@ import {
   buildNodeTaskFlowItems,
 } from '../utils/nodeFlow'
 import TaskDocHoverPopover from './TaskDocHoverPopover.vue'
+import StatusIcon from './StatusIcon.vue'
 
 const props = defineProps<{
   node: NodeInfo
@@ -187,7 +187,7 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
             @click="emit('select-recognition', node, recognitionSummary.matchedIndex!)"
           >
             <template #icon>
-              <check-circle-outlined />
+              <status-icon status="success" />
             </template>
             {{ recognitionSummary.matchedName }} matched
           </n-button>
@@ -216,9 +216,7 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
               @click="emit('select-flow-item', node, group.flowItemId)"
             >
               <template #icon>
-                <check-circle-outlined v-if="group.status === 'success'" />
-                <loading-outlined v-else-if="group.status === 'running'" />
-                <close-circle-outlined v-else />
+                <status-icon :status="group.status" />
               </template>
               {{ group.name }}
             </n-button>
@@ -239,9 +237,7 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'action'>>(() => {
             @click="actionSummary.useFlowItem && actionSummary.flowItemId ? emit('select-flow-item', node, actionSummary.flowItemId) : emit('select-action', node)"
           >
             <template #icon>
-              <check-circle-outlined v-if="actionSummary.status === 'success'" />
-              <loading-outlined v-else-if="actionSummary.status === 'running'" />
-              <close-circle-outlined v-else />
+              <status-icon :status="actionSummary.status" />
             </template>
             {{ actionSummary.name }}
           </n-button>

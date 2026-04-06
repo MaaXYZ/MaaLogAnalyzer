@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { computed, toRef } from 'vue'
 import { NCard, NButton, NFlex, NText } from 'naive-ui'
-import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@vicons/antd'
 import type { NodeInfo, MergedRecognitionItem } from '../types'
 import { resolveImageSrcPath } from '../utils/imageSrc'
 import { getFlowItemButtonType, getFlowItemShortLabel } from '../utils/flowLabels'
 import TaskDocHoverPopover from './TaskDocHoverPopover.vue'
 import SafePreviewImage from './SafePreviewImage.vue'
+import StatusIcon from './StatusIcon.vue'
 import { useNodeCardFlowRows } from './nodeCard/useNodeCardFlowRows'
 import { useFlowItemExpandState } from './nodeCard/useFlowItemExpandState'
+import { buildRecognitionItemKey } from './nodeCard/recognitionListKeys'
 
 const emit = defineEmits<{
   'select-action': [node: NodeInfo]
@@ -76,15 +77,6 @@ const hasRecognitionSection = computed(() => props.mergedRecognitionList.length 
 
 const recognitionNodeShortLabel = getFlowItemShortLabel('recognition_node')
 const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
-const getRecognitionItemKey = (item: MergedRecognitionItem, idx: number): string => {
-  if (item.isRoundSeparator) {
-    return `round-${item.roundIndex ?? idx}-${item.name}`
-  }
-  if (item.attemptIndex != null) {
-    return `attempt-${item.attemptIndex}`
-  }
-  return `placeholder-${idx}-${item.name}`
-}
 </script>
 
 <template>
@@ -105,7 +97,7 @@ const getRecognitionItemKey = (item: MergedRecognitionItem, idx: number): string
       <n-flex vertical style="gap: 8px">
         <div
           v-for="(item, idx) in mergedRecognitionList"
-          :key="getRecognitionItemKey(item, idx)"
+          :key="buildRecognitionItemKey(item, idx)"
           class="recognition-item-fragment"
         >
           <n-text
@@ -125,7 +117,7 @@ const getRecognitionItemKey = (item: MergedRecognitionItem, idx: number): string
             style="align-self: flex-start; opacity: 0.5"
           >
             <template #icon>
-              <close-circle-outlined />
+              <status-icon status="not-recognized" />
             </template>
             {{ item.name }}
           </n-button>
@@ -144,9 +136,7 @@ const getRecognitionItemKey = (item: MergedRecognitionItem, idx: number): string
                   @click="emit('select-recognition', node, item.attemptIndex!)"
                 >
                   <template #icon>
-                    <check-circle-outlined v-if="item.status === 'success'" />
-                    <loading-outlined v-else-if="item.status === 'running'" />
-                    <close-circle-outlined v-else />
+                    <status-icon :status="item.status" />
                   </template>
                   {{ item.name }}
                 </n-button>
@@ -211,9 +201,7 @@ const getRecognitionItemKey = (item: MergedRecognitionItem, idx: number): string
                       @click="emit('select-flow-item', node, nested.item.id)"
                     >
                       <template #icon>
-                        <check-circle-outlined v-if="nested.item.status === 'success'" />
-                        <loading-outlined v-else-if="nested.item.status === 'running'" />
-                        <close-circle-outlined v-else />
+                        <status-icon :status="nested.item.status" />
                       </template>
                       <template v-if="nested.item.type === 'wait_freezes'">
                         [{{ waitFreezesShortLabel }}] {{ nested.item.name }}{{ formatWaitFreezesMeta(nested.item) }}
@@ -321,9 +309,7 @@ const getRecognitionItemKey = (item: MergedRecognitionItem, idx: number): string
                 @click="emit('select-flow-item', node, row.item.id)"
               >
                 <template #icon>
-                  <check-circle-outlined v-if="row.item.status === 'success'" />
-                  <loading-outlined v-else-if="row.item.status === 'running'" />
-                  <close-circle-outlined v-else />
+                  <status-icon :status="row.item.status" />
                 </template>
                 <template v-if="row.item.type === 'wait_freezes'">
                   [{{ waitFreezesShortLabel }}] {{ row.item.name }}{{ formatWaitFreezesMeta(row.item) }}

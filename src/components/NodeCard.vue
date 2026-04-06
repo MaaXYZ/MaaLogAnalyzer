@@ -6,6 +6,7 @@ import { getSettings } from '../utils/settings'
 import { extractTime } from '../utils/formatDuration'
 import { useNodeCardTaskDoc } from './nodeCard/useNodeCardTaskDoc'
 import { useMergedRecognitionList } from './nodeCard/useMergedRecognitionList'
+import { resolveStatusButtonType } from './nodeCard/statusButtonType'
 import NodeCardDetailed from './NodeCardDetailed.vue'
 import NodeCardCompact from './NodeCardCompact.vue'
 import NodeCardTree from './NodeCardTree.vue'
@@ -126,10 +127,7 @@ type ButtonType = 'default' | 'primary' | 'info' | 'success' | 'warning' | 'erro
 
 // 获取按钮类型
 const getButtonType = (status: string): ButtonType => {
-  if (status === 'success') return 'success'
-  if (status === 'running') return 'info'
-  if (status === 'failed') return 'warning'
-  return 'default'
+  return resolveStatusButtonType(status)
 }
 
 // 动作按钮类型
