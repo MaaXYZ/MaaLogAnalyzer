@@ -791,6 +791,46 @@ export class LogParser {
       nextList: any[]
       waitFreezesRuntimeStates: Map<number, WaitFreezesRuntimeState>
     }
+    type ScopedSimpleNodeEventHandler = (
+      taskId: number | null,
+      message: string,
+      details: Record<string, any>,
+      timestamp: string,
+      eventOrder: number
+    ) => boolean
+    type ScopedActionEventHandler = (
+      taskId: number | null,
+      message: string,
+      details: Record<string, any>,
+      timestamp: string,
+      eventOrder: number
+    ) => boolean
+    type ScopedActionNodeEventHandler = (
+      taskId: number | null,
+      message: string,
+      details: Record<string, any>,
+      timestamp: string
+    ) => boolean
+    type ScopedPipelineNodeStartingHandler = (
+      taskId: number | null,
+      details: Record<string, any>,
+      timestamp: string
+    ) => void
+    type ScopedPipelineNodeFinalizeHandler = (
+      taskId: number | null,
+      details: Record<string, any>,
+      message: string,
+      timestamp: string
+    ) => void
+    type ScopedNodeDispatchConfig = {
+      handleSimpleNodeEvent: ScopedSimpleNodeEventHandler
+      dispatchPendingRecognition: (taskId: number, recognition: RecognitionAttempt) => void
+      dispatchStandaloneRecognition: (taskId: number, recognition: RecognitionAttempt) => void
+      handlePipelineNodeStarting: ScopedPipelineNodeStartingHandler
+      handlePipelineNodeFinalize: ScopedPipelineNodeFinalizeHandler
+      excludeTaskIdFromParentRecognitionLookup?: boolean
+      dispatchDetachedRecognition?: (recognition: RecognitionAttempt) => void
+    }
 
     // 当前节点的累积状态
     const taskScopedNodeAggregationByTaskId = new Map<number, TaskScopedNodeAggregation>()
@@ -1288,16 +1328,15 @@ export class LogParser {
       recognitionOrderMeta.set(attempt, { startSeq: eventOrder, endSeq: eventOrder })
       return attempt
     }
-    const completeRecognitionNodeAttempt = (params: {
-      attempt: RecognitionAttempt
-      recoId: number
-      details: Record<string, any>
-      timestamp: string
-      status: 'success' | 'failed'
-      eventOrder: number
+    const completeRecognitionNodeAttempt = (
+      attempt: RecognitionAttempt,
+      recoId: number,
+      details: Record<string, any>,
+      timestamp: string,
+      status: 'success' | 'failed',
+      eventOrder: number,
       startTimestamp: string
-    }) => {
-      const { attempt, recoId, details, timestamp, status, eventOrder, startTimestamp } = params
+    ) => {
       const endTimestamp = this.stringPool.intern(timestamp)
       attempt.name = this.stringPool.intern(details.name || attempt.name || '')
       attempt.ts = attempt.ts || startTimestamp
@@ -1322,11 +1361,11 @@ export class LogParser {
       details: Record<string, any>,
       timestamp: string,
       eventOrder: number,
-      onAttempt?: (attempt: RecognitionAttempt) => void
+      onAttempt?: (taskId: number, attempt: RecognitionAttempt) => void
     ) => {
       const attempt = startRecognitionAttempt(taskId, details, timestamp, eventOrder)
       if (attempt && onAttempt) {
-        onAttempt(attempt)
+        onAttempt(taskId, attempt)
       }
     }
     const handleRecognitionFinishEvent = (
@@ -1335,11 +1374,11 @@ export class LogParser {
       timestamp: string,
       status: 'success' | 'failed',
       eventOrder: number,
-      onAttempt?: (attempt: RecognitionAttempt) => void
+      onAttempt?: (taskId: number, attempt: RecognitionAttempt) => void
     ) => {
       const attempt = finishRecognitionAttempt(taskId, details, timestamp, status, eventOrder)
       if (attempt && onAttempt) {
-        onAttempt(attempt)
+        onAttempt(taskId, attempt)
       }
     }
     const applyTaskNextList = (taskId: number, list: any[]) => {
@@ -1363,22 +1402,14 @@ export class LogParser {
       }
       subTaskRecognitionNodeStartTimes.set(scopedKey(taskId, recoId), startTimestamp)
     }
-    const startRecognitionNodeEvent = (params: {
-      taskId: number
-      details: Record<string, any>
-      timestamp: string
-      eventOrder: number
-      findParentRecognition: () => RecognitionAttempt | undefined
+    const startRecognitionNodeEvent = (
+      taskId: number,
+      details: Record<string, any>,
+      timestamp: string,
+      eventOrder: number,
+      excludeParentTaskId?: number,
       dispatchDetachedRecognition?: (attempt: RecognitionAttempt) => void
-    }) => {
-      const {
-        taskId,
-        details,
-        timestamp,
-        eventOrder,
-        findParentRecognition,
-        dispatchDetachedRecognition,
-      } = params
+    ) => {
       const recoId = resolveRecognitionNodeRecoId(details)
       if (recoId == null) return
       const startTimestamp = this.stringPool.intern(timestamp)
@@ -1390,7 +1421,7 @@ export class LogParser {
         startTimestamp,
         eventOrder
       )
-      const parentRecognition = findParentRecognition()
+      const parentRecognition = findActiveParentRecognition(excludeParentTaskId)
       if (parentRecognition && parentRecognition.reco_id !== recoId) {
         attachNodeToAttempt(parentRecognition, recoNodeAttempt)
         return
@@ -1419,29 +1450,18 @@ export class LogParser {
       }
       subTaskRecognitionNodeStartTimes.delete(scopedKey(taskId, recoId))
     }
-    const finalizeRecognitionNodeEvent = (params: {
-      taskId: number
-      details: Record<string, any>
-      timestamp: string
-      status: 'success' | 'failed'
-      eventOrder: number
-      pendingRecognitions: RecognitionAttempt[]
-      findParentRecognition: () => RecognitionAttempt | undefined
-      dispatchPendingRecognition: (attempt: RecognitionAttempt) => void
-      dispatchStandaloneRecognition: (attempt: RecognitionAttempt) => void
-    }) => {
-      const {
-        taskId,
-        details,
-        timestamp,
-        status,
-        eventOrder,
-        pendingRecognitions,
-        findParentRecognition,
-        dispatchPendingRecognition,
-        dispatchStandaloneRecognition,
-      } = params
-      const parentRecognition = findParentRecognition()
+    const finalizeRecognitionNodeEvent = (
+      taskId: number,
+      details: Record<string, any>,
+      timestamp: string,
+      status: 'success' | 'failed',
+      eventOrder: number,
+      pendingRecognitions: RecognitionAttempt[],
+      dispatchPendingRecognition: (taskId: number, attempt: RecognitionAttempt) => void,
+      dispatchStandaloneRecognition: (taskId: number, attempt: RecognitionAttempt) => void,
+      excludeParentTaskId?: number
+    ) => {
+      const parentRecognition = findActiveParentRecognition(excludeParentTaskId)
       const normalizedPendingRecognitions = dedupeRecognitionAttempts(pendingRecognitions)
 
       if (normalizedPendingRecognitions.length > 0) {
@@ -1453,15 +1473,15 @@ export class LogParser {
         if (pendingRecoNodeAttempt && pendingRecoId != null) {
           const fallbackStartTimestamp = this.stringPool.intern(timestamp)
           const startTimestamp = getRecognitionNodeStartTimestamp(taskId, pendingRecoId, fallbackStartTimestamp)
-          completeRecognitionNodeAttempt({
-            attempt: pendingRecoNodeAttempt,
-            recoId: pendingRecoId,
+          completeRecognitionNodeAttempt(
+            pendingRecoNodeAttempt,
+            pendingRecoId,
             details,
             timestamp,
             status,
             eventOrder,
-            startTimestamp,
-          })
+            startTimestamp
+          )
         }
         for (const recognition of normalizedPendingRecognitions) {
           const resolvedRecognition = (
@@ -1473,7 +1493,7 @@ export class LogParser {
             attachNodeToAttempt(parentRecognition, resolvedRecognition)
             continue
           }
-          dispatchPendingRecognition(resolvedRecognition)
+          dispatchPendingRecognition(taskId, resolvedRecognition)
         }
         if (pendingRecoId != null) {
           activeRecognitionNodeAttempts.delete(scopedKey(taskId, pendingRecoId))
@@ -1494,22 +1514,22 @@ export class LogParser {
         end_ts: startTimestamp,
         status: 'running',
       }
-      completeRecognitionNodeAttempt({
-        attempt: recoNodeAttempt,
+      completeRecognitionNodeAttempt(
+        recoNodeAttempt,
         recoId,
         details,
         timestamp,
         status,
         eventOrder,
-        startTimestamp,
-      })
+        startTimestamp
+      )
       clearRecognitionNodeStartTimestamp(taskId, recoId)
       activeRecognitionNodeAttempts.delete(nodeKey)
       if (parentRecognition && parentRecognition.reco_id !== recoNodeAttempt.reco_id) {
         attachNodeToAttempt(parentRecognition, recoNodeAttempt)
         return
       }
-      dispatchStandaloneRecognition(recoNodeAttempt)
+      dispatchStandaloneRecognition(taskId, recoNodeAttempt)
     }
     const mergeRecognitionOrderMeta = (target: RecognitionAttempt, source: RecognitionAttempt) => {
       const targetMeta = recognitionOrderMeta.get(target)
@@ -1607,11 +1627,6 @@ export class LogParser {
     const pushActionLevelRecognition = (attempt: RecognitionAttempt) => {
       if (isKnownRecognitionRecoId(attempt.reco_id)) return
       actionLevelRecognitionNodes.push(attempt)
-    }
-    const pushActionLevelRecognitionIfUnknown = (attempt: RecognitionAttempt) => {
-      if (!isKnownRecognitionRecoId(attempt.reco_id)) {
-        pushActionLevelRecognition(attempt)
-      }
     }
     const sortByParseOrderThenRecoId = (items: RecognitionAttempt[]) => {
       return [...items].sort((a, b) => {
@@ -2845,78 +2860,73 @@ export class LogParser {
       refreshActivePipelineNodePreview(timestamp)
       return true
     }
-    const handleWaitFreezesNodeEvent = (params: {
-      taskId: number | null
-      message: string
-      details: Record<string, any>
-      timestamp: string
-      eventOrder: number
-      onUpdated?: () => void
-    }): boolean => {
+    const handleWaitFreezesNodeEvent = (
+      taskId: number | null,
+      message: string,
+      details: Record<string, any>,
+      timestamp: string,
+      eventOrder: number,
+      onUpdated?: (details: Record<string, any>) => void
+    ): boolean => {
       if (
-        params.message !== 'Node.WaitFreezes.Starting' &&
-        params.message !== 'Node.WaitFreezes.Succeeded' &&
-        params.message !== 'Node.WaitFreezes.Failed'
+        message !== 'Node.WaitFreezes.Starting' &&
+        message !== 'Node.WaitFreezes.Succeeded' &&
+        message !== 'Node.WaitFreezes.Failed'
       ) {
         return false
       }
-      if (params.taskId != null) {
-        const waitFreezesStatus = resolveWaitFreezesStatus(params.message)
-        upsertWaitFreezesState(params.taskId, params.details, params.timestamp, waitFreezesStatus, params.eventOrder)
-        params.onUpdated?.()
+      if (taskId != null) {
+        const waitFreezesStatus = resolveWaitFreezesStatus(message)
+        upsertWaitFreezesState(taskId, details, timestamp, waitFreezesStatus, eventOrder)
+        onUpdated?.(details)
       }
-      refreshActivePipelineNodePreview(params.timestamp)
+      refreshActivePipelineNodePreview(timestamp)
       return true
     }
-    const handleRecognitionNodeEvent = (params: {
-      taskId: number | null
-      message: string
-      details: Record<string, any>
-      timestamp: string
-      eventOrder: number
-      onAttempt?: (taskId: number, attempt: RecognitionAttempt) => void
+    const handleRecognitionNodeEvent = (
+      taskId: number | null,
+      message: string,
+      details: Record<string, any>,
+      timestamp: string,
+      eventOrder: number,
+      onAttempt?: (taskId: number, attempt: RecognitionAttempt) => void,
       skipRefreshWhenTaskMissingOnFinish?: boolean
-    }): boolean => {
-      if (params.message === 'Node.Recognition.Starting') {
-        if (params.taskId != null) {
-          const taskId = params.taskId
+    ): boolean => {
+      if (message === 'Node.Recognition.Starting') {
+        if (taskId != null) {
           handleRecognitionStartEvent(
             taskId,
-            params.details,
-            params.timestamp,
-            params.eventOrder,
-            (attempt) => {
-              params.onAttempt?.(taskId, attempt)
-            }
+            details,
+            timestamp,
+            eventOrder,
+            onAttempt
           )
         }
-        refreshActivePipelineNodePreview(params.timestamp)
+        refreshActivePipelineNodePreview(timestamp)
         return true
       }
-      if (params.message !== 'Node.Recognition.Succeeded' && params.message !== 'Node.Recognition.Failed') {
+      if (message !== 'Node.Recognition.Succeeded' && message !== 'Node.Recognition.Failed') {
         return false
       }
-      if (params.taskId == null) {
-        if (!params.skipRefreshWhenTaskMissingOnFinish) {
-          refreshActivePipelineNodePreview(params.timestamp)
+      if (taskId == null) {
+        if (!skipRefreshWhenTaskMissingOnFinish) {
+          refreshActivePipelineNodePreview(timestamp)
         }
         return true
       }
-      const taskId = params.taskId
       handleRecognitionFinishEvent(
         taskId,
-        params.details,
-        params.timestamp,
-        params.message === 'Node.Recognition.Succeeded' ? 'success' : 'failed',
-        params.eventOrder,
-        (attempt) => {
-          params.onAttempt?.(taskId, attempt)
-        }
+        details,
+        timestamp,
+        message === 'Node.Recognition.Succeeded' ? 'success' : 'failed',
+        eventOrder,
+        onAttempt
       )
-      refreshActivePipelineNodePreview(params.timestamp)
+      refreshActivePipelineNodePreview(timestamp)
       return true
     }
-    const handleCurrentTaskActionEvent = (
+    const handleCurrentTaskActionEvent: ScopedActionEventHandler = (
+      _taskId: number | null,
       message: string,
       details: Record<string, any>,
       timestamp: string,
@@ -2967,7 +2977,7 @@ export class LogParser {
       refreshActivePipelineNodePreview(timestamp)
       return true
     }
-    const handleSubTaskActionEvent = (
+    const handleSubTaskActionEvent: ScopedActionEventHandler = (
       subTaskId: number | null,
       message: string,
       details: Record<string, any>,
@@ -3008,7 +3018,8 @@ export class LogParser {
       refreshActivePipelineNodePreview(timestamp)
       return true
     }
-    const handleCurrentTaskActionNodeEvent = (
+    const handleCurrentTaskActionNodeEvent: ScopedActionNodeEventHandler = (
+      _taskId: number | null,
       message: string,
       details: Record<string, any>,
       timestamp: string
@@ -3031,150 +3042,138 @@ export class LogParser {
       refreshActivePipelineNodePreview(timestamp)
       return true
     }
-    const handleCurrentTaskSimpleNodeEvent = (
+    const syncActiveNodeFocusAfterWaitFreezes = (details: Record<string, any>) => {
+      const activeNode = getActivePipelineNode()
+      if (activeNode) {
+        activeNode.focus = resolveEventFocus(details, activeNode.focus)
+      }
+    }
+    const handleSimpleNodeEvent = (
+      taskId: number | null,
+      message: string,
+      details: Record<string, any>,
+      timestamp: string,
+      eventOrder: number,
+      handleActionEvent: ScopedActionEventHandler,
+      handleActionNodeEvent: ScopedActionNodeEventHandler,
+      onWaitFreezesUpdated?: (details: Record<string, any>) => void,
+      onRecognitionAttempt?: (taskId: number, attempt: RecognitionAttempt) => void,
+      skipRecognitionRefreshWhenTaskMissingOnFinish?: boolean
+    ): boolean => {
+      if (handleNextListNodeEvent(taskId, message, details, timestamp)) {
+        return true
+      }
+      if (handleWaitFreezesNodeEvent(
+        taskId,
+        message,
+        details,
+        timestamp,
+        eventOrder,
+        onWaitFreezesUpdated
+      )) {
+        return true
+      }
+      if (handleRecognitionNodeEvent(
+        taskId,
+        message,
+        details,
+        timestamp,
+        eventOrder,
+        onRecognitionAttempt,
+        skipRecognitionRefreshWhenTaskMissingOnFinish
+      )) {
+        return true
+      }
+      if (handleActionEvent(taskId, message, details, timestamp, eventOrder)) {
+        return true
+      }
+      if (handleActionNodeEvent(taskId, message, details, timestamp)) {
+        return true
+      }
+      return false
+    }
+    const handleCurrentTaskSimpleNodeEvent: ScopedSimpleNodeEventHandler = (
+      _taskId: number | null,
       message: string,
       details: Record<string, any>,
       timestamp: string,
       eventOrder: number
     ): boolean => {
-      if (handleNextListNodeEvent(task.task_id, message, details, timestamp)) {
-        return true
-      }
-      if (handleWaitFreezesNodeEvent({
-        taskId: task.task_id,
+      return handleSimpleNodeEvent(
+        task.task_id,
         message,
         details,
         timestamp,
         eventOrder,
-        onUpdated: () => {
-          const activeNode = getActivePipelineNode()
-          if (activeNode) {
-            activeNode.focus = resolveEventFocus(details, activeNode.focus)
-          }
-        },
-      })) {
-        return true
-      }
-      if (handleRecognitionNodeEvent({
-        taskId: task.task_id,
-        message,
-        details,
-        timestamp,
-        eventOrder,
-        onAttempt: (_taskId, attempt) => {
-          pushCurrentTaskRecognitionAttempt(attempt)
-        },
-      })) {
-        return true
-      }
-      if (handleCurrentTaskActionEvent(message, details, timestamp, eventOrder)) {
-        return true
-      }
-      if (handleCurrentTaskActionNodeEvent(message, details, timestamp)) {
-        return true
-      }
-      return false
+        handleCurrentTaskActionEvent,
+        handleCurrentTaskActionNodeEvent,
+        syncActiveNodeFocusAfterWaitFreezes,
+        addCurrentTaskRecognition,
+      )
     }
-    const handleSubTaskSimpleNodeEvent = (
+    const handleSubTaskSimpleNodeEvent: ScopedSimpleNodeEventHandler = (
       subTaskId: number | null,
       message: string,
       details: Record<string, any>,
       timestamp: string,
       eventOrder: number
     ): boolean => {
-      if (handleNextListNodeEvent(subTaskId, message, details, timestamp)) {
-        return true
-      }
-      if (handleWaitFreezesNodeEvent({
-        taskId: subTaskId,
+      return handleSimpleNodeEvent(
+        subTaskId,
         message,
         details,
         timestamp,
         eventOrder,
-      })) {
-        return true
-      }
-      if (handleRecognitionNodeEvent({
-        taskId: subTaskId,
-        message,
-        details,
-        timestamp,
-        eventOrder,
-        onAttempt: (taskId, attempt) => {
-          subTasks.addRecognition(taskId, attempt)
-        },
-        skipRefreshWhenTaskMissingOnFinish: true,
-      })) {
-        return true
-      }
-      if (handleSubTaskActionEvent(subTaskId, message, details, timestamp, eventOrder)) {
-        return true
-      }
-      if (handleSubTaskActionNodeLifecycleEvent(subTaskId, message, details, timestamp)) {
-        return true
-      }
-      if (message === 'Node.PipelineNode.Starting') {
-        if (subTaskId != null) {
-          resetTaskNodeAggregation(subTaskId)
-          if (details.node_id != null) {
-            subTaskPipelineNodeStartTimes.set(scopedKey(subTaskId, details.node_id), this.stringPool.intern(timestamp))
-          }
-        }
+        handleSubTaskActionEvent,
+        handleSubTaskActionNodeLifecycleEvent,
+        undefined,
+        addSubTaskRecognition,
+        true
+      )
+    }
+    const handleRecognitionNodeLifecycleEvent = (
+      taskId: number | null,
+      message: string,
+      details: Record<string, any>,
+      timestamp: string,
+      eventOrder: number,
+      dispatchPendingRecognition: (taskId: number, recognition: RecognitionAttempt) => void,
+      dispatchStandaloneRecognition: (taskId: number, recognition: RecognitionAttempt) => void,
+      excludeParentTaskId?: number,
+      dispatchDetachedRecognition?: (recognition: RecognitionAttempt) => void
+    ): boolean => {
+      if (message === 'Node.RecognitionNode.Starting') {
+        if (taskId == null) return true
+        startRecognitionNodeEvent(
+          taskId,
+          details,
+          timestamp,
+          eventOrder,
+          excludeParentTaskId,
+          dispatchDetachedRecognition
+        )
         refreshActivePipelineNodePreview(timestamp)
         return true
       }
-      return false
-    }
-    const handleRecognitionNodeLifecycleEvent = (params: {
-      taskId: number | null
-      excludeParentTaskId?: number
-      message: string
-      details: Record<string, any>
-      timestamp: string
-      eventOrder: number
-      consumePendingRecognitions: (taskId: number) => RecognitionAttempt[]
-      dispatchPendingRecognition: (taskId: number, recognition: RecognitionAttempt) => void
-      dispatchStandaloneRecognition: (taskId: number, recognition: RecognitionAttempt) => void
-      dispatchDetachedRecognition?: (recognition: RecognitionAttempt) => void
-    }): boolean => {
-      if (params.message === 'Node.RecognitionNode.Starting') {
-        if (params.taskId == null) return true
-        const taskId = params.taskId
-        startRecognitionNodeEvent({
-          taskId,
-          details: params.details,
-          timestamp: params.timestamp,
-          eventOrder: params.eventOrder,
-          findParentRecognition: () => findActiveParentRecognition(params.excludeParentTaskId),
-          dispatchDetachedRecognition: params.dispatchDetachedRecognition,
-        })
-        refreshActivePipelineNodePreview(params.timestamp)
-        return true
-      }
-      if (params.message !== 'Node.RecognitionNode.Succeeded' && params.message !== 'Node.RecognitionNode.Failed') {
+      if (message !== 'Node.RecognitionNode.Succeeded' && message !== 'Node.RecognitionNode.Failed') {
         return false
       }
-      if (params.taskId == null) return true
-      const taskId = params.taskId
-      finalizeRecognitionNodeEvent({
+      if (taskId == null) return true
+      finalizeRecognitionNodeEvent(
         taskId,
-        details: params.details,
-        timestamp: params.timestamp,
-        status: params.message === 'Node.RecognitionNode.Succeeded' ? 'success' : 'failed',
-        eventOrder: params.eventOrder,
-        pendingRecognitions: params.consumePendingRecognitions(taskId),
-        findParentRecognition: () => findActiveParentRecognition(params.excludeParentTaskId),
-        dispatchPendingRecognition: (recognition) => {
-          params.dispatchPendingRecognition(taskId, recognition)
-        },
-        dispatchStandaloneRecognition: (recognition) => {
-          params.dispatchStandaloneRecognition(taskId, recognition)
-        },
-      })
-      refreshActivePipelineNodePreview(params.timestamp)
+        details,
+        timestamp,
+        message === 'Node.RecognitionNode.Succeeded' ? 'success' : 'failed',
+        eventOrder,
+        subTasks.consumeRecognitions(taskId),
+        dispatchPendingRecognition,
+        dispatchStandaloneRecognition,
+        excludeParentTaskId
+      )
+      refreshActivePipelineNodePreview(timestamp)
       return true
     }
-    const handleSubTaskActionNodeLifecycleEvent = (
+    const handleSubTaskActionNodeLifecycleEvent: ScopedActionNodeEventHandler = (
       subTaskId: number | null,
       message: string,
       details: Record<string, any>,
@@ -3199,48 +3198,61 @@ export class LogParser {
       refreshActivePipelineNodePreview(timestamp)
       return true
     }
-    const handleTaskerTaskLifecycleMetaEvent = (params: {
-      messageMeta: ReturnType<typeof parseMaaMessageMeta>
-      details: Record<string, any>
-      message: string
+    const dispatchActionLevelRecognition = (_taskId: number, recognition: RecognitionAttempt) => {
+      pushActionLevelRecognition(recognition)
+    }
+    const addCurrentTaskRecognition = (_taskId: number, recognition: RecognitionAttempt) => {
+      pushCurrentTaskRecognitionAttempt(recognition)
+    }
+    const addSubTaskRecognition = (taskId: number, recognition: RecognitionAttempt) => {
+      subTasks.addRecognition(taskId, recognition)
+    }
+    const addSubTaskRecognitionNode = (taskId: number, recognition: RecognitionAttempt) => {
+      subTasks.addRecognitionNode(taskId, recognition)
+    }
+    const handleTaskerTaskLifecycleMetaEvent = (
+      messageMeta: ReturnType<typeof parseMaaMessageMeta>,
+      eventTaskId: number | undefined,
+      details: Record<string, any>,
+      message: string,
       timestamp: string
-    }) => {
+    ) => {
       if (
-        params.messageMeta.domain !== 'Tasker' ||
-        params.messageMeta.taskerKind !== 'Task' ||
-        params.details.task_id == null
+        messageMeta.domain !== 'Tasker' ||
+        messageMeta.taskerKind !== 'Task' ||
+        eventTaskId == null
       ) {
         return
       }
-      const eventTaskId = params.details.task_id as number
-      if (params.messageMeta.phase === 'Starting') {
+      if (messageMeta.phase === 'Starting') {
         const parentTaskId = peekActiveTask()
         if (eventTaskId !== task.task_id && parentTaskId !== eventTaskId) {
           subTaskParentByTaskId.set(eventTaskId, parentTaskId)
         }
         pushActiveTask(eventTaskId)
-      } else if (params.messageMeta.phase === 'Succeeded' || params.messageMeta.phase === 'Failed') {
+      } else if (messageMeta.phase === 'Succeeded' || messageMeta.phase === 'Failed') {
         popActiveTask(eventTaskId)
       }
 
       if (eventTaskId === task.task_id) return
       const snapshot = getOrCreateSubTaskSnapshot(eventTaskId)
-      if (params.messageMeta.phase === 'Starting') {
-        snapshot.entry = this.stringPool.intern(params.details.entry || '')
-        snapshot.hash = this.stringPool.intern(params.details.hash || '')
-        snapshot.uuid = this.stringPool.intern(params.details.uuid || '')
+      if (messageMeta.phase === 'Starting') {
+        snapshot.entry = this.stringPool.intern(details.entry || '')
+        snapshot.hash = this.stringPool.intern(details.hash || '')
+        snapshot.uuid = this.stringPool.intern(details.uuid || '')
         snapshot.status = 'running'
-        snapshot.ts = this.stringPool.intern(params.timestamp)
-        snapshot.start_message = this.stringPool.intern(params.message)
-        snapshot.start_details = markRawTaskDetails(params.details)
-      } else if (params.messageMeta.phase === 'Succeeded' || params.messageMeta.phase === 'Failed') {
-        snapshot.status = params.messageMeta.phase === 'Succeeded' ? 'succeeded' : 'failed'
-        snapshot.end_ts = this.stringPool.intern(params.timestamp)
-        snapshot.end_message = this.stringPool.intern(params.message)
-        snapshot.end_details = markRawTaskDetails(params.details)
+        snapshot.ts = this.stringPool.intern(timestamp)
+        snapshot.start_message = this.stringPool.intern(message)
+        snapshot.start_details = markRawTaskDetails(details)
+      } else if (messageMeta.phase === 'Succeeded' || messageMeta.phase === 'Failed') {
+        snapshot.status = messageMeta.phase === 'Succeeded' ? 'succeeded' : 'failed'
+        snapshot.end_ts = this.stringPool.intern(timestamp)
+        snapshot.end_message = this.stringPool.intern(message)
+        snapshot.end_details = markRawTaskDetails(details)
       }
     }
-    const startCurrentPipelineNodeEvent = (
+    const startCurrentPipelineNodeEvent: ScopedPipelineNodeStartingHandler = (
+      _taskId: number | null,
       details: Record<string, any>,
       timestamp: string
     ) => {
@@ -3277,81 +3289,115 @@ export class LogParser {
       }
       refreshActivePipelineNodePreview(timestamp)
     }
-
+    const startSubTaskPipelineNodeEvent: ScopedPipelineNodeStartingHandler = (
+      subTaskId: number | null,
+      details: Record<string, any>,
+      timestamp: string
+    ) => {
+      if (subTaskId != null) {
+        resetTaskNodeAggregation(subTaskId)
+        if (details.node_id != null) {
+          subTaskPipelineNodeStartTimes.set(scopedKey(subTaskId, details.node_id), this.stringPool.intern(timestamp))
+        }
+      }
+      refreshActivePipelineNodePreview(timestamp)
+    }
+    const finalizeCurrentTaskPipelineNodeEvent: ScopedPipelineNodeFinalizeHandler = (
+      _taskId: number | null,
+      details: Record<string, any>,
+      message: string,
+      timestamp: string
+    ) => {
+      finalizeTaskPipelineNodeEvent(task.task_id, details, message, timestamp)
+    }
+    const finalizeSubTaskPipelineNodeEventByTask: ScopedPipelineNodeFinalizeHandler = (
+      subTaskId: number | null,
+      details: Record<string, any>,
+      message: string,
+      timestamp: string
+    ) => {
+      if (subTaskId != null) {
+        finalizeSubTaskPipelineNodeEvent(subTaskId, details, message, timestamp)
+      }
+    }
+    const handleScopedNodeEvent = (
+      taskId: number | null,
+      message: string,
+      details: Record<string, any>,
+      timestamp: string,
+      eventOrder: number,
+      config: ScopedNodeDispatchConfig
+    ) => {
+      const excludeParentTaskId = config.excludeTaskIdFromParentRecognitionLookup
+        ? (taskId ?? undefined)
+        : undefined
+      if (config.handleSimpleNodeEvent(taskId, message, details, timestamp, eventOrder)) {
+        return
+      }
+      if (handleRecognitionNodeLifecycleEvent(
+        taskId,
+        message,
+        details,
+        timestamp,
+        eventOrder,
+        config.dispatchPendingRecognition,
+        config.dispatchStandaloneRecognition,
+        excludeParentTaskId,
+        config.dispatchDetachedRecognition
+      )) {
+        return
+      }
+      if (message === 'Node.PipelineNode.Starting') {
+        config.handlePipelineNodeStarting(taskId, details, timestamp)
+        return
+      }
+      if (isPipelineNodeFinalizeMessage(message)) {
+        config.handlePipelineNodeFinalize(taskId, details, message, timestamp)
+      }
+    }
+    const currentTaskNodeDispatchConfig: ScopedNodeDispatchConfig = {
+      handleSimpleNodeEvent: handleCurrentTaskSimpleNodeEvent,
+      dispatchPendingRecognition: dispatchActionLevelRecognition,
+      dispatchStandaloneRecognition: dispatchActionLevelRecognition,
+      handlePipelineNodeStarting: startCurrentPipelineNodeEvent,
+      handlePipelineNodeFinalize: finalizeCurrentTaskPipelineNodeEvent,
+      dispatchDetachedRecognition: pushActionLevelRecognition,
+    }
+    const subTaskNodeDispatchConfig: ScopedNodeDispatchConfig = {
+      handleSimpleNodeEvent: handleSubTaskSimpleNodeEvent,
+      dispatchPendingRecognition: addSubTaskRecognition,
+      dispatchStandaloneRecognition: addSubTaskRecognitionNode,
+      handlePipelineNodeStarting: startSubTaskPipelineNodeEvent,
+      handlePipelineNodeFinalize: finalizeSubTaskPipelineNodeEventByTask,
+      excludeTaskIdFromParentRecognitionLookup: true,
+    }
     for (let eventIndex = 0; eventIndex < taskEvents.length; eventIndex++) {
       const event = taskEvents[eventIndex]
       const eventOrder = eventIndex
+      const timestamp = event.timestamp
       const { message, details } = event
       const messageMeta = parseMaaMessageMeta(message)
+      const eventTaskId = details.task_id as number | undefined
 
-      handleTaskerTaskLifecycleMetaEvent({
+      handleTaskerTaskLifecycleMetaEvent(
         messageMeta,
+        eventTaskId,
         details,
         message,
-        timestamp: event.timestamp,
-      })
+        timestamp
+      )
 
       if (messageMeta.domain !== 'Node') continue
-      const isCurrentTask = details.task_id === task.task_id
+      const isCurrentTask = eventTaskId === task.task_id
 
-      // === 当前任务的事件 ===
-      if (isCurrentTask) {
-        if (handleCurrentTaskSimpleNodeEvent(message, details, event.timestamp, eventOrder)) {
-          continue
-        }
-        if (handleRecognitionNodeLifecycleEvent({
-          taskId: task.task_id,
-          message,
-          details,
-          timestamp: event.timestamp,
-          eventOrder,
-          consumePendingRecognitions: (taskId) => subTasks.consumeRecognitions(taskId),
-          dispatchPendingRecognition: (_taskId, recognition) => {
-            pushActionLevelRecognitionIfUnknown(recognition)
-          },
-          dispatchStandaloneRecognition: (_taskId, recognition) => {
-            pushActionLevelRecognitionIfUnknown(recognition)
-          },
-          dispatchDetachedRecognition: pushActionLevelRecognitionIfUnknown,
-        })) {
-          continue
-        }
-        if (message === 'Node.PipelineNode.Starting') {
-          startCurrentPipelineNodeEvent(details, event.timestamp)
-          continue
-        }
-        if (isPipelineNodeFinalizeMessage(message)) {
-          finalizeTaskPipelineNodeEvent(task.task_id, details, message, event.timestamp)
-          continue
-        }
-        continue
-      }
-
-      // === 子任务的事件（task_id !== 当前任务） ===
-      const subTaskId = details.task_id
-      if (handleSubTaskSimpleNodeEvent(subTaskId, message, details, event.timestamp, eventOrder)) {
-        continue
-      }
-      if (handleRecognitionNodeLifecycleEvent({
-        taskId: subTaskId,
-        excludeParentTaskId: subTaskId ?? undefined,
+      handleScopedNodeEvent(
+        isCurrentTask ? task.task_id : (eventTaskId ?? null),
         message,
         details,
-        timestamp: event.timestamp,
+        timestamp,
         eventOrder,
-        consumePendingRecognitions: (taskId) => subTasks.consumeRecognitions(taskId),
-        dispatchPendingRecognition: (taskId, recognition) => {
-          subTasks.addRecognition(taskId, recognition)
-        },
-        dispatchStandaloneRecognition: (taskId, recognition) => {
-          subTasks.addRecognitionNode(taskId, recognition)
-        },
-      })) {
-        continue
-      }
-      if (subTaskId != null && isPipelineNodeFinalizeMessage(message)) {
-        finalizeSubTaskPipelineNodeEvent(subTaskId, details, message, event.timestamp)
-      }
+        isCurrentTask ? currentTaskNodeDispatchConfig : subTaskNodeDispatchConfig
+      )
     }
 
     return nodes
