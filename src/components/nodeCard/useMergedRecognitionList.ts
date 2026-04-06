@@ -78,7 +78,11 @@ export const useMergedRecognitionList = (params: UseMergedRecognitionListParams)
       }
     })
 
-    type RoundAttempt = { attempt: RecognitionAttempt; index: number }
+    type RoundAttempt = {
+      attempt: RecognitionAttempt
+      index: number
+      matchName: string
+    }
     const rounds: RoundAttempt[][] = [[]]
     let currentRound = 0
     let expectedNextIndex = 0
@@ -95,7 +99,7 @@ export const useMergedRecognitionList = (params: UseMergedRecognitionListParams)
         expectedNextIndex = 0
       }
 
-      rounds[currentRound].push({ attempt, index })
+      rounds[currentRound].push({ attempt, index, matchName })
 
       if (nextIndex != null) {
         expectedNextIndex = nextIndex + 1
@@ -129,7 +133,7 @@ export const useMergedRecognitionList = (params: UseMergedRecognitionListParams)
       const outOfNextList: RoundAttempt[] = []
 
       roundAttempts.forEach((roundAttempt) => {
-        const matchName = resolveRecognitionNextListName(roundAttempt.attempt, nextListNames)
+        const matchName = roundAttempt.matchName
         const bucket = roundBuckets.get(matchName)
         if (bucket) {
           bucket.push(roundAttempt)
@@ -167,8 +171,7 @@ export const useMergedRecognitionList = (params: UseMergedRecognitionListParams)
 
       const remainingMatched = [...roundBuckets.values()].flat()
       const tail = [...outOfNextList, ...remainingMatched].sort((a, b) => a.index - b.index)
-      tail.forEach(({ attempt, index }) => {
-        const matchName = resolveRecognitionNextListName(attempt, nextListNames)
+      tail.forEach(({ attempt, index, matchName }) => {
         const name = nextDisplayMap.get(matchName) ?? attempt.name
         result.push({
           name,

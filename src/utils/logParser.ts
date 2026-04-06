@@ -1745,6 +1745,28 @@ export class LogParser {
         orphans
       }
     }
+    const resolveFallbackRecoDetails = (
+      details: Record<string, any>,
+      recognitions: RecognitionAttempt[]
+    ): NodeInfo['reco_details'] => {
+      if (details.reco_details) return details.reco_details
+      return recognitions.length > 0
+        ? recognitions[recognitions.length - 1].reco_details
+        : undefined
+    }
+    const selectAttachedTopLevelRecognitions = (params: {
+      attempts: RecognitionAttempt[]
+      orphans: RecognitionAttempt[]
+    }): RecognitionAttempt[] => {
+      return params.attempts.length > 0 ? params.attempts : params.orphans
+    }
+    const selectAttachedNodeRecognitions = (params: {
+      attempts: RecognitionAttempt[]
+      orphans: RecognitionAttempt[]
+    }): RecognitionAttempt[] | undefined => {
+      if (params.attempts.length > 0) return params.attempts
+      return params.orphans.length > 0 ? params.orphans : undefined
+    }
     const cloneRecognitionAttempt = (attempt: RecognitionAttempt): RecognitionAttempt => {
       const cloned: RecognitionAttempt = {
         ...attempt,
@@ -2007,6 +2029,97 @@ export class LogParser {
         sortNestedTaskGroupTree(root)
       }
       return roots
+    }
+    const mergeSubTaskActionGroupWithSnapshot = (group: NestedActionGroup): NestedActionGroup => {
+      const snapshot = subTaskSnapshots.get(group.task_id)
+      if (!snapshot) return group
+
+      const snapshotStatus: 'success' | 'failed' | 'running' =
+        snapshot.status === 'failed'
+          ? 'failed'
+          : snapshot.status === 'running'
+            ? 'running'
+            : 'success'
+      const mergedStatus: 'success' | 'failed' | 'running' =
+        group.status === 'failed' || snapshotStatus === 'failed'
+          ? 'failed'
+          : group.status === 'running' || snapshotStatus === 'running'
+            ? 'running'
+            : 'success'
+      const snapshotStartTimestamp = snapshot.ts || group.ts
+      const snapshotEndTimestamp = snapshot.end_ts
+
+      return {
+        ...group,
+        name: this.stringPool.intern(snapshot.entry || group.name),
+        ts: this.stringPool.intern(snapshotStartTimestamp || group.ts),
+        end_ts: snapshotEndTimestamp ? this.stringPool.intern(snapshotEndTimestamp) : undefined,
+        status: mergedStatus,
+        task_details: markRaw({
+          task_id: snapshot.task_id,
+          entry: snapshot.entry || '',
+          hash: snapshot.hash || '',
+          uuid: snapshot.uuid || '',
+          status: snapshot.status,
+          ts: snapshot.ts,
+          end_ts: snapshot.end_ts,
+          start_message: snapshot.start_message,
+          end_message: snapshot.end_message,
+          start_details: snapshot.start_details,
+          end_details: snapshot.end_details
+        })
+      }
+    }
+    const splitRecognitionAttemptsByActionWindow = (
+      attempts: RecognitionAttempt[],
+      actionStartOrder?: number,
+      actionEndOrder?: number
+    ) => {
+      const topLevel: RecognitionAttempt[] = []
+      const actionLevel: RecognitionAttempt[] = []
+      for (const attempt of attempts) {
+        const attemptMeta = recognitionOrderMeta.get(attempt)
+        const inActionWindow = (
+          actionStartOrder != null &&
+          attemptMeta != null &&
+          attemptMeta.endSeq >= actionStartOrder &&
+          (actionEndOrder == null || attemptMeta.startSeq <= actionEndOrder)
+        )
+        if (inActionWindow) {
+          actionLevel.push(attempt)
+        } else {
+          topLevel.push(attempt)
+        }
+      }
+      return { topLevel, actionLevel }
+    }
+    const resolveFinalNestedActionGroups = (
+      taskId: number,
+      startTimestamp: string,
+      endTimestamp: string,
+      groups: NestedActionGroup[]
+    ): NestedActionGroup[] => {
+      const nestedSubTaskGroups = nestSubTaskActionGroups(groups)
+      if (nestedSubTaskGroups.length > 0) {
+        return nestedSubTaskGroups
+      }
+      if (nestedActionNodes.length === 0) {
+        return []
+      }
+      return [
+        {
+          task_id: taskId,
+          name: this.stringPool.intern('ActionNode'),
+          ts: startTimestamp,
+          end_ts: endTimestamp,
+          status: nestedActionNodes.some(item => item.status === 'failed')
+            ? 'failed'
+            : nestedActionNodes.some(item => item.status === 'running')
+              ? 'running'
+              : 'success',
+          nested_actions: nestedActionNodes.slice(),
+        },
+      ]
     }
     const getLatestActionRuntimeState = () => {
       let latest: {
@@ -2385,11 +2498,7 @@ export class LogParser {
       const taskRecognitions = dedupeRecognitionAttempts(subTasks.consumeRecognitions(subTaskId))
       const recognitionNodes = dedupeRecognitionAttempts(subTasks.consumeRecognitionNodes(subTaskId))
       const attachedRecognitions = attachRecognitionNodesToAttempts(taskRecognitions, recognitionNodes)
-      const fallbackRecoDetails =
-        details.reco_details ||
-        (attachedRecognitions.attempts.length > 0
-          ? attachedRecognitions.attempts[attachedRecognitions.attempts.length - 1].reco_details
-          : undefined)
+      const fallbackRecoDetails = resolveFallbackRecoDetails(details, attachedRecognitions.attempts)
       const resolvedNodeName = this.stringPool.intern(
         details.reco_details?.name || details.action_details?.name || details.name || ''
       )
@@ -2400,9 +2509,7 @@ export class LogParser {
         mergedActionEndTimestamp,
         endTimestamp
       )
-      const subTaskTopLevelRecognitions = attachedRecognitions.attempts.length > 0
-        ? attachedRecognitions.attempts
-        : attachedRecognitions.orphans
+      const subTaskTopLevelRecognitions = selectAttachedTopLevelRecognitions(attachedRecognitions)
       const composedSubTaskFlow = composePipelineNodeFlow({
         topLevelRecognitions: subTaskTopLevelRecognitions,
         actionLevelRecognitions: [],
@@ -2437,9 +2544,7 @@ export class LogParser {
         action_details: resolvedActionDetails,
         next_list: resolvedNextList,
         node_flow: resolvedNodeFlow,
-        recognitions: attachedRecognitions.attempts.length > 0
-          ? attachedRecognitions.attempts
-          : (attachedRecognitions.orphans.length > 0 ? attachedRecognitions.orphans : undefined)
+        recognitions: selectAttachedNodeRecognitions(attachedRecognitions)
       })
       clearSubTaskRuntimeStateAfterPipelineFinalize(subTaskId, nodeId, actionKey)
       refreshActivePipelineNodePreview(timestamp)
@@ -2545,63 +2650,10 @@ export class LogParser {
       const actionStartOrder = actionId != null ? actionStartOrders.get(actionId) : undefined
       const actionEndOrder = actionId != null ? actionEndOrders.get(actionId) : undefined
       const currentTaskRecognitionAttempts = dedupeRecognitionAttempts(currentTaskRecognitions)
-      const scopedTopLevelRecognitions: RecognitionAttempt[] = []
-      const scopedActionRecognitions: RecognitionAttempt[] = []
-      for (const attempt of currentTaskRecognitionAttempts) {
-        const attemptMeta = recognitionOrderMeta.get(attempt)
-        if (
-          actionStartOrder != null &&
-          attemptMeta &&
-          attemptMeta.endSeq >= actionStartOrder &&
-          (actionEndOrder == null || attemptMeta.startSeq <= actionEndOrder)
-        ) {
-          scopedActionRecognitions.push(attempt)
-        } else {
-          scopedTopLevelRecognitions.push(attempt)
-        }
-      }
-      const subTaskActionGroups: NestedActionGroup[] = subTasks.consumeAsNestedActionGroups(this.stringPool).map((group: any) => {
-        const snapshot = subTaskSnapshots.get(group.task_id)
-        if (!snapshot) {
-          return group
-        }
-
-        const snapshotStatus: 'success' | 'failed' | 'running' =
-          snapshot.status === 'failed'
-            ? 'failed'
-            : snapshot.status === 'running'
-              ? 'running'
-              : 'success'
-        const mergedStatus: 'success' | 'failed' | 'running' =
-          group.status === 'failed' || snapshotStatus === 'failed'
-            ? 'failed'
-            : group.status === 'running' || snapshotStatus === 'running'
-              ? 'running'
-              : 'success'
-        const startTimestamp = snapshot.ts || group.ts
-        const endTimestamp = snapshot.end_ts
-
-        return {
-          ...group,
-          name: this.stringPool.intern(snapshot.entry || group.name),
-          ts: this.stringPool.intern(startTimestamp || group.ts),
-          end_ts: endTimestamp ? this.stringPool.intern(endTimestamp) : undefined,
-          status: mergedStatus,
-          task_details: markRaw({
-            task_id: snapshot.task_id,
-            entry: snapshot.entry || '',
-            hash: snapshot.hash || '',
-            uuid: snapshot.uuid || '',
-            status: snapshot.status,
-            ts: snapshot.ts,
-            end_ts: snapshot.end_ts,
-            start_message: snapshot.start_message,
-            end_message: snapshot.end_message,
-            start_details: snapshot.start_details,
-            end_details: snapshot.end_details
-          })
-        }
-      })
+      const { topLevel: scopedTopLevelRecognitions, actionLevel: scopedActionRecognitions } =
+        splitRecognitionAttemptsByActionWindow(currentTaskRecognitionAttempts, actionStartOrder, actionEndOrder)
+      const subTaskActionGroups: NestedActionGroup[] =
+        subTasks.consumeAsNestedActionGroups(this.stringPool).map(mergeSubTaskActionGroupWithSnapshot)
       const subTaskOrphanRecognitionAttempts = subTasks.consumeOrphanRecognitions()
       const subTaskOrphanRecognitionNodes = subTasks.consumeOrphanRecognitionNodes()
       const pendingActionLevelRecognitions = dedupeRecognitionAttempts([
@@ -2617,33 +2669,13 @@ export class LogParser {
         actionStartOrder
       )
       const nestedRecognitionInAction = scopedAttachResult.remaining
-      const nestedSubTaskGroups = nestSubTaskActionGroups(scopedAttachResult.nestedActionGroups)
-      const resolvedNestedActionGroups: NestedActionGroup[] =
-        nestedSubTaskGroups.length > 0
-          ? nestedSubTaskGroups
-          : (
-            nestedActionNodes.length > 0
-              ? [
-                  {
-                    task_id: taskId,
-                    name: this.stringPool.intern('ActionNode'),
-                    ts: startTimestamp,
-                    end_ts: endTimestamp,
-                    status: nestedActionNodes.some(item => item.status === 'failed')
-                      ? 'failed'
-                      : nestedActionNodes.some(item => item.status === 'running')
-                        ? 'running'
-                        : 'success',
-                    nested_actions: nestedActionNodes.slice(),
-                  },
-                ]
-              : []
-          )
-      const fallbackRecoDetails =
-        details.reco_details ||
-        (scopedAttachResult.topLevelAttempts.length > 0
-          ? scopedAttachResult.topLevelAttempts[scopedAttachResult.topLevelAttempts.length - 1].reco_details
-          : undefined)
+      const resolvedNestedActionGroups = resolveFinalNestedActionGroups(
+        taskId,
+        startTimestamp,
+        endTimestamp,
+        scopedAttachResult.nestedActionGroups
+      )
+      const fallbackRecoDetails = resolveFallbackRecoDetails(details, scopedAttachResult.topLevelAttempts)
       const mergedActionDetails = withActionTimestamps(details.action_details, actionStartTimestamp, actionEndTimestamp, endTimestamp)
       const composedFlow = composePipelineNodeFlow({
         topLevelRecognitions: scopedAttachResult.topLevelAttempts,
