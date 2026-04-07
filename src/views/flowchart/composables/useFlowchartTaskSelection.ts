@@ -65,7 +65,7 @@ export const useFlowchartTaskSelection = (options: UseFlowchartTaskSelectionOpti
   // - 无法对齐时才回退到第一个任务
   watch(
     [options.tasks, options.initialTask],
-    ([tasks, initialTask]) => {
+    ([tasks, initialTask], [prevTasks]) => {
       if (tasks.length === 0) {
         selectedTaskIndex.value = null
         return
@@ -79,6 +79,17 @@ export const useFlowchartTaskSelection = (options: UseFlowchartTaskSelectionOpti
         }
       }
 
+      if (prevTasks && prevTasks.length > 0 && selectedTaskIndex.value != null) {
+        const previousSelectedTask = prevTasks[selectedTaskIndex.value]
+        if (previousSelectedTask) {
+          const remappedIndex = findTaskIndex(tasks, previousSelectedTask)
+          if (remappedIndex >= 0) {
+            selectedTaskIndex.value = remappedIndex
+            return
+          }
+        }
+      }
+
       if (selectedTaskIndex.value == null || selectedTaskIndex.value >= tasks.length) {
         selectedTaskIndex.value = 0
       }
@@ -88,6 +99,7 @@ export const useFlowchartTaskSelection = (options: UseFlowchartTaskSelectionOpti
 
   const handleUserTaskSelect = (index: number | null) => {
     if (index == null) return
+    if (index < 0 || index >= options.tasks.value.length) return
     selectedTaskIndex.value = index
     const task = options.tasks.value[index]
     if (task) options.onSelectTask(task)
