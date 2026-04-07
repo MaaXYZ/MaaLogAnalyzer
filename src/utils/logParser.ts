@@ -129,6 +129,15 @@ const parseMaaMessageMeta = (message: string): MaaMessageMeta => {
   }
 }
 
+const cachedMaaMessageMeta = new Map<string, MaaMessageMeta>()
+const getCachedMaaMessageMeta = (message: string): MaaMessageMeta => {
+  const cached = cachedMaaMessageMeta.get(message)
+  if (cached) return cached
+  const parsed = parseMaaMessageMeta(message)
+  cachedMaaMessageMeta.set(message, parsed)
+  return parsed
+}
+
 const toKnownMaaPhase = (phase: MaaPhase): KnownMaaPhase | null => {
   if (phase === 'Unknown') return null
   return phase
@@ -390,7 +399,7 @@ export class LogParser {
       })
     }
 
-    const eventMeta = parseMaaMessageMeta(event.message)
+    const eventMeta = getCachedMaaMessageMeta(event.message)
     if (
       eventMeta.domain === 'Tasker' &&
       eventMeta.taskerKind === 'Task' &&
@@ -672,7 +681,7 @@ export class LogParser {
     for (let i = 0; i < this.events.length; i++) {
       const event = this.events[i]
       const { message, details } = event
-      const meta = parseMaaMessageMeta(message)
+      const meta = getCachedMaaMessageMeta(message)
 
       if (meta.domain === 'Tasker' && meta.taskerKind === 'Task' && meta.phase === 'Starting') {
         const taskId = details.task_id
@@ -822,7 +831,7 @@ export class LogParser {
     type ScopedSimpleNodeEventHandler = (
       taskId: number | null,
       messageMeta: MaaMessageMeta,
-      phase: KnownMaaPhase | null,
+      phase: KnownMaaPhase,
       details: Record<string, any>,
       timestamp: string,
       eventOrder: number
@@ -2998,7 +3007,7 @@ export class LogParser {
     const handleSimpleNodeEvent = (
       taskId: number | null,
       messageMeta: MaaMessageMeta,
-      phase: KnownMaaPhase | null,
+      phase: KnownMaaPhase,
       details: Record<string, any>,
       timestamp: string,
       eventOrder: number,
@@ -3008,7 +3017,6 @@ export class LogParser {
       onRecognitionAttempt?: (taskId: number, attempt: RecognitionAttempt) => void,
       skipRecognitionRefreshWhenTaskMissingOnFinish?: boolean
     ): boolean => {
-      if (!phase) return false
       switch (messageMeta.nodeKind) {
         case 'NextList':
           return handleNextListNodeEvent(taskId, phase, details, timestamp)
@@ -3041,48 +3049,55 @@ export class LogParser {
           return false
       }
     }
-    const handleCurrentTaskSimpleNodeEvent: ScopedSimpleNodeEventHandler = (
-      _taskId: number | null,
-      messageMeta: MaaMessageMeta,
-      phase: KnownMaaPhase | null,
-      details: Record<string, any>,
-      timestamp: string,
-      eventOrder: number
-    ): boolean => {
-      return handleSimpleNodeEvent(
-        task.task_id,
-        messageMeta,
-        phase,
-        details,
-        timestamp,
-        eventOrder,
-        handleCurrentTaskActionEvent,
-        handleCurrentTaskActionNodeEvent,
-        syncActiveNodeFocusAfterWaitFreezes,
-        addCurrentTaskRecognition,
-      )
+    const createScopedSimpleNodeEventHandler = (params: {
+      fixedTaskId?: number
+      handleActionEvent: ScopedActionEventHandler
+      handleActionNodeEvent: ScopedActionNodeEventHandler
+      onWaitFreezesUpdated?: (details: Record<string, any>) => void
+      onRecognitionAttempt?: (taskId: number, attempt: RecognitionAttempt) => void
+      skipRecognitionRefreshWhenTaskMissingOnFinish?: boolean
+    }): ScopedSimpleNodeEventHandler => {
+      return (
+        taskId: number | null,
+        messageMeta: MaaMessageMeta,
+        phase: KnownMaaPhase,
+        details: Record<string, any>,
+        timestamp: string,
+        eventOrder: number
+      ): boolean => {
+        const scopedTaskId = params.fixedTaskId ?? taskId
+        return handleSimpleNodeEvent(
+          scopedTaskId,
+          messageMeta,
+          phase,
+          details,
+          timestamp,
+          eventOrder,
+          params.handleActionEvent,
+          params.handleActionNodeEvent,
+          params.onWaitFreezesUpdated,
+          params.onRecognitionAttempt,
+          params.skipRecognitionRefreshWhenTaskMissingOnFinish
+        )
+      }
     }
-    const handleSubTaskSimpleNodeEvent: ScopedSimpleNodeEventHandler = (
-      subTaskId: number | null,
-      messageMeta: MaaMessageMeta,
-      phase: KnownMaaPhase | null,
-      details: Record<string, any>,
-      timestamp: string,
-      eventOrder: number
-    ): boolean => {
-      return handleSimpleNodeEvent(
-        subTaskId,
-        messageMeta,
-        phase,
-        details,
-        timestamp,
-        eventOrder,
-        handleSubTaskActionEvent,
-        handleSubTaskActionNodeLifecycleEvent,
-        undefined,
-        addSubTaskRecognition,
-        true
-      )
+    const createScopedPipelineNodeFinalizeHandler = (params: {
+      fixedTaskId?: number
+    }): ScopedPipelineNodeFinalizeHandler => {
+      return (
+        taskId: number | null,
+        details: Record<string, any>,
+        phase: KnownMaaPhase,
+        timestamp: string
+      ): void => {
+        const scopedTaskId = params.fixedTaskId ?? taskId
+        if (scopedTaskId == null) return
+        if (scopedTaskId === task.task_id) {
+          finalizeTaskPipelineNodeEvent(task.task_id, details, phase, timestamp)
+        } else {
+          finalizeSubTaskPipelineNodeEvent(scopedTaskId, details, phase, timestamp)
+        }
+      }
     }
     const handleRecognitionNodeLifecycleEvent = (
       taskId: number | null,
@@ -3249,24 +3264,6 @@ export class LogParser {
       }
       refreshActivePipelineNodePreview(timestamp)
     }
-    const finalizeCurrentTaskPipelineNodeEvent: ScopedPipelineNodeFinalizeHandler = (
-      _taskId: number | null,
-      details: Record<string, any>,
-      phase: KnownMaaPhase,
-      timestamp: string
-    ) => {
-      finalizeTaskPipelineNodeEvent(task.task_id, details, phase, timestamp)
-    }
-    const finalizeSubTaskPipelineNodeEventByTask: ScopedPipelineNodeFinalizeHandler = (
-      subTaskId: number | null,
-      details: Record<string, any>,
-      phase: KnownMaaPhase,
-      timestamp: string
-    ) => {
-      if (subTaskId != null) {
-        finalizeSubTaskPipelineNodeEvent(subTaskId, details, phase, timestamp)
-      }
-    }
     const handleScopedNodeEvent = (
       taskId: number | null,
       messageMeta: MaaMessageMeta,
@@ -3276,13 +3273,13 @@ export class LogParser {
       config: ScopedNodeDispatchConfig
     ) => {
       const phase = toKnownMaaPhase(messageMeta.phase)
+      if (!phase) return
       const excludeParentTaskId = config.excludeTaskIdFromParentRecognitionLookup
         ? (taskId ?? undefined)
         : undefined
       if (config.handleSimpleNodeEvent(taskId, messageMeta, phase, details, timestamp, eventOrder)) {
         return
       }
-      if (!phase) return
       switch (messageMeta.nodeKind) {
         case 'RecognitionNode':
           handleRecognitionNodeLifecycleEvent(
@@ -3309,19 +3306,32 @@ export class LogParser {
       }
     }
     const currentTaskNodeDispatchConfig: ScopedNodeDispatchConfig = {
-      handleSimpleNodeEvent: handleCurrentTaskSimpleNodeEvent,
+      handleSimpleNodeEvent: createScopedSimpleNodeEventHandler({
+        fixedTaskId: task.task_id,
+        handleActionEvent: handleCurrentTaskActionEvent,
+        handleActionNodeEvent: handleCurrentTaskActionNodeEvent,
+        onWaitFreezesUpdated: syncActiveNodeFocusAfterWaitFreezes,
+        onRecognitionAttempt: addCurrentTaskRecognition,
+      }),
       dispatchPendingRecognition: dispatchActionLevelRecognition,
       dispatchStandaloneRecognition: dispatchActionLevelRecognition,
       handlePipelineNodeStarting: startCurrentPipelineNodeEvent,
-      handlePipelineNodeFinalize: finalizeCurrentTaskPipelineNodeEvent,
+      handlePipelineNodeFinalize: createScopedPipelineNodeFinalizeHandler({
+        fixedTaskId: task.task_id,
+      }),
       dispatchDetachedRecognition: pushActionLevelRecognition,
     }
     const subTaskNodeDispatchConfig: ScopedNodeDispatchConfig = {
-      handleSimpleNodeEvent: handleSubTaskSimpleNodeEvent,
+      handleSimpleNodeEvent: createScopedSimpleNodeEventHandler({
+        handleActionEvent: handleSubTaskActionEvent,
+        handleActionNodeEvent: handleSubTaskActionNodeLifecycleEvent,
+        onRecognitionAttempt: addSubTaskRecognition,
+        skipRecognitionRefreshWhenTaskMissingOnFinish: true,
+      }),
       dispatchPendingRecognition: addSubTaskRecognition,
       dispatchStandaloneRecognition: addSubTaskRecognitionNode,
       handlePipelineNodeStarting: startSubTaskPipelineNodeEvent,
-      handlePipelineNodeFinalize: finalizeSubTaskPipelineNodeEventByTask,
+      handlePipelineNodeFinalize: createScopedPipelineNodeFinalizeHandler({}),
       excludeTaskIdFromParentRecognitionLookup: true,
     }
     for (let eventIndex = 0; eventIndex < taskEvents.length; eventIndex++) {
@@ -3329,7 +3339,7 @@ export class LogParser {
       const eventOrder = eventIndex
       const timestamp = event.timestamp
       const { message, details } = event
-      const messageMeta = parseMaaMessageMeta(message)
+      const messageMeta = getCachedMaaMessageMeta(message)
       const eventTaskId = details.task_id as number | undefined
 
       handleTaskerTaskLifecycleMetaEvent(
