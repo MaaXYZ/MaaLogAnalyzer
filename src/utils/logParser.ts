@@ -82,6 +82,56 @@ const resolveTaskLifecycleEventDetails = (details: Record<string, any> | undefin
   }
 }
 
+interface TaskLifecycleMetaEventContext {
+  rootTaskId: number
+  peekActiveTask: () => number
+  pushActiveTask: (taskId: number) => void
+  popActiveTask: (taskId: number) => void
+  setSubTaskParent: (taskId: number, parentTaskId: number) => void
+  onSubTaskStarting: (
+    taskId: number,
+    details: Record<string, any>,
+    message: string,
+    timestamp: string
+  ) => void
+  onSubTaskTerminal: (
+    taskId: number,
+    details: Record<string, any>,
+    message: string,
+    timestamp: string,
+    phase: TaskTerminalPhase
+  ) => void
+}
+
+const handleTaskLifecycleMetaEvent = (
+  context: TaskLifecycleMetaEventContext,
+  messageMeta: MaaMessageMeta,
+  eventTaskId: number | undefined,
+  details: Record<string, any>,
+  message: string,
+  timestamp: string
+): void => {
+  const phase = resolveTaskLifecyclePhase(messageMeta)
+  if (phase == null || eventTaskId == null) return
+
+  if (phase === 'Starting') {
+    const parentTaskId = context.peekActiveTask()
+    if (eventTaskId !== context.rootTaskId && parentTaskId !== eventTaskId) {
+      context.setSubTaskParent(eventTaskId, parentTaskId)
+    }
+    context.pushActiveTask(eventTaskId)
+  } else {
+    context.popActiveTask(eventTaskId)
+  }
+
+  if (eventTaskId === context.rootTaskId) return
+  if (phase === 'Starting') {
+    context.onSubTaskStarting(eventTaskId, details, message, timestamp)
+  } else {
+    context.onSubTaskTerminal(eventTaskId, details, message, timestamp, phase)
+  }
+}
+
 const normalizeMaaDomain = (value: string): MaaDomain => {
   switch (value) {
     case 'Resource':
@@ -3264,34 +3314,6 @@ export class LogParser {
     const addSubTaskRecognitionNode = (taskId: number, recognition: RecognitionAttempt) => {
       subTasks.addRecognitionNode(taskId, recognition)
     }
-    const handleTaskerTaskLifecycleMetaEvent = (
-      messageMeta: MaaMessageMeta,
-      eventTaskId: number | undefined,
-      details: Record<string, any>,
-      message: string,
-      timestamp: string
-    ) => {
-      const phase = resolveTaskLifecyclePhase(messageMeta)
-      if (phase == null || eventTaskId == null) return
-
-      if (phase === 'Starting') {
-        const parentTaskId = peekActiveTask()
-        if (eventTaskId !== task.task_id && parentTaskId !== eventTaskId) {
-          subTaskParentByTaskId.set(eventTaskId, parentTaskId)
-        }
-        pushActiveTask(eventTaskId)
-      } else {
-        popActiveTask(eventTaskId)
-      }
-
-      if (eventTaskId === task.task_id) return
-      const snapshot = getOrCreateSubTaskSnapshot(eventTaskId)
-      if (phase === 'Starting') {
-        applySubTaskSnapshotStarting(snapshot, details, message, timestamp)
-      } else {
-        applySubTaskSnapshotTerminal(snapshot, details, message, timestamp, phase)
-      }
-    }
     const startCurrentPipelineNodeEvent: ScopedPipelineNodeStartingHandler = (
       _taskId: number | null,
       details: Record<string, any>,
@@ -3413,6 +3435,23 @@ export class LogParser {
       handlePipelineNodeFinalize: createScopedPipelineNodeFinalizeHandler({}),
       excludeTaskIdFromParentRecognitionLookup: true,
     }
+    const taskLifecycleMetaContext: TaskLifecycleMetaEventContext = {
+      rootTaskId: task.task_id,
+      peekActiveTask,
+      pushActiveTask,
+      popActiveTask,
+      setSubTaskParent: (subTaskId: number, parentTaskId: number) => {
+        subTaskParentByTaskId.set(subTaskId, parentTaskId)
+      },
+      onSubTaskStarting: (subTaskId, subTaskDetails, subTaskMessage, subTaskTimestamp) => {
+        const snapshot = getOrCreateSubTaskSnapshot(subTaskId)
+        applySubTaskSnapshotStarting(snapshot, subTaskDetails, subTaskMessage, subTaskTimestamp)
+      },
+      onSubTaskTerminal: (subTaskId, subTaskDetails, subTaskMessage, subTaskTimestamp, phase) => {
+        const snapshot = getOrCreateSubTaskSnapshot(subTaskId)
+        applySubTaskSnapshotTerminal(snapshot, subTaskDetails, subTaskMessage, subTaskTimestamp, phase)
+      },
+    }
     for (let eventIndex = 0; eventIndex < taskEvents.length; eventIndex++) {
       const event = taskEvents[eventIndex]
       const eventOrder = eventIndex
@@ -3421,12 +3460,13 @@ export class LogParser {
       const messageMeta = this.getCachedMaaMessageMeta(message)
       const eventTaskId = resolveEventTaskId(details)
 
-      handleTaskerTaskLifecycleMetaEvent(
+      handleTaskLifecycleMetaEvent(
+        taskLifecycleMetaContext,
         messageMeta,
         eventTaskId,
         details,
         message,
-        timestamp
+        timestamp,
       )
 
       if (messageMeta.domain !== 'Node') continue

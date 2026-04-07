@@ -5,8 +5,7 @@ import type { NodeInfo, MergedRecognitionItem } from '../types'
 import { getFlowItemButtonType, getFlowItemShortLabel } from '../utils/flowLabels'
 import TaskDocHoverPopover from './TaskDocHoverPopover.vue'
 import StatusIcon from './StatusIcon.vue'
-import { useNodeCardFlowRows } from './nodeCard/useNodeCardFlowRows'
-import { useFlowItemExpandState } from './nodeCard/useFlowItemExpandState'
+import { useNodeCardFlowSectionState } from './nodeCard/useNodeCardFlowSectionState'
 import { buildRecognitionItemKey } from './nodeCard/recognitionListKeys'
 import { resolveStatusButtonType } from './nodeCard/statusButtonType'
 
@@ -41,39 +40,21 @@ const isRecognitionNestedExpanded = (attemptIndex: number): boolean => {
   return true
 }
 
-const nodeId = computed(() => props.node.node_id)
-const forceExpandRelatedWhileRunning = toRef(props, 'forceExpandRelatedWhileRunning')
-
-const {
-  isExpanded: isNestedRecognitionFlowItemExpanded,
-  toggle: toggleNestedRecognitionFlowItemExpand,
-} = useFlowItemExpandState({
-  forceExpand: forceExpandRelatedWhileRunning,
-  defaultCollapsed: toRef(props, 'defaultCollapseNestedRecognition'),
-  resetWhen: nodeId,
-})
-
-const {
-  isExpanded: isFlowItemExpanded,
-  toggle: toggleFlowItemExpand,
-} = useFlowItemExpandState({
-  forceExpand: forceExpandRelatedWhileRunning,
-  defaultCollapsed: toRef(props, 'defaultCollapseNestedActionNodes'),
-  resetWhen: nodeId,
-})
-
 const {
   actionTimelineRows: flowRows,
+  toggleNestedRecognitionFlowItemExpand,
+  toggleActionFlowItem: toggleFlowItemExpand,
   getRecognitionNestedRows,
   hasRecognitionNestedRows,
   formatWaitFreezesMeta,
   getActionTimelineItemDisplayName,
   hasActionSection,
   hasActionNestedChildren,
-} = useNodeCardFlowRows({
+} = useNodeCardFlowSectionState({
   node: toRef(props, 'node'),
-  isActionFlowItemExpanded: isFlowItemExpanded,
-  isRecognitionNestedFlowItemExpanded: isNestedRecognitionFlowItemExpanded,
+  defaultCollapseNestedRecognition: toRef(props, 'defaultCollapseNestedRecognition'),
+  defaultCollapseNestedActionNodes: toRef(props, 'defaultCollapseNestedActionNodes'),
+  forceExpandRelatedWhileRunning: toRef(props, 'forceExpandRelatedWhileRunning'),
 })
 const isRecognitionExpanded = computed(() => props.recognitionExpanded ?? true)
 const isActionExpanded = computed(() => props.actionExpanded ?? true)

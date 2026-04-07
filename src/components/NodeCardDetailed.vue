@@ -7,8 +7,7 @@ import { getFlowItemButtonType, getFlowItemShortLabel } from '../utils/flowLabel
 import TaskDocHoverPopover from './TaskDocHoverPopover.vue'
 import SafePreviewImage from './SafePreviewImage.vue'
 import StatusIcon from './StatusIcon.vue'
-import { useNodeCardFlowRows } from './nodeCard/useNodeCardFlowRows'
-import { useFlowItemExpandState } from './nodeCard/useFlowItemExpandState'
+import { useNodeCardFlowSectionState } from './nodeCard/useNodeCardFlowSectionState'
 import { buildRecognitionItemKey } from './nodeCard/recognitionListKeys'
 import { resolveStatusButtonType } from './nodeCard/statusButtonType'
 
@@ -38,38 +37,20 @@ const DETAIL_INDENT_PX = 14
 
 const toDetailOffset = (depth: number): string => `${depth * DETAIL_INDENT_PX}px`
 
-const nodeId = computed(() => props.node.node_id)
-const forceExpandRelatedWhileRunning = toRef(props, 'forceExpandRelatedWhileRunning')
-
 const {
-  isExpanded: isNestedRecognitionFlowItemExpanded,
-  toggle: toggleNestedRecognitionFlowItemExpand,
-} = useFlowItemExpandState({
-  forceExpand: forceExpandRelatedWhileRunning,
-  defaultCollapsed: toRef(props, 'defaultCollapseNestedRecognition'),
-  resetWhen: nodeId,
-})
-
-const {
-  isExpanded: isActionFlowItemExpanded,
-  toggle: toggleActionFlowItem,
-} = useFlowItemExpandState({
-  forceExpand: forceExpandRelatedWhileRunning,
-  defaultCollapsed: toRef(props, 'defaultCollapseNestedActionNodes'),
-  resetWhen: nodeId,
-})
-
-const {
+  toggleNestedRecognitionFlowItemExpand,
+  toggleActionFlowItem,
   actionTimelineRows,
   getRecognitionNestedRows,
   hasRecognitionNestedRows,
   formatWaitFreezesMeta,
   getActionTimelineItemDisplayName,
   hasActionSection,
-} = useNodeCardFlowRows({
+} = useNodeCardFlowSectionState({
   node: toRef(props, 'node'),
-  isActionFlowItemExpanded,
-  isRecognitionNestedFlowItemExpanded: isNestedRecognitionFlowItemExpanded,
+  defaultCollapseNestedRecognition: toRef(props, 'defaultCollapseNestedRecognition'),
+  defaultCollapseNestedActionNodes: toRef(props, 'defaultCollapseNestedActionNodes'),
+  forceExpandRelatedWhileRunning: toRef(props, 'forceExpandRelatedWhileRunning'),
 })
 
 const hasRecognitionSection = computed(() => props.mergedRecognitionList.length > 0)
