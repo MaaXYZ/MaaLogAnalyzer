@@ -25,18 +25,22 @@ describe('useFlowchartTaskSelection', () => {
     const task2 = makeTask({ taskId: 2, entry: 'Task2', uuid: 'u-2', startTime: '2026-04-07 10:00:00.002' })
     const task3 = makeTask({ taskId: 3, entry: 'Task3', uuid: 'u-3', startTime: '2026-04-07 10:00:00.003' })
     const tasks = ref<TaskInfo[]>([task1, task2, task3])
-    const initialTask = ref<TaskInfo | null>(null)
-    const onSelectTask = vi.fn()
+    const selectedTask = ref<TaskInfo | null>(null)
+    const onSelectTask = vi.fn((task: TaskInfo) => {
+      selectedTask.value = task
+    })
 
     const selection = useFlowchartTaskSelection({
       tasks,
-      initialTask,
+      selectedTask,
       onSelectTask,
     })
 
     await nextTick()
     expect(selection.selectedTaskIndex.value).toBe(0)
     expect(selection.selectedTask.value?.task_id).toBe(task1.task_id)
+    expect(selectedTask.value?.task_id).toBe(task1.task_id)
+    expect(onSelectTask).toHaveBeenCalledTimes(1)
 
     selection.handleUserTaskSelect(2)
     await nextTick()
@@ -48,21 +52,23 @@ describe('useFlowchartTaskSelection', () => {
 
     expect(selection.selectedTaskIndex.value).toBe(0)
     expect(selection.selectedTask.value?.task_id).toBe(task3.task_id)
-    expect(onSelectTask).toHaveBeenCalledTimes(1)
+    expect(onSelectTask).toHaveBeenCalledTimes(2)
     expect(onSelectTask).toHaveBeenLastCalledWith(task3)
   })
 
-  it('prioritizes external initialTask when it is resolvable', async () => {
+  it('prioritizes external selectedTask when it is resolvable', async () => {
     const task1 = makeTask({ taskId: 1, entry: 'Task1', uuid: 'u-1', startTime: '2026-04-07 10:00:00.001' })
     const task2 = makeTask({ taskId: 2, entry: 'Task2', uuid: 'u-2', startTime: '2026-04-07 10:00:00.002' })
     const task3 = makeTask({ taskId: 3, entry: 'Task3', uuid: 'u-3', startTime: '2026-04-07 10:00:00.003' })
     const tasks = ref<TaskInfo[]>([task1, task2, task3])
-    const initialTask = ref<TaskInfo | null>(null)
+    const selectedTask = ref<TaskInfo | null>(null)
 
     const selection = useFlowchartTaskSelection({
       tasks,
-      initialTask,
-      onSelectTask: vi.fn(),
+      selectedTask,
+      onSelectTask: (task) => {
+        selectedTask.value = task
+      },
     })
 
     await nextTick()
@@ -70,7 +76,7 @@ describe('useFlowchartTaskSelection', () => {
     await nextTick()
     expect(selection.selectedTask.value?.task_id).toBe(task3.task_id)
 
-    initialTask.value = task2
+    selectedTask.value = task2
     await nextTick()
     expect(selection.selectedTaskIndex.value).toBe(1)
     expect(selection.selectedTask.value?.task_id).toBe(task2.task_id)
@@ -80,12 +86,14 @@ describe('useFlowchartTaskSelection', () => {
     const task1 = makeTask({ taskId: 1, entry: 'Task1', uuid: 'u-1', startTime: '2026-04-07 10:00:00.001' })
     const task2 = makeTask({ taskId: 2, entry: 'Task2', uuid: 'u-2', startTime: '2026-04-07 10:00:00.002' })
     const tasks = ref<TaskInfo[]>([task1, task2])
-    const initialTask = ref<TaskInfo | null>(null)
-    const onSelectTask = vi.fn()
+    const selectedTask = ref<TaskInfo | null>(null)
+    const onSelectTask = vi.fn((task: TaskInfo) => {
+      selectedTask.value = task
+    })
 
     const selection = useFlowchartTaskSelection({
       tasks,
-      initialTask,
+      selectedTask,
       onSelectTask,
     })
 
@@ -95,6 +103,35 @@ describe('useFlowchartTaskSelection', () => {
 
     expect(selection.selectedTaskIndex.value).toBe(0)
     expect(selection.selectedTask.value?.task_id).toBe(task1.task_id)
-    expect(onSelectTask).not.toHaveBeenCalled()
+    expect(onSelectTask).toHaveBeenCalledTimes(1)
+    expect(onSelectTask).toHaveBeenLastCalledWith(task1)
+  })
+
+  it('falls back to first task when external selectedTask becomes unresolvable', async () => {
+    const task1 = makeTask({ taskId: 1, entry: 'Task1', uuid: 'u-1', startTime: '2026-04-07 10:00:00.001' })
+    const task2 = makeTask({ taskId: 2, entry: 'Task2', uuid: 'u-2', startTime: '2026-04-07 10:00:00.002' })
+    const task3 = makeTask({ taskId: 3, entry: 'Task3', uuid: 'u-3', startTime: '2026-04-07 10:00:00.003' })
+    const tasks = ref<TaskInfo[]>([task1, task2, task3])
+    const selectedTask = ref<TaskInfo | null>(task3)
+    const onSelectTask = vi.fn((task: TaskInfo) => {
+      selectedTask.value = task
+    })
+
+    const selection = useFlowchartTaskSelection({
+      tasks,
+      selectedTask,
+      onSelectTask,
+    })
+
+    await nextTick()
+    expect(selection.selectedTask.value?.task_id).toBe(task3.task_id)
+
+    tasks.value = [task1, task2]
+    await nextTick()
+
+    expect(selection.selectedTaskIndex.value).toBe(0)
+    expect(selection.selectedTask.value?.task_id).toBe(task1.task_id)
+    expect(onSelectTask).toHaveBeenCalledTimes(1)
+    expect(onSelectTask).toHaveBeenLastCalledWith(task1)
   })
 })

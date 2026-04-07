@@ -23,7 +23,7 @@ defineProps<{
     <flowchart-view
       :tasks="tasks"
       :parser="parser"
-      :initial-task="selectedTask"
+      :selected-task="selectedTask"
       style="height: 100%"
       @select-task="onSelectTask"
       @navigate-to-node="onNavigateToNode"

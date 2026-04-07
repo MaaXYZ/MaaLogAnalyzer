@@ -1,7 +1,8 @@
-import { computed, h, ref, watch, type Ref } from 'vue'
+import { computed, h, watch, type Ref } from 'vue'
 import type { VNodeChild } from 'vue'
 import type { SelectOption } from 'naive-ui'
 import type { TaskInfo } from '../../../types'
+import { findTaskIndex, isSameTask } from '../../../utils/taskIdentity'
 
 type FlowchartTaskOption = SelectOption & {
   status: TaskInfo['status']
@@ -9,32 +10,11 @@ type FlowchartTaskOption = SelectOption & {
 
 interface UseFlowchartTaskSelectionOptions {
   tasks: Ref<TaskInfo[]>
-  initialTask: Ref<TaskInfo | null | undefined>
+  selectedTask: Ref<TaskInfo | null | undefined>
   onSelectTask: (task: TaskInfo) => void
 }
 
-const findTaskIndex = (tasks: TaskInfo[], task: TaskInfo): number => {
-  // 1) 优先使用对象引用，避免重复 task_id 时跳到同 id 的第一个任务
-  const byRef = tasks.findIndex(t => t === task)
-  if (byRef >= 0) return byRef
-
-  // 2) uuid 在大多数日志中唯一，作为第二匹配条件
-  if (task.uuid) {
-    const byUuid = tasks.findIndex(t => t.uuid === task.uuid)
-    if (byUuid >= 0) return byUuid
-  }
-
-  // 3) 回退到复合键，减少仅 task_id 匹配的歧义
-  return tasks.findIndex(t =>
-    t.task_id === task.task_id
-    && t.start_time === task.start_time
-    && t.entry === task.entry
-  )
-}
-
 export const useFlowchartTaskSelection = (options: UseFlowchartTaskSelectionOptions) => {
-  const selectedTaskIndex = ref<number | null>(null)
-
   const taskOptions = computed<FlowchartTaskOption[]>(() =>
     options.tasks.value.map((task, index) => ({
       label: `#${index + 1} ${task.entry}`,
@@ -42,6 +22,15 @@ export const useFlowchartTaskSelection = (options: UseFlowchartTaskSelectionOpti
       status: task.status,
     }))
   )
+
+  const selectedTaskIndex = computed<number | null>(() => {
+    const tasks = options.tasks.value
+    if (tasks.length === 0) return null
+    const externalTask = options.selectedTask.value
+    if (!externalTask) return 0
+    const index = findTaskIndex(tasks, externalTask)
+    return index >= 0 ? index : 0
+  })
 
   const selectedTask = computed<TaskInfo | null>(() =>
     selectedTaskIndex.value != null ? options.tasks.value[selectedTaskIndex.value] ?? null : null
@@ -60,38 +49,18 @@ export const useFlowchartTaskSelection = (options: UseFlowchartTaskSelectionOpti
     ])
   }
 
-  // 同步任务列表与外部 initialTask：
-  // - 优先对齐父组件传入的任务
-  // - 无法对齐时才回退到第一个任务
+  // 受控选择：父层 selectedTask 作为单一来源；
+  // 若为空/不在当前任务列表中，则主动回写首任务，避免 Process/Flowchart 状态分叉。
   watch(
-    [options.tasks, options.initialTask],
-    ([tasks, initialTask], [prevTasks]) => {
-      if (tasks.length === 0) {
-        selectedTaskIndex.value = null
-        return
-      }
+    [options.tasks, options.selectedTask],
+    ([tasks, externalTask]) => {
+      if (tasks.length === 0) return
+      const externalIndex = externalTask ? findTaskIndex(tasks, externalTask) : -1
+      if (externalIndex >= 0) return
 
-      if (initialTask) {
-        const index = findTaskIndex(tasks, initialTask)
-        if (index >= 0) {
-          selectedTaskIndex.value = index
-          return
-        }
-      }
-
-      if (prevTasks && prevTasks.length > 0 && selectedTaskIndex.value != null) {
-        const previousSelectedTask = prevTasks[selectedTaskIndex.value]
-        if (previousSelectedTask) {
-          const remappedIndex = findTaskIndex(tasks, previousSelectedTask)
-          if (remappedIndex >= 0) {
-            selectedTaskIndex.value = remappedIndex
-            return
-          }
-        }
-      }
-
-      if (selectedTaskIndex.value == null || selectedTaskIndex.value >= tasks.length) {
-        selectedTaskIndex.value = 0
+      const fallbackTask = tasks[0]
+      if (!externalTask || !isSameTask(externalTask, fallbackTask)) {
+        options.onSelectTask(fallbackTask)
       }
     },
     { immediate: true },
@@ -100,9 +69,11 @@ export const useFlowchartTaskSelection = (options: UseFlowchartTaskSelectionOpti
   const handleUserTaskSelect = (index: number | null) => {
     if (index == null) return
     if (index < 0 || index >= options.tasks.value.length) return
-    selectedTaskIndex.value = index
     const task = options.tasks.value[index]
-    if (task) options.onSelectTask(task)
+    if (!task) return
+    const currentIndex = selectedTaskIndex.value
+    if (currentIndex === index) return
+    options.onSelectTask(task)
   }
 
   return {

@@ -27,7 +27,7 @@ import { findNodeInfoImage } from './flowchart/utils/nodeImageLookup'
 const props = defineProps<{
   tasks: TaskInfo[]
   parser?: LogParser
-  initialTask?: TaskInfo | null
+  selectedTask?: TaskInfo | null
 }>()
 
 const emit = defineEmits<{
@@ -48,7 +48,7 @@ const {
   handleUserTaskSelect,
 } = useFlowchartTaskSelection({
   tasks: computed(() => props.tasks),
-  initialTask: computed(() => props.initialTask),
+  selectedTask: computed(() => props.selectedTask),
   onSelectTask: (task) => emit('select-task', task),
 })
 
