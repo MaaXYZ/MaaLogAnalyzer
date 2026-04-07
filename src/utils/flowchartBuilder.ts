@@ -1,6 +1,7 @@
 import type { Node, Edge } from '@vue-flow/core'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import type { TaskInfo, NodeInfo } from '../types'
+import { sortNodesByGlobalExecutionOrder } from './taskExecutionOrder'
 
 export interface FlowNodeData {
   label: string
@@ -45,9 +46,11 @@ export interface BuildFlowchartOptions {
 }
 
 export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchartOptions = {}): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  const orderedNodes = sortNodesByGlobalExecutionOrder(task.nodes)
+
   // 1. Collect executed node names with order and info
   const executedNodeMap = new Map<string, { order: number[]; infos: NodeInfo[] }>()
-  task.nodes.forEach((node, index) => {
+  orderedNodes.forEach((node, index) => {
     const existing = executedNodeMap.get(node.name)
     if (existing) {
       existing.order.push(index + 1)
@@ -123,15 +126,15 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
   })
 
   // Execution edges: consecutive nodes
-  for (let i = 0; i < task.nodes.length - 1; i++) {
-    const from = task.nodes[i].name
-    const to = task.nodes[i + 1].name
+  for (let i = 0; i < orderedNodes.length - 1; i++) {
+    const from = orderedNodes[i].name
+    const to = orderedNodes[i + 1].name
     const edgeId = `${from}->${to}`
 
     const existing = flowEdges.find(e => e.id === edgeId)
-    const toNodeStatus: FlowEdgeData['edgeStatus'] = task.nodes[i + 1].status === 'failed'
+    const toNodeStatus: FlowEdgeData['edgeStatus'] = orderedNodes[i + 1].status === 'failed'
       ? 'failed'
-      : task.nodes[i + 1].status === 'running'
+      : orderedNodes[i + 1].status === 'running'
         ? 'running'
         : 'success'
 

@@ -1,5 +1,6 @@
 import { computed, nextTick, ref, type Ref } from 'vue'
 import type { NodeInfo, TaskInfo } from '../../../types'
+import { sortNodesByGlobalExecutionOrder } from '../../../utils/taskExecutionOrder'
 
 interface UseFlowchartTimelineOptions {
   selectedTask: Ref<TaskInfo | null>
@@ -21,7 +22,8 @@ export const useFlowchartTimeline = (options: UseFlowchartTimelineOptions) => {
   const executionTimeline = computed<TimelineItem[]>(() => {
     const task = options.selectedTask.value
     if (!task) return []
-    return task.nodes.map((node, index) => ({
+    const orderedNodes = sortNodesByGlobalExecutionOrder(task.nodes)
+    return orderedNodes.map((node, index) => ({
       index,
       name: node.name,
       status: node.status,
