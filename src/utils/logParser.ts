@@ -976,6 +976,7 @@ export class LogParser {
     const subTaskActionNodeStartTimes = new Map<string, string>()
     const subTaskSnapshots = new Map<number, SubTaskSnapshot>()
     const subTaskParentByTaskId = new Map<number, number>()
+    let syntheticSubTaskPipelineNodeId = -1
     const activeTaskStack: number[] = [task.task_id]
     const activeRecognitionAttempts = new Map<string, RecognitionAttempt>()
     const activeRecognitionStack: Array<{ taskId: number; recoId: number }> = []
@@ -1251,7 +1252,7 @@ export class LogParser {
       status: 'running' | 'success' | 'failed',
       eventOrder: number
     ) => {
-      const wfId = normalizeWaitFreezesId(details.wf_id)
+      const wfId = normalizeWaitFreezesId(readNumberField(details, 'wf_id') ?? details.wf_id)
       if (wfId == null) return
 
       const aggregation = getOrCreateTaskNodeAggregation(taskId)
@@ -2382,8 +2383,23 @@ export class LogParser {
       if (phase === 'Starting') return 'running'
       return resolveCompletionStatus(phase)
     }
-    const resolveActionNodeEventId = (details: Record<string, any>) => {
-      return details.action_details?.action_id ?? details.action_id ?? details.node_id
+    const readNestedNumberField = (
+      details: Record<string, any>,
+      nestedField: string,
+      field: string
+    ): number | undefined => {
+      const nested = details[nestedField]
+      if (!nested || typeof nested !== 'object') return undefined
+      return readNumberField(nested as Record<string, any>, field)
+    }
+    const resolveActionDetailsActionId = (details: Record<string, any>): number | undefined => {
+      return readNestedNumberField(details, 'action_details', 'action_id')
+        ?? readNestedNumberField(details, 'node_details', 'action_id')
+    }
+    const resolveActionNodeEventId = (details: Record<string, any>): number | undefined => {
+      return readNestedNumberField(details, 'action_details', 'action_id')
+        ?? readNumberField(details, 'action_id')
+        ?? readNumberField(details, 'node_id')
     }
     const handleSubTaskActionNodeStartingEvent = (
       subTaskId: number,
@@ -2639,12 +2655,13 @@ export class LogParser {
       timestamp: string
     ) => {
       const subTaskPipelineStatus = resolveTerminalCompletionStatus(phase)
-      const nodeId = details.node_id
+      const nodeId = readNumberField(details, 'node_id')
+      const resolvedNodeId = nodeId ?? syntheticSubTaskPipelineNodeId--
       const endTimestamp = this.stringPool.intern(timestamp)
       const startTimestamp = nodeId != null
         ? (subTaskPipelineNodeStartTimes.get(scopedKey(subTaskId, nodeId)) || endTimestamp)
         : endTimestamp
-      const actionId = details.action_details?.action_id ?? details.node_details?.action_id
+      const actionId = resolveActionDetailsActionId(details)
       const actionKey = resolveSubTaskActionKey(subTaskId, actionId)
       const actionStartTimestamp = actionKey ? subTaskActionStartTimes.get(actionKey) : undefined
       const actionEndTimestamp = actionKey ? subTaskActionEndTimes.get(actionKey) : undefined
@@ -2690,7 +2707,7 @@ export class LogParser {
         ? composedSubTaskFlow.nodeFlow
         : undefined
       subTasks.addPipelineNode(subTaskId, {
-        node_id: nodeId,
+        node_id: resolvedNodeId,
         name: resolvedNodeName,
         ts: startTimestamp,
         end_ts: endTimestamp,
@@ -2815,7 +2832,7 @@ export class LogParser {
       phase: TaskTerminalPhase,
       timestamp: string
     ) => {
-      const nodeId = details.node_id
+      const nodeId = readNumberField(details, 'node_id')
       if (!nodeId) return
 
       const pipelineStatus = resolveTerminalCompletionStatus(phase)
@@ -2824,7 +2841,7 @@ export class LogParser {
       const nodeName = details.name || ''
       const startTimestamp = pipelineNodeStartTimes.get(nodeId) || this.stringPool.intern(timestamp)
       const endTimestamp = this.stringPool.intern(timestamp)
-      const actionId = details.action_details?.action_id ?? details.node_details?.action_id
+      const actionId = resolveActionDetailsActionId(details)
       const actionStartTimestamp = actionId != null ? actionStartTimes.get(actionId) : undefined
       const actionEndTimestamp = actionId != null ? actionEndTimes.get(actionId) : undefined
       const actionStartOrder = actionId != null ? actionStartOrders.get(actionId) : undefined

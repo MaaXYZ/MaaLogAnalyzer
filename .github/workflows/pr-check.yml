@@ -53,12 +53,23 @@ jobs:
       - name: 核心回归测试
         if: matrix.platform == 'linux'
         run: |
-          mapfile -t core_tests < <(
-            find src \
-              -type f \
-              -path '*/__tests__/*.test.ts' \
-              | sort
-          )
+          if command -v rg >/dev/null 2>&1; then
+            mapfile -t core_tests < <(
+              rg --files \
+                -g '**/__tests__/*.test.ts' \
+                -g '!src-tauri/target/**' \
+                -g '!dist/**' \
+                -g '!coverage/**' \
+                | sort
+            )
+          else
+            mapfile -t core_tests < <(
+              find . \
+                -type d \( -name node_modules -o -path './src-tauri/target' -o -name dist -o -name coverage \) -prune -o \
+                -type f -path '*/__tests__/*.test.ts' -print \
+                | sort
+            )
+          fi
           if [ "${#core_tests[@]}" -eq 0 ]; then
             echo "未找到核心回归测试文件"
             exit 1
