@@ -26,6 +26,7 @@ const props = defineProps<{
   tasks: TaskInfo[]
   activeTaskIndex: number
   currentNodes: NodeTimelineItem[]
+  selectedNodeId?: number | null
   selectedTaskKey?: string | null
   displayMode: string
   showRealtimeStatus: boolean
@@ -66,6 +67,14 @@ const emit = defineEmits<{
   'select-recognition': [node: NodeInfo, attemptIndex: number]
   'select-flow-item': [node: NodeInfo, flowItemId: string]
 }>()
+
+const handleSelectNodeNav = (index: number) => {
+  emit('select-node-nav', index)
+  const item = props.nodeNavItems.find((entry) => entry.originalIndex === index)
+  if (item) {
+    emit('select-node', item.node)
+  }
+}
 </script>
 
 <template>
@@ -110,6 +119,7 @@ const emit = defineEmits<{
       <node-nav-panel
         :ref="props.setNodeNavPanelRef"
         :items="nodeNavItems"
+        :selected-node-id="selectedNodeId ?? null"
         :current-nodes-length="currentNodes.length"
         :display-mode="displayMode"
         :search-text="nodeNavSearchText"
@@ -118,7 +128,7 @@ const emit = defineEmits<{
         :empty-description="nodeNavEmptyDescription"
         @update:search-text="emit('update:node-nav-search-text', $event)"
         @toggle-failed-only="emit('toggle-node-nav-failed-only')"
-        @select-node="emit('select-node-nav', $event)"
+        @select-node="handleSelectNodeNav"
         @manual-scroll-up="emit('manual-scroll-up')"
       />
     </template>

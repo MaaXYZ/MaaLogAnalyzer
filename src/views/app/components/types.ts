@@ -22,6 +22,7 @@ export type UploadContentHandler = (
 export interface ProcessViewForwardProps {
   tasks: TaskInfo[]
   selectedTask: TaskInfo | null
+  selectedNode?: NodeInfo | null
   loading: boolean
   parser: LogParser
   detailViewCollapsed?: boolean

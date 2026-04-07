@@ -18,6 +18,7 @@ const getSelectedTaskKey = (task: TaskInfo | null): string | null => {
 const props = defineProps<{
   tasks: TaskInfo[]
   selectedTask: TaskInfo | null
+  selectedNode?: NodeInfo | null
   isMobile?: boolean
   settingsDisplayMode: string
   detailViewCollapsed: boolean
@@ -117,6 +118,7 @@ const props = defineProps<{
         :tasks="props.tasks"
         :active-task-index="props.activeTaskIndex"
         :current-nodes="props.currentNodes"
+        :selected-node-id="props.selectedNode?.node_id ?? null"
         :selected-task-key="getSelectedTaskKey(props.selectedTask)"
         :display-mode="props.settingsDisplayMode"
         :show-realtime-status="props.showRealtimeStatus"

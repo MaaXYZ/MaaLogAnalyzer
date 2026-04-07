@@ -13,6 +13,7 @@ import ProcessContentSection from './process/components/ProcessContentSection.vu
 const props = defineProps<{
   tasks: TaskInfo[]
   selectedTask: TaskInfo | null
+  selectedNode?: NodeInfo | null
   loading: boolean
   parser: LogParser
   detailViewCollapsed?: boolean
@@ -137,6 +138,7 @@ void fileInputRef
     <process-content-section
       :tasks="tasks"
       :selected-task="selectedTask"
+      :selected-node="selectedNode"
       :is-mobile="isMobile"
       :settings-display-mode="settings.displayMode"
       :detail-view-collapsed="!!detailViewCollapsed"

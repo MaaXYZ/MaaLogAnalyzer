@@ -11,6 +11,7 @@ import NodeNavSearchInput from './NodeNavSearchInput.vue'
 
 const props = defineProps<{
   items: NodeNavViewItem[]
+  selectedNodeId?: number | null
   currentNodesLength: number
   displayMode: string
   searchText: string
@@ -150,7 +151,10 @@ defineExpose({
           >
             <div
               class="node-nav-row"
-              :class="{ 'node-nav-row-detailed': props.displayMode === 'detailed' }"
+              :class="{
+                'node-nav-row-detailed': props.displayMode === 'detailed',
+                'node-nav-row-active': props.selectedNodeId != null && item.node.node_id === props.selectedNodeId,
+              }"
               @click="emit('select-node', item.originalIndex)"
             >
               <node-nav-item
@@ -181,9 +185,20 @@ defineExpose({
 .node-nav-row {
   cursor: pointer;
   padding: 4px 8px;
+  border-radius: 8px;
+  transition: background-color 0.2s, box-shadow 0.2s;
 }
 
 .node-nav-row-detailed {
   padding: 8px 12px;
+}
+
+.node-nav-row:hover {
+  background: rgba(125, 125, 125, 0.12);
+}
+
+.node-nav-row-active {
+  background: rgba(99, 226, 183, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(99, 226, 183, 0.5);
 }
 </style>

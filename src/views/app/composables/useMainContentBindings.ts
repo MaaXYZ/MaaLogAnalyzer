@@ -62,6 +62,7 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
   const processViewBaseProps = computed(() => ({
     tasks: options.filteredTasks.value,
     selectedTask: options.selectedTask.value,
+    selectedNode: options.selectedNode.value,
     loading: options.loading.value,
     parser: options.parser,
     isVscodeLaunchEmbed: options.isVscodeLaunchEmbed,
