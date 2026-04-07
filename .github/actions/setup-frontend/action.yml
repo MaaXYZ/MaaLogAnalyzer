@@ -1,0 +1,25 @@
+name: Setup Frontend Toolchain
+description: Setup Node.js and pnpm with dependency cache, then install dependencies.
+runs:
+  using: composite
+  steps:
+    - name: 安装 pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+        run_install: false
+
+    - name: 安装 Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: pnpm
+        cache-dependency-path: pnpm-lock.yaml
+
+    - name: 预取 pnpm 依赖
+      shell: bash
+      run: pnpm fetch --frozen-lockfile
+
+    - name: 安装前端依赖（优先离线缓存）
+      shell: bash
+      run: pnpm install --frozen-lockfile --prefer-offline

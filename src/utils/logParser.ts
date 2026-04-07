@@ -12,6 +12,11 @@ import type {
 } from '../types'
 import { StringPool } from './stringPool'
 import { buildActionFlowItems, buildRecognitionFlowItems } from './nodeFlow'
+import {
+  decodeTaskLifecycleEventDetails,
+  readNumberField,
+  type TaskLifecycleEventDetails,
+} from './logEventDecoders'
 
 export interface ParseProgress {
   current: number
@@ -61,25 +66,12 @@ interface MaaMessageMeta {
   nodeKind: MaaNodeKind
 }
 
-type TaskLifecycleEventDetails = {
-  task_id?: number
-  entry: string
-  hash: string
-  uuid: string
-}
-
 const resolveEventTaskId = (details: Record<string, any> | undefined): number | undefined => {
-  return details && typeof details.task_id === 'number' ? details.task_id : undefined
+  return readNumberField(details, 'task_id')
 }
 
 const resolveTaskLifecycleEventDetails = (details: Record<string, any> | undefined): TaskLifecycleEventDetails => {
-  const safeDetails = details ?? {}
-  return {
-    task_id: resolveEventTaskId(safeDetails),
-    entry: typeof safeDetails.entry === 'string' ? safeDetails.entry : '',
-    hash: typeof safeDetails.hash === 'string' ? safeDetails.hash : '',
-    uuid: typeof safeDetails.uuid === 'string' ? safeDetails.uuid : '',
-  }
+  return decodeTaskLifecycleEventDetails(details)
 }
 
 interface TaskLifecycleMetaEventContext {
