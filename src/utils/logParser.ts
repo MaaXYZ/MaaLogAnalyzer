@@ -69,6 +69,7 @@ import {
 import { createTaskNodeRuntimeContext } from './logParser/taskNodeRuntimeContext'
 import { buildTasksFromEvents } from './logParser/taskBuilder'
 import { processTaskEvents } from './logParser/taskEventLoopHelpers'
+import { createTaskLifecycleMetaContext } from './logParser/taskLifecycleContextFactory'
 import {
   parseRecognitionAnchorName as parseRecognitionAnchorNameHelper,
   resolveEventFocus,
@@ -1177,36 +1178,16 @@ export class LogParser {
       addSubTaskRecognition,
       addSubTaskRecognitionNode,
     })
-    const taskLifecycleMetaContext: TaskLifecycleMetaEventContext = {
+    const taskLifecycleMetaContext: TaskLifecycleMetaEventContext = createTaskLifecycleMetaContext({
       rootTaskId: task.task_id,
-      peekActiveTask: () => taskStackTracker.peek(),
-      pushActiveTask: (taskId) => taskStackTracker.push(taskId),
-      popActiveTask: (taskId) => taskStackTracker.pop(taskId),
-      setSubTaskParent: (subTaskId: number, parentTaskId: number) => {
-        subTaskParentByTaskId.set(subTaskId, parentTaskId)
-      },
-      onSubTaskStarting: (subTaskId, subTaskDetails, subTaskMessage, subTaskTimestamp) => {
-        const snapshot = getOrCreateSubTaskSnapshot(subTaskSnapshots, subTaskId)
-        applySubTaskSnapshotStarting(
-          snapshot,
-          subTaskDetails,
-          subTaskMessage,
-          subTaskTimestamp,
-          (value) => this.stringPool.intern(value)
-        )
-      },
-      onSubTaskTerminal: (subTaskId, subTaskDetails, subTaskMessage, subTaskTimestamp, phase) => {
-        const snapshot = getOrCreateSubTaskSnapshot(subTaskSnapshots, subTaskId)
-        applySubTaskSnapshotTerminal(
-          snapshot,
-          subTaskDetails,
-          subTaskMessage,
-          subTaskTimestamp,
-          phase,
-          (value) => this.stringPool.intern(value)
-        )
-      },
-    }
+      taskStackTracker,
+      subTaskParentByTaskId,
+      subTaskSnapshots,
+      getOrCreateSubTaskSnapshot,
+      applySubTaskSnapshotStarting,
+      applySubTaskSnapshotTerminal,
+      intern: (value) => this.stringPool.intern(value),
+    })
     processTaskEvents({
       taskEvents,
       rootTaskId: task.task_id,
