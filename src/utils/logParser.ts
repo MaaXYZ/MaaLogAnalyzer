@@ -62,7 +62,6 @@ import {
   getOrCreateTaskNodeAggregation,
   getTaskNextList,
   resetTaskNodeAggregation,
-  setTaskNextList,
   type TaskScopedNodeAggregation,
 } from './logParser/taskScopedAggregationHelpers'
 import { createTaskStackTracker } from './logParser/taskStackHelpers'
@@ -106,6 +105,10 @@ import {
   handleRecognitionStartEvent as handleRecognitionStartEventHelper,
   pushRecognitionAttemptIfMissing,
 } from './logParser/recognitionEventHandlers'
+import {
+  applyTaskNextList as applyTaskNextListHelper,
+  handleNextListNodeEvent as handleNextListNodeEventHelper,
+} from './logParser/nextListEventHelpers'
 import { settleCurrentNodeRuntimeStates as settleCurrentNodeRuntimeStatesHelper } from './logParser/runtimeSettlementHelpers'
 import {
   createScopedPipelineNodeFinalizeHandler,
@@ -567,17 +570,14 @@ export class LogParser {
       })
     }
     const applyTaskNextList = (taskId: number, list: unknown[]) => {
-      const nextList = setTaskNextList(
+      applyTaskNextListHelper({
         taskScopedNodeAggregationByTaskId,
         taskId,
-        toListItems(list)
-      )
-      if (taskId === task.task_id) {
-        const activeNode = getActivePipelineNode()
-        if (activeNode) {
-          activeNode.next_list = nextList
-        }
-      }
+        list,
+        toListItems,
+        rootTaskId: task.task_id,
+        getActivePipelineNode,
+      })
     }
     const startRecognitionNodeEvent = (
       taskId: number,
@@ -1029,15 +1029,14 @@ export class LogParser {
       details: Record<string, any>,
       timestamp: string
     ): boolean => {
-      if (taskId != null) {
-        if (phase === 'Failed') {
-          applyTaskNextList(taskId, [])
-        } else {
-          applyTaskNextList(taskId, Array.isArray(details.list) ? details.list : [])
-        }
-      }
-      refreshActivePipelineNodePreview(timestamp)
-      return true
+      return handleNextListNodeEventHelper({
+        taskId,
+        phase,
+        details,
+        timestamp,
+        applyTaskNextList,
+        refreshActivePipelineNodePreview,
+      })
     }
     const handleWaitFreezesNodeEvent = (
       taskId: number | null,
