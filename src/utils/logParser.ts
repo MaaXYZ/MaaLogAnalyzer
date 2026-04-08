@@ -66,7 +66,6 @@ import { handleWaitFreezesNodeEvent as handleWaitFreezesNodeEventHelper } from '
 import {
   getOrCreateTaskNodeAggregation,
   getTaskNextList,
-  resetTaskNodeAggregation,
   type TaskScopedNodeAggregation,
 } from './logParser/taskScopedAggregationHelpers'
 import { createTaskStackTracker } from './logParser/taskStackHelpers'
@@ -96,6 +95,7 @@ import {
   clearSubTaskRuntimeStateAfterPipelineFinalize,
   consumeMatchedSubTaskAction,
 } from './logParser/subTaskRuntimeCleanupHelpers'
+import { resetCurrentNodeAggregationState } from './logParser/nodeAggregationResetHelpers'
 import {
   startCurrentPipelineNodeEvent as startCurrentPipelineNodeEventHelper,
   startSubTaskPipelineNodeEvent as startSubTaskPipelineNodeEventHelper,
@@ -852,17 +852,19 @@ export class LogParser {
       return getActiveRunningPipelineNode(activePipelineNodeId, pipelineNodesById)
     }
     const resetCurrentNodeAggregation = () => {
-      taskScopedNodeAggregationByTaskId.clear()
-      resetTaskNodeAggregation(taskScopedNodeAggregationByTaskId, task.task_id)
-      currentTaskRecognitions.length = 0
-      nestedActionNodes.length = 0
-      actionLevelRecognitionNodes.length = 0
-      activeRecognitionNodeAttempts.clear()
-      actionRuntimeStates.clear()
-      activeSubTaskActionNodes.clear()
-      subTasks.clear()
-      subTaskParentByTaskId.clear()
-      taskStackTracker.reset()
+      resetCurrentNodeAggregationState({
+        rootTaskId: task.task_id,
+        taskScopedNodeAggregationByTaskId,
+        currentTaskRecognitions,
+        nestedActionNodes,
+        actionLevelRecognitionNodes,
+        activeRecognitionNodeAttempts,
+        actionRuntimeStates,
+        activeSubTaskActionNodes,
+        subTasks,
+        subTaskParentByTaskId,
+        taskStackTracker,
+      })
     }
     const settleCurrentNodeRuntimeStates = (
       fallbackStatus: 'success' | 'failed',
