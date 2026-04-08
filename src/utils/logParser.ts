@@ -101,6 +101,11 @@ import {
   startSubTaskPipelineNodeEvent as startSubTaskPipelineNodeEventHelper,
 } from './logParser/pipelineNodeStartHelpers'
 import {
+  cleanupCurrentTaskPipelineRuntimeState as cleanupCurrentTaskPipelineRuntimeStateHelper,
+  getActiveRunningPipelineNode,
+  upsertPipelineNode,
+} from './logParser/pipelineRuntimeStateHelpers'
+import {
   finalizeRecognitionNodeEvent as finalizeRecognitionNodeEventHelper,
   startRecognitionNodeEvent as startRecognitionNodeEventHelper,
 } from './logParser/recognitionNodeLifecycleHelpers'
@@ -844,10 +849,7 @@ export class LogParser {
       refreshActivePipelineNodePreview(timestamp)
     }
     const getActivePipelineNode = (): NodeInfo | null => {
-      if (activePipelineNodeId == null) return null
-      const node = pipelineNodesById.get(activePipelineNodeId)
-      if (!node || node.status !== 'running') return null
-      return node
+      return getActiveRunningPipelineNode(activePipelineNodeId, pipelineNodesById)
     }
     const resetCurrentNodeAggregation = () => {
       taskScopedNodeAggregationByTaskId.clear()
@@ -884,30 +886,23 @@ export class LogParser {
       })
     }
     const upsertCurrentTaskPipelineNode = (node: NodeInfo) => {
-      const existingNode = pipelineNodesById.get(node.node_id)
-      if (existingNode) {
-        Object.assign(existingNode, node)
-        return existingNode
-      }
-      nodes.push(node)
-      pipelineNodesById.set(node.node_id, node)
-      return node
+      return upsertPipelineNode(nodes, pipelineNodesById, node)
     }
     const cleanupCurrentTaskPipelineRuntimeState = (
       nodeId: number,
       actionId: number | null | undefined
     ) => {
-      if (activePipelineNodeId === nodeId) {
-        activePipelineNodeId = null
-      }
-      pipelineNodeStartTimes.delete(nodeId)
-      if (actionId != null) {
-        actionStartTimes.delete(actionId)
-        actionEndTimes.delete(actionId)
-        actionStartOrders.delete(actionId)
-        actionEndOrders.delete(actionId)
-      }
-      resetCurrentNodeAggregation()
+      activePipelineNodeId = cleanupCurrentTaskPipelineRuntimeStateHelper({
+        activePipelineNodeId,
+        nodeId,
+        actionId,
+        pipelineNodeStartTimes,
+        actionStartTimes,
+        actionEndTimes,
+        actionStartOrders,
+        actionEndOrders,
+        resetCurrentNodeAggregation,
+      })
     }
     const finalizeTaskPipelineNodeEvent = (
       taskId: number,
