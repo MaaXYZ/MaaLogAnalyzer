@@ -100,6 +100,7 @@ import {
   type ScopedNodeDispatchConfig,
   type ScopedPipelineNodeStartingHandler,
 } from './logParser/scopedNodeDispatchHelpers'
+import { routeSimpleNodeEvent } from './logParser/simpleNodeEventRouter'
 import {
   composeFinalPipelineNodeFlow,
   composePipelineNodeFlow,
@@ -1346,37 +1347,22 @@ export class LogParser {
       onRecognitionAttempt?: (taskId: number, attempt: RecognitionAttempt) => void,
       skipRecognitionRefreshWhenTaskMissingOnFinish?: boolean
     ): boolean => {
-      switch (messageMeta.nodeKind) {
-        case 'NextList':
-          return handleNextListNodeEvent(taskId, phase, details, timestamp)
-        case 'WaitFreezes':
-          return handleWaitFreezesNodeEvent(
-            taskId,
-            phase,
-            details,
-            timestamp,
-            eventOrder,
-            onWaitFreezesUpdated
-          )
-        case 'Recognition':
-          return handleRecognitionNodeEvent(
-            taskId,
-            phase,
-            details,
-            timestamp,
-            eventOrder,
-            onRecognitionAttempt,
-            skipRecognitionRefreshWhenTaskMissingOnFinish
-          )
-        case 'Action':
-          handleActionEvent(taskId, phase, details, timestamp, eventOrder)
-          return true
-        case 'ActionNode':
-          handleActionNodeEvent(taskId, phase, details, timestamp)
-          return true
-        default:
-          return false
-      }
+      return routeSimpleNodeEvent({
+        taskId,
+        messageMeta,
+        phase,
+        details,
+        timestamp,
+        eventOrder,
+        handleActionEvent,
+        handleActionNodeEvent,
+        onNextList: handleNextListNodeEvent,
+        onWaitFreezes: handleWaitFreezesNodeEvent,
+        onRecognition: handleRecognitionNodeEvent,
+        onWaitFreezesUpdated,
+        onRecognitionAttempt,
+        skipRecognitionRefreshWhenTaskMissingOnFinish,
+      })
     }
     const handleRecognitionNodeLifecycleEvent = (
       taskId: number | null,
