@@ -70,6 +70,7 @@ import { createTaskNodeRuntimeContext } from './logParser/taskNodeRuntimeContext
 import { buildTasksFromEvents } from './logParser/taskBuilder'
 import { processTaskEvents } from './logParser/taskEventLoopHelpers'
 import { createTaskLifecycleMetaContext } from './logParser/taskLifecycleContextFactory'
+import { createSimpleNodeEventHandler } from './logParser/simpleNodeEventHandlerFactory'
 import {
   parseRecognitionAnchorName as parseRecognitionAnchorNameHelper,
   resolveEventFocus,
@@ -128,7 +129,6 @@ import {
   type ScopedPipelineNodeStartingHandler,
 } from './logParser/scopedNodeDispatchHelpers'
 import { createNodeDispatchConfigs } from './logParser/nodeDispatchConfigFactory'
-import { routeSimpleNodeEvent } from './logParser/simpleNodeEventRouter'
 import {
   composeFinalPipelineNodeFlow,
   composePipelineNodeFlow,
@@ -981,42 +981,11 @@ export class LogParser {
         refresh: refreshActivePipelineNodePreview,
       })
     }
-    const syncActiveNodeFocusAfterWaitFreezes = (details: Record<string, any>) => {
-      const activeNode = getActivePipelineNode()
-      if (activeNode) {
-        activeNode.focus = resolveEventFocus(details, activeNode.focus)
-      }
-    }
-    const handleSimpleNodeEvent = (
-      taskId: number | null,
-      messageMeta: MaaMessageMeta,
-      phase: KnownMaaPhase,
-      details: Record<string, any>,
-      timestamp: string,
-      eventOrder: number,
-      handleActionEvent: ScopedActionEventHandler,
-      handleActionNodeEvent: ScopedActionNodeEventHandler,
-      onWaitFreezesUpdated?: (details: Record<string, any>) => void,
-      onRecognitionAttempt?: (taskId: number, attempt: RecognitionAttempt) => void,
-      skipRecognitionRefreshWhenTaskMissingOnFinish?: boolean
-    ): boolean => {
-      return routeSimpleNodeEvent({
-        taskId,
-        messageMeta,
-        phase,
-        details,
-        timestamp,
-        eventOrder,
-        handleActionEvent,
-        handleActionNodeEvent,
-        onNextList: handleNextListNodeEvent,
-        onWaitFreezes: handleWaitFreezesNodeEvent,
-        onRecognition: handleRecognitionNodeEvent,
-        onWaitFreezesUpdated,
-        onRecognitionAttempt,
-        skipRecognitionRefreshWhenTaskMissingOnFinish,
-      })
-    }
+    const handleSimpleNodeEvent = createSimpleNodeEventHandler({
+      onNextList: handleNextListNodeEvent,
+      onWaitFreezes: handleWaitFreezesNodeEvent,
+      onRecognition: handleRecognitionNodeEvent,
+    })
     const handleSubTaskActionNodeLifecycleEvent: ScopedActionNodeEventHandler = (
       subTaskId: number | null,
       phase: KnownMaaPhase,
@@ -1109,7 +1078,12 @@ export class LogParser {
       handleSimpleNodeEvent,
       handleCurrentTaskActionEvent,
       handleCurrentTaskActionNodeEvent,
-      syncActiveNodeFocusAfterWaitFreezes,
+      syncActiveNodeFocusAfterWaitFreezes: (details) => {
+        const activeNode = getActivePipelineNode()
+        if (activeNode) {
+          activeNode.focus = resolveEventFocus(details, activeNode.focus)
+        }
+      },
       handleSubTaskActionEvent,
       handleSubTaskActionNodeLifecycleEvent,
       startCurrentPipelineNodeEvent,
