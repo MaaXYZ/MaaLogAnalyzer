@@ -69,13 +69,20 @@ import {
 import {
   buildWaitFreezesFlowItems,
   upsertWaitFreezesState,
-  type WaitFreezesRuntimeState,
 } from './logParserWaitFreezesHelpers'
 import {
   partitionActionScopeWaitFreezes,
   sortFlowItemsByTimestamp,
   splitAndAttachWaitFreezesFlowItems,
 } from './logParserFlowAssemblyHelpers'
+import {
+  clearTaskNodeAggregation,
+  getOrCreateTaskNodeAggregation,
+  getTaskNextList,
+  resetTaskNodeAggregation,
+  setTaskNextList,
+  type TaskScopedNodeAggregation,
+} from './logParserTaskScopedAggregationHelpers'
 
 export interface ParseProgress {
   current: number
@@ -580,10 +587,6 @@ export class LogParser {
 
     const taskEvents = this.events.slice(taskStartIndex, taskEndIndex + 1)
 
-    type TaskScopedNodeAggregation = {
-      nextList: NextListItem[]
-      waitFreezesRuntimeStates: Map<number, WaitFreezesRuntimeState>
-    }
     type ScopedSimpleNodeEventHandler = (
       taskId: number | null,
       messageMeta: MaaMessageMeta,
@@ -673,27 +676,6 @@ export class LogParser {
     } = createRecognitionAttemptHelpers(recognitionOrderMeta)
 
     const scopedKey = (taskId: number, id: number): string => `${taskId}:${id}`
-    const getOrCreateTaskNodeAggregation = (taskId: number): TaskScopedNodeAggregation => {
-      const existing = taskScopedNodeAggregationByTaskId.get(taskId)
-      if (existing) return existing
-      const created: TaskScopedNodeAggregation = {
-        nextList: [],
-        waitFreezesRuntimeStates: new Map<number, WaitFreezesRuntimeState>(),
-      }
-      taskScopedNodeAggregationByTaskId.set(taskId, created)
-      return created
-    }
-    const getTaskNextList = (taskId: number): NextListItem[] => {
-      return taskScopedNodeAggregationByTaskId.get(taskId)?.nextList ?? []
-    }
-    const resetTaskNodeAggregation = (taskId: number) => {
-      const aggregation = getOrCreateTaskNodeAggregation(taskId)
-      aggregation.nextList = []
-      aggregation.waitFreezesRuntimeStates.clear()
-    }
-    const clearTaskNodeAggregation = (taskId: number) => {
-      taskScopedNodeAggregationByTaskId.delete(taskId)
-    }
     const toTimestampMs = (value?: string): number => {
       if (!value) return Number.POSITIVE_INFINITY
       const normalized = value.includes(' ') ? value.replace(' ', 'T') : value
@@ -941,12 +923,15 @@ export class LogParser {
       }
     }
     const applyTaskNextList = (taskId: number, list: unknown[]) => {
-      const aggregation = getOrCreateTaskNodeAggregation(taskId)
-      aggregation.nextList = toNextListItems(list)
+      const nextList = setTaskNextList(
+        taskScopedNodeAggregationByTaskId,
+        taskId,
+        toNextListItems(list)
+      )
       if (taskId === task.task_id) {
         const activeNode = getActivePipelineNode()
         if (activeNode) {
-          activeNode.next_list = aggregation.nextList
+          activeNode.next_list = nextList
         }
       }
     }
@@ -1404,7 +1389,7 @@ export class LogParser {
 
       const nowTimestamp = this.stringPool.intern(timestamp)
       activeNode.end_ts = nowTimestamp
-      activeNode.next_list = getTaskNextList(task.task_id)
+      activeNode.next_list = getTaskNextList(taskScopedNodeAggregationByTaskId, task.task_id)
 
       const topLevelRecognitions = dedupeRecognitionAttempts(currentTaskRecognitions)
       const actionRecognitions = dedupeRecognitionAttempts(actionLevelRecognitionNodes)
@@ -1527,7 +1512,7 @@ export class LogParser {
           activeRecognitionNodeAttempts.delete(key)
         }
       }
-      clearTaskNodeAggregation(subTaskId)
+      clearTaskNodeAggregation(taskScopedNodeAggregationByTaskId, subTaskId)
     }
     const finalizeSubTaskPipelineNodeEvent = (
       subTaskId: number,
@@ -1557,7 +1542,7 @@ export class LogParser {
       const resolvedNodeName = this.stringPool.intern(
         details.reco_details?.name || details.action_details?.name || details.name || ''
       )
-      const resolvedNextList = getTaskNextList(subTaskId)
+      const resolvedNextList = getTaskNextList(taskScopedNodeAggregationByTaskId, subTaskId)
       const resolvedActionDetails = withActionTimestamps(
         mergedActionDetails,
         mergedActionStartTimestamp,
@@ -1610,7 +1595,7 @@ export class LogParser {
     }
     const resetCurrentNodeAggregation = () => {
       taskScopedNodeAggregationByTaskId.clear()
-      resetTaskNodeAggregation(task.task_id)
+      resetTaskNodeAggregation(taskScopedNodeAggregationByTaskId, task.task_id)
       currentTaskRecognitions.length = 0
       nestedActionNodes.length = 0
       actionLevelRecognitionNodes.length = 0
@@ -1793,7 +1778,7 @@ export class LogParser {
       const nodeFlow = composedFlow.nodeFlow
       const actionFlow = composedFlow.actionFlow
 
-      const resolvedNextList = getTaskNextList(taskId)
+      const resolvedNextList = getTaskNextList(taskScopedNodeAggregationByTaskId, taskId)
       let nodeStatus: NodeInfo['status'] = pipelineStatus
       if (nodeStatus === 'success' && actionFlow.some(item => item.type === 'task' && item.status === 'failed')) {
         nodeStatus = 'failed'
@@ -1854,7 +1839,7 @@ export class LogParser {
     ): boolean => {
       if (taskId != null) {
         const waitFreezesStatus = resolveRuntimeStatusFromPhase(phase)
-        const aggregation = getOrCreateTaskNodeAggregation(taskId)
+        const aggregation = getOrCreateTaskNodeAggregation(taskScopedNodeAggregationByTaskId, taskId)
         upsertWaitFreezesState({
           runtimeStates: aggregation.waitFreezesRuntimeStates,
           details,
@@ -2254,7 +2239,7 @@ export class LogParser {
       timestamp: string
     ) => {
       if (subTaskId != null) {
-        resetTaskNodeAggregation(subTaskId)
+        resetTaskNodeAggregation(taskScopedNodeAggregationByTaskId, subTaskId)
         const nodeId = readNumberField(details, 'node_id')
         if (nodeId != null) {
           subTaskPipelineNodeStartTimes.set(scopedKey(subTaskId, nodeId), this.stringPool.intern(timestamp))
