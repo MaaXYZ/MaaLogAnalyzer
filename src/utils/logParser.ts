@@ -100,6 +100,12 @@ import {
   finalizeRecognitionNodeEvent as finalizeRecognitionNodeEventHelper,
   startRecognitionNodeEvent as startRecognitionNodeEventHelper,
 } from './logParser/recognitionNodeLifecycleHelpers'
+import {
+  handleRecognitionFinishEvent as handleRecognitionFinishEventHelper,
+  handleRecognitionNodeEvent as handleRecognitionNodeEventHelper,
+  handleRecognitionStartEvent as handleRecognitionStartEventHelper,
+  pushRecognitionAttemptIfMissing,
+} from './logParser/recognitionEventHandlers'
 import { settleCurrentNodeRuntimeStates as settleCurrentNodeRuntimeStatesHelper } from './logParser/runtimeSettlementHelpers'
 import {
   createScopedPipelineNodeFinalizeHandler,
@@ -524,9 +530,7 @@ export class LogParser {
       })
     }
     const pushCurrentTaskRecognitionAttempt = (attempt: RecognitionAttempt | undefined) => {
-      if (attempt && !currentTaskRecognitions.includes(attempt)) {
-        currentTaskRecognitions.push(attempt)
-      }
+      pushRecognitionAttemptIfMissing(currentTaskRecognitions, attempt)
     }
     const handleRecognitionStartEvent = (
       taskId: number,
@@ -535,10 +539,14 @@ export class LogParser {
       eventOrder: number,
       onAttempt?: (taskId: number, attempt: RecognitionAttempt) => void
     ) => {
-      const attempt = startRecognitionAttempt(taskId, details, timestamp, eventOrder)
-      if (attempt && onAttempt) {
-        onAttempt(taskId, attempt)
-      }
+      handleRecognitionStartEventHelper({
+        taskId,
+        details,
+        timestamp,
+        eventOrder,
+        startRecognitionAttempt,
+        onAttempt,
+      })
     }
     const handleRecognitionFinishEvent = (
       taskId: number,
@@ -548,10 +556,15 @@ export class LogParser {
       eventOrder: number,
       onAttempt?: (taskId: number, attempt: RecognitionAttempt) => void
     ) => {
-      const attempt = finishRecognitionAttempt(taskId, details, timestamp, status, eventOrder)
-      if (attempt && onAttempt) {
-        onAttempt(taskId, attempt)
-      }
+      handleRecognitionFinishEventHelper({
+        taskId,
+        details,
+        timestamp,
+        status,
+        eventOrder,
+        finishRecognitionAttempt,
+        onAttempt,
+      })
     }
     const applyTaskNextList = (taskId: number, list: unknown[]) => {
       const nextList = setTaskNextList(
@@ -1062,35 +1075,19 @@ export class LogParser {
       onAttempt?: (taskId: number, attempt: RecognitionAttempt) => void,
       skipRefreshWhenTaskMissingOnFinish?: boolean
     ): boolean => {
-      if (phase === 'Starting') {
-        if (taskId != null) {
-          handleRecognitionStartEvent(
-            taskId,
-            details,
-            timestamp,
-            eventOrder,
-            onAttempt
-          )
-        }
-        refreshActivePipelineNodePreview(timestamp)
-        return true
-      }
-      if (taskId == null) {
-        if (!skipRefreshWhenTaskMissingOnFinish) {
-          refreshActivePipelineNodePreview(timestamp)
-        }
-        return true
-      }
-      handleRecognitionFinishEvent(
+      return handleRecognitionNodeEventHelper({
         taskId,
+        phase,
         details,
         timestamp,
-        resolveTerminalCompletionStatus(phase),
         eventOrder,
-        onAttempt
-      )
-      refreshActivePipelineNodePreview(timestamp)
-      return true
+        onStart: handleRecognitionStartEvent,
+        onFinish: handleRecognitionFinishEvent,
+        resolveTerminalStatus: (nodePhase) => resolveTerminalCompletionStatus(nodePhase as TaskTerminalPhase),
+        refresh: refreshActivePipelineNodePreview,
+        onAttempt,
+        skipRefreshWhenTaskMissingOnFinish,
+      })
     }
     const createCurrentTaskActionRuntimeState = (
       actionId: number,
