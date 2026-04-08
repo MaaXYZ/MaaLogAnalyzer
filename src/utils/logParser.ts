@@ -122,13 +122,12 @@ import {
 } from './logParser/nextListEventHelpers'
 import { settleCurrentNodeRuntimeStates as settleCurrentNodeRuntimeStatesHelper } from './logParser/runtimeSettlementHelpers'
 import {
-  createScopedPipelineNodeFinalizeHandler,
-  createScopedSimpleNodeEventHandler,
   type ScopedActionEventHandler,
   type ScopedActionNodeEventHandler,
   type ScopedNodeDispatchConfig,
   type ScopedPipelineNodeStartingHandler,
 } from './logParser/scopedNodeDispatchHelpers'
+import { createNodeDispatchConfigs } from './logParser/nodeDispatchConfigFactory'
 import { routeSimpleNodeEvent } from './logParser/simpleNodeEventRouter'
 import {
   composeFinalPipelineNodeFlow,
@@ -1088,12 +1087,6 @@ export class LogParser {
         refresh: refreshActivePipelineNodePreview,
       })
     }
-    const dispatchActionLevelRecognition = (_taskId: number, recognition: RecognitionAttempt) => {
-      pushActionLevelRecognition(recognition)
-    }
-    const addCurrentTaskRecognition = (_taskId: number, recognition: RecognitionAttempt) => {
-      pushCurrentTaskRecognitionAttempt(recognition)
-    }
     const addSubTaskRecognition = (taskId: number, recognition: RecognitionAttempt) => {
       subTasks.addRecognition(taskId, recognition)
     }
@@ -1164,44 +1157,26 @@ export class LogParser {
         ),
       })
     }
-    const currentTaskNodeDispatchConfig: ScopedNodeDispatchConfig = {
-      handleSimpleNodeEvent: createScopedSimpleNodeEventHandler({
-        fixedTaskId: task.task_id,
-        handleSimpleNodeEvent,
-        handleActionEvent: handleCurrentTaskActionEvent,
-        handleActionNodeEvent: handleCurrentTaskActionNodeEvent,
-        onWaitFreezesUpdated: syncActiveNodeFocusAfterWaitFreezes,
-        onRecognitionAttempt: addCurrentTaskRecognition,
-      }),
-      dispatchPendingRecognition: dispatchActionLevelRecognition,
-      dispatchStandaloneRecognition: dispatchActionLevelRecognition,
-      handlePipelineNodeStarting: startCurrentPipelineNodeEvent,
-      handlePipelineNodeFinalize: createScopedPipelineNodeFinalizeHandler({
-        fixedTaskId: task.task_id,
-        rootTaskId: task.task_id,
-        finalizeTaskPipelineNodeEvent,
-        finalizeSubTaskPipelineNodeEvent,
-      }),
-      dispatchDetachedRecognition: pushActionLevelRecognition,
-    }
-    const subTaskNodeDispatchConfig: ScopedNodeDispatchConfig = {
-      handleSimpleNodeEvent: createScopedSimpleNodeEventHandler({
-        handleSimpleNodeEvent,
-        handleActionEvent: handleSubTaskActionEvent,
-        handleActionNodeEvent: handleSubTaskActionNodeLifecycleEvent,
-        onRecognitionAttempt: addSubTaskRecognition,
-        skipRecognitionRefreshWhenTaskMissingOnFinish: true,
-      }),
-      dispatchPendingRecognition: addSubTaskRecognition,
-      dispatchStandaloneRecognition: addSubTaskRecognitionNode,
-      handlePipelineNodeStarting: startSubTaskPipelineNodeEvent,
-      handlePipelineNodeFinalize: createScopedPipelineNodeFinalizeHandler({
-        rootTaskId: task.task_id,
-        finalizeTaskPipelineNodeEvent,
-        finalizeSubTaskPipelineNodeEvent,
-      }),
-      excludeTaskIdFromParentRecognitionLookup: true,
-    }
+    const {
+      currentTaskNodeDispatchConfig,
+      subTaskNodeDispatchConfig,
+    } = createNodeDispatchConfigs({
+      rootTaskId: task.task_id,
+      handleSimpleNodeEvent,
+      handleCurrentTaskActionEvent,
+      handleCurrentTaskActionNodeEvent,
+      syncActiveNodeFocusAfterWaitFreezes,
+      handleSubTaskActionEvent,
+      handleSubTaskActionNodeLifecycleEvent,
+      startCurrentPipelineNodeEvent,
+      startSubTaskPipelineNodeEvent,
+      finalizeTaskPipelineNodeEvent,
+      finalizeSubTaskPipelineNodeEvent,
+      pushActionLevelRecognition,
+      pushCurrentTaskRecognitionAttempt,
+      addSubTaskRecognition,
+      addSubTaskRecognitionNode,
+    })
     const taskLifecycleMetaContext: TaskLifecycleMetaEventContext = {
       rootTaskId: task.task_id,
       peekActiveTask: () => taskStackTracker.peek(),
