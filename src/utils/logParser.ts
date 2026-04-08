@@ -3,7 +3,6 @@ import type {
   EventNotification,
   TaskInfo,
   NodeInfo,
-  NextListItem,
   RecognitionAttempt,
   NestedActionGroup,
   NestedActionNode,
@@ -12,20 +11,11 @@ import type {
 import { StringPool } from './stringPool'
 import { buildActionFlowItems, buildRecognitionFlowItems } from './nodeFlow'
 import {
-  decodeCompactActionDetails,
-  decodeCompactNodeDetails,
-  decodeEventIdentityIds,
-  parseNumericArray,
-  parseRoi,
-  parseWaitFreezesParam,
   readNumberField,
-  readStringField,
 } from './logEventDecoders'
 import {
-  isTaskTerminalPhase,
   parseMaaMessageMeta,
   resolveTaskLifecyclePhase,
-  resolveTaskTerminalStatus,
   resolveTerminalCompletionStatus,
   toKnownMaaPhase,
   type KnownMaaPhase,
@@ -84,6 +74,20 @@ import {
   type TaskScopedNodeAggregation,
 } from './logParser/taskScopedAggregationHelpers'
 import { createTaskStackTracker } from './logParser/taskStackHelpers'
+import {
+  findImageByTimestampSuffix,
+  findWaitFreezesImages,
+} from './logParser/imageLookupHelpers'
+import { buildTasksFromEvents } from './logParser/taskBuilder'
+import {
+  normalizeRecoId,
+  parseRecognitionAnchorName as parseRecognitionAnchorNameHelper,
+  resolveEventFocus,
+  resolveRecognitionNodeRecoId,
+  scopedTaskNodeKey,
+  toNextListItems as toNextListItemsHelper,
+  withActionTimestamps as withActionTimestampsHelper,
+} from './logParser/nodeEventValueHelpers'
 import { toTimestampMs } from './timestamp'
 
 export interface ParseProgress {
@@ -335,223 +339,16 @@ export class LogParser {
     })
   }
 
-  private settleRunningFlowItems(
-    items: UnifiedFlowItem[] | undefined,
-    fallbackStatus: 'success' | 'failed'
-  ): void {
-    if (!items || items.length === 0) return
-    for (const item of items) {
-      if (item.status === 'running') {
-        item.status = fallbackStatus
-      }
-      if (item.children && item.children.length > 0) {
-        this.settleRunningFlowItems(item.children, fallbackStatus)
-      }
-    }
-  }
-
-  private settleCompletedTaskNodes(task: TaskInfo): void {
-    if (task.status === 'running') return
-    const fallbackStatus: 'success' | 'failed' = task.status === 'succeeded' ? 'success' : 'failed'
-    const fallbackTimestamp = task.end_time || task.start_time
-    for (const node of task.nodes) {
-      if (node.status === 'running') {
-        node.status = fallbackStatus
-        node.end_ts = node.end_ts || fallbackTimestamp
-        if (node.action_details) {
-          node.action_details = markRaw({
-            ...node.action_details,
-            success: fallbackStatus === 'success',
-            end_ts: node.action_details.end_ts || node.end_ts,
-          })
-        }
-      }
-      this.settleRunningFlowItems(node.node_flow, fallbackStatus)
-    }
-  }
-
-  private normalizeTaskEventListItem(raw: unknown): { name: string; anchor: boolean; jump_back: boolean } | null {
-    if (!raw || typeof raw !== 'object') return null
-    const item = raw as Record<string, unknown>
-    const name = typeof item.name === 'string' ? this.stringPool.intern(item.name) : ''
-    if (!name) return null
-    return {
-      name,
-      anchor: item.anchor === true,
-      jump_back: item.jump_back === true,
-    }
-  }
-
-  private compactTaskEventDetails(message: string, details: Record<string, any>): Record<string, any> {
-    const compact: Record<string, any> = {}
-
-    const ids = decodeEventIdentityIds(details)
-    if (ids.task_id != null) compact.task_id = ids.task_id
-    if (ids.node_id != null) compact.node_id = ids.node_id
-    if (ids.reco_id != null) compact.reco_id = ids.reco_id
-    if (ids.action_id != null) compact.action_id = ids.action_id
-
-    const name = readStringField(details, 'name')
-    if (name != null) compact.name = this.stringPool.intern(name)
-    const entry = readStringField(details, 'entry')
-    if (entry != null) compact.entry = this.stringPool.intern(entry)
-    const status = readStringField(details, 'status')
-    if (status != null) compact.status = this.stringPool.intern(status)
-    const error = readStringField(details, 'error')
-    if (error != null) compact.error = this.stringPool.intern(error)
-    const reason = readStringField(details, 'reason')
-    if (reason != null) compact.reason = this.stringPool.intern(reason)
-    const uuid = readStringField(details, 'uuid')
-    if (uuid != null) compact.uuid = this.stringPool.intern(uuid)
-    const hash = readStringField(details, 'hash')
-    if (hash != null) compact.hash = this.stringPool.intern(hash)
-    const action = readStringField(details, 'action')
-    if (action != null) compact.action = this.stringPool.intern(action)
-    const anchor = readStringField(details, 'anchor')
-    if (anchor != null) compact.anchor = this.stringPool.intern(anchor)
-
-    if (message.startsWith('Node.WaitFreezes.')) {
-      if (ids.wf_id != null) compact.wf_id = ids.wf_id
-      const phase = readStringField(details, 'phase')
-      if (phase != null) compact.phase = this.stringPool.intern(phase)
-      const elapsed = readNumberField(details, 'elapsed')
-      if (elapsed != null) compact.elapsed = elapsed
-      if (Object.prototype.hasOwnProperty.call(details, 'focus')) {
-        const rawFocus = details.focus
-        compact.focus = (rawFocus != null && typeof rawFocus === 'object')
-          ? markRaw(rawFocus)
-          : rawFocus
-      }
-
-      const recoIds = parseNumericArray(details.reco_ids)
-      if (recoIds) compact.reco_ids = markRaw(recoIds)
-
-      const roi = parseRoi(details.roi)
-      if (roi) compact.roi = markRaw(roi)
-
-      const param = parseWaitFreezesParam(details.param)
-      if (param) compact.param = markRaw(param)
-    }
-
-    if (Array.isArray(details.list)) {
-      const list = details.list
-        .map((item: unknown) => this.normalizeTaskEventListItem(item))
-        .filter((item): item is { name: string; anchor: boolean; jump_back: boolean } => item != null)
-      if (list.length > 0) {
-        compact.list = markRaw(list)
-      }
-    }
-
-    if (details.action_details && typeof details.action_details === 'object') {
-      const parsed = decodeCompactActionDetails(details.action_details)
-      if (parsed) {
-        const actionDetails: Record<string, unknown> = {}
-        if (parsed.action_id != null) actionDetails.action_id = parsed.action_id
-        if (parsed.action != null) actionDetails.action = this.stringPool.intern(parsed.action)
-        if (parsed.name != null) actionDetails.name = this.stringPool.intern(parsed.name)
-        if (parsed.success != null) actionDetails.success = parsed.success
-        compact.action_details = markRaw(actionDetails)
-      }
-    }
-
-    if (details.node_details && typeof details.node_details === 'object') {
-      const parsed = decodeCompactNodeDetails(details.node_details)
-      if (parsed) {
-        const nodeDetails: Record<string, unknown> = {}
-        if (parsed.action_id != null) nodeDetails.action_id = parsed.action_id
-        if (parsed.node_id != null) nodeDetails.node_id = parsed.node_id
-        compact.node_details = markRaw(nodeDetails)
-      }
-    }
-
-    return markRaw(compact)
-  }
-
   /**
    * 获取所有任务
    */
   private buildTasks(consume: boolean): TaskInfo[] {
-    const tasks: TaskInfo[] = []
-
-    for (let i = 0; i < this.events.length; i++) {
-      const event = this.events[i]
-      const { message, details } = event
-      const meta = this.getCachedMaaMessageMeta(message)
-      const taskLifecyclePhase = resolveTaskLifecyclePhase(meta)
-      const lifecycleDetails = resolveTaskLifecycleEventDetails(details)
-
-      if (taskLifecyclePhase === 'Starting') {
-        const taskId = lifecycleDetails.task_id
-        const uuid = lifecycleDetails.uuid
-
-        const isDuplicate = tasks.some(t =>
-          t.uuid === uuid && t.task_id === taskId && !t.end_time
-        )
-
-        if (taskId && !isDuplicate) {
-          tasks.push({
-            task_id: taskId,
-            entry: this.stringPool.intern(lifecycleDetails.entry),
-            hash: this.stringPool.intern(lifecycleDetails.hash),
-            uuid: this.stringPool.intern(uuid),
-            start_time: this.stringPool.intern(event.timestamp),
-            status: 'running',
-            nodes: [],
-            events: [],
-            duration: undefined,
-            _startEventIndex: i
-          })
-        }
-      } else if (taskLifecyclePhase && isTaskTerminalPhase(taskLifecyclePhase)) {
-        const taskId = lifecycleDetails.task_id
-        const uuid = lifecycleDetails.uuid
-
-        let matchedTask = null
-        if (uuid && uuid.trim() !== '') {
-          matchedTask = tasks.find(t => t.uuid === uuid && !t.end_time)
-        } else {
-          matchedTask = tasks.find(t => t.task_id === taskId && !t.end_time)
-        }
-
-        if (matchedTask) {
-          matchedTask.status = resolveTaskTerminalStatus(taskLifecyclePhase)
-          matchedTask.end_time = this.stringPool.intern(event.timestamp)
-          matchedTask._endEventIndex = i
-
-          if (matchedTask.start_time && matchedTask.end_time) {
-            const start = new Date(matchedTask.start_time).getTime()
-            const end = new Date(matchedTask.end_time).getTime()
-            matchedTask.duration = end - start
-          }
-        }
-      }
-    }
-
-    for (const task of tasks) {
-      task.nodes = this.getTaskNodes(task)
-      this.settleCompletedTaskNodes(task)
-      const taskStartIndex = task._startEventIndex ?? -1
-      const taskEndIndex = task._endEventIndex ?? this.events.length - 1
-      if (taskStartIndex >= 0) {
-        task.events = this.events
-          .slice(taskStartIndex, taskEndIndex + 1)
-          .filter(event => resolveEventTaskId(event.details) === task.task_id)
-          .map((event) => ({
-            timestamp: event.timestamp,
-            level: event.level,
-            message: event.message,
-            details: this.compactTaskEventDetails(event.message, event.details ?? {}),
-            _lineNumber: event._lineNumber,
-          }))
-      }
-
-      if (task.status === 'running' && task.nodes.length > 0) {
-        const lastNode = task.nodes[task.nodes.length - 1]
-        const start = new Date(task.start_time).getTime()
-        const end = new Date(lastNode.end_ts || lastNode.ts).getTime()
-        task.duration = end - start
-      }
-    }
+    const tasks = buildTasksFromEvents({
+      events: this.events,
+      stringPool: this.stringPool,
+      getCachedMaaMessageMeta: (message) => this.getCachedMaaMessageMeta(message),
+      getTaskNodes: (task) => this.getTaskNodes(task),
+    })
 
     if (consume) {
       this.events = []
@@ -564,7 +361,7 @@ export class LogParser {
       this.stringPool.clear()
     }
 
-    return tasks.filter(task => task.entry !== 'MaaTaskerPostStop')
+    return tasks
   }
 
   getTasksSnapshot(): TaskInfo[] {
@@ -677,45 +474,15 @@ export class LogParser {
       sortByParseOrderThenRecoId,
     } = createRecognitionAttemptHelpers(recognitionOrderMeta)
 
-    const scopedKey = (taskId: number, id: number): string => `${taskId}:${id}`
-    const withActionTimestamps = (
+    const scopedKey = scopedTaskNodeKey
+    const withTimestamps = (
       actionDetails: any,
       startTimestamp?: string,
       endTimestamp?: string,
       fallbackEndTimestamp?: string
-    ) => {
-      if (!actionDetails) return undefined
-      const resolvedEnd = endTimestamp ?? actionDetails.end_ts ?? fallbackEndTimestamp
-      const resolvedStart = startTimestamp ?? actionDetails.ts ?? resolvedEnd
-      return markRaw({
-        ...actionDetails,
-        ...(resolvedStart ? { ts: this.stringPool.intern(resolvedStart) } : {}),
-        ...(resolvedEnd ? { end_ts: this.stringPool.intern(resolvedEnd) } : {})
-      })
-    }
-    const toNextListItems = (list: unknown[]): NextListItem[] => {
-      return list.map((rawItem: unknown) => {
-        const item = rawItem && typeof rawItem === 'object'
-          ? rawItem as Partial<NextListItem>
-          : {}
-        return {
-          name: this.stringPool.intern(item.name || ''),
-          anchor: item.anchor || false,
-          jump_back: item.jump_back || false
-        }
-      })
-    }
-    const parseRecognitionAnchorName = (details: Record<string, any>): string | undefined => {
-      if (typeof details.anchor !== 'string') return undefined
-      const trimmed = details.anchor.trim()
-      if (!trimmed) return undefined
-      return this.stringPool.intern(trimmed)
-    }
-    const resolveEventFocus = (details: Record<string, any>, fallback?: NodeInfo['focus']) => {
-      if (!Object.prototype.hasOwnProperty.call(details, 'focus')) return fallback
-      if (details.focus == null) return fallback
-      return markRaw(details.focus)
-    }
+    ) => withActionTimestampsHelper(actionDetails, this.stringPool, startTimestamp, endTimestamp, fallbackEndTimestamp)
+    const toListItems = (list: unknown[]) => toNextListItemsHelper(list, this.stringPool)
+    const parseAnchorName = (details: Record<string, any>) => parseRecognitionAnchorNameHelper(details, this.stringPool)
     const removeFromActiveRecognitionStack = (taskId: number, recoId: number) => {
       for (let i = activeRecognitionStack.length - 1; i >= 0; i--) {
         const frame = activeRecognitionStack[i]
@@ -724,17 +491,6 @@ export class LogParser {
           return
         }
       }
-    }
-    const normalizeRecoId = (value: unknown): number | null => {
-      const recoId = typeof value === 'number' ? value : Number(value)
-      return Number.isFinite(recoId) ? recoId : null
-    }
-    const resolveRecognitionNodeRecoId = (details: Record<string, any>): number | null => {
-      return normalizeRecoId(
-        details.reco_details?.reco_id ??
-        details.reco_id ??
-        details.node_details?.reco_id
-      )
     }
     const startRecognitionAttempt = (
       taskId: number,
@@ -748,7 +504,7 @@ export class LogParser {
       if (finishedRecognitionKeys.has(key)) return undefined
       const existing = activeRecognitionAttempts.get(key)
       if (existing) {
-        const parsedAnchorName = parseRecognitionAnchorName(details)
+        const parsedAnchorName = parseAnchorName(details)
         if (parsedAnchorName && !existing.anchor_name) {
           existing.anchor_name = parsedAnchorName
         }
@@ -756,7 +512,7 @@ export class LogParser {
       }
 
       const startTimestamp = this.stringPool.intern(timestamp)
-      const parsedAnchorName = parseRecognitionAnchorName(details)
+      const parsedAnchorName = parseAnchorName(details)
       const attempt: RecognitionAttempt = {
         reco_id: recoId,
         name: this.stringPool.intern(details.name || ''),
@@ -797,7 +553,7 @@ export class LogParser {
       attempt.ts = attempt.ts || endTimestamp
       attempt.end_ts = endTimestamp
       if (!attempt.anchor_name) {
-        const parsedAnchorName = parseRecognitionAnchorName(details)
+        const parsedAnchorName = parseAnchorName(details)
         if (parsedAnchorName) {
           attempt.anchor_name = parsedAnchorName
         }
@@ -899,7 +655,7 @@ export class LogParser {
       const nextList = setTaskNextList(
         taskScopedNodeAggregationByTaskId,
         taskId,
-        toNextListItems(list)
+        toListItems(list)
       )
       if (taskId === task.task_id) {
         const activeNode = getActivePipelineNode()
@@ -1247,7 +1003,7 @@ export class LogParser {
           ts: startTimestamp,
           end_ts: startTimestamp,
           status: 'running',
-          action_details: withActionTimestamps(details.action_details, startTimestamp, undefined, startTimestamp),
+          action_details: withTimestamps(details.action_details, startTimestamp, undefined, startTimestamp),
         })
       }
     }
@@ -1276,7 +1032,7 @@ export class LogParser {
       resolvedActionNode.ts = resolvedActionNode.ts || actionNodeStartTimestamp || nowTimestamp
       resolvedActionNode.end_ts = actionEndTimestamp || nowTimestamp
       resolvedActionNode.status = status
-      resolvedActionNode.action_details = withActionTimestamps(
+      resolvedActionNode.action_details = withTimestamps(
         details.action_details,
         actionStartTimestamp || actionNodeStartTimestamp || resolvedActionNode.ts,
         actionEndTimestamp,
@@ -1516,7 +1272,7 @@ export class LogParser {
         details.reco_details?.name || details.action_details?.name || details.name || ''
       )
       const resolvedNextList = getTaskNextList(taskScopedNodeAggregationByTaskId, subTaskId)
-      const resolvedActionDetails = withActionTimestamps(
+      const resolvedActionDetails = withTimestamps(
         mergedActionDetails,
         mergedActionStartTimestamp,
         mergedActionEndTimestamp,
@@ -1731,7 +1487,7 @@ export class LogParser {
         scopedAttachResult.nestedActionGroups
       )
       const fallbackRecoDetails = resolveFallbackRecoDetails(details, scopedAttachResult.topLevelAttempts)
-      const mergedActionDetails = withActionTimestamps(details.action_details, actionStartTimestamp, actionEndTimestamp, endTimestamp)
+      const mergedActionDetails = withTimestamps(details.action_details, actionStartTimestamp, actionEndTimestamp, endTimestamp)
       const resolvedNodeName = this.stringPool.intern(nodeName)
       const composedFlow = composeFinalPipelineNodeFlow({
         taskId,
@@ -1821,7 +1577,7 @@ export class LogParser {
           activeNodeName: taskId === task.task_id ? getActivePipelineNode()?.name : undefined,
           intern: (value) => this.stringPool.intern(value),
           resolveEventFocus,
-          findWaitFreezesImages: (ts, actionName) => this.findWaitFreezesImages(ts, actionName),
+          findWaitFreezesImages: (ts, actionName) => findWaitFreezesImages(this.waitFreezesImages, ts, actionName),
         })
         onUpdated?.(details)
       }
@@ -1970,7 +1726,7 @@ export class LogParser {
           ts: startTimestamp,
           end_ts: endTimestamp,
           status: resolveRuntimeStatusFromPhase(phase),
-          action_details: withActionTimestamps(details.action_details, startTimestamp, endTimestamp, endTimestamp)
+          action_details: withTimestamps(details.action_details, startTimestamp, endTimestamp, endTimestamp)
         })
       }
       refreshActivePipelineNodePreview(timestamp)
@@ -2189,7 +1945,7 @@ export class LogParser {
           status: 'running',
           task_id: task.task_id,
           reco_details: details.reco_details ? markRaw(details.reco_details) : undefined,
-          action_details: withActionTimestamps(details.action_details, undefined, undefined, startTimestamp),
+          action_details: withTimestamps(details.action_details, undefined, undefined, startTimestamp),
           focus: resolveEventFocus(details),
           next_list: [],
           node_details: details.node_details ? markRaw(details.node_details) : undefined,
@@ -2356,14 +2112,14 @@ export class LogParser {
    * 查找识别尝试的截图（匹配到秒级别）
    */
   findRecognitionImage(timestamp: string, nodeName: string): string | undefined {
-    return this.findImageByTimestampSuffix(this.errorImages, timestamp, `_${nodeName}`)
+    return findImageByTimestampSuffix(this.errorImages, timestamp, `_${nodeName}`)
   }
 
   /**
    * 查找错误截图（匹配到秒级别 + 节点名）
    */
   findErrorImage(timestamp: string, nodeName: string): string | undefined {
-    return this.findImageByTimestampSuffix(this.errorImages, timestamp, `_${nodeName}`)
+    return findImageByTimestampSuffix(this.errorImages, timestamp, `_${nodeName}`)
   }
 
   findErrorImageByNames(timestamp: string, candidateNames: Array<string | null | undefined>): string | undefined {
@@ -2382,63 +2138,7 @@ export class LogParser {
    * key 格式: YYYY.MM.DD-HH.MM.SS.ms_NodeName_RecoId
    */
   findVisionImage(timestamp: string, nodeName: string, recoId: number): string | undefined {
-    return this.findImageByTimestampSuffix(this.visionImages, timestamp, `_${nodeName}_${recoId}`)
-  }
-
-  private toImageSecondsKey(timestamp: string): string {
-    return timestamp.replace(
-      /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\..*/,
-      '$1.$2.$3-$4.$5.$6'
-    )
-  }
-
-  private findImageByTimestampSuffix(
-    source: Map<string, string>,
-    timestamp: string,
-    suffix: string
-  ): string | undefined {
-    if (source.size === 0) return undefined
-    const secondsKey = this.toImageSecondsKey(timestamp)
-    for (const [key, path] of source.entries()) {
-      if (key.includes(`${secondsKey}.`) && key.endsWith(suffix)) {
-        return path
-      }
-    }
-    return undefined
-  }
-
-  /**
-   * 查找 action 的 wait_freezes 调试截图（按节点名匹配，返回所有匹配的图片）
-   * key 格式: YYYY.MM.DD-HH.MM.SS.ms_NodeName_wait_freezes
-   * 匹配逻辑：节点名一致，且时间戳在节点完成前（同分钟或前几分钟）
-   */
-  private findWaitFreezesImages(nodeTimestamp: string, actionName: string): string[] | undefined {
-    if (this.waitFreezesImages.size === 0) return undefined
-
-    const suffix = `_${actionName}_wait_freezes`
-    const results: string[] = []
-
-    // 节点完成时间（毫秒）
-    const nodeTime = new Date(nodeTimestamp).getTime()
-    if (isNaN(nodeTime)) return undefined
-
-    for (const [key, path] of this.waitFreezesImages.entries()) {
-      if (!key.endsWith(suffix)) continue
-
-      // 从 key 中提取时间戳: 2026.03.11-06.22.54.365_NodeName_wait_freezes
-      // -> 2026-03-11 06:22:54.365
-      const tsMatch = key.match(/^(\d{4})\.(\d{2})\.(\d{2})-(\d{2})\.(\d{2})\.(\d{2})\.(\d{1,3})_/)
-      if (!tsMatch) continue
-      const [, y, mo, d, h, mi, s, ms] = tsMatch
-      const imgTime = new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}.${ms.padEnd(3, '0')}`).getTime()
-
-      // wait_freezes 截图应该在节点完成前、且不超过60秒
-      if (!isNaN(imgTime) && imgTime <= nodeTime && nodeTime - imgTime < 60000) {
-        results.push(path)
-      }
-    }
-
-    return results.length > 0 ? results : undefined
+    return findImageByTimestampSuffix(this.visionImages, timestamp, `_${nodeName}_${recoId}`)
   }
 
   /**
