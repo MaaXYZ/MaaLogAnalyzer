@@ -6,6 +6,7 @@ import type {
   UnifiedFlowGroup,
   UnifiedFlowItem,
 } from '../types'
+import { toTimestampMs } from './timestamp'
 
 const flowTitleMap: Record<UnifiedFlowItem['type'], UnifiedFlowGroup['title']> = {
   pipeline_node: 'PipelineNode',
@@ -15,13 +16,6 @@ const flowTitleMap: Record<UnifiedFlowItem['type'], UnifiedFlowGroup['title']> =
   action: 'Action',
   action_node: 'ActionNode',
   task: 'Task',
-}
-
-const toTimestampMs = (timestamp?: string): number => {
-  if (!timestamp) return Number.POSITIVE_INFINITY
-  const normalized = timestamp.includes(' ') ? timestamp.replace(' ', 'T') : timestamp
-  const parsed = Date.parse(normalized)
-  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY
 }
 
 const flowItemTimestampMs = (item: UnifiedFlowItem): number => {

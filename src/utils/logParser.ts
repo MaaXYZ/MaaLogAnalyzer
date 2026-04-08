@@ -84,6 +84,7 @@ import {
   type TaskScopedNodeAggregation,
 } from './logParserTaskScopedAggregationHelpers'
 import { createTaskStackTracker } from './logParserTaskStackHelpers'
+import { toTimestampMs } from './timestamp'
 
 export interface ParseProgress {
   current: number
@@ -677,12 +678,6 @@ export class LogParser {
     } = createRecognitionAttemptHelpers(recognitionOrderMeta)
 
     const scopedKey = (taskId: number, id: number): string => `${taskId}:${id}`
-    const toTimestampMs = (value?: string): number => {
-      if (!value) return Number.POSITIVE_INFINITY
-      const normalized = value.includes(' ') ? value.replace(' ', 'T') : value
-      const parsed = Date.parse(normalized)
-      return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY
-    }
     const withActionTimestamps = (
       actionDetails: any,
       startTimestamp?: string,
