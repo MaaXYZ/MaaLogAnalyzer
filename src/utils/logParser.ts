@@ -95,6 +95,7 @@ import {
   clearSubTaskRuntimeStateAfterPipelineFinalize,
   consumeMatchedSubTaskAction,
 } from './logParser/subTaskRuntimeCleanupHelpers'
+import { finalizeSubTaskPipelineNodeEvent as finalizeSubTaskPipelineNodeEventHelper } from './logParser/subTaskPipelineFinalizeHelpers'
 import { resetCurrentNodeAggregationState } from './logParser/nodeAggregationResetHelpers'
 import {
   startCurrentPipelineNodeEvent as startCurrentPipelineNodeEventHelper,
@@ -766,76 +767,26 @@ export class LogParser {
       phase: TaskTerminalPhase,
       timestamp: string
     ) => {
-      const subTaskPipelineStatus = resolveTerminalCompletionStatus(phase)
-      const nodeId = readNumberField(details, 'node_id')
-      const resolvedNodeId = nodeId ?? syntheticSubTaskPipelineNodeId--
-      const endTimestamp = this.stringPool.intern(timestamp)
-      const startTimestamp = nodeId != null
-        ? (subTaskPipelineNodeStartTimes.get(scopedKey(subTaskId, nodeId)) || endTimestamp)
-        : endTimestamp
-      const actionId = resolveActionDetailsActionId(details)
-      const actionKey = resolveSubTaskActionKey(subTaskId, actionId)
-      const actionStartTimestamp = actionKey ? subTaskActionStartTimes.get(actionKey) : undefined
-      const actionEndTimestamp = actionKey ? subTaskActionEndTimes.get(actionKey) : undefined
-      const matchedTaskAction = consumeMatchedSubTaskAction(subTasks, subTaskId, actionId)
-      const mergedActionDetails = details.action_details || matchedTaskAction?.action_details
-      const mergedActionStartTimestamp = actionStartTimestamp || matchedTaskAction?.ts
-      const mergedActionEndTimestamp = actionEndTimestamp || matchedTaskAction?.end_ts
-      const taskRecognitions = dedupeRecognitionAttempts(subTasks.consumeRecognitions(subTaskId))
-      const recognitionNodes = dedupeRecognitionAttempts(subTasks.consumeRecognitionNodes(subTaskId))
-      const attachedRecognitions = attachRecognitionNodesToAttempts(taskRecognitions, recognitionNodes)
-      const fallbackRecoDetails = resolveFallbackRecoDetails(details, attachedRecognitions.attempts)
-      const resolvedNodeName = this.stringPool.intern(
-        details.reco_details?.name || details.action_details?.name || details.name || ''
-      )
-      const resolvedNextList = getTaskNextList(taskScopedNodeAggregationByTaskId, subTaskId)
-      const resolvedActionDetails = withTimestamps(
-        mergedActionDetails,
-        mergedActionStartTimestamp,
-        mergedActionEndTimestamp,
-        endTimestamp
-      )
-      const attachedTopLevelRecognitions = attachedRecognitions.attempts.length > 0
-        ? attachedRecognitions.attempts
-        : attachedRecognitions.orphans
-      const attachedNodeRecognitions = attachedRecognitions.attempts.length > 0
-        ? attachedRecognitions.attempts
-        : (attachedRecognitions.orphans.length > 0 ? attachedRecognitions.orphans : undefined)
-      const composedSubTaskFlow = composeFinalPipelineNodeFlow({
-        taskScopedNodeAggregationByTaskId,
-        taskId: subTaskId,
-        topLevelRecognitions: attachedTopLevelRecognitions,
-        actionLevelRecognitions: [],
-        nestedActionGroups: [],
-        actionDetails: resolvedActionDetails,
-        fallbackStatus: subTaskPipelineStatus,
-        eventTimestamp: timestamp,
-        details,
-        nodeName: resolvedNodeName,
-        actionId,
-        nodeId,
-        fallbackTimestamp: endTimestamp,
-        findErrorImageByNames: (eventTs, names) => this.findErrorImageByNames(eventTs, names),
-      })
-      const resolvedNodeFlow = composedSubTaskFlow.nodeFlow.length > 0
-        ? composedSubTaskFlow.nodeFlow
-        : undefined
-      subTasks.addPipelineNode(subTaskId, {
-        node_id: resolvedNodeId,
-        name: resolvedNodeName,
-        ts: startTimestamp,
-        end_ts: endTimestamp,
-        status: subTaskPipelineStatus,
-        reco_details: fallbackRecoDetails ? markRaw(fallbackRecoDetails) : undefined,
-        action_details: resolvedActionDetails,
-        next_list: resolvedNextList,
-        node_flow: resolvedNodeFlow,
-        recognitions: attachedNodeRecognitions
-      })
-      clearSubTaskRuntimeStateAfterPipelineFinalize({
+      finalizeSubTaskPipelineNodeEventHelper({
         subTaskId,
-        nodeId,
-        actionKey,
+        details,
+        phase,
+        timestamp,
+        allocateSyntheticNodeId: () => syntheticSubTaskPipelineNodeId--,
+        readNumberField,
+        resolveTerminalCompletionStatus,
+        resolveActionDetailsActionId,
+        resolveSubTaskActionKey,
+        consumeMatchedSubTaskAction,
+        subTasks,
+        dedupeRecognitionAttempts,
+        attachRecognitionNodesToAttempts,
+        resolveFallbackRecoDetails,
+        withTimestamps,
+        composeFinalPipelineNodeFlow,
+        findErrorImageByNames: (eventTs, names) => this.findErrorImageByNames(eventTs, names),
+        getTaskNextList,
+        taskScopedNodeAggregationByTaskId,
         scopedKey,
         subTaskPipelineNodeStartTimes,
         subTaskActionStartTimes,
@@ -844,7 +795,8 @@ export class LogParser {
         subTaskActionEndOrders,
         activeSubTaskActionNodes,
         activeRecognitionNodeAttempts,
-        taskScopedNodeAggregationByTaskId,
+        clearSubTaskRuntimeStateAfterPipelineFinalize,
+        intern: (value) => this.stringPool.intern(value),
       })
       refreshActivePipelineNodePreview(timestamp)
     }
