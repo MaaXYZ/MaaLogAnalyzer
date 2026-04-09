@@ -1,5 +1,14 @@
 import type { NestedActionGroup, NestedActionNode } from '../../types'
 
+const resolveActionEndMsForNesting = (
+  node: NestedActionNode,
+  toTimestampMs: (value?: string) => number
+): number => {
+  // Running parent actions should keep accepting later child task starts.
+  if (node.status === 'running') return Number.POSITIVE_INFINITY
+  return toTimestampMs(node.action_details?.end_ts || node.end_ts || node.ts)
+}
+
 const pickParentActionNodeForSubTask = (
   parentGroup: NestedActionGroup,
   childGroup: NestedActionGroup,
@@ -17,7 +26,7 @@ const pickParentActionNodeForSubTask = (
 
   for (const node of parentGroup.nested_actions ?? []) {
     const startMs = toTimestampMs(node.action_details?.ts || node.ts)
-    const endMs = toTimestampMs(node.action_details?.end_ts || node.end_ts || node.ts)
+    const endMs = resolveActionEndMsForNesting(node, toTimestampMs)
     const inRange = Number.isFinite(childStartMs) &&
       Number.isFinite(startMs) &&
       childStartMs >= startMs &&
@@ -76,7 +85,7 @@ const pickParentActionNodeByTimeline = (
   const scanGroup = (group: NestedActionGroup) => {
     for (const node of group.nested_actions ?? []) {
       const actionStartMs = toTimestampMs(node.action_details?.ts || node.ts)
-      const actionEndMs = toTimestampMs(node.action_details?.end_ts || node.end_ts || node.ts)
+      const actionEndMs = resolveActionEndMsForNesting(node, toTimestampMs)
       const contains =
         Number.isFinite(actionStartMs) &&
         childStartMs >= actionStartMs &&
