@@ -50,6 +50,28 @@ export interface BuildFlowchartOptions {
   ignoreUnexecutedNodes?: boolean
 }
 
+const hasFailedAction = (node: NodeInfo): boolean => {
+  if (node.action_details && node.action_details.success === false) return true
+  return (node.node_flow || []).some((item) => item.type === 'action' && item.status === 'failed')
+}
+
+const resolveFlowNodeStatus = (
+  infos: NodeInfo[] | undefined,
+): FlowNodeData['status'] => {
+  if (!infos || infos.length === 0) return 'not-executed'
+
+  // Prefer "failed" whenever any execution contains a failed action.
+  if (infos.some((info) => info.status === 'failed' || hasFailedAction(info))) {
+    return 'failed'
+  }
+
+  if (infos.some((info) => info.status === 'running')) {
+    return 'running'
+  }
+
+  return 'success'
+}
+
 export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchartOptions = {}): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const orderedNodes = sortNodesByGlobalExecutionOrder(task.nodes)
   const orderedExecutions = orderedNodes.map((node) => ({
@@ -87,15 +109,7 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
   const flowNodes: Node[] = []
   allNodeNames.forEach(name => {
     const executed = executedNodeMap.get(name)
-    let status: FlowNodeData['status'] = 'not-executed'
-    if (executed) {
-      const lastInfo = executed.infos[executed.infos.length - 1]
-      status = lastInfo.status === 'failed'
-        ? 'failed'
-        : lastInfo.status === 'running'
-          ? 'running'
-          : 'success'
-    }
+    const status = resolveFlowNodeStatus(executed?.infos)
 
     flowNodes.push({
       id: name,

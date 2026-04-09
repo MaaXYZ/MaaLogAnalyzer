@@ -258,4 +258,62 @@ describe('buildFlowchartData execution order', () => {
     expect(edge?.data.executed).toBe(true)
     expect(edge?.data.transitionType).toBe('on-error')
   })
+
+  it('marks JumpBack hit node as failed when action fails in any execution', async () => {
+    const task = makeTask([
+      {
+        ...makeNode({
+          nodeId: 61,
+          name: 'ParentNode',
+          ts: '2026-04-07 10:00:40.100',
+          status: 'success',
+          nextList: [{ name: 'JumpTarget', anchor: false, jump_back: true }],
+        }),
+        node_details: {
+          action_id: 1001,
+          completed: true,
+          name: 'JumpTarget',
+          node_id: 61,
+          reco_id: 2001,
+        },
+        action_details: {
+          action_id: 1001,
+          action: 'Click',
+          box: [0, 0, 1, 1],
+          detail: {},
+          name: 'JumpTarget',
+          success: false,
+        },
+      },
+      {
+        ...makeNode({
+          nodeId: 62,
+          name: 'ParentNode',
+          ts: '2026-04-07 10:00:40.300',
+          status: 'success',
+          nextList: [{ name: 'JumpTarget', anchor: false, jump_back: true }],
+        }),
+        node_details: {
+          action_id: 1002,
+          completed: true,
+          name: 'JumpTarget',
+          node_id: 62,
+          reco_id: 2002,
+        },
+        action_details: {
+          action_id: 1002,
+          action: 'Click',
+          box: [0, 0, 1, 1],
+          detail: {},
+          name: 'JumpTarget',
+          success: true,
+        },
+      },
+    ])
+
+    const { nodes } = await buildFlowchartData(task)
+    const jumpNode = nodes.find((node) => node.id === 'JumpTarget')
+    expect(jumpNode?.data.status).toBe('failed')
+    expect(jumpNode?.data.executionOrder).toEqual([1, 2])
+  })
 })
