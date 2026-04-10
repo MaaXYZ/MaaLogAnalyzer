@@ -7,6 +7,10 @@ This document describes the first local "domain knowledge pack" for AI log analy
 - `src/ai/knowledge/maa-domain-knowledge.v1.json`
 - `src/ai/knowledge/index.ts`
 
+## Related docs
+
+- `docs/ai/LANGCHAIN_MCP_SKILL_OVERVIEW.md`
+
 ## Purpose
 
 The pack gives the model structured MaaFramework semantics that are not obvious from raw logs alone, including:
