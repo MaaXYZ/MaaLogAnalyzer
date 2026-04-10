@@ -19,7 +19,7 @@ interface UseTutorialRunnerOptions {
   stopTour: () => void
   currentTourStepIds: () => string[]
   tutorialSteps: TutorialStepLike[]
-  tutorialSampleLog: string
+  loadTutorialSampleLog: () => Promise<string>
   tutorialStorageKey: string
   tutorialVersion: number
   tutorialAutoStartEnabled: boolean
@@ -48,7 +48,8 @@ export const useTutorialRunner = (options: UseTutorialRunnerOptions) => {
     options.loading.value = true
 
     try {
-      await options.processLogContent(options.tutorialSampleLog)
+      const tutorialSampleLog = await options.loadTutorialSampleLog()
+      await options.processLogContent(tutorialSampleLog)
       if (options.getTasksLength() === 0) {
         options.onError('Built-in sample failed to load: no tasks parsed.')
         return

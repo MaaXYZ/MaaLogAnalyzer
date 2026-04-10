@@ -4,7 +4,6 @@ import { getErrorMessage } from '../../../utils/errorHandler'
 import { useIsMobile } from '../../../composables/useIsMobile'
 import { buildNodeFlowItems, buildNodeRecognitionFlowItems } from '../../../utils/nodeFlow'
 import { TOUR_STEPS, TOUR_STORAGE_KEY, TOUR_VERSION } from '../../../tutorial/steps'
-import tutorialSampleLog from '../../../assets/tutorial-sample.log?raw'
 import type { NodeInfo, TaskInfo } from '../../../types'
 import { LogParser } from '../../../utils/logParser'
 import { BRIDGE_THEME_UPDATED_EVENT } from '../../../utils/bridgeEvents'
@@ -213,7 +212,10 @@ export const useAppRootViewModel = ({
     viewMode,
     showAboutModal,
     getTasksLength: () => tasks.value.length,
-    tutorialSampleLog,
+    loadTutorialSampleLog: async () => {
+      const module = await import('../../../assets/tutorial-sample.log?raw')
+      return module.default
+    },
     tutorialStorageKey: TOUR_STORAGE_KEY,
     tutorialVersion: TOUR_VERSION,
     tutorialAutoStartEnabled,

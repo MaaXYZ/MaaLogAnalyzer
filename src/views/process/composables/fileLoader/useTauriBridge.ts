@@ -1,4 +1,5 @@
 import type { UseProcessFileLoaderOptions } from './types'
+import { invoke } from '@tauri-apps/api/core'
 
 const createTauriImageMap = (entries: Record<string, string>) => {
   const result = new Map<string, string>()
@@ -31,7 +32,6 @@ export const useTauriBridge = (
           options.onFileLoadingStart()
 
           if (selected.toLowerCase().endsWith('.zip')) {
-            const { invoke } = await import('@tauri-apps/api/core')
             const result = await invoke<{
               content: string
               error_images: Record<string, string>

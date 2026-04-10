@@ -45,11 +45,6 @@ export default defineConfig({
         manualChunks(id) {
           const normalizedId = id.replace(/\\/g, '/')
 
-          if (normalizedId.includes('/src/views/TextSearchView.vue')) return 'view-search'
-          if (normalizedId.includes('/src/views/NodeStatisticsView.vue')) return 'view-statistics'
-          if (normalizedId.includes('/src/views/FlowchartView.vue')) return 'view-flowchart'
-          if (normalizedId.includes('/src/views/SettingsView.vue')) return 'view-settings'
-
           if (!normalizedId.includes('/node_modules/')) return undefined
 
           if (normalizedId.includes('/node_modules/vue/')) return 'vue-vendor'

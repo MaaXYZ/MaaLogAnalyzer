@@ -32,7 +32,7 @@ interface UseAppWorkflowBindingsOptions {
   viewMode: Ref<string>
   showAboutModal: Ref<boolean>
   getTasksLength: () => number
-  tutorialSampleLog: string
+  loadTutorialSampleLog: () => Promise<string>
   tutorialStorageKey: string
   tutorialVersion: number
   tutorialAutoStartEnabled: boolean
@@ -77,7 +77,7 @@ export const useAppWorkflowBindings = (options: UseAppWorkflowBindingsOptions) =
     stopTour: tutorialTour.stopTour,
     currentTourStepIds: () => tutorialTour.currentTourSteps.value.map(step => step.id),
     tutorialSteps: options.steps,
-    tutorialSampleLog: options.tutorialSampleLog,
+    loadTutorialSampleLog: options.loadTutorialSampleLog,
     tutorialStorageKey: options.tutorialStorageKey,
     tutorialVersion: options.tutorialVersion,
     tutorialAutoStartEnabled: options.tutorialAutoStartEnabled,

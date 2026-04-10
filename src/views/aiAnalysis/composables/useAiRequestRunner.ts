@@ -3,6 +3,7 @@ import type { ChatCompletionResult } from '../../../ai/client'
 import type { AiSettings } from '../../../utils/aiSettings'
 import type { NodeInfo, TaskInfo } from '../../../types'
 import type { AiLoadedTarget } from '../../../ai/contextBuilder'
+import { tryParseStructuredOutput } from '../../../ai/structuredOutput'
 import type {
   AnalysisFocusMode,
   AnalysisPromptProfile,
@@ -23,6 +24,7 @@ import {
 } from '../utils/requestFlow'
 import { createSendRequest, createTrackedRequester } from '../utils/requestClient'
 import { handleTruncation } from '../utils/truncation'
+import { sanitizeAnswerForUser } from '../utils/markdown'
 import {
   accumulateTokenUsage,
   getNextConversationTurn,
@@ -287,7 +289,7 @@ export const useAiRequestRunner = (options: UseAiRequestRunnerOptions) => {
       options.message.warning('模型输出仍被截断，请继续缩小范围或拆分问题后重试。')
     }
 
-    let parsed = (await import('../../../ai/structuredOutput')).tryParseStructuredOutput(response.text)
+    let parsed = tryParseStructuredOutput(response.text)
     parsed = await repairStructuredJsonIfNeeded(parsed, {
       responseText: response.text,
       outputTruncated,
@@ -325,7 +327,7 @@ export const useAiRequestRunner = (options: UseAiRequestRunnerOptions) => {
     })
 
     const answerTextRaw = parsed?.answer?.trim() || response.text
-    const answerText = (await import('../utils/markdown')).sanitizeAnswerForUser(answerTextRaw)
+    const answerText = sanitizeAnswerForUser(answerTextRaw)
     options.resultText.value = answerText
 
     if (mode === 'analyze') {

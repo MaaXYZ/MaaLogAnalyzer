@@ -56,7 +56,8 @@ const emit = defineEmits<{
 <template>
   <div style="flex: 1; min-height: 0">
     <main-content-analysis-section
-      :active="viewMode === 'analysis'"
+      v-if="viewMode === 'analysis'"
+      :active="true"
       :is-mobile="isMobile"
       :split-size="splitSize"
       :process-view-mobile-props="processViewMobileProps"
@@ -75,18 +76,21 @@ const emit = defineEmits<{
     />
 
     <search-mode-pane
-      :active="viewMode === 'search'"
+      v-else-if="viewMode === 'search'"
+      :active="true"
       :text-search-view-props="textSearchViewProps"
     />
 
     <statistics-mode-pane
-      :active="viewMode === 'statistics'"
+      v-else-if="viewMode === 'statistics'"
+      :active="true"
       :tasks="tasks"
       :is-vscode-launch-embed="isVscodeLaunchEmbed"
     />
 
     <flowchart-mode-pane
-      :active="viewMode === 'flowchart'"
+      v-else-if="viewMode === 'flowchart'"
+      :active="true"
       :tasks="filteredTasks"
       :parser="parser"
       :selected-task="selectedTask"
@@ -97,7 +101,8 @@ const emit = defineEmits<{
     />
 
     <ai-mode-pane
-      :active="viewMode === 'ai'"
+      v-else-if="viewMode === 'ai'"
+      :active="true"
       :tasks="tasks"
       :selected-task="selectedTask"
       :selected-node="selectedNode"
@@ -109,7 +114,8 @@ const emit = defineEmits<{
     />
 
     <main-content-split-section
-      :active="viewMode === 'split'"
+      v-else-if="viewMode === 'split'"
+      :active="true"
       :is-mobile="isMobile"
       :split-vertical-size="splitVerticalSize"
       :split-size="splitSize"

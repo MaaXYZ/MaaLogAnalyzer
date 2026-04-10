@@ -4,6 +4,7 @@
  */
 
 import { isTauri, isVSCode } from './platform'
+import { invoke } from '@tauri-apps/api/core'
 
 export { isTauri, isVSCode }
 
@@ -149,8 +150,6 @@ export function consumeTauriZipErrorImages(): Map<string, string> | null {
  * 使用 Tauri Rust 命令解压 ZIP 文件
  */
 async function openZipFileWithTauri(path: string): Promise<string | null> {
-  const { invoke } = await import('@tauri-apps/api/core')
-
   const result = await invoke<{ content: string; error_images: Record<string, string> }>('extract_zip_log', { path })
 
   const errorImages = new Map<string, string>()
