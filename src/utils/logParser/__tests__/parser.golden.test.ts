@@ -209,7 +209,9 @@ describe('LogParser golden snapshots', () => {
                           "children": [
                             {
                               "name": "SubNode",
+                              "node_id": 7201,
                               "status": "success",
+                              "task_id": 72,
                               "type": "wait_freezes",
                               "wait_freezes": {
                                 "elapsed": 10,
@@ -274,7 +276,9 @@ describe('LogParser golden snapshots', () => {
               "flow": [
                 {
                   "name": "SubNode",
+                  "node_id": 7201,
                   "status": "success",
+                  "task_id": 72,
                   "type": "wait_freezes",
                   "wait_freezes": {
                     "elapsed": 10,

@@ -167,7 +167,8 @@ export const composeFinalPipelineNodeFlow = (params: {
     actionLevelRecognitions: params.actionLevelRecognitions,
     nestedActionGroups: params.nestedActionGroups,
     waitFreezesFlow: buildWaitFreezesFlowItems(
-      params.taskScopedNodeAggregationByTaskId.get(params.taskId)?.waitFreezesRuntimeStates
+      params.taskScopedNodeAggregationByTaskId.get(params.taskId)?.waitFreezesRuntimeStates,
+      params.taskId,
     ),
     createActionRoot: createFinalActionRootFactory({
       actionDetails: params.actionDetails,

@@ -77,6 +77,62 @@ describe('FlowAssemblyHelpers', () => {
     expect(result.unassignedContextWaitFreezes.map((item) => item.id)).toEqual(['wf-2'])
   })
 
+  it('attaches non-context wait_freezes to best nested action-flow parent', () => {
+    const pipelineA: UnifiedFlowItem = {
+      id: 'pipeline-a',
+      type: 'pipeline_node',
+      name: 'NodeA',
+      status: 'success',
+      ts: '2026-04-08 00:00:03.000',
+      end_ts: '2026-04-08 00:00:08.000',
+    }
+    const pipelineB: UnifiedFlowItem = {
+      id: 'pipeline-b',
+      type: 'pipeline_node',
+      name: 'NodeB',
+      status: 'success',
+      ts: '2026-04-08 00:00:09.000',
+      end_ts: '2026-04-08 00:00:15.000',
+    }
+    const actionFlow: UnifiedFlowItem[] = [
+      {
+        id: 'action-root',
+        type: 'action',
+        name: 'RootAction',
+        status: 'success',
+        ts: '2026-04-08 00:00:01.000',
+        end_ts: '2026-04-08 00:00:20.000',
+        children: [
+          {
+            id: 'task-1',
+            type: 'task',
+            name: 'TaskOne',
+            status: 'success',
+            ts: '2026-04-08 00:00:02.000',
+            end_ts: '2026-04-08 00:00:19.000',
+            children: [pipelineA, pipelineB],
+          },
+        ],
+      },
+    ]
+
+    const matchByNameAndTime = {
+      ...wf(10, '2026-04-08 00:00:10.000'),
+      name: 'NodeB',
+    }
+    const noParent = wf(11, '2026-04-08 00:00:25.000')
+
+    const result = splitAndAttachWaitFreezesFlowItems({
+      recognitionFlow: [],
+      actionFlow,
+      waitFreezesFlow: [matchByNameAndTime, noParent],
+      toTimestampMs,
+    })
+
+    expect(pipelineB.children?.map((item) => item.id)).toEqual(['wf-10'])
+    expect(result.actionScopeWaitFreezes.map((item) => item.id)).toEqual(['wf-11'])
+  })
+
   it('partitions wait_freezes by action window', () => {
     const items = [
       wf(1, '2026-04-08 00:00:01.000'),

@@ -27,6 +27,7 @@ export const handleWaitFreezesNodeEvent = (params: {
     findWaitFreezesImages: (timestamp: string, actionName: string) => string[] | undefined
   }) => void
   resolveRuntimeStatusFromPhase: (phase: KnownMaaPhase) => 'running' | 'success' | 'failed'
+  getActivePipelineNodeId: (taskId: number) => number | undefined
   getActivePipelineNodeName: () => string | undefined
   intern: (value: string) => string
   resolveEventFocus: (details: Record<string, any>, fallbackFocus?: NodeInfo['focus']) => NodeInfo['focus']
@@ -45,6 +46,7 @@ export const handleWaitFreezesNodeEvent = (params: {
       timestamp: params.timestamp,
       status: waitFreezesStatus,
       eventOrder: params.eventOrder,
+      activeNodeId: params.getActivePipelineNodeId(params.taskId),
       activeNodeName: params.taskId === params.rootTaskId ? params.getActivePipelineNodeName() : undefined,
       intern: params.intern,
       resolveEventFocus: params.resolveEventFocus,

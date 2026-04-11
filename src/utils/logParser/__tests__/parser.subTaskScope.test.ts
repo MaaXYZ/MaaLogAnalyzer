@@ -106,6 +106,8 @@ describe('LogParser sub task scoped node aggregation', () => {
         item.status === 'failed'
     )
     expect(mainWaitFreezes).toBeTruthy()
+    expect(mainWaitFreezes?.item.task_id).toBe(1)
+    expect(mainWaitFreezes?.item.node_id).toBe(101)
 
     const subWaitFreezes = allWaitFreezes.find(
       ({ item }) =>
@@ -114,6 +116,9 @@ describe('LogParser sub task scoped node aggregation', () => {
         item.status === 'success'
     )
     expect(subWaitFreezes).toBeTruthy()
+    expect(subWaitFreezes?.item.task_id).toBe(2)
+    expect(subWaitFreezes?.item.node_id).toBe(201)
+    expect(subWaitFreezes?.item.id).not.toBe(mainWaitFreezes?.item.id)
     expect(subWaitFreezes?.path.some(pathNode => pathNode.type === 'task' && pathNode.task_id === 2)).toBe(true)
   })
 

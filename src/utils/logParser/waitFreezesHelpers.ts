@@ -10,6 +10,7 @@ import {
 export type WaitFreezesRuntimeState = {
   wf_id: number
   name: string
+  node_id?: number
   phase?: string
   ts: string
   end_ts?: string
@@ -28,14 +29,28 @@ export const normalizeWaitFreezesId = (value: unknown): number | null => {
   return Number.isFinite(wfId) ? wfId : null
 }
 
-export const toWaitFreezesFlowItem = (state: WaitFreezesRuntimeState): UnifiedFlowItem => {
+const buildWaitFreezesFlowItemId = (
+  state: WaitFreezesRuntimeState,
+  taskId?: number
+): string => {
+  const taskScope = Number.isFinite(taskId) ? String(taskId) : 'na'
+  const nodeScope = Number.isFinite(state.node_id) ? String(state.node_id) : 'na'
+  return `node.wait_freezes.${taskScope}.${nodeScope}.${state.wf_id}`
+}
+
+export const toWaitFreezesFlowItem = (
+  state: WaitFreezesRuntimeState,
+  taskId?: number
+): UnifiedFlowItem => {
   return {
-    id: `node.wait_freezes.${state.wf_id}`,
+    id: buildWaitFreezesFlowItemId(state, taskId),
     type: 'wait_freezes',
     name: state.name || 'WaitFreezes',
     status: state.status,
     ts: state.ts,
     end_ts: state.end_ts,
+    task_id: taskId,
+    node_id: state.node_id,
     wait_freezes_details: markRaw({
       wf_id: state.wf_id,
       phase: state.phase,
@@ -50,7 +65,8 @@ export const toWaitFreezesFlowItem = (state: WaitFreezesRuntimeState): UnifiedFl
 }
 
 export const buildWaitFreezesFlowItems = (
-  waitFreezesRuntimeStates?: Map<number, WaitFreezesRuntimeState>
+  waitFreezesRuntimeStates?: Map<number, WaitFreezesRuntimeState>,
+  taskId?: number
 ): UnifiedFlowItem[] => {
   if (!waitFreezesRuntimeStates || waitFreezesRuntimeStates.size === 0) {
     return []
@@ -61,7 +77,7 @@ export const buildWaitFreezesFlowItems = (
       if (delta !== 0) return delta
       return a.wf_id - b.wf_id
     })
-    .map(toWaitFreezesFlowItem)
+    .map((state) => toWaitFreezesFlowItem(state, taskId))
 }
 
 interface UpsertWaitFreezesStateParams {
@@ -70,6 +86,7 @@ interface UpsertWaitFreezesStateParams {
   timestamp: string
   status: 'running' | 'success' | 'failed'
   eventOrder: number
+  activeNodeId?: number
   activeNodeName?: string
   intern: (value: string) => string
   resolveEventFocus: (details: Record<string, any>, fallback?: any) => any
@@ -90,6 +107,7 @@ export const upsertWaitFreezesState = (params: UpsertWaitFreezesStateParams): vo
   const name = params.intern(fallbackName || params.activeNodeName || 'WaitFreezes')
   const rawPhase = typeof params.details.phase === 'string' ? params.details.phase.trim() : ''
   const phase = rawPhase ? params.intern(rawPhase) : existing?.phase
+  const nodeId = readNumberField(params.details, 'node_id') ?? existing?.node_id ?? params.activeNodeId
   const elapsed = typeof params.details.elapsed === 'number' ? params.details.elapsed : existing?.elapsed
   const recoIds = parseNumericArray(params.details.reco_ids) ?? existing?.reco_ids
   const roi = parseRoi(params.details.roi) ?? existing?.roi
@@ -100,6 +118,7 @@ export const upsertWaitFreezesState = (params: UpsertWaitFreezesStateParams): vo
   params.runtimeStates.set(wfId, {
     wf_id: wfId,
     name,
+    node_id: nodeId,
     phase,
     ts: existing?.ts || nowTs,
     end_ts: params.status === 'running' ? (existing?.end_ts || nowTs) : nowTs,

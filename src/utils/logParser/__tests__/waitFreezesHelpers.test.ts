@@ -35,6 +35,7 @@ describe('WaitFreezesHelpers', () => {
       timestamp: '2026-04-08 00:00:00.100',
       status: 'running',
       eventOrder: 10,
+      activeNodeId: 101,
       activeNodeName: 'NodeA',
       intern: identity,
       resolveEventFocus,
@@ -55,6 +56,7 @@ describe('WaitFreezesHelpers', () => {
       timestamp: '2026-04-08 00:00:01.200',
       status: 'failed',
       eventOrder: 99,
+      activeNodeId: 101,
       activeNodeName: 'NodeA',
       intern: identity,
       resolveEventFocus,
@@ -68,6 +70,7 @@ describe('WaitFreezesHelpers', () => {
     expect(state.order).toBe(10)
     expect(state.status).toBe('failed')
     expect(state.phase).toBe('post')
+    expect(state.node_id).toBe(101)
     expect(state.elapsed).toBe(23)
     expect(state.reco_ids).toEqual([1, 2])
     expect(state.images).toEqual(['imgA.png'])
@@ -79,6 +82,7 @@ describe('WaitFreezesHelpers', () => {
     runtimeStates.set(3, {
       wf_id: 3,
       name: 'C',
+      node_id: 7003,
       ts: '2026-04-08 00:00:00.300',
       status: 'success',
       order: 2,
@@ -86,6 +90,7 @@ describe('WaitFreezesHelpers', () => {
     runtimeStates.set(2, {
       wf_id: 2,
       name: 'B',
+      node_id: 7002,
       ts: '2026-04-08 00:00:00.200',
       status: 'running',
       order: 1,
@@ -93,17 +98,20 @@ describe('WaitFreezesHelpers', () => {
     runtimeStates.set(1, {
       wf_id: 1,
       name: 'A',
+      node_id: 7001,
       ts: '2026-04-08 00:00:00.100',
       status: 'failed',
       order: 1,
     })
 
-    const items = buildWaitFreezesFlowItems(runtimeStates)
+    const items = buildWaitFreezesFlowItems(runtimeStates, 42)
     expect(items.map((item) => item.wait_freezes_details?.wf_id)).toEqual([1, 2, 3])
     expect(items.map((item) => item.id)).toEqual([
-      'node.wait_freezes.1',
-      'node.wait_freezes.2',
-      'node.wait_freezes.3',
+      'node.wait_freezes.42.7001.1',
+      'node.wait_freezes.42.7002.2',
+      'node.wait_freezes.42.7003.3',
     ])
+    expect(items.map((item) => item.task_id)).toEqual([42, 42, 42])
+    expect(items.map((item) => item.node_id)).toEqual([7001, 7002, 7003])
   })
 })

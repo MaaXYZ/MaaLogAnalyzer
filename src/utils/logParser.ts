@@ -464,6 +464,7 @@ export class LogParser {
       recognitionOrderMeta,
     } = createTaskNodeRuntimeContext(task.task_id)
     let activePipelineNodeId: number | null = null
+    const activePipelineNodeIdByTaskId = new Map<number, number>()
 
     const taskStartIndex = task._startEventIndex ?? -1
     const taskEndIndex = task._endEventIndex ?? this.events.length - 1
@@ -696,7 +697,8 @@ export class LogParser {
         summarizeActionFlowStatus,
         createActionRootFlowItem,
         buildWaitFreezesFlowItems: () => buildWaitFreezesFlowItems(
-          taskScopedNodeAggregationByTaskId.get(task.task_id)?.waitFreezesRuntimeStates
+          taskScopedNodeAggregationByTaskId.get(task.task_id)?.waitFreezesRuntimeStates,
+          task.task_id,
         ),
         findErrorImageByNames: (eventTs, names) => this.findErrorImageByNames(eventTs, names),
         intern: (value) => this.stringPool.intern(value),
@@ -743,6 +745,7 @@ export class LogParser {
         clearSubTaskRuntimeStateAfterPipelineFinalize,
         intern: (value) => this.stringPool.intern(value),
       })
+      activePipelineNodeIdByTaskId.delete(subTaskId)
       refreshActivePipelineNodePreview(timestamp)
     }
     const getActivePipelineNode = (): NodeInfo | null => {
@@ -762,6 +765,7 @@ export class LogParser {
         subTaskParentByTaskId,
         taskStackTracker,
       })
+      activePipelineNodeIdByTaskId.clear()
     }
     const settleCurrentNodeRuntimeStates = (
       fallbackStatus: 'success' | 'failed',
@@ -802,6 +806,9 @@ export class LogParser {
         actionEndOrders,
         resetCurrentNodeAggregation,
       })
+      if (activePipelineNodeId == null) {
+        activePipelineNodeIdByTaskId.delete(task.task_id)
+      }
     }
     const finalizeTaskPipelineNodeEvent = (
       taskId: number,
@@ -886,6 +893,12 @@ export class LogParser {
         getOrCreateTaskNodeAggregation,
         upsertWaitFreezesState,
         resolveRuntimeStatusFromPhase,
+        getActivePipelineNodeId: (eventTaskId) => {
+          if (eventTaskId === task.task_id) {
+            return getActivePipelineNode()?.node_id
+          }
+          return activePipelineNodeIdByTaskId.get(eventTaskId)
+        },
         getActivePipelineNodeName: () => getActivePipelineNode()?.name,
         intern: (value) => this.stringPool.intern(value),
         resolveEventFocus,
@@ -1072,6 +1085,7 @@ export class LogParser {
         if (startedNodeId == null) return
         pipelineNodeStartTimes.set(startedNodeId, this.stringPool.intern(timestamp))
         activePipelineNodeId = startedNodeId
+        activePipelineNodeIdByTaskId.set(task.task_id, startedNodeId)
         refreshActivePipelineNodePreview(timestamp)
       },
       startSubTaskPipelineNodeEvent: (subTaskId, details, timestamp) => {
@@ -1084,6 +1098,12 @@ export class LogParser {
           subTaskPipelineNodeStartTimes,
           intern: (value) => this.stringPool.intern(value),
         })
+        if (subTaskId != null) {
+          const subTaskNodeId = readNumberField(details, 'node_id')
+          if (subTaskNodeId != null) {
+            activePipelineNodeIdByTaskId.set(subTaskId, subTaskNodeId)
+          }
+        }
         refreshActivePipelineNodePreview(timestamp)
       },
       finalizeTaskPipelineNodeEvent,
