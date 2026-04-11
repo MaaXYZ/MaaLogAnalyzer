@@ -21,6 +21,7 @@ export const handleWaitFreezesNodeEvent = (params: {
     timestamp: string
     status: 'running' | 'success' | 'failed'
     eventOrder: number
+    activeNodeId?: number
     activeNodeName?: string
     intern: (value: string) => string
     resolveEventFocus: (details: Record<string, any>, fallbackFocus?: NodeInfo['focus']) => NodeInfo['focus']
