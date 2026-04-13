@@ -717,6 +717,192 @@ type ScopeIdFormat =
 3. projector 是 `ScopeTree` 的消费者，不是解析包的唯一出口
 4. 对外查询默认基于 `ScopeTree + TraceIndex`，而不是基于 `TaskInfo[]`
 
+### 9.3.1 TraceIndex 落地结构建议
+
+前面的 `TraceIndex` 只是最小能力说明。真正实现时，建议把“按 id 查 scope”“按逻辑节点查执行实例”“按 seq 查事件”三类能力一次建全。
+
+建议结构：
+
+```ts
+type TaskNodeKey = `${number}:${number}`
+type TaskLocalKey = `${number}:${number}`
+
+type NodeExecutionRef = {
+  taskId: number
+  nodeId: number
+  occurrenceIndex: number
+  pipelineScopeId: string
+  startSeq: number
+  endSeq?: number
+}
+
+type TraceIndex = {
+  scopeById: Map<string, ScopeNode>
+  eventBySeq: Map<number, ProtocolEvent>
+  parentScopeIdByScopeId: Map<string, string | null>
+  childScopeIdsByScopeId: Map<string, string[]>
+
+  taskScopesByTaskId: Map<number, ScopeNode[]>
+  pipelineNodeScopesByTaskIdAndNodeId: Map<TaskNodeKey, ScopeNode[]>
+  recognitionScopesByTaskIdAndRecoId: Map<TaskLocalKey, ScopeNode[]>
+  actionScopesByTaskIdAndActionId: Map<TaskLocalKey, ScopeNode[]>
+  waitFreezesScopesByTaskIdAndWfId: Map<TaskLocalKey, ScopeNode[]>
+
+  nodeExecutionsByTaskIdAndNodeId: Map<TaskNodeKey, NodeExecutionRef[]>
+  nodeExecutionByPipelineScopeId: Map<string, NodeExecutionRef>
+
+  controllerScopes: ScopeNode[]
+  resourceScopes: ScopeNode[]
+}
+```
+
+说明：
+
+1. `scopeById`
+   - 所有严格查询的第一入口
+
+2. `eventBySeq`
+   - 用于 timeline、evidence、raw line 回捞
+
+3. `parentScopeIdByScopeId / childScopeIdsByScopeId`
+   - 避免查询父链时反复扫描整棵树
+
+4. `nodeExecutionsByTaskIdAndNodeId`
+   - 直接服务 `task_id + node_id + occurrence_index`
+
+5. `nodeExecutionByPipelineScopeId`
+   - 把单次逻辑节点执行实例稳定锚定到对应 `PipelineNode` 根 scope
+
+实现建议：
+
+1. 先 DFS/BFS 一次整棵 `ScopeTree`
+2. 同步填充 `scopeById / parent / children / eventBySeq`
+3. 遇到 `PipelineNode` 时，再按 `(taskId, nodeId)` 归档到 node execution 索引
+4. 每个 `(taskId, nodeId)` 桶最终按 `startSeq` 排序后回填 `occurrenceIndex`
+
+### 9.3.2 Locator 类型建议
+
+建议把查询定位分成“宽查询 locator”和“唯一定位 locator”两层。
+
+```ts
+type ScopeLocator =
+  | { scopeId: string }
+  | { kind: ScopeKind; taskId?: number; localId?: number; startSeq?: number }
+
+type NodeExecutionLocator = {
+  taskId: number
+  nodeId: number
+  occurrenceIndex?: number
+  scopeId?: string
+}
+
+type UniqueScopeLocator =
+  | { scopeId: string }
+  | { taskId: number; nodeId: number; occurrenceIndex: number }
+```
+
+语义：
+
+1. `ScopeLocator`
+   - 面向任意 scope 的通用查询
+
+2. `NodeExecutionLocator`
+   - 面向逻辑节点执行实例
+   - 允许宽查询，也允许单实例查询
+
+3. `UniqueScopeLocator`
+   - 强约束必须只命中一个实例
+   - 适用于 `get_parent_chain` 这类单实例接口
+
+规则：
+
+1. 如果传入 `scopeId`，则忽略同一请求里的 `occurrenceIndex`
+2. `scopeId` 找不到，返回 `not_found`
+3. `taskId + nodeId + occurrenceIndex` 找不到，返回 `not_found`
+4. `taskId + nodeId` 命中多个实例而调用方要求唯一，返回 `ambiguous`
+
+### 9.3.3 Query Helper API 建议
+
+建议 query helpers 不直接抛异常，而返回统一结果对象；tool/service 层再把它翻译成协议错误码。
+
+```ts
+type QueryErrorCode = 'not_found' | 'ambiguous' | 'invalid_locator'
+
+type QueryResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: QueryErrorCode; message: string }
+```
+
+建议 helper：
+
+```ts
+type QueryHelpers = {
+  findScopeById(scopeId: string): ScopeNode | null
+  findScopesByLocator(locator: ScopeLocator): ScopeNode[]
+
+  findNodeExecutions(taskId: number, nodeId: number): NodeExecutionRef[]
+  findNodeExecution(locator: UniqueScopeLocator): QueryResult<NodeExecutionRef>
+
+  getParentChain(locator: UniqueScopeLocator): QueryResult<ScopeNode[]>
+  getNodeTimeline(locator: NodeExecutionLocator, limit?: number): QueryResult<ScopeTimeline[]>
+  getNextListHistory(locator: NodeExecutionLocator, limit?: number): QueryResult<NextListHistory[]>
+
+  getScopeEvents(scopeId: string): ProtocolEvent[]
+  getRawLinesBySeqRange(startSeq: number, endSeq: number): QueryResult<Array<{
+    sourceKey: string
+    line: number
+    text: string
+  }>>
+}
+```
+
+说明：
+
+1. `getNodeTimeline`
+   - 默认返回逻辑节点下所有匹配实例
+   - 若 locator 足够精确，则只返回单实例 timeline
+
+2. `getNextListHistory`
+   - 语义与 `getNodeTimeline` 一致
+
+3. `getParentChain`
+   - 必须使用 `UniqueScopeLocator`
+   - 不接受模糊多实例结果
+
+4. `getScopeEvents`
+   - 从 `scope.seq ~ scope.endSeq` 以及 scope 子树聚合协议事件
+   - 是很多上层查询的基础能力
+
+### 9.3.4 Timeline 组装建议
+
+建议把 timeline 输出构建成独立 helper，不直接散在 tool handler 里。
+
+```ts
+type ScopeTimeline = {
+  scopeId: string
+  occurrenceIndex: number
+  ts: string
+  seq: number
+  event: string
+  scopeKind: ScopeKind
+  taskId?: number
+  nodeId?: number
+  name?: string
+  sourceKey?: string
+  line?: number
+}
+```
+
+组装规则：
+
+1. 先确定目标 `NodeExecutionRef`
+2. 以该 `PipelineNode` scope 为根遍历其子树
+3. 收集所有落在该执行实例里的协议事件
+4. 按 `seq` 升序输出
+5. 每条 timeline item 都补上 `scopeId + occurrenceIndex`
+
+这样 `get_node_timeline`、调试视图、证据构造都能复用同一条链路。
+
 ### 9.4 面向外部工具的 SessionStore
 
 如果解析包需要直接承接外部工具协议，则还需要在 `ParseArtifacts` 之上加一层只读会话封装。
@@ -779,8 +965,10 @@ type AnalyzerSessionStore = Map<string, AnalyzerSession>
 `query/`
 
 1. `traceIndex.ts`
-2. `queryTypes.ts`
-3. `queryHelpers.ts`
+2. `locator.ts`
+3. `queryTypes.ts`
+4. `queryHelpers.ts`
+5. `timeline.ts`
 
 `service/`
 
@@ -842,6 +1030,13 @@ type AnalyzerSessionStore = Map<string, AnalyzerSession>
 
 实现 `TraceIndex`、`SourceRef/RawLineStore` 与基础 query helpers，对外提供 artifacts 查询能力。
 
+其中优先级建议为：
+
+1. `scopeById / eventBySeq / parent-child index`
+2. `nodeExecutionsByTaskIdAndNodeId`
+3. `locator` 解析与 `QueryResult`
+4. timeline / parent-chain / raw-line 回捞 helper
+
 ### Step 5
 
 实现 `TaskProjector`，对齐现有 `TaskInfo / NodeInfo / node_flow` 输出。
@@ -873,6 +1068,9 @@ type AnalyzerSessionStore = Map<string, AnalyzerSession>
 9. `findRecognition(taskId, recoId)` 多实例返回测试
 10. `RawLineStore` 按 `sourceKey + line` 回捞测试
 11. `SessionStore` 查询会话复用测试
+12. `scopeId` 确定性生成测试
+13. `(taskId, nodeId) -> occurrenceIndex` 排序测试
+14. `UniqueScopeLocator` 歧义错误测试
 
 ## 14. 当前结论
 
