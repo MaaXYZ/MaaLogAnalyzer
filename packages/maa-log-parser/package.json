@@ -2,225 +2,236 @@
   "name": "@windsland52/maa-log-parser",
   "version": "0.0.1",
   "type": "module",
-  "private": true,
-  "types": "./src/core/index.ts",
+  "private": false,
+  "types": "./dist/core/index.d.ts",
   "scripts": {
     "typecheck": "tsc -p ./tsconfig.json",
     "test": "vitest run src/__tests__",
-    "build": "pnpm run typecheck"
+    "build": "pnpm run clean && tsc -p ./tsconfig.build.json && node ../../scripts/fix-esm-imports.mjs ./dist",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\""
   },
   "exports": {
     ".": {
-      "import": "./src/core/index.ts",
-      "types": "./src/core/index.ts"
+      "import": "./dist/core/index.js",
+      "types": "./dist/core/index.d.ts"
     },
     "./raw-value": {
-      "import": "./src/shared/rawValue.ts",
-      "types": "./src/shared/rawValue.ts"
+      "import": "./dist/shared/rawValue.js",
+      "types": "./dist/shared/rawValue.d.ts"
     },
     "./event-meta": {
-      "import": "./src/event/meta.ts",
-      "types": "./src/event/meta.ts"
+      "import": "./dist/event/meta.js",
+      "types": "./dist/event/meta.d.ts"
     },
     "./types": {
-      "import": "./src/shared/types.ts",
-      "types": "./src/shared/types.ts"
+      "import": "./dist/shared/types.js",
+      "types": "./dist/shared/types.d.ts"
     },
     "./log-event-decoders": {
-      "import": "./src/shared/logEventDecoders.ts",
-      "types": "./src/shared/logEventDecoders.ts"
+      "import": "./dist/shared/logEventDecoders.js",
+      "types": "./dist/shared/logEventDecoders.d.ts"
     },
     "./string-pool": {
-      "import": "./src/shared/stringPool.ts",
-      "types": "./src/shared/stringPool.ts"
+      "import": "./dist/shared/stringPool.js",
+      "types": "./dist/shared/stringPool.d.ts"
     },
     "./task-builder": {
-      "import": "./src/task/builder.ts",
-      "types": "./src/task/builder.ts"
+      "import": "./dist/task/builder.js",
+      "types": "./dist/task/builder.d.ts"
     },
     "./task-lifecycle": {
-      "import": "./src/task/lifecycle.ts",
-      "types": "./src/task/lifecycle.ts"
+      "import": "./dist/task/lifecycle.js",
+      "types": "./dist/task/lifecycle.d.ts"
     },
     "./task-completion-helpers": {
-      "import": "./src/task/completionHelpers.ts",
-      "types": "./src/task/completionHelpers.ts"
+      "import": "./dist/task/completionHelpers.js",
+      "types": "./dist/task/completionHelpers.d.ts"
     },
     "./task-event-compaction": {
-      "import": "./src/task/eventCompaction.ts",
-      "types": "./src/task/eventCompaction.ts"
+      "import": "./dist/task/eventCompaction.js",
+      "types": "./dist/task/eventCompaction.d.ts"
     },
     "./scoped-node-dispatch-helpers": {
-      "import": "./src/node/scopedDispatchHelpers.ts",
-      "types": "./src/node/scopedDispatchHelpers.ts"
+      "import": "./dist/node/scopedDispatchHelpers.js",
+      "types": "./dist/node/scopedDispatchHelpers.d.ts"
     },
     "./task-event-loop-helpers": {
-      "import": "./src/task/eventLoopHelpers.ts",
-      "types": "./src/task/eventLoopHelpers.ts"
+      "import": "./dist/task/eventLoopHelpers.js",
+      "types": "./dist/task/eventLoopHelpers.d.ts"
     },
     "./sub-task-collector": {
-      "import": "./src/subtask/collector.ts",
-      "types": "./src/subtask/collector.ts"
+      "import": "./dist/subtask/collector.js",
+      "types": "./dist/subtask/collector.d.ts"
     },
     "./event-line": {
-      "import": "./src/event/line.ts",
-      "types": "./src/event/line.ts"
+      "import": "./dist/event/line.js",
+      "types": "./dist/event/line.d.ts"
     },
     "./action-helpers": {
-      "import": "./src/action/helpers.ts",
-      "types": "./src/action/helpers.ts"
+      "import": "./dist/action/helpers.js",
+      "types": "./dist/action/helpers.d.ts"
     },
     "./action-runtime-helpers": {
-      "import": "./src/action/runtimeHelpers.ts",
-      "types": "./src/action/runtimeHelpers.ts"
+      "import": "./dist/action/runtimeHelpers.js",
+      "types": "./dist/action/runtimeHelpers.d.ts"
     },
     "./action-event-lifecycle-helpers": {
-      "import": "./src/action/eventLifecycleHelpers.ts",
-      "types": "./src/action/eventLifecycleHelpers.ts"
+      "import": "./dist/action/eventLifecycleHelpers.js",
+      "types": "./dist/action/eventLifecycleHelpers.d.ts"
     },
     "./recognition-helpers": {
-      "import": "./src/recognition/helpers.ts",
-      "types": "./src/recognition/helpers.ts"
+      "import": "./dist/recognition/helpers.js",
+      "types": "./dist/recognition/helpers.d.ts"
     },
     "./recognition-attempt-runtime": {
-      "import": "./src/recognition/attemptRuntime.ts",
-      "types": "./src/recognition/attemptRuntime.ts"
+      "import": "./dist/recognition/attemptRuntime.js",
+      "types": "./dist/recognition/attemptRuntime.d.ts"
     },
     "./recognition-collection-helpers": {
-      "import": "./src/recognition/collectionHelpers.ts",
-      "types": "./src/recognition/collectionHelpers.ts"
+      "import": "./dist/recognition/collectionHelpers.js",
+      "types": "./dist/recognition/collectionHelpers.d.ts"
     },
     "./recognition-scope-helpers": {
-      "import": "./src/recognition/scopeHelpers.ts",
-      "types": "./src/recognition/scopeHelpers.ts"
+      "import": "./dist/recognition/scopeHelpers.js",
+      "types": "./dist/recognition/scopeHelpers.d.ts"
     },
     "./recognition-event-handlers": {
-      "import": "./src/recognition/eventHandlers.ts",
-      "types": "./src/recognition/eventHandlers.ts"
+      "import": "./dist/recognition/eventHandlers.js",
+      "types": "./dist/recognition/eventHandlers.d.ts"
     },
     "./image-lookup-helpers": {
-      "import": "./src/event/imageLookupHelpers.ts",
-      "types": "./src/event/imageLookupHelpers.ts"
+      "import": "./dist/event/imageLookupHelpers.js",
+      "types": "./dist/event/imageLookupHelpers.d.ts"
     },
     "./wait-freezes-helpers": {
-      "import": "./src/waitFreezes/helpers.ts",
-      "types": "./src/waitFreezes/helpers.ts"
+      "import": "./dist/waitFreezes/helpers.js",
+      "types": "./dist/waitFreezes/helpers.d.ts"
     },
     "./task-scoped-aggregation-helpers": {
-      "import": "./src/task/scopedAggregationHelpers.ts",
-      "types": "./src/task/scopedAggregationHelpers.ts"
+      "import": "./dist/task/scopedAggregationHelpers.js",
+      "types": "./dist/task/scopedAggregationHelpers.d.ts"
     },
     "./wait-freezes-event-helpers": {
-      "import": "./src/waitFreezes/eventHelpers.ts",
-      "types": "./src/waitFreezes/eventHelpers.ts"
+      "import": "./dist/waitFreezes/eventHelpers.js",
+      "types": "./dist/waitFreezes/eventHelpers.d.ts"
     },
     "./task-stack-helpers": {
-      "import": "./src/task/stackHelpers.ts",
-      "types": "./src/task/stackHelpers.ts"
+      "import": "./dist/task/stackHelpers.js",
+      "types": "./dist/task/stackHelpers.d.ts"
     },
     "./task-lifecycle-context-factory": {
-      "import": "./src/task/lifecycleContextFactory.ts",
-      "types": "./src/task/lifecycleContextFactory.ts"
+      "import": "./dist/task/lifecycleContextFactory.js",
+      "types": "./dist/task/lifecycleContextFactory.d.ts"
     },
     "./node-event-value-helpers": {
-      "import": "./src/node/eventValueHelpers.ts",
-      "types": "./src/node/eventValueHelpers.ts"
+      "import": "./dist/node/eventValueHelpers.js",
+      "types": "./dist/node/eventValueHelpers.d.ts"
     },
     "./task-node-runtime-context": {
-      "import": "./src/task/nodeRuntimeContext.ts",
-      "types": "./src/task/nodeRuntimeContext.ts"
+      "import": "./dist/task/nodeRuntimeContext.js",
+      "types": "./dist/task/nodeRuntimeContext.d.ts"
     },
     "./next-list-event-helpers": {
-      "import": "./src/node/nextListHelpers.ts",
-      "types": "./src/node/nextListHelpers.ts"
+      "import": "./dist/node/nextListHelpers.js",
+      "types": "./dist/node/nextListHelpers.d.ts"
     },
     "./runtime-settlement-helpers": {
-      "import": "./src/pipeline/runtimeSettlementHelpers.ts",
-      "types": "./src/pipeline/runtimeSettlementHelpers.ts"
+      "import": "./dist/pipeline/runtimeSettlementHelpers.js",
+      "types": "./dist/pipeline/runtimeSettlementHelpers.d.ts"
     },
     "./node-aggregation-reset-helpers": {
-      "import": "./src/node/aggregationResetHelpers.ts",
-      "types": "./src/node/aggregationResetHelpers.ts"
+      "import": "./dist/node/aggregationResetHelpers.js",
+      "types": "./dist/node/aggregationResetHelpers.d.ts"
     },
     "./sub-task-snapshot-helpers": {
-      "import": "./src/subtask/snapshotHelpers.ts",
-      "types": "./src/subtask/snapshotHelpers.ts"
+      "import": "./dist/subtask/snapshotHelpers.js",
+      "types": "./dist/subtask/snapshotHelpers.d.ts"
     },
     "./simple-node-event-router": {
-      "import": "./src/node/simpleEventRouter.ts",
-      "types": "./src/node/simpleEventRouter.ts"
+      "import": "./dist/node/simpleEventRouter.js",
+      "types": "./dist/node/simpleEventRouter.d.ts"
     },
     "./simple-node-event-handler-factory": {
-      "import": "./src/node/simpleEventHandlerFactory.ts",
-      "types": "./src/node/simpleEventHandlerFactory.ts"
+      "import": "./dist/node/simpleEventHandlerFactory.js",
+      "types": "./dist/node/simpleEventHandlerFactory.d.ts"
     },
     "./sub-task-action-node-helpers": {
-      "import": "./src/subtask/actionNodeHelpers.ts",
-      "types": "./src/subtask/actionNodeHelpers.ts"
+      "import": "./dist/subtask/actionNodeHelpers.js",
+      "types": "./dist/subtask/actionNodeHelpers.d.ts"
     },
     "./sub-task-action-node-lifecycle-handler": {
-      "import": "./src/subtask/actionNodeLifecycleHandler.ts",
-      "types": "./src/subtask/actionNodeLifecycleHandler.ts"
+      "import": "./dist/subtask/actionNodeLifecycleHandler.js",
+      "types": "./dist/subtask/actionNodeLifecycleHandler.d.ts"
     },
     "./sub-task-runtime-cleanup-helpers": {
-      "import": "./src/subtask/runtimeCleanupHelpers.ts",
-      "types": "./src/subtask/runtimeCleanupHelpers.ts"
+      "import": "./dist/subtask/runtimeCleanupHelpers.js",
+      "types": "./dist/subtask/runtimeCleanupHelpers.d.ts"
     },
     "./sub-task-pipeline-finalize-helpers": {
-      "import": "./src/subtask/pipelineFinalizeHelpers.ts",
-      "types": "./src/subtask/pipelineFinalizeHelpers.ts"
+      "import": "./dist/subtask/pipelineFinalizeHelpers.js",
+      "types": "./dist/subtask/pipelineFinalizeHelpers.d.ts"
     },
     "./task-pipeline-finalize-helpers": {
-      "import": "./src/task/pipelineFinalizeHelpers.ts",
-      "types": "./src/task/pipelineFinalizeHelpers.ts"
+      "import": "./dist/task/pipelineFinalizeHelpers.js",
+      "types": "./dist/task/pipelineFinalizeHelpers.d.ts"
     },
     "./pipeline-node-start-helpers": {
-      "import": "./src/pipeline/startHelpers.ts",
-      "types": "./src/pipeline/startHelpers.ts"
+      "import": "./dist/pipeline/startHelpers.js",
+      "types": "./dist/pipeline/startHelpers.d.ts"
     },
     "./pipeline-runtime-state-helpers": {
-      "import": "./src/pipeline/runtimeStateHelpers.ts",
-      "types": "./src/pipeline/runtimeStateHelpers.ts"
+      "import": "./dist/pipeline/runtimeStateHelpers.js",
+      "types": "./dist/pipeline/runtimeStateHelpers.d.ts"
     },
     "./recognition-node-lifecycle-helpers": {
-      "import": "./src/recognition/nodeLifecycleHelpers.ts",
-      "types": "./src/recognition/nodeLifecycleHelpers.ts"
+      "import": "./dist/recognition/nodeLifecycleHelpers.js",
+      "types": "./dist/recognition/nodeLifecycleHelpers.d.ts"
     },
     "./node-dispatch-lifecycle-helpers": {
-      "import": "./src/node/dispatchLifecycleHelpers.ts",
-      "types": "./src/node/dispatchLifecycleHelpers.ts"
+      "import": "./dist/node/dispatchLifecycleHelpers.js",
+      "types": "./dist/node/dispatchLifecycleHelpers.d.ts"
     },
     "./node-dispatch-config-factory": {
-      "import": "./src/node/dispatchConfigFactory.ts",
-      "types": "./src/node/dispatchConfigFactory.ts"
+      "import": "./dist/node/dispatchConfigFactory.js",
+      "types": "./dist/node/dispatchConfigFactory.d.ts"
     },
     "./sub-task-nesting-helpers": {
-      "import": "./src/subtask/nestingHelpers.ts",
-      "types": "./src/subtask/nestingHelpers.ts"
+      "import": "./dist/subtask/nestingHelpers.js",
+      "types": "./dist/subtask/nestingHelpers.d.ts"
     },
     "./flow-assembly-helpers": {
-      "import": "./src/pipeline/flowAssemblyHelpers.ts",
-      "types": "./src/pipeline/flowAssemblyHelpers.ts"
+      "import": "./dist/pipeline/flowAssemblyHelpers.js",
+      "types": "./dist/pipeline/flowAssemblyHelpers.d.ts"
     },
     "./pipeline-node-flow-helpers": {
-      "import": "./src/pipeline/nodeFlowHelpers.ts",
-      "types": "./src/pipeline/nodeFlowHelpers.ts"
+      "import": "./dist/pipeline/nodeFlowHelpers.js",
+      "types": "./dist/pipeline/nodeFlowHelpers.d.ts"
     },
     "./active-node-preview-helpers": {
-      "import": "./src/pipeline/activePreviewHelpers.ts",
-      "types": "./src/pipeline/activePreviewHelpers.ts"
+      "import": "./dist/pipeline/activePreviewHelpers.js",
+      "types": "./dist/pipeline/activePreviewHelpers.d.ts"
     },
     "./node-flow": {
-      "import": "./src/node/flow.ts",
-      "types": "./src/node/flow.ts"
+      "import": "./dist/node/flow.js",
+      "types": "./dist/node/flow.d.ts"
     },
     "./timestamp": {
-      "import": "./src/shared/timestamp.ts",
-      "types": "./src/shared/timestamp.ts"
+      "import": "./dist/shared/timestamp.js",
+      "types": "./dist/shared/timestamp.d.ts"
     },
     "./node-statistics": {
-      "import": "./src/node/statistics.ts",
-      "types": "./src/node/statistics.ts"
+      "import": "./dist/node/statistics.js",
+      "types": "./dist/node/statistics.d.ts"
     }
-  }
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

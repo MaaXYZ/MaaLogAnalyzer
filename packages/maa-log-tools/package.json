@@ -2,46 +2,47 @@
   "name": "@windsland52/maa-log-tools",
   "version": "0.0.1",
   "type": "module",
-  "private": true,
+  "private": false,
   "scripts": {
     "typecheck": "tsc -p ./tsconfig.json",
-    "build": "pnpm run typecheck"
+    "build": "pnpm run clean && tsc -p ./tsconfig.build.json && node ../../scripts/fix-esm-imports.mjs ./dist",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{ recursive: true, force: true })\""
   },
   "bin": {
-    "mla-log-tools": "./src/cli.ts"
+    "mla-log-tools": "./dist/cli.js"
   },
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     },
     "./cli": {
-      "import": "./src/cli.ts",
-      "types": "./src/cli.ts"
+      "import": "./dist/cli.js",
+      "types": "./dist/cli.d.ts"
     },
     "./node-input": {
-      "import": "./src/nodeInput.ts",
-      "types": "./src/nodeInput.ts"
+      "import": "./dist/nodeInput.js",
+      "types": "./dist/nodeInput.d.ts"
     },
     "./task-identity": {
-      "import": "./src/taskIdentity.ts",
-      "types": "./src/taskIdentity.ts"
+      "import": "./dist/taskIdentity.js",
+      "types": "./dist/taskIdentity.d.ts"
     },
     "./next-list-presentation": {
-      "import": "./src/nextListPresentation.ts",
-      "types": "./src/nextListPresentation.ts"
+      "import": "./dist/nextListPresentation.js",
+      "types": "./dist/nextListPresentation.d.ts"
     },
     "./task-execution-order": {
-      "import": "./src/taskExecutionOrder.ts",
-      "types": "./src/taskExecutionOrder.ts"
+      "import": "./dist/taskExecutionOrder.js",
+      "types": "./dist/taskExecutionOrder.d.ts"
     },
     "./node-execution-name": {
-      "import": "./src/nodeExecutionName.ts",
-      "types": "./src/nodeExecutionName.ts"
+      "import": "./dist/nodeExecutionName.js",
+      "types": "./dist/nodeExecutionName.d.ts"
     },
     "./node-execution-timeline": {
-      "import": "./src/nodeExecutionTimeline.ts",
-      "types": "./src/nodeExecutionTimeline.ts"
+      "import": "./dist/nodeExecutionTimeline.js",
+      "types": "./dist/nodeExecutionTimeline.d.ts"
     }
   },
   "dependencies": {
@@ -50,5 +51,15 @@
     "@windsland52/maa-log-parser": "workspace:*",
     "@windsland52/maa-log-runtime": "workspace:*",
     "fflate": "^0.8.2"
-  }
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

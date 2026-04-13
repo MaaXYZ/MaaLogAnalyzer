@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type { KernelOutput } from '@windsland52/maa-log-kernel/protocol'
 import { readNodeTextFileContent } from './nodeInput'
 import {
@@ -10,7 +11,7 @@ import {
 } from './index'
 
 const printUsage = (): void => {
-  console.error('Usage: pnpm kernel:cli <path> [--pretty] [--no-events]')
+  console.error('Usage: mla-log-tools <path> [--pretty] [--no-events]')
   console.error('  <path>: log file path, zip path, or log directory path')
 }
 
@@ -85,8 +86,18 @@ const main = async (): Promise<void> => {
   process.stdout.write('\n')
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error)
-  console.error(message)
-  process.exit(1)
-})
+const isEntrypoint = (): boolean => {
+  const argvPath = process.argv[1]
+  if (!argvPath) {
+    return false
+  }
+  return import.meta.url === pathToFileURL(path.resolve(argvPath)).href
+}
+
+if (isEntrypoint()) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(message)
+    process.exit(1)
+  })
+}
