@@ -50,6 +50,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build packages
+        run: pnpm build:packages
+
       - name: Publish packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -75,8 +78,42 @@ jobs:
             pkg_ver=$(node -p "require('./package.json').version")
             pkg_private=$(node -p "Boolean(require('./package.json').private)")
 
+            pkg_has_ts_runtime=$(node -e "
+              const p = require('./package.json');
+              const tsTargets = [];
+              const visit = (value, path, isTypeField) => {
+                if (typeof value === 'string') {
+                  if (!isTypeField && value.endsWith('.ts') && !value.endsWith('.d.ts')) {
+                    tsTargets.push(path + '=' + value);
+                  }
+                  return;
+                }
+                if (value && typeof value === 'object') {
+                  for (const [k, v] of Object.entries(value)) {
+                    const nextIsTypeField = isTypeField || k === 'types';
+                    visit(v, path ? path + '.' + k : k, nextIsTypeField);
+                  }
+                }
+              };
+              visit(p.bin, 'bin', false);
+              visit(p.exports, 'exports', false);
+              if (tsTargets.length > 0) {
+                console.error('Detected TypeScript runtime entries:');
+                for (const item of tsTargets) console.error('  - ' + item);
+                process.stdout.write('true');
+              } else {
+                process.stdout.write('false');
+              }
+            ")
+
             if [ "${pkg_private}" = "true" ]; then
               echo "Skip private package: ${pkg_name}"
+              cd - >/dev/null
+              continue
+            fi
+
+            if [ "${pkg_has_ts_runtime}" = "true" ]; then
+              echo "Skip package with TypeScript runtime entries: ${pkg_name}"
               cd - >/dev/null
               continue
             fi
