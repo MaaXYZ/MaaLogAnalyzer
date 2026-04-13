@@ -8,6 +8,10 @@ Repository-specific parser package for MaaLogAnalyzer.
 - Keep parser entry stable for other internal packages
 - Provide raw value transformer hooks used by parser runtime
 
+Architecture design:
+
+- `../../docs/LOG_PARSER_ARCHITECTURE.md`
+
 ## Exports
 
 - `LogParser`
