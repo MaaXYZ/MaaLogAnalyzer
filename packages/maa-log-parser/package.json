@@ -23,6 +23,62 @@
       "import": "./dist/event/meta.js",
       "types": "./dist/event/meta.d.ts"
     },
+    "./protocol-types": {
+      "import": "./dist/protocol/types.js",
+      "types": "./dist/protocol/types.d.ts"
+    },
+    "./protocol-event-factory": {
+      "import": "./dist/protocol/eventFactory.js",
+      "types": "./dist/protocol/eventFactory.d.ts"
+    },
+    "./trace-scope-types": {
+      "import": "./dist/trace/scopeTypes.js",
+      "types": "./dist/trace/scopeTypes.d.ts"
+    },
+    "./trace-scope-id": {
+      "import": "./dist/trace/scopeId.js",
+      "types": "./dist/trace/scopeId.d.ts"
+    },
+    "./trace-reducer": {
+      "import": "./dist/trace/reducer.js",
+      "types": "./dist/trace/reducer.d.ts"
+    },
+    "./query-types": {
+      "import": "./dist/query/queryTypes.js",
+      "types": "./dist/query/queryTypes.d.ts"
+    },
+    "./query-locator": {
+      "import": "./dist/query/locator.js",
+      "types": "./dist/query/locator.d.ts"
+    },
+    "./trace-index": {
+      "import": "./dist/query/traceIndex.js",
+      "types": "./dist/query/traceIndex.d.ts"
+    },
+    "./query-helpers": {
+      "import": "./dist/query/helpers.js",
+      "types": "./dist/query/helpers.d.ts"
+    },
+    "./raw-line-store": {
+      "import": "./dist/raw/store.js",
+      "types": "./dist/raw/store.d.ts"
+    },
+    "./service-types": {
+      "import": "./dist/service/types.js",
+      "types": "./dist/service/types.d.ts"
+    },
+    "./service-session-store": {
+      "import": "./dist/service/sessionStore.js",
+      "types": "./dist/service/sessionStore.d.ts"
+    },
+    "./service-evidence-builders": {
+      "import": "./dist/service/evidenceBuilders.js",
+      "types": "./dist/service/evidenceBuilders.d.ts"
+    },
+    "./service-tool-handlers": {
+      "import": "./dist/service/toolHandlers.js",
+      "types": "./dist/service/toolHandlers.d.ts"
+    },
     "./types": {
       "import": "./dist/shared/types.js",
       "types": "./dist/shared/types.d.ts"

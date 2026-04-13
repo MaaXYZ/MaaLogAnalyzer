@@ -144,6 +144,17 @@ import {
 } from '../pipeline/nodeFlowHelpers'
 import { wrapRaw } from '../shared/rawValue'
 import { toTimestampMs } from '../shared/timestamp'
+import { createProtocolEvent } from '../protocol/eventFactory'
+import type { ProtocolEvent } from '../protocol/types'
+import { buildTraceTree, type TraceScopePayload } from '../trace/reducer'
+import type { ScopeNode } from '../trace/scopeTypes'
+import { buildTraceIndex, type TraceIndex } from '../query/traceIndex'
+import {
+  cloneRawLineStore,
+  createRawLineStore,
+  setRawLineSource,
+  type RawLineStore,
+} from '../raw/store'
 
 export interface ParseProgress {
   current: number
@@ -154,6 +165,24 @@ export interface ParseProgress {
 export interface ParseFileOptions {
   chunkLineCount?: number
   yieldControl?: (() => Promise<void> | void) | null
+  sourceKey?: string
+  sourcePath?: string
+  inputIndex?: number
+  storeRawLines?: boolean
+}
+
+export interface ParseSourceInput {
+  content: string
+  sourceKey?: string
+  sourcePath?: string
+  inputIndex?: number
+}
+
+export interface ParseArtifactsSnapshot {
+  events: ProtocolEvent[]
+  trace: ScopeNode<TraceScopePayload | Record<string, never>>
+  index: TraceIndex
+  rawLines?: RawLineStore
 }
 
 const defaultParseYieldControl = async (): Promise<void> => {
@@ -175,6 +204,8 @@ const forceCopyString = (value: string): string => {
 
 export class LogParser {
   private events: EventNotification[] = []
+  private protocolEvents: ProtocolEvent[] = []
+  private rawLines: RawLineStore | null = null
   private messageMetaCache = new Map<string, MaaMessageMeta>()
   private stringPool = new StringPool()
   private eventTokenPool = new Map<string, string>()
@@ -217,6 +248,8 @@ export class LogParser {
 
   resetParsedEvents(): void {
     this.events = []
+    this.protocolEvents = []
+    this.rawLines = null
     this.messageMetaCache.clear()
     this.taskProcessMap.clear()
     this.taskThreadMap.clear()
@@ -268,7 +301,26 @@ export class LogParser {
     return copied
   }
 
-  private appendEvent(event: EventNotification & { processId: string; threadId: string; _dedupSignature: string; _timestampMs: number }): void {
+  private ensureRawLineStore(): RawLineStore {
+    if (!this.rawLines) {
+      this.rawLines = createRawLineStore()
+    }
+    return this.rawLines
+  }
+
+  private appendEvent(
+    event: EventNotification & {
+      processId: string
+      threadId: string
+      _dedupSignature: string
+      _timestampMs: number
+    },
+    sourceOptions?: {
+      sourceKey?: string
+      sourcePath?: string
+      inputIndex?: number
+    },
+  ): void {
     this.pruneDedupSignatures(event._timestampMs)
     const previous = this.lastEventBySignature.get(event._dedupSignature)
     const eventMs = event._timestampMs
@@ -290,6 +342,15 @@ export class LogParser {
       _lineNumber: event._lineNumber,
     }
     this.events.push(storedEvent)
+    const protocolEvent = createProtocolEvent(event, {
+      seq: this.protocolEvents.length + 1,
+      sourceKey: sourceOptions?.sourceKey,
+      sourcePath: sourceOptions?.sourcePath,
+      inputIndex: sourceOptions?.inputIndex,
+    })
+    if (protocolEvent) {
+      this.protocolEvents.push(protocolEvent)
+    }
     this.lastEventBySignature.set(event._dedupSignature, {
       timestampMs: eventMs,
       processId: event.processId,
@@ -322,7 +383,10 @@ export class LogParser {
       try {
         const event = this.parseEventLine(rawLine.trim(), lineNum)
         if (!event) continue
-        this.appendEvent(event)
+        this.appendEvent(event, {
+          sourceKey: 'input:0',
+          inputIndex: 0,
+        })
       } catch (e) {
         console.warn(`解析实时事件行失败(line=${lineNum}):`, e)
       }
@@ -333,34 +397,54 @@ export class LogParser {
    * 解析日志文件内容（异步分块处理）
    * 只处理包含 !!!OnEventNotify!!! 的行
    */
-  async parseFile(
-    content: string,
-    onProgress?: (progress: ParseProgress) => void,
-    options?: ParseFileOptions
-  ): Promise<void> {
-    this.resetParsedEvents()
+  private async parseSourceContent(
+    input: ParseSourceInput,
+    runtime: {
+      onProgress?: ((progress: ParseProgress) => void) | undefined
+      chunkLineCount: number
+      yieldControl: (() => Promise<void> | void) | null
+      progressOffset: number
+      totalChars: number
+      storeRawLines: boolean
+    },
+  ): Promise<number> {
+    const content = input.content
     const totalChars = content.length
-    const chunkLineCount = options?.chunkLineCount ?? 1000
-    const yieldControl = options?.yieldControl === undefined
-      ? defaultParseYieldControl
-      : options.yieldControl
+    const normalizedInputIndex = input.inputIndex ?? 0
+    const sourceKey = input.sourceKey ?? input.sourcePath ?? `input:${normalizedInputIndex}`
+    const sourceMeta = {
+      sourceKey,
+      sourcePath: input.sourcePath,
+      inputIndex: normalizedInputIndex,
+    }
+    const rawLines = runtime.storeRawLines ? [] as string[] : null
+    const chunkLineCount = runtime.chunkLineCount
     let cursor = 0
     let lineNum = 0
 
     if (totalChars === 0) {
-      if (onProgress) {
-        onProgress({
-          current: 0,
-          total: 0,
-          percentage: 100
+      if (rawLines) {
+        setRawLineSource(this.ensureRawLineStore(), {
+          ...sourceMeta,
+          lines: rawLines,
         })
       }
-      return
+      if (runtime.onProgress) {
+        const current = Math.min(runtime.progressOffset, runtime.totalChars)
+        runtime.onProgress({
+          current,
+          total: runtime.totalChars,
+          percentage: runtime.totalChars === 0
+            ? 100
+            : Math.round((current / runtime.totalChars) * 100),
+        })
+      }
+      return 0
     }
 
     while (cursor <= totalChars) {
-      if (yieldControl) {
-        await yieldControl()
+      if (runtime.yieldControl) {
+        await runtime.yieldControl()
       }
       let parsedLines = 0
 
@@ -369,6 +453,9 @@ export class LogParser {
         let lineEnd = content.indexOf('\n', lineStart)
         if (lineEnd < 0) lineEnd = totalChars
         const rawLine = content.slice(lineStart, lineEnd)
+        if (rawLines) {
+          rawLines.push(rawLine)
+        }
         cursor = lineEnd < totalChars ? lineEnd + 1 : totalChars + 1
         parsedLines += 1
         lineNum += 1
@@ -378,21 +465,103 @@ export class LogParser {
         try {
           const event = this.parseEventLine(rawLine.trim(), lineNum)
           if (!event) continue
-          this.appendEvent(event)
+          this.appendEvent(event, sourceMeta)
         } catch (e) {
           console.warn(`解析第 ${lineNum} 行失败:`, e)
         }
       }
 
-      if (onProgress) {
-        const current = Math.min(cursor, totalChars)
-        onProgress({
+      if (runtime.onProgress) {
+        const current = Math.min(runtime.progressOffset + Math.min(cursor, totalChars), runtime.totalChars)
+        runtime.onProgress({
           current,
-          total: totalChars,
-          percentage: Math.round((current / totalChars) * 100)
+          total: runtime.totalChars,
+          percentage: runtime.totalChars === 0
+            ? 100
+            : Math.round((current / runtime.totalChars) * 100),
         })
       }
     }
+
+    if (rawLines) {
+      setRawLineSource(this.ensureRawLineStore(), {
+        ...sourceMeta,
+        lines: rawLines,
+      })
+    }
+
+    return totalChars
+  }
+
+  /**
+   * 解析多 source 日志内容（异步分块处理）
+   */
+  async parseInputs(
+    inputs: ParseSourceInput[],
+    onProgress?: (progress: ParseProgress) => void,
+    options?: ParseFileOptions,
+  ): Promise<void> {
+    this.resetParsedEvents()
+
+    const normalizedInputs = inputs.map((input, index) => ({
+      ...input,
+      inputIndex: input.inputIndex ?? index,
+    }))
+    const totalChars = normalizedInputs.reduce((sum, input) => sum + input.content.length, 0)
+    const chunkLineCount = options?.chunkLineCount ?? 1000
+    const yieldControl = options?.yieldControl === undefined
+      ? defaultParseYieldControl
+      : options.yieldControl
+    const storeRawLines = options?.storeRawLines === true
+
+    if (normalizedInputs.length === 0) {
+      if (onProgress) {
+        onProgress({
+          current: 0,
+          total: 0,
+          percentage: 100,
+        })
+      }
+      return
+    }
+
+    let progressOffset = 0
+    for (const input of normalizedInputs) {
+      const parsedChars = await this.parseSourceContent(input, {
+        onProgress,
+        chunkLineCount,
+        yieldControl,
+        progressOffset,
+        totalChars,
+        storeRawLines,
+      })
+      progressOffset += parsedChars
+    }
+
+    if (onProgress) {
+      onProgress({
+        current: totalChars,
+        total: totalChars,
+        percentage: 100,
+      })
+    }
+  }
+
+  /**
+   * 解析单个日志文件内容（异步分块处理）
+   * 只处理包含 !!!OnEventNotify!!! 的行
+   */
+  async parseFile(
+    content: string,
+    onProgress?: (progress: ParseProgress) => void,
+    options?: ParseFileOptions
+  ): Promise<void> {
+    await this.parseInputs([{
+      content,
+      sourceKey: options?.sourceKey,
+      sourcePath: options?.sourcePath,
+      inputIndex: options?.inputIndex,
+    }], onProgress, options)
   }
 
   /**
@@ -422,6 +591,8 @@ export class LogParser {
 
     if (consume) {
       this.events = []
+      this.protocolEvents = []
+      this.rawLines = null
       this.messageMetaCache.clear()
       this.lastEventBySignature.clear()
       this.dedupSignatureTimeline = []
@@ -440,6 +611,34 @@ export class LogParser {
 
   getEventsSnapshot(): EventNotification[] {
     return this.events.slice()
+  }
+
+  getProtocolEventsSnapshot(): ProtocolEvent[] {
+    return this.protocolEvents.slice()
+  }
+
+  getRawLineStoreSnapshot(): RawLineStore | null {
+    return cloneRawLineStore(this.rawLines)
+  }
+
+  getTraceSnapshot(): ScopeNode<TraceScopePayload | Record<string, never>> {
+    return buildTraceTree(this.protocolEvents)
+  }
+
+  getTraceIndexSnapshot(): TraceIndex {
+    return buildTraceIndex(this.getTraceSnapshot(), this.protocolEvents)
+  }
+
+  getParseArtifactsSnapshot(): ParseArtifactsSnapshot {
+    const events = this.getProtocolEventsSnapshot()
+    const trace = buildTraceTree(events)
+    const index = buildTraceIndex(trace, events)
+    return {
+      events,
+      trace,
+      index,
+      rawLines: this.getRawLineStoreSnapshot() ?? undefined,
+    }
   }
 
   getTasks(): TaskInfo[] {

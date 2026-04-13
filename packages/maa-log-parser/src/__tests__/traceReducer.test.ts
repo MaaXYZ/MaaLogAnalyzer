@@ -1,0 +1,307 @@
+import { describe, expect, it } from 'vitest'
+import { buildTraceTree } from '../trace/reducer'
+import type { ProtocolEvent } from '../protocol/types'
+
+const makeEvent = <T extends ProtocolEvent>(event: T): T => event
+
+describe('TraceReducer', () => {
+  it('builds nested scope tree with next_list preference and nested task parenting', () => {
+    const events: ProtocolEvent[] = [
+      makeEvent({
+        kind: 'task',
+        seq: 1,
+        ts: '2026-04-08 00:00:01.000',
+        tsMs: 1,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 1 },
+        rawMessage: 'Tasker.Task.Starting',
+        phase: 'starting',
+        rawDetails: { task_id: 1, entry: 'Main' },
+        taskId: 1,
+        entry: 'Main',
+      }),
+      makeEvent({
+        kind: 'pipeline_node',
+        seq: 2,
+        ts: '2026-04-08 00:00:02.000',
+        tsMs: 2,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 2 },
+        rawMessage: 'Node.PipelineNode.Starting',
+        phase: 'starting',
+        rawDetails: { task_id: 1, node_id: 101, name: 'MainNode' },
+        taskId: 1,
+        nodeId: 101,
+        name: 'MainNode',
+      }),
+      makeEvent({
+        kind: 'next_list',
+        seq: 3,
+        ts: '2026-04-08 00:00:03.000',
+        tsMs: 3,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 3 },
+        rawMessage: 'Node.NextList.Starting',
+        phase: 'starting',
+        rawDetails: { task_id: 1, name: 'MainNode' },
+        taskId: 1,
+        name: 'MainNode',
+      }),
+      makeEvent({
+        kind: 'recognition',
+        seq: 4,
+        ts: '2026-04-08 00:00:04.000',
+        tsMs: 4,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 4 },
+        rawMessage: 'Node.Recognition.Starting',
+        phase: 'starting',
+        rawDetails: { task_id: 1, reco_id: 501, name: 'RecoA' },
+        taskId: 1,
+        recoId: 501,
+        name: 'RecoA',
+      }),
+      makeEvent({
+        kind: 'recognition',
+        seq: 5,
+        ts: '2026-04-08 00:00:05.000',
+        tsMs: 5,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 5 },
+        rawMessage: 'Node.Recognition.Succeeded',
+        phase: 'succeeded',
+        rawDetails: { task_id: 1, reco_id: 501, name: 'RecoA' },
+        taskId: 1,
+        recoId: 501,
+        name: 'RecoA',
+      }),
+      makeEvent({
+        kind: 'controller_action',
+        seq: 6,
+        ts: '2026-04-08 00:00:06.000',
+        tsMs: 6,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 6 },
+        rawMessage: 'Controller.Action.Starting',
+        phase: 'starting',
+        rawDetails: { ctrl_id: 7, action: 'Click' },
+        ctrlId: 7,
+        action: 'Click',
+      }),
+      makeEvent({
+        kind: 'controller_action',
+        seq: 7,
+        ts: '2026-04-08 00:00:07.000',
+        tsMs: 7,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 7 },
+        rawMessage: 'Controller.Action.Succeeded',
+        phase: 'succeeded',
+        rawDetails: { ctrl_id: 7, action: 'Click' },
+        ctrlId: 7,
+        action: 'Click',
+      }),
+      makeEvent({
+        kind: 'wait_freezes',
+        seq: 8,
+        ts: '2026-04-08 00:00:08.000',
+        tsMs: 8,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 8 },
+        rawMessage: 'Node.WaitFreezes.Starting',
+        phase: 'starting',
+        rawDetails: { task_id: 1, wf_id: 9, name: 'WF' },
+        taskId: 1,
+        wfId: 9,
+        name: 'WF',
+      }),
+      makeEvent({
+        kind: 'wait_freezes',
+        seq: 9,
+        ts: '2026-04-08 00:00:09.000',
+        tsMs: 9,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 9 },
+        rawMessage: 'Node.WaitFreezes.Failed',
+        phase: 'failed',
+        rawDetails: { task_id: 1, wf_id: 9, name: 'WF' },
+        taskId: 1,
+        wfId: 9,
+        name: 'WF',
+      }),
+      makeEvent({
+        kind: 'next_list',
+        seq: 10,
+        ts: '2026-04-08 00:00:10.000',
+        tsMs: 10,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 10 },
+        rawMessage: 'Node.NextList.Succeeded',
+        phase: 'succeeded',
+        rawDetails: { task_id: 1, name: 'MainNode' },
+        taskId: 1,
+        name: 'MainNode',
+      }),
+      makeEvent({
+        kind: 'action',
+        seq: 11,
+        ts: '2026-04-08 00:00:11.000',
+        tsMs: 11,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 11 },
+        rawMessage: 'Node.Action.Starting',
+        phase: 'starting',
+        rawDetails: { task_id: 1, action_id: 601, name: 'DoA' },
+        taskId: 1,
+        actionId: 601,
+        name: 'DoA',
+      }),
+      makeEvent({
+        kind: 'task',
+        seq: 12,
+        ts: '2026-04-08 00:00:12.000',
+        tsMs: 12,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 12 },
+        rawMessage: 'Tasker.Task.Starting',
+        phase: 'starting',
+        rawDetails: { task_id: 2, entry: 'SubTask' },
+        taskId: 2,
+        entry: 'SubTask',
+      }),
+      makeEvent({
+        kind: 'pipeline_node',
+        seq: 13,
+        ts: '2026-04-08 00:00:13.000',
+        tsMs: 13,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 13 },
+        rawMessage: 'Node.PipelineNode.Starting',
+        phase: 'starting',
+        rawDetails: { task_id: 2, node_id: 201, name: 'SubNode' },
+        taskId: 2,
+        nodeId: 201,
+        name: 'SubNode',
+      }),
+      makeEvent({
+        kind: 'pipeline_node',
+        seq: 14,
+        ts: '2026-04-08 00:00:14.000',
+        tsMs: 14,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 14 },
+        rawMessage: 'Node.PipelineNode.Succeeded',
+        phase: 'succeeded',
+        rawDetails: { task_id: 2, node_id: 201, name: 'SubNode' },
+        taskId: 2,
+        nodeId: 201,
+        name: 'SubNode',
+      }),
+      makeEvent({
+        kind: 'task',
+        seq: 15,
+        ts: '2026-04-08 00:00:15.000',
+        tsMs: 15,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 15 },
+        rawMessage: 'Tasker.Task.Succeeded',
+        phase: 'succeeded',
+        rawDetails: { task_id: 2, entry: 'SubTask' },
+        taskId: 2,
+        entry: 'SubTask',
+      }),
+      makeEvent({
+        kind: 'action',
+        seq: 16,
+        ts: '2026-04-08 00:00:16.000',
+        tsMs: 16,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 16 },
+        rawMessage: 'Node.Action.Succeeded',
+        phase: 'succeeded',
+        rawDetails: { task_id: 1, action_id: 601, name: 'DoA' },
+        taskId: 1,
+        actionId: 601,
+        name: 'DoA',
+      }),
+      makeEvent({
+        kind: 'pipeline_node',
+        seq: 17,
+        ts: '2026-04-08 00:00:17.000',
+        tsMs: 17,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 17 },
+        rawMessage: 'Node.PipelineNode.Succeeded',
+        phase: 'succeeded',
+        rawDetails: { task_id: 1, node_id: 101, name: 'MainNode' },
+        taskId: 1,
+        nodeId: 101,
+        name: 'MainNode',
+      }),
+      makeEvent({
+        kind: 'task',
+        seq: 18,
+        ts: '2026-04-08 00:00:18.000',
+        tsMs: 18,
+        processId: 'Px1',
+        threadId: 'Tx1',
+        source: { sourceKey: 'maa.log', inputIndex: 0, line: 18 },
+        rawMessage: 'Tasker.Task.Succeeded',
+        phase: 'succeeded',
+        rawDetails: { task_id: 1, entry: 'Main' },
+        taskId: 1,
+        entry: 'Main',
+      }),
+    ]
+
+    const trace = buildTraceTree(events)
+
+    expect(trace.children).toHaveLength(1)
+    const task1 = trace.children[0]
+    expect(task1.kind).toBe('task')
+    expect(task1.children).toHaveLength(1)
+
+    const pipeline1 = task1.children[0]
+    expect(pipeline1.kind).toBe('pipeline_node')
+    expect(pipeline1.children.map((item) => item.kind)).toEqual(['next_list', 'action'])
+
+    const nextList = pipeline1.children[0]
+    expect(nextList.kind).toBe('next_list')
+    expect(nextList.children.map((item) => item.kind)).toEqual([
+      'recognition',
+      'controller_action',
+      'wait_freezes',
+    ])
+
+    const action = pipeline1.children[1]
+    expect(action.kind).toBe('action')
+    expect(action.children).toHaveLength(1)
+    expect(action.children[0]?.kind).toBe('task')
+
+    const task2 = action.children[0]
+    expect(task2.taskId).toBe(2)
+    expect(task2.children.map((item) => item.kind)).toEqual(['pipeline_node'])
+
+    expect(task1.status).toBe('succeeded')
+    expect(task2.status).toBe('succeeded')
+    expect(nextList.status).toBe('succeeded')
+    expect(action.status).toBe('succeeded')
+  })
+})

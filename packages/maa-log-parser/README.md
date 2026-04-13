@@ -31,6 +31,55 @@ Subpath export:
 	- `parseMaaMessageMeta`
 	- `resolveTaskLifecyclePhase`
 	- `buildEventDedupSignature`
+- `@windsland52/maa-log-parser/protocol-types`
+	- `SourceRef`
+	- `ProtocolEvent`
+	- protocol event kind/type exports
+- `@windsland52/maa-log-parser/protocol-event-factory`
+	- `createSourceRef`
+	- `createProtocolEvent`
+- `@windsland52/maa-log-parser/trace-scope-types`
+	- `ScopeKind`
+	- `ScopeNode`
+- `@windsland52/maa-log-parser/trace-scope-id`
+	- `buildScopeId`
+	- `createScopeId`
+	- `resolveScopeLocalId`
+- `@windsland52/maa-log-parser/trace-reducer`
+	- `buildTraceTree`
+	- `TraceScopePayload`
+- `@windsland52/maa-log-parser/query-types`
+	- `NodeExecutionRef`
+	- `QueryResult`
+- `@windsland52/maa-log-parser/query-locator`
+	- `ScopeLocator`
+	- `NodeExecutionLocator`
+	- `UniqueScopeLocator`
+	- `buildTaskNodeKey`
+- `@windsland52/maa-log-parser/trace-index`
+	- `TraceIndex`
+	- `createEmptyTraceIndex`
+	- `buildTraceIndex`
+- `@windsland52/maa-log-parser/query-helpers`
+	- `findScopeById`
+	- `findScopesByLocator`
+	- `findNodeExecution`
+	- `getParentChain`
+	- `getNodeTimeline`
+	- `getNextListHistory`
+	- `createQueryHelpers`
+- `@windsland52/maa-log-parser/raw-line-store`
+	- `createRawLineStore`
+	- `getRawLine`
+	- `getRawLinesByRefs`
+- `@windsland52/maa-log-parser/service-session-store`
+	- `AnalyzerSessionStore`
+	- `createAnalyzerSessionStore`
+- `@windsland52/maa-log-parser/service-evidence-builders`
+	- `buildEvidence`
+	- `buildLineEvidence`
+- `@windsland52/maa-log-parser/service-tool-handlers`
+	- `createAnalyzerToolHandlers`
 - `@windsland52/maa-log-parser/types`
 	- Type re-exports for parser-related data structures
 - `@windsland52/maa-log-parser/log-event-decoders`
