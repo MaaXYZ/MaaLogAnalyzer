@@ -78,6 +78,12 @@ const readNextList = (value: unknown): ProtocolNextListItem[] | undefined => {
   return items
 }
 
+const requireTaskId = <T extends { taskId?: number }>(
+  event: T,
+): T | null => {
+  return event.taskId != null ? event : null
+}
+
 const buildBase = <TKind extends ProtocolEvent['kind']>(
   event: ParsedEventLine,
   options: CreateProtocolEventOptions,
@@ -150,7 +156,7 @@ export const createProtocolEvent = (
       uuid: readStringField(details, 'uuid'),
       hash: readStringField(details, 'hash'),
     }
-    return protocolEvent
+    return requireTaskId(protocolEvent)
   }
 
   if (meta.domain !== 'Node') return null
@@ -167,7 +173,7 @@ export const createProtocolEvent = (
         recoDetails: readRecord(readUnknownField(details, 'reco_details')),
         actionDetails: readRecord(readUnknownField(details, 'action_details')),
       }
-      return protocolEvent
+      return requireTaskId(protocolEvent)
     }
     case 'RecognitionNode': {
       const protocolEvent: RecognitionNodeEvent = {
@@ -180,7 +186,7 @@ export const createProtocolEvent = (
         nodeDetails: readRecord(readUnknownField(details, 'node_details')),
         recoDetails: readRecord(readUnknownField(details, 'reco_details')),
       }
-      return protocolEvent
+      return requireTaskId(protocolEvent)
     }
     case 'ActionNode': {
       const protocolEvent: ActionNodeEvent = {
@@ -193,7 +199,7 @@ export const createProtocolEvent = (
         nodeDetails: readRecord(readUnknownField(details, 'node_details')),
         actionDetails: readRecord(readUnknownField(details, 'action_details')),
       }
-      return protocolEvent
+      return requireTaskId(protocolEvent)
     }
     case 'NextList': {
       const protocolEvent: NextListEvent = {
@@ -203,7 +209,7 @@ export const createProtocolEvent = (
         list: readNextList(readUnknownField(details, 'list')),
         focus: readUnknownField(details, 'focus'),
       }
-      return protocolEvent
+      return requireTaskId(protocolEvent)
     }
     case 'Recognition': {
       const protocolEvent: RecognitionEvent = {
@@ -215,7 +221,7 @@ export const createProtocolEvent = (
         anchor: readStringField(details, 'anchor'),
         recoDetails: readRecord(readUnknownField(details, 'reco_details')),
       }
-      return protocolEvent
+      return requireTaskId(protocolEvent)
     }
     case 'Action': {
       const protocolEvent: ActionEvent = {
@@ -226,7 +232,7 @@ export const createProtocolEvent = (
         focus: readUnknownField(details, 'focus'),
         actionDetails: readRecord(readUnknownField(details, 'action_details')),
       }
-      return protocolEvent
+      return requireTaskId(protocolEvent)
     }
     case 'WaitFreezes': {
       const protocolEvent: WaitFreezesEvent = {
@@ -241,7 +247,7 @@ export const createProtocolEvent = (
         elapsed: readNumberField(details, 'elapsed'),
         focus: readUnknownField(details, 'focus'),
       }
-      return protocolEvent
+      return requireTaskId(protocolEvent)
     }
     default:
       return null

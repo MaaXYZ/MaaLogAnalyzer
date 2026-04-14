@@ -374,7 +374,8 @@ describe('Strict task projector semantics', () => {
 
     const nestedRecognitionNode = mainRecognition?.children?.[0]
     expect(nestedRecognitionNode?.task_id).toBe(2)
-    expect(nestedRecognitionNode?.children?.map((item) => item.type)).toEqual(['recognition_node'])
+    expect(nestedRecognitionNode?.children?.map((item) => item.type)).toEqual(['recognition'])
+    expect(nestedRecognitionNode?.children?.[0]?.children?.map((item) => item.type)).toEqual(['recognition_node'])
 
     const actionRoot = collectFlowItems(
       mainNode.node_flow,

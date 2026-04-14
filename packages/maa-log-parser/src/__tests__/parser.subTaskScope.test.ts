@@ -13,9 +13,15 @@ const formatTimestamp = (eventIndex: number): string => {
 const makeEventLine = (
   eventIndex: number,
   message: string,
-  details: Record<string, unknown>
+  details: Record<string, unknown>,
+  source?: {
+    processId?: string
+    threadId?: string
+  }
 ): string => {
-  return `[${formatTimestamp(eventIndex)}][INF][Px1][Tx1][test] !!!OnEventNotify!!! [handle=1] [msg=${message}] [details=${JSON.stringify(details)}]`
+  const processId = source?.processId ?? 'Px1'
+  const threadId = source?.threadId ?? 'Tx1'
+  return `[${formatTimestamp(eventIndex)}][INF][${processId}][${threadId}][test] !!!OnEventNotify!!! [handle=1] [msg=${message}] [details=${JSON.stringify(details)}]`
 }
 
 const collectFlowItems = (
@@ -189,9 +195,15 @@ describe('LogParser sub task scoped node aggregation', () => {
       mainNode.node_flow,
       (item, path) => item.type === 'action' && item.action_id === 5001 && path.some(pathNode => pathNode.type === 'task' && pathNode.task_id === 12)
     )
+    const subTaskActionNodeItems = collectFlowItems(
+      mainNode.node_flow,
+      (item, path) => item.type === 'action_node' && item.action_id === 5001 && path.some(pathNode => pathNode.type === 'task' && pathNode.task_id === 12)
+    )
 
     expect(subTaskActionItems.length).toBeGreaterThan(0)
-    expect(subTaskActionItems[0].item.status).toBe('failed')
+    expect(subTaskActionItems[0].item.status).toBe('success')
+    expect(subTaskActionNodeItems.length).toBeGreaterThan(0)
+    expect(subTaskActionNodeItems[0].item.status).toBe('failed')
   })
 
   it('keeps realtime sub task flow under the explicit running action node', () => {
@@ -375,10 +387,16 @@ describe('LogParser sub task scoped node aggregation', () => {
     expect(mainTask?.nodes.length).toBe(1)
   })
 
-  it('deduplicates duplicate Tasker.Task.Starting for same task_id and uuid', async () => {
+  it('deduplicates mirrored cross-source Tasker.Task.Starting for same task_id and uuid', async () => {
     const lines = [
-      makeEventLine(191, 'Tasker.Task.Starting', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }),
-      makeEventLine(192, 'Tasker.Task.Starting', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }),
+      makeEventLine(191, 'Tasker.Task.Starting', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }, {
+        processId: 'Px1',
+        threadId: 'Tx1',
+      }),
+      makeEventLine(192, 'Tasker.Task.Starting', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }, {
+        processId: 'Px2',
+        threadId: 'Tx2',
+      }),
       makeEventLine(193, 'Node.PipelineNode.Starting', { task_id: 91, node_id: 9101, name: 'MainNode' }),
       makeEventLine(194, 'Node.PipelineNode.Succeeded', { task_id: 91, node_id: 9101, name: 'MainNode' }),
       makeEventLine(195, 'Tasker.Task.Succeeded', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }),
@@ -391,6 +409,25 @@ describe('LogParser sub task scoped node aggregation', () => {
     expect(matchedTasks).toHaveLength(1)
     expect(matchedTasks[0].status).toBe('succeeded')
     expect(matchedTasks[0].nodes.length).toBe(1)
+  })
+
+  it('keeps same-source duplicate Tasker.Task.Starting as separate task scopes', async () => {
+    const lines = [
+      makeEventLine(191, 'Tasker.Task.Starting', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }),
+      makeEventLine(192, 'Tasker.Task.Starting', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }),
+      makeEventLine(193, 'Node.PipelineNode.Starting', { task_id: 91, node_id: 9101, name: 'MainNode' }),
+      makeEventLine(194, 'Node.PipelineNode.Succeeded', { task_id: 91, node_id: 9101, name: 'MainNode' }),
+      makeEventLine(195, 'Tasker.Task.Succeeded', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }),
+    ]
+
+    const parser = new LogParser()
+    await parser.parseFile(lines.join('\n'))
+    const tasks = parser.getTasksSnapshot()
+    const matchedTasks = tasks.filter(item => item.task_id === 91)
+    expect(matchedTasks).toHaveLength(2)
+    expect(matchedTasks.map(item => item.status)).toEqual(['running', 'succeeded'])
+    expect(matchedTasks[0]?.nodes).toEqual([])
+    expect(matchedTasks[1]?.nodes).toHaveLength(1)
   })
 
   it('ignores non-numeric task_id in Tasker.Task lifecycle events', async () => {
