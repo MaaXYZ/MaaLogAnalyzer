@@ -25,83 +25,80 @@ Architecture design:
 Subpath export:
 
 - `@windsland52/maa-log-parser/raw-value`
-	- `setRawValueTransformer`
-	- `resetRawValueTransformer`
-	- `wrapRaw`
+  - `setRawValueTransformer`
+  - `resetRawValueTransformer`
+  - `wrapRaw`
 - `@windsland52/maa-log-parser/protocol-types`
-	- `SourceRef`
-	- `ProtocolEvent`
-	- protocol event kind/type exports
+  - `SourceRef`
+  - `ProtocolEvent`
+  - protocol event kind/type exports
 - `@windsland52/maa-log-parser/protocol-event-factory`
-	- `createSourceRef`
-	- `createProtocolEvent`
+  - `createSourceRef`
+  - `createProtocolEvent`
 - `@windsland52/maa-log-parser/trace-scope-types`
-	- `ScopeKind`
-	- `ScopeNode`
+  - `ScopeKind`
+  - `ScopeNode`
 - `@windsland52/maa-log-parser/trace-scope-id`
-	- `buildScopeId`
-	- `createScopeId`
-	- `resolveScopeLocalId`
+  - `buildScopeId`
+  - `createScopeId`
+  - `resolveScopeLocalId`
 - `@windsland52/maa-log-parser/trace-reducer`
-	- `buildTraceTree`
-	- `TraceScopePayload`
+  - `buildTraceTree`
+  - `TraceScopePayload`
 - `@windsland52/maa-log-parser/query-types`
-	- `NodeExecutionRef`
-	- `QueryResult`
+  - `NodeExecutionRef`
+  - `QueryResult`
 - `@windsland52/maa-log-parser/query-locator`
-	- `ScopeLocator`
-	- `NodeExecutionLocator`
-	- `UniqueScopeLocator`
-	- `buildTaskNodeKey`
+  - `ScopeLocator`
+  - `NodeExecutionLocator`
+  - `UniqueScopeLocator`
+  - `buildTaskNodeKey`
 - `@windsland52/maa-log-parser/trace-index`
-	- `TraceIndex`
-	- `createEmptyTraceIndex`
-	- `buildTraceIndex`
+  - `TraceIndex`
+  - `createEmptyTraceIndex`
+  - `buildTraceIndex`
 - `@windsland52/maa-log-parser/query-helpers`
-	- `findScopeById`
-	- `findScopesByLocator`
-	- `findNodeExecution`
-	- `getParentChain`
-	- `getNodeTimeline`
-	- `getNextListHistory`
-	- `createQueryHelpers`
+  - `findScopeById`
+  - `findScopesByLocator`
+  - `findNodeExecution`
+  - `getParentChain`
+  - `getNodeTimeline`
+  - `getNextListHistory`
+  - `createQueryHelpers`
 - `@windsland52/maa-log-parser/raw-line-store`
-	- `createRawLineStore`
-	- `getRawLine`
-	- `getRawLinesByRefs`
+  - `createRawLineStore`
+  - `getRawLine`
+  - `getRawLinesByRefs`
 - `@windsland52/maa-log-parser/service-session-store`
-	- `AnalyzerSessionStore`
-	- `createAnalyzerSessionStore`
+  - `AnalyzerSessionStore`
+  - `createAnalyzerSessionStore`
 - `@windsland52/maa-log-parser/service-evidence-builders`
-	- `buildEvidence`
-	- `buildLineEvidence`
+  - `buildEvidence`
+  - `buildLineEvidence`
 - `@windsland52/maa-log-parser/service-tool-handlers`
-	- `createAnalyzerToolHandlers`
+  - `createAnalyzerToolHandlers`
 - `@windsland52/maa-log-parser/types`
-	- Type re-exports for parser-related data structures
+  - Type re-exports for parser-related data structures
 - `@windsland52/maa-log-parser/log-event-decoders`
-	- `readNumberField`
-	- `readStringField`
-	- `decodeTaskLifecycleEventDetails`
-	- `decodeEventIdentityIds`
-- `@windsland52/maa-log-parser/image-lookup-helpers`
-	- `findImageByTimestampSuffix`
-	- `findWaitFreezesImages`
+  - `readNumberField`
+  - `readStringField`
+  - `decodeTaskLifecycleEventDetails`
+  - `decodeEventIdentityIds`
 - `@windsland52/maa-log-parser/node-flow`
-	- `buildRecognitionFlowItems`
-	- `buildActionFlowItems`
-	- `buildNodeFlowItems`
-	- `buildNodeFlowGroups`
+  - `buildRecognitionFlowItems`
+  - `buildActionFlowItems`
+  - `buildNodeFlowItems`
+  - `buildNodeFlowGroups`
 - `@windsland52/maa-log-parser/timestamp`
-	- `toTimestampMs`
+  - `toTimestampMs`
 - `@windsland52/maa-log-parser/node-statistics`
-	- `NodeStatisticsAnalyzer`
-	- `NodeStatistics`
-	- `RecognitionActionStatistics`
+  - `NodeStatisticsAnalyzer`
+  - `NodeStatistics`
+  - `RecognitionActionStatistics`
 
 ## Notes
 
 - `LogParser` runtime implementation lives at `src/core/logParser.ts`.
 - `getTasksSnapshot()` projects the current parser state without clearing buffered events. Use it for realtime/incremental views that need repeated reads.
-- `getTasks()` projects tasks and then clears the buffered parse state. Use it for one-shot file parsing when the parsed result has already been handed off.
-- `image-lookup-helpers` is a low-level timestamp/suffix matcher used by the projector to attach error, vision, and `wait_freezes` screenshots. Most callers should prefer `LogParser#setErrorImages()`, `setVisionImages()`, and `setWaitFreezesImages()` instead of calling those helpers directly.
+- `consumeTasks()` projects tasks and then clears the buffered parse state. Use it for one-shot file parsing when the parsed result has already been handed off.
+- `imageLookupHelpers.ts` is an internal low-level timestamp/suffix matcher used by the projector to attach error, vision, and `wait_freezes` screenshots. Most callers should prefer `LogParser#setErrorImages()`, `setVisionImages()`, and `setWaitFreezesImages()` instead of calling those helpers directly.

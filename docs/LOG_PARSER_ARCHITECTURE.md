@@ -1003,7 +1003,7 @@ type AnalyzerSessionStore = Map<string, AnalyzerSession>
 
 第一阶段收敛后，以解析语义清晰为优先，要求如下：
 
-1. `getTasksSnapshot()` / `getTasks()` 直接返回严格 projector 结果
+1. `getTasksSnapshot()` / `consumeTasks()` 直接返回严格 projector 结果
 2. 不再为旧 UI 伪造 `action` 根、running 占位或启发式重挂子任务
 3. `NextList.Failed` 带 `list` 时，列表仍保留
 4. `PipelineNode/RecognitionNode/ActionNode` 终态直接携带的 `reco_details/action_details` 仍可被 projector 正确消费

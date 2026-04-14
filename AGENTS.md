@@ -49,7 +49,7 @@ cd src-vscode && npm run compile
 2. `LogParser.parseFile()` parses in chunks (non-blocking)
 3. OnEventNotify events are extracted and deduplicated
 4. Protocol events are reduced into a trace tree
-5. Tasks are projected from trace via `getTasksSnapshot()` or `getTasks()`
+5. Tasks are projected from trace via `getTasksSnapshot()` or `consumeTasks()`
 6. UI-specific node flow / recognition views are derived from projected task data
 7. UI renders Process/Detail/Flow/Search views
 
@@ -68,7 +68,7 @@ Compatibility note:
 - `src/types.ts` is now a compatibility type facade.
 - Canonical parser-owned type definitions live in `packages/maa-log-parser/src/types.ts`.
 - `LogParser#getTasksSnapshot()` is non-consuming and should be used for realtime/incremental reads.
-- `LogParser#getTasks()` is consuming and clears buffered parser state after projection, which fits one-shot file parsing flows.
+- `LogParser#consumeTasks()` is consuming and clears buffered parser state after projection, which fits one-shot file parsing flows.
 
 ## Implementation Rules
 
@@ -113,7 +113,6 @@ Compatibility note:
 2. Verify no accidental encoding corruption (especially Chinese text files).
 3. Review `git diff` for unrelated edits.
 4. Confirm platform-specific behavior on at least one realistic path (log file/folder/zip).
-
 
 ## Encoding Safety (Must Follow)
 

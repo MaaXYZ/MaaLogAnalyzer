@@ -537,7 +537,7 @@ export class LogParser {
    * Use this for one-shot parse flows where the caller only needs the final
    * projected task list and will not keep querying parser snapshots afterward.
    */
-  getTasks(): TaskInfo[] {
+  consumeTasks(): TaskInfo[] {
     return this.projectTasksSnapshot(true)
   }
 

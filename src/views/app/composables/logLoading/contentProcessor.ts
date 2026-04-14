@@ -25,7 +25,7 @@ export const createProcessLogContent = (
     await options.parser.parseFile(params.content, (progress) => {
       options.parseProgress.value = progress.percentage
     })
-    const parsedTasks = options.parser.getTasks()
+    const parsedTasks = options.parser.consumeTasks()
     options.clearRuntimeFilters()
     options.applyParsedTasks(parsedTasks, false)
 

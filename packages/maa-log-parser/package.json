@@ -79,10 +79,6 @@
       "import": "./dist/shared/logEventDecoders.js",
       "types": "./dist/shared/logEventDecoders.d.ts"
     },
-    "./image-lookup-helpers": {
-      "import": "./dist/event/imageLookupHelpers.js",
-      "types": "./dist/event/imageLookupHelpers.d.ts"
-    },
     "./node-flow": {
       "import": "./dist/node/flow.js",
       "types": "./dist/node/flow.d.ts"

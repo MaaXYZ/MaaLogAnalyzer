@@ -42,7 +42,7 @@ export const useNodeStatisticsDataSource = (
         parseProgress.value = progress.percentage
       })
 
-      const newTasks = parser.getTasks()
+      const newTasks = parser.consumeTasks()
       if (!useLocalData.value) {
         useLocalData.value = true
       }
