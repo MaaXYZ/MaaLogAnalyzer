@@ -25,6 +25,7 @@ export type {
 export { AnalyzerSessionStore, createAnalyzerSessionStore } from '../service/sessionStore'
 export { buildEvidence, buildLineEvidence } from '../service/evidenceBuilders'
 export { createAnalyzerToolHandlers } from '../service/toolHandlers'
+export { projectTasksFromTrace } from '../projector/taskProjector'
 export type {
   AnalyzerInputResolver,
   AnalyzerSession,
@@ -49,6 +50,7 @@ export type {
   ParseLogBundleResult,
   ResolvedLogSourceInput,
 } from '../service/types'
+export type { ProjectTasksFromTraceOptions } from '../projector/taskProjector'
 export {
   resetRawValueTransformer,
   setRawValueTransformer,

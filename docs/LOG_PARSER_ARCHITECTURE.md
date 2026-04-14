@@ -993,22 +993,22 @@ type AnalyzerSessionStore = Map<string, AnalyzerSession>
 4. 调用第二段
 5. 构建查询索引与可选 `RawLineStore`
 6. 调用第三段
-7. 对外暴露兼容 API 与中间层 artifacts API
+7. 对外暴露严格语义 API 与中间层 artifacts API
 
 补充：
 
 - 如需承接 Orchestrator/Tool 协议，`session` 管理与工具方法分发放在 `service/` 层，不放入 `core/logParser.ts`
 
-## 11. 兼容性要求
+## 11. 严格语义要求
 
-第一阶段重构必须保持以下行为不变：
+第一阶段收敛后，以解析语义清晰为优先，要求如下：
 
-1. `getTasksSnapshot()` / `getTasks()` 的 UI 表现不变
-2. 现有任务、节点、流程、子任务、截图展示不变
+1. `getTasksSnapshot()` / `getTasks()` 直接返回严格 projector 结果
+2. 不再为旧 UI 伪造 `action` 根、running 占位或启发式重挂子任务
 3. `NextList.Failed` 带 `list` 时，列表仍保留
 4. `PipelineNode/RecognitionNode/ActionNode` 终态直接携带的 `reco_details/action_details` 仍可被 projector 正确消费
-5. 子任务嵌套、recognition node、action node、wait freezes 展示效果不退化
-6. 对外新增的 artifacts/query API 不影响现有 UI 入口兼容性
+5. 子任务嵌套、recognition node、action node、wait freezes 按真实作用域树投影
+6. 对外新增的 artifacts/query API 与严格 projector 语义保持一致
 
 ## 12. 实施步骤
 

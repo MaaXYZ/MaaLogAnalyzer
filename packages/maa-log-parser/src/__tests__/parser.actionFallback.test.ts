@@ -35,8 +35,8 @@ const collectActionItems = (items: UnifiedFlowItem[] | undefined): UnifiedFlowIt
 	return result
 }
 
-describe('LogParser action fallback', () => {
-	it('creates fallback action flow item from PipelineNode.Failed action_details', async () => {
+describe('LogParser strict action projection', () => {
+	it('does not create fallback action flow item from PipelineNode.Failed action_details', async () => {
 		const lines = [
 			makeEventLine(1, 'Tasker.Task.Starting', { task_id: 81, entry: 'MainTask', hash: 'h-81', uuid: 'u-81' }),
 			makeEventLine(2, 'Node.PipelineNode.Starting', { task_id: 81, node_id: 8101, name: 'MainNode' }),
@@ -66,12 +66,7 @@ describe('LogParser action fallback', () => {
 
 		const node = task!.nodes[0]
 		const actionItems = collectActionItems(node.node_flow)
-
-		expect(actionItems.length).toBeGreaterThanOrEqual(1)
-		expect(actionItems[0].name).toBe('FallbackAction')
-		expect(actionItems[0].status).toBe('failed')
-		expect(actionItems[0].action_id).toBe(9001)
-		expect(actionItems[0].action_details?.success).toBe(false)
+		expect(actionItems).toHaveLength(0)
 	})
 
 	it('does not create fallback action flow item when action_details is absent', async () => {

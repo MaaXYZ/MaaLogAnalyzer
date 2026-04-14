@@ -81,7 +81,7 @@ export const useNodeCardFlowRows = (params: UseNodeCardFlowRowsParams) => {
     return name
   }
   const getActionTimelineItemDisplayName = (item: UnifiedFlowItem): string => {
-    if (item.type !== 'action') return item.name
+    if (item.type !== 'action' && item.type !== 'action_node') return item.name
     if (actionRootItem.value && item.id !== actionRootItem.value.id) return item.name
     return formatActionDisplayName(item.name)
   }

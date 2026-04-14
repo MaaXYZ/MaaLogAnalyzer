@@ -86,7 +86,9 @@ export interface BuildFlowchartOptions {
 
 const hasFailedAction = (node: NodeInfo): boolean => {
   if (node.action_details && node.action_details.success === false) return true
-  return (node.node_flow || []).some((item) => item.type === 'action' && item.status === 'failed')
+  return (node.node_flow || []).some(
+    (item) => (item.type === 'action' || item.type === 'action_node') && item.status === 'failed'
+  )
 }
 
 const resolveFlowNodeStatus = (

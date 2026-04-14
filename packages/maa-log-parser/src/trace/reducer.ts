@@ -45,6 +45,14 @@ const BUSINESS_SCOPE_KINDS = new Set<ScopeKind>([
 
 const isBusinessScope = (kind: ScopeKind): boolean => BUSINESS_SCOPE_KINDS.has(kind)
 
+const matchesScopeSource = (
+  scope: TraceScopeNode,
+  event: ProtocolEvent,
+): boolean => {
+  const payload = scope.payload as Record<string, unknown>
+  return payload.processId === event.processId && payload.threadId === event.threadId
+}
+
 const pushMapStack = <K, V>(
   map: Map<K, V[]>,
   key: K,
@@ -208,12 +216,16 @@ const createRootNode = (events: ProtocolEvent[]): TraceRootNode => ({
 
 const findNearestOpenBusinessScope = (
   state: ReducerState,
-  taskId?: number,
+  options: {
+    taskId?: number
+    event?: ProtocolEvent
+  } = {},
 ): TraceScopeNode | null => {
   for (let index = state.openScopes.length - 1; index >= 0; index -= 1) {
     const scope = state.openScopes[index]
     if (!isBusinessScope(scope.kind)) continue
-    if (taskId != null && scope.taskId !== taskId) continue
+    if (options.taskId != null && scope.taskId !== options.taskId) continue
+    if (options.event && !matchesScopeSource(scope, options.event)) continue
     return scope
   }
   return null
@@ -229,23 +241,26 @@ const resolveParentScope = (
     case 'resource_loading':
       return state.root
     case 'controller_action':
-      return findNearestOpenBusinessScope(state) ?? state.root
+      return findNearestOpenBusinessScope(state, { event }) ?? state.root
     case 'task':
-      return findNearestOpenBusinessScope(state) ?? state.root
+      return findNearestOpenBusinessScope(state, { event }) ?? state.root
     case 'pipeline_node':
       return taskId != null
-        ? peekMapStack(state.openTaskScopesByTaskId, taskId) ?? state.root
+        ? peekMapStack(state.openTaskScopesByTaskId, taskId)
+          ?? findNearestOpenBusinessScope(state, { event })
+          ?? state.root
         : state.root
     case 'next_list':
       return taskId != null
         ? peekMapStack(state.openPipelineScopesByTaskId, taskId)
           ?? peekMapStack(state.openTaskScopesByTaskId, taskId)
+          ?? findNearestOpenBusinessScope(state, { event })
           ?? state.root
         : state.root
     case 'recognition':
       return taskId != null
         ? peekMapStack(state.openNextListScopesByTaskId, taskId)
-          ?? findNearestOpenBusinessScope(state, taskId)
+          ?? findNearestOpenBusinessScope(state, { taskId })
           ?? peekMapStack(state.openTaskScopesByTaskId, taskId)
           ?? state.root
         : state.root
@@ -254,8 +269,9 @@ const resolveParentScope = (
     case 'recognition_node':
     case 'action_node':
       return taskId != null
-        ? findNearestOpenBusinessScope(state, taskId)
+        ? findNearestOpenBusinessScope(state, { taskId })
           ?? peekMapStack(state.openTaskScopesByTaskId, taskId)
+          ?? findNearestOpenBusinessScope(state, { event })
           ?? state.root
         : state.root
   }

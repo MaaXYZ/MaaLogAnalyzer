@@ -11,17 +11,14 @@ import type {
 import { toTimestampMs } from '../shared/timestamp'
 import type { ScopeNode, ScopeStatus } from '../trace/scopeTypes'
 
+/**
+ * Strict trace projector.
+ *
+ * Keep the projected task tree aligned with trace semantics and avoid legacy UI
+ * compatibility shaping here.
+ */
 interface ProjectionContext {
   currentNodeId?: number
-  fallbackActionDetail?: ActionDetail
-  forceRecognitionNode?: boolean
-}
-
-interface ProjectedFlowNode {
-  item: UnifiedFlowItem
-  seq: number
-  endSeq?: number
-  children?: ProjectedFlowNode[]
 }
 
 export interface ProjectTasksFromTraceOptions {
@@ -58,15 +55,6 @@ const sortScopesBySeq = (
   scopes: ScopeNode[],
 ): ScopeNode[] => {
   return [...scopes].sort((left, right) => left.seq - right.seq)
-}
-
-const sortProjectedFlowBySeq = (
-  items: ProjectedFlowNode[],
-): ProjectedFlowNode[] => {
-  return [...items].sort((left, right) => {
-    if (left.seq !== right.seq) return left.seq - right.seq
-    return (left.endSeq ?? left.seq) - (right.endSeq ?? right.seq)
-  })
 }
 
 const readRecord = (
@@ -247,28 +235,61 @@ const normalizeWaitFreezesDetail = (
   }
 }
 
-const buildProjectedFlowNode = (
-  scope: ScopeNode,
-  item: UnifiedFlowItem,
-): ProjectedFlowNode => ({
-  item,
-  seq: scope.seq,
-  endSeq: scope.endSeq,
-})
+const summarizeFlowItemStatus = (
+  items: UnifiedFlowItem[],
+): UnifiedFlowItem['status'] => {
+  if (items.some((item) => item.status === 'failed')) return 'failed'
+  if (items.some((item) => item.status === 'running')) return 'running'
+  return 'success'
+}
 
-const withProjectedChildren = (
-  node: ProjectedFlowNode,
-  children: ProjectedFlowNode[],
-): ProjectedFlowNode => ({
-  ...node,
-  children: sortProjectedFlowBySeq(children),
-  item: {
-    ...node.item,
-    children: children.length > 0
-      ? sortProjectedFlowBySeq(children).map((child) => child.item)
-      : undefined,
-  },
-})
+const shouldSynthesizeForeignTaskGroup = (
+  parentScope: ScopeNode,
+  childScope: ScopeNode,
+): boolean => {
+  if (childScope.kind !== 'pipeline_node') return false
+  const parentTaskId = readScopeTaskId(parentScope)
+  const childTaskId = readScopeTaskId(childScope)
+  if (parentTaskId == null || childTaskId == null) return false
+  return parentTaskId !== childTaskId
+}
+
+const projectSyntheticTaskFlowItem = (
+  parentScope: ScopeNode,
+  groupedScopes: ScopeNode[],
+  context: ProjectionContext,
+): UnifiedFlowItem => {
+  const firstScope = groupedScopes[0]
+  const lastScope = groupedScopes[groupedScopes.length - 1]
+  const taskId = readScopeTaskId(firstScope) ?? 0
+  const children = groupedScopes.flatMap((scope) => projectFlowScope(scope, context))
+  const status = summarizeFlowItemStatus(children)
+  const name = readScopeName(firstScope)
+
+  return {
+    id: `${parentScope.id}.synthetic-task.${taskId}.seq${firstScope.seq}`,
+    type: 'task',
+    name,
+    status,
+    ts: firstScope.ts,
+    end_ts: lastScope?.endTs,
+    task_id: taskId,
+    task_details: {
+      task_id: taskId,
+      entry: name,
+      status: toTaskStatus(
+        status === 'running'
+          ? 'running'
+          : status === 'failed'
+            ? 'failed'
+            : 'succeeded'
+      ),
+      ts: firstScope.ts,
+      end_ts: lastScope?.endTs,
+    },
+    children: children.length > 0 ? children : undefined,
+  }
+}
 
 const collectTaskScopes = (
   scope: ScopeNode,
@@ -317,398 +338,222 @@ const projectTaskEvents = (
     }))
 }
 
-const isRecognitionFlowItem = (
-  item: UnifiedFlowItem,
-): boolean => item.type === 'recognition' || item.type === 'recognition_node'
-
-const collectRecognitionParents = (
-  nodes: ProjectedFlowNode[],
-  output: Array<{ node: ProjectedFlowNode; depth: number }>,
-  depth = 0,
-): void => {
-  for (const node of nodes) {
-    if (isRecognitionFlowItem(node.item)) {
-      output.push({ node, depth })
-    }
-    if (node.children && node.children.length > 0) {
-      collectRecognitionParents(node.children, output, depth + 1)
-    }
-  }
-}
-
-const reassignTasksToRecognitionParent = (
-  nodes: ProjectedFlowNode[],
-): ProjectedFlowNode[] => {
-  if (nodes.length === 0) return nodes
-
-  const recognitionParents: Array<{ node: ProjectedFlowNode; depth: number }> = []
-  collectRecognitionParents(nodes, recognitionParents)
-  if (recognitionParents.length === 0) return nodes
-
-  const retained: ProjectedFlowNode[] = []
-  for (const node of nodes) {
-    if (node.item.type !== 'task') {
-      retained.push(node)
-      continue
-    }
-
-    let best: { node: ProjectedFlowNode; depth: number } | null = null
-    for (const candidate of recognitionParents) {
-      const candidateEndSeq = candidate.node.endSeq ?? candidate.node.seq
-      const inWindow = node.seq >= candidate.node.seq && node.seq <= candidateEndSeq + 1
-      if (!inWindow) continue
-      if (
-        best == null
-        || candidate.depth > best.depth
-        || (candidate.depth === best.depth && candidate.node.seq >= best.node.seq)
-      ) {
-        best = candidate
-      }
-    }
-
-    if (!best) {
-      retained.push(node)
-      continue
-    }
-
-    const currentChildren = best.node.children ?? []
-    best.node.children = sortProjectedFlowBySeq([...currentChildren, node])
-    best.node.item = {
-      ...best.node.item,
-      children: best.node.children.map((child) => child.item),
-    }
-  }
-
-  return retained
-}
-
-const projectTaskFlowScope = (
-  scope: ScopeNode,
-): ProjectedFlowNode => {
-  const payload = readScopePayload(scope)
-  const childNodes = sortScopesBySeq(scope.children)
-    .flatMap((child) => projectScopeToFlowNodes(child, {}))
-
-  return withProjectedChildren(
-    buildProjectedFlowNode(scope, {
-      id: scope.id,
-      type: 'task',
-      name: readStringField(payload, 'entry') ?? readScopeName(scope),
-      status: toRuntimeStatus(scope.status),
-      ts: scope.ts,
-      end_ts: scope.endTs,
-      task_id: readScopeTaskId(scope),
-      task_details: {
-        task_id: readScopeTaskId(scope) ?? 0,
-        entry: readStringField(payload, 'entry'),
-        hash: readStringField(payload, 'hash'),
-        uuid: readStringField(payload, 'uuid'),
-        status: toTaskStatus(scope.status),
-        ts: scope.ts,
-        end_ts: scope.endTs,
-      },
-    }),
-    childNodes,
-  )
-}
-
-const projectRecognitionFlowScope = (
+const projectFlowChildren = (
   scope: ScopeNode,
   context: ProjectionContext,
-): ProjectedFlowNode => {
-  const payload = readScopePayload(scope)
-  const childContext: ProjectionContext = {
-    ...context,
-    forceRecognitionNode: true,
-  }
-  const childNodes = sortScopesBySeq(scope.children)
-    .flatMap((child) => projectScopeToFlowNodes(child, childContext))
-  const type: UnifiedFlowItem['type'] =
-    scope.kind === 'recognition_node' || context.forceRecognitionNode
-      ? 'recognition_node'
-      : 'recognition'
-
-  return withProjectedChildren(
-    buildProjectedFlowNode(scope, {
-      id: scope.id,
-      type,
-      name: readScopeName(scope),
-      status: toRuntimeStatus(scope.status),
-      ts: scope.ts,
-      end_ts: scope.endTs,
-      reco_id: readScopeRecoId(scope),
-      anchor_name: readStringField(payload, 'anchor'),
-      reco_details: normalizeRecognitionDetail(payload.recoDetails),
-    }),
-    childNodes,
-  )
-}
-
-const projectActionFlowScope = (
-  scope: ScopeNode,
-  context: ProjectionContext,
-): ProjectedFlowNode => {
-  const payload = readScopePayload(scope)
-  const actionDetail = normalizeActionDetail(payload.actionDetails) ?? context.fallbackActionDetail
-  const childContext: ProjectionContext = {
-    ...context,
-    fallbackActionDetail: actionDetail,
-    forceRecognitionNode: true,
-  }
-  const childNodes = sortScopesBySeq(scope.children)
-    .flatMap((child) => projectScopeToFlowNodes(child, childContext))
-
-  return withProjectedChildren(
-    buildProjectedFlowNode(scope, {
-      id: scope.id,
-      type: 'action',
-      name: actionDetail?.name || readScopeName(scope),
-      status: toRuntimeStatus(scope.status),
-      ts: actionDetail?.ts || scope.ts,
-      end_ts: actionDetail?.end_ts || scope.endTs,
-      action_id: readScopeActionId(scope) ?? actionDetail?.action_id,
-      action_details: actionDetail,
-    }),
-    childNodes,
-  )
-}
-
-const projectWaitFreezesFlowScope = (
-  scope: ScopeNode,
-  context: ProjectionContext,
-): ProjectedFlowNode => buildProjectedFlowNode(scope, {
-  id: scope.id,
-  type: 'wait_freezes',
-  name: readScopeName(scope),
-  status: toRuntimeStatus(scope.status),
-  ts: scope.ts,
-  end_ts: scope.endTs,
-  task_id: readScopeTaskId(scope),
-  node_id: context.currentNodeId,
-  wait_freezes_details: normalizeWaitFreezesDetail(scope),
-})
-
-const createSyntheticActionRoot = (
-  scope: ScopeNode,
-  context: ProjectionContext,
-  children: ProjectedFlowNode[],
-): ProjectedFlowNode => {
-  const payload = readScopePayload(scope)
-  const actionDetail = normalizeActionDetail(payload.actionDetails) ?? context.fallbackActionDetail
-  const actionId = actionDetail?.action_id ?? readScopeNodeId(scope) ?? 0
-  const syntheticScope: ScopeNode = {
-    id: `${scope.id}:synthetic-action`,
-    kind: 'action',
-    status: scope.status,
-    ts: children[0]?.item.ts ?? scope.ts,
-    endTs: children[children.length - 1]?.item.end_ts ?? scope.endTs,
-    seq: children[0]?.seq ?? scope.seq,
-    endSeq: children[children.length - 1]?.endSeq ?? scope.endSeq,
-    taskId: scope.taskId,
-    payload: {},
-    children: [],
-  }
-
-  return withProjectedChildren(
-    buildProjectedFlowNode(syntheticScope, {
-      id: `synthetic-action:${scope.id}`,
-      type: 'action',
-      name: actionDetail?.name || readScopeName(scope),
-      status: actionDetail
-        ? (actionDetail.success ? 'success' : 'failed')
-        : toRuntimeStatus(scope.status),
-      ts: actionDetail?.ts || children[0]?.item.ts || scope.ts,
-      end_ts: actionDetail?.end_ts || scope.endTs,
-      action_id: actionId,
-      action_details: actionDetail,
-    }),
-    children,
-  )
-}
-
-const composePipelineFlowChildren = (
-  scope: ScopeNode,
-  context: ProjectionContext,
-  options: {
-    allowSyntheticActionRoot: boolean
-  },
-): ProjectedFlowNode[] => {
-  const recognitionRoots: ProjectedFlowNode[] = []
-  const directWaitFreezes: ProjectedFlowNode[] = []
-  const actionScopeChildren: ProjectedFlowNode[] = []
-  const explicitActionRoots: ProjectedFlowNode[] = []
-
-  const classify = (nodes: ProjectedFlowNode[]): void => {
-    for (const node of nodes) {
-      if (isRecognitionFlowItem(node.item)) {
-        recognitionRoots.push(node)
-        continue
-      }
-      if (node.item.type === 'wait_freezes') {
-        directWaitFreezes.push(node)
-        continue
-      }
-      if (node.item.type === 'action') {
-        explicitActionRoots.push(node)
-        continue
-      }
-      actionScopeChildren.push(node)
-    }
-  }
-
-  for (const child of sortScopesBySeq(scope.children)) {
-    switch (child.kind) {
-      case 'next_list':
-        classify(sortScopesBySeq(child.children).flatMap((nested) => projectScopeToFlowNodes(nested, context)))
-        break
-      case 'action_node': {
-        const payload = readScopePayload(child)
-        const actionNodeContext: ProjectionContext = {
-          ...context,
-          currentNodeId: readScopeNodeId(child) ?? context.currentNodeId,
-          fallbackActionDetail: normalizeActionDetail(payload.actionDetails) ?? context.fallbackActionDetail,
-          forceRecognitionNode: true,
+): UnifiedFlowItem[] => {
+  const items: UnifiedFlowItem[] = []
+  const children = sortScopesBySeq(scope.children)
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index]
+    if (shouldSynthesizeForeignTaskGroup(scope, child)) {
+      const groupedScopes = [child]
+      const groupedTaskId = readScopeTaskId(child)
+      while (index + 1 < children.length) {
+        const next = children[index + 1]
+        if (
+          !shouldSynthesizeForeignTaskGroup(scope, next) ||
+          readScopeTaskId(next) !== groupedTaskId
+        ) {
+          break
         }
-        classify(sortScopesBySeq(child.children).flatMap((nested) => projectScopeToFlowNodes(nested, actionNodeContext)))
-        break
+        groupedScopes.push(next)
+        index += 1
       }
-      default:
-        classify(projectScopeToFlowNodes(child, context))
-        break
-    }
-  }
-
-  const orderedRecognitionRoots = sortProjectedFlowBySeq(recognitionRoots)
-  const orderedWaitFreezes = sortProjectedFlowBySeq(directWaitFreezes)
-  const orderedActionScopeChildren = sortProjectedFlowBySeq(actionScopeChildren)
-  const orderedExplicitActionRoots = sortProjectedFlowBySeq(explicitActionRoots)
-
-  let actionRoot: ProjectedFlowNode | null = null
-  if (orderedExplicitActionRoots.length === 1) {
-    const [root] = orderedExplicitActionRoots
-    actionRoot = withProjectedChildren(root, [
-      ...(root.children ?? []),
-      ...orderedActionScopeChildren,
-    ])
-  } else if (orderedExplicitActionRoots.length > 1) {
-    actionRoot = createSyntheticActionRoot(scope, context, [
-      ...orderedExplicitActionRoots,
-      ...orderedActionScopeChildren,
-    ])
-  } else if (orderedActionScopeChildren.length > 0 && options.allowSyntheticActionRoot) {
-    actionRoot = createSyntheticActionRoot(scope, context, orderedActionScopeChildren)
-  }
-
-  if (!actionRoot) {
-    return sortProjectedFlowBySeq([
-      ...orderedRecognitionRoots,
-      ...orderedWaitFreezes,
-      ...orderedActionScopeChildren,
-    ])
-  }
-
-  if (
-    actionRoot.item.action_details == null
-    || actionRoot.item.action_details.action === 'Custom'
-  ) {
-    const reassignedChildren = reassignTasksToRecognitionParent(actionRoot.children ?? [])
-    actionRoot = withProjectedChildren(actionRoot, reassignedChildren)
-  }
-
-  const before: ProjectedFlowNode[] = []
-  const inside: ProjectedFlowNode[] = []
-  const after: ProjectedFlowNode[] = []
-  const actionEndSeq = actionRoot.endSeq ?? actionRoot.seq
-  const actionRunning = actionRoot.item.status === 'running'
-
-  for (const waitFreezes of orderedWaitFreezes) {
-    if (waitFreezes.seq < actionRoot.seq) {
-      before.push(waitFreezes)
+      items.push(projectSyntheticTaskFlowItem(scope, groupedScopes, context))
       continue
     }
-    if (actionRunning || waitFreezes.seq <= actionEndSeq) {
-      inside.push(waitFreezes)
-      continue
-    }
-    after.push(waitFreezes)
+
+    items.push(...projectFlowScope(child, context))
   }
-
-  const normalizedActionRoot = inside.length > 0
-    ? withProjectedChildren(actionRoot, [
-      ...(actionRoot.children ?? []),
-      ...inside,
-    ])
-    : actionRoot
-
-  return sortProjectedFlowBySeq([
-    ...orderedRecognitionRoots,
-    ...before,
-    normalizedActionRoot,
-    ...after,
-  ])
+  return items
 }
 
-const projectPipelineNodeFlowScope = (
+const projectTaskFlowItem = (
+  scope: ScopeNode,
+  _context: ProjectionContext,
+): UnifiedFlowItem => {
+  const payload = readScopePayload(scope)
+  const children = projectFlowChildren(scope, {})
+
+  return {
+    id: scope.id,
+    type: 'task',
+    name: readStringField(payload, 'entry') ?? readScopeName(scope),
+    status: toRuntimeStatus(scope.status),
+    ts: scope.ts,
+    end_ts: scope.endTs,
+    task_id: readScopeTaskId(scope),
+    task_details: {
+      task_id: readScopeTaskId(scope) ?? 0,
+      entry: readStringField(payload, 'entry'),
+      hash: readStringField(payload, 'hash'),
+      uuid: readStringField(payload, 'uuid'),
+      status: toTaskStatus(scope.status),
+      ts: scope.ts,
+      end_ts: scope.endTs,
+    },
+    children: children.length > 0 ? children : undefined,
+  }
+}
+
+const projectPipelineNodeFlowItem = (
   scope: ScopeNode,
   context: ProjectionContext,
-): ProjectedFlowNode => {
+): UnifiedFlowItem => {
   const payload = readScopePayload(scope)
   const nodeId = readScopeNodeId(scope) ?? context.currentNodeId
-  const actionDetail = normalizeActionDetail(payload.actionDetails) ?? context.fallbackActionDetail
-  const childContext: ProjectionContext = {
+  const children = projectFlowChildren(scope, {
     currentNodeId: nodeId,
-    fallbackActionDetail: actionDetail,
-    forceRecognitionNode: false,
-  }
-  const normalizedChildren = composePipelineFlowChildren(scope, childContext, {
-    allowSyntheticActionRoot: actionDetail != null,
   })
 
-  return withProjectedChildren(
-    buildProjectedFlowNode(scope, {
-      id: scope.id,
-      type: 'pipeline_node',
-      name: actionDetail?.name || readScopeName(scope),
-      status: toRuntimeStatus(scope.status),
-      ts: scope.ts,
-      end_ts: scope.endTs,
-      task_id: readScopeTaskId(scope),
-      node_id: nodeId,
-      reco_details: normalizeRecognitionDetail(payload.recoDetails),
-      action_details: actionDetail,
-    }),
-    normalizedChildren,
-  )
+  return {
+    id: scope.id,
+    type: 'pipeline_node',
+    name: readScopeName(scope),
+    status: toRuntimeStatus(scope.status),
+    ts: scope.ts,
+    end_ts: scope.endTs,
+    task_id: readScopeTaskId(scope),
+    node_id: nodeId,
+    reco_details: normalizeRecognitionDetail(payload.recoDetails),
+    action_details: normalizeActionDetail(payload.actionDetails),
+    children: children.length > 0 ? children : undefined,
+  }
 }
 
-const projectScopeToFlowNodes = (
+const projectRecognitionFlowItem = (
   scope: ScopeNode,
   context: ProjectionContext,
-): ProjectedFlowNode[] => {
+): UnifiedFlowItem => {
+  const payload = readScopePayload(scope)
+  const children = projectFlowChildren(scope, context)
+
+  return {
+    id: scope.id,
+    type: 'recognition',
+    name: readScopeName(scope),
+    status: toRuntimeStatus(scope.status),
+    ts: scope.ts,
+    end_ts: scope.endTs,
+    reco_id: readScopeRecoId(scope),
+    anchor_name: readStringField(payload, 'anchor'),
+    reco_details: normalizeRecognitionDetail(payload.recoDetails),
+    children: children.length > 0 ? children : undefined,
+  }
+}
+
+const projectRecognitionNodeFlowItem = (
+  scope: ScopeNode,
+  context: ProjectionContext,
+): UnifiedFlowItem => {
+  const payload = readScopePayload(scope)
+  const nodeId = readScopeNodeId(scope) ?? context.currentNodeId
+  const children = projectFlowChildren(scope, {
+    currentNodeId: nodeId,
+  })
+
+  return {
+    id: scope.id,
+    type: 'recognition_node',
+    name: readScopeName(scope),
+    status: toRuntimeStatus(scope.status),
+    ts: scope.ts,
+    end_ts: scope.endTs,
+    task_id: readScopeTaskId(scope),
+    node_id: nodeId,
+    reco_id: readScopeRecoId(scope),
+    reco_details: normalizeRecognitionDetail(payload.recoDetails),
+    children: children.length > 0 ? children : undefined,
+  }
+}
+
+const projectActionFlowItem = (
+  scope: ScopeNode,
+  context: ProjectionContext,
+): UnifiedFlowItem => {
+  const payload = readScopePayload(scope)
+  const children = projectFlowChildren(scope, context)
+
+  return {
+    id: scope.id,
+    type: 'action',
+    name: readScopeName(scope),
+    status: toRuntimeStatus(scope.status),
+    ts: scope.ts,
+    end_ts: scope.endTs,
+    action_id: readScopeActionId(scope),
+    action_details: normalizeActionDetail(payload.actionDetails),
+    children: children.length > 0 ? children : undefined,
+  }
+}
+
+const projectActionNodeFlowItem = (
+  scope: ScopeNode,
+  context: ProjectionContext,
+): UnifiedFlowItem => {
+  const payload = readScopePayload(scope)
+  const nodeId = readScopeNodeId(scope) ?? context.currentNodeId
+  const children = projectFlowChildren(scope, {
+    currentNodeId: nodeId,
+  })
+
+  return {
+    id: scope.id,
+    type: 'action_node',
+    name: readScopeName(scope),
+    status: toRuntimeStatus(scope.status),
+    ts: scope.ts,
+    end_ts: scope.endTs,
+    task_id: readScopeTaskId(scope),
+    node_id: nodeId,
+    action_id: readScopeActionId(scope),
+    action_details: normalizeActionDetail(payload.actionDetails),
+    children: children.length > 0 ? children : undefined,
+  }
+}
+
+const projectWaitFreezesFlowItem = (
+  scope: ScopeNode,
+  context: ProjectionContext,
+): UnifiedFlowItem => {
+  const children = projectFlowChildren(scope, context)
+
+  return {
+    id: scope.id,
+    type: 'wait_freezes',
+    name: readScopeName(scope),
+    status: toRuntimeStatus(scope.status),
+    ts: scope.ts,
+    end_ts: scope.endTs,
+    task_id: readScopeTaskId(scope),
+    node_id: context.currentNodeId,
+    wait_freezes_details: normalizeWaitFreezesDetail(scope),
+    children: children.length > 0 ? children : undefined,
+  }
+}
+
+const projectFlowScope = (
+  scope: ScopeNode,
+  context: ProjectionContext,
+): UnifiedFlowItem[] => {
   switch (scope.kind) {
     case 'task':
-      return [projectTaskFlowScope(scope)]
+      return [projectTaskFlowItem(scope, context)]
     case 'pipeline_node':
-      return [projectPipelineNodeFlowScope(scope, context)]
+      return [projectPipelineNodeFlowItem(scope, context)]
     case 'recognition':
+      return [projectRecognitionFlowItem(scope, context)]
     case 'recognition_node':
-      return [projectRecognitionFlowScope(scope, context)]
+      return [projectRecognitionNodeFlowItem(scope, context)]
     case 'action':
-      return [projectActionFlowScope(scope, context)]
+      return [projectActionFlowItem(scope, context)]
+    case 'action_node':
+      return [projectActionNodeFlowItem(scope, context)]
     case 'wait_freezes':
-      return [projectWaitFreezesFlowScope(scope, context)]
+      return [projectWaitFreezesFlowItem(scope, context)]
     case 'next_list':
-      return sortScopesBySeq(scope.children).flatMap((child) => projectScopeToFlowNodes(child, context))
-    case 'action_node': {
-      const payload = readScopePayload(scope)
-      const nestedContext: ProjectionContext = {
-        ...context,
-        currentNodeId: readScopeNodeId(scope) ?? context.currentNodeId,
-        fallbackActionDetail: normalizeActionDetail(payload.actionDetails) ?? context.fallbackActionDetail,
-        forceRecognitionNode: true,
-      }
-      return sortScopesBySeq(scope.children).flatMap((child) => projectScopeToFlowNodes(child, nestedContext))
-    }
+      return sortScopesBySeq(scope.children).flatMap((child) => projectFlowScope(child, context))
     case 'controller_action':
     case 'resource_loading':
     case 'trace_root':
@@ -734,13 +579,8 @@ const projectPipelineNodeScope = (
   const payload = readScopePayload(scope)
   const nodeId = readScopeNodeId(scope) ?? 0
   const taskId = readScopeTaskId(scope) ?? 0
-  const actionDetail = normalizeActionDetail(payload.actionDetails)
-  const nodeFlow = composePipelineFlowChildren(scope, {
+  const nodeFlow = projectFlowChildren(scope, {
     currentNodeId: nodeId,
-    fallbackActionDetail: actionDetail,
-    forceRecognitionNode: false,
-  }, {
-    allowSyntheticActionRoot: true,
   })
 
   return {
@@ -751,10 +591,10 @@ const projectPipelineNodeScope = (
     status: toRuntimeStatus(scope.status),
     task_id: taskId,
     reco_details: normalizeRecognitionDetail(payload.recoDetails),
-    action_details: actionDetail,
+    action_details: normalizeActionDetail(payload.actionDetails),
     focus: payload.focus,
     next_list: resolveNodeNextList(scope),
-    node_flow: nodeFlow.map((item) => item.item),
+    node_flow: nodeFlow,
     node_details: normalizeNodeDetails(payload.nodeDetails),
   }
 }

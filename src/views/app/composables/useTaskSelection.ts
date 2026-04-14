@@ -72,7 +72,11 @@ export const useTaskSelection = (options: UseTaskSelectionOptions) => {
 
   const handleSelectRecognition = (node: NodeInfo, attemptIndex: number) => {
     options.selectedNode.value = node
-    options.selectedFlowItemId.value = pickFlowId(node, `node.recognition.${attemptIndex}`)
+    const recognitionItems = options.buildNodeRecognitionFlowItems(node)
+    const targetRecognition = recognitionItems[attemptIndex] ?? null
+    options.selectedFlowItemId.value = targetRecognition
+      ? pickFlowId(node, targetRecognition.id)
+      : null
   }
 
   const handleSelectFlowItem = (node: NodeInfo, flowItemId: string) => {

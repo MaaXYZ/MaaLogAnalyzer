@@ -42,7 +42,7 @@ const actionTimelinePhaseWeight = (item: UnifiedFlowItem): number => {
     if (phase === 'post') return 40
     return 30
   }
-  if (item.type === 'action') return 10
+  if (item.type === 'action' || item.type === 'action_node') return 10
   return 15
 }
 
@@ -308,7 +308,9 @@ export const buildNodeFlowItems = (node: NodeInfo): UnifiedFlowItem[] => {
 }
 
 export const buildNodeRecognitionFlowItems = (node: NodeInfo): UnifiedFlowItem[] => {
-  return buildNodeFlowItems(node).filter(item => item.type === 'recognition')
+  return buildNodeFlowItems(node).filter(
+    item => item.type === 'recognition' || item.type === 'recognition_node'
+  )
 }
 
 export const buildNodeRecognitionAttempts = (node: NodeInfo): RecognitionAttempt[] => {
@@ -333,7 +335,9 @@ export const buildNodeRecognitionAttempts = (node: NodeInfo): RecognitionAttempt
 }
 
 export const buildNodeActionRootItem = (node: NodeInfo): UnifiedFlowItem | null => {
-  return buildNodeFlowItems(node).find(item => item.type === 'action') || null
+  return buildNodeFlowItems(node).find(
+    item => item.type === 'action' || item.type === 'action_node'
+  ) || null
 }
 
 export const buildNodeWaitFreezesFlowItems = (node: NodeInfo): UnifiedFlowItem[] => {
@@ -392,7 +396,9 @@ const buildFallbackActionRootItem = (node: NodeInfo): UnifiedFlowItem | null => 
 
 export const buildNodeActionTimelineItems = (node: NodeInfo): UnifiedFlowItem[] => {
   const nodeFlowItems = buildNodeFlowItems(node)
-  const actionRootFromFlow = nodeFlowItems.find(item => item.type === 'action') || null
+  const actionRootFromFlow = nodeFlowItems.find(
+    item => item.type === 'action' || item.type === 'action_node'
+  ) || null
   const actionRootItem = actionRootFromFlow ?? buildFallbackActionRootItem(node)
   const waitFreezesItems = nodeFlowItems.filter(item => item.type === 'wait_freezes')
 

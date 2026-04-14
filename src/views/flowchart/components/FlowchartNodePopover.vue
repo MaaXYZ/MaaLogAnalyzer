@@ -34,7 +34,9 @@ const showAbnormalOnly = ref(false)
 
 const hasFailedAction = (info: NodeInfo): boolean => {
   if (info.action_details && info.action_details.success === false) return true
-  return (info.node_flow || []).some((item) => item.type === 'action' && item.status === 'failed')
+  return (info.node_flow || []).some(
+    (item) => (item.type === 'action' || item.type === 'action_node') && item.status === 'failed'
+  )
 }
 
 const isAbnormalExecution = (info: NodeInfo): boolean => {

@@ -194,7 +194,7 @@ describe('LogParser sub task scoped node aggregation', () => {
     expect(subTaskActionItems[0].item.status).toBe('failed')
   })
 
-  it('shows sub task flow under running parent action during realtime preview', () => {
+  it('keeps realtime sub task flow under the explicit running action node', () => {
     const lines = [
       makeEventLine(121, 'Tasker.Task.Starting', { task_id: 1, entry: 'MainTask', hash: 'h-main-rt', uuid: 'u-main-rt' }),
       makeEventLine(122, 'Node.PipelineNode.Starting', { task_id: 1, node_id: 101, name: 'MainNode' }),
@@ -231,18 +231,18 @@ describe('LogParser sub task scoped node aggregation', () => {
     expect(mainTask?.nodes.length).toBe(1)
 
     const mainNode = mainTask!.nodes[0]
-    const runningMainAction = collectFlowItems(
+    const runningMainActionNode = collectFlowItems(
       mainNode.node_flow,
-      (item) => item.type === 'action' && item.action_id === 1001 && item.status === 'running'
+      (item) => item.type === 'action_node' && item.action_id === 1001 && item.status === 'running'
     )
-    expect(runningMainAction.length).toBeGreaterThan(0)
+    expect(runningMainActionNode.length).toBeGreaterThan(0)
 
     const nestedSubTask = collectFlowItems(
       mainNode.node_flow,
       (item, path) =>
         item.type === 'task' &&
         item.task_id === 2 &&
-        path.some(pathNode => pathNode.type === 'action' && pathNode.action_id === 1001)
+        path.some(pathNode => pathNode.type === 'action_node' && pathNode.action_id === 1001)
     )
     expect(nestedSubTask.length).toBeGreaterThan(0)
 
@@ -255,280 +255,6 @@ describe('LogParser sub task scoped node aggregation', () => {
     )
     expect(nestedSubPipeline.length).toBeGreaterThan(0)
     expect(nestedSubPipeline[0].item.status).toBe('success')
-  })
-
-  it('nests custom-rec sub task under recognition node instead of action root', async () => {
-    const customActionDetails = {
-      action_id: 9001,
-      action: 'Custom',
-      box: [0, 0, 0, 0],
-      detail: {},
-      name: 'CustomReco',
-      success: true,
-    }
-
-    const lines = [
-      makeEventLine(501, 'Tasker.Task.Starting', { task_id: 90, entry: 'MainTask', hash: 'h-main-custom', uuid: 'u-main-custom' }),
-      makeEventLine(502, 'Node.PipelineNode.Starting', { task_id: 90, node_id: 9001, name: 'MainNode' }),
-      makeEventLine(503, 'Node.Action.Starting', { task_id: 90, action_id: 9001, name: 'CustomReco' }),
-      makeEventLine(504, 'Node.ActionNode.Starting', {
-        task_id: 90,
-        node_id: 9001,
-        action_id: 9001,
-        name: 'MainNode',
-        action_details: customActionDetails,
-      }),
-      makeEventLine(505, 'Node.Recognition.Starting', { task_id: 90, reco_id: 90001, name: 'RecoA' }),
-      makeEventLine(506, 'Node.Recognition.Succeeded', { task_id: 90, reco_id: 90001, name: 'RecoA' }),
-
-      makeEventLine(507, 'Tasker.Task.Starting', { task_id: 91, entry: 'SubTask', hash: 'h-sub-custom', uuid: 'u-sub-custom' }),
-      makeEventLine(508, 'Node.PipelineNode.Starting', { task_id: 91, node_id: 9101, name: 'SubNode' }),
-      makeEventLine(509, 'Node.PipelineNode.Succeeded', { task_id: 91, node_id: 9101, name: 'SubNode' }),
-      makeEventLine(510, 'Tasker.Task.Succeeded', { task_id: 91, entry: 'SubTask', hash: 'h-sub-custom', uuid: 'u-sub-custom' }),
-
-      makeEventLine(511, 'Node.Action.Succeeded', { task_id: 90, action_id: 9001, name: 'CustomReco' }),
-      makeEventLine(512, 'Node.ActionNode.Succeeded', {
-        task_id: 90,
-        node_id: 9001,
-        action_id: 9001,
-        name: 'MainNode',
-        action_details: customActionDetails,
-      }),
-      makeEventLine(513, 'Node.PipelineNode.Succeeded', {
-        task_id: 90,
-        node_id: 9001,
-        name: 'MainNode',
-        action_details: customActionDetails,
-      }),
-      makeEventLine(514, 'Tasker.Task.Succeeded', { task_id: 90, entry: 'MainTask', hash: 'h-main-custom', uuid: 'u-main-custom' }),
-    ]
-
-    const parser = new LogParser()
-    await parser.parseFile(lines.join('\n'))
-    const tasks = parser.getTasksSnapshot()
-    const mainTask = tasks.find(item => item.task_id === 90)
-
-    expect(mainTask).toBeTruthy()
-    const mainNode = mainTask!.nodes[0]
-
-    const nestedSubTaskUnderRecognition = collectFlowItems(
-      mainNode.node_flow,
-      (item, path) =>
-        item.type === 'task' &&
-        item.task_id === 91 &&
-        path.some(pathNode => pathNode.type === 'recognition_node')
-    )
-    expect(nestedSubTaskUnderRecognition.length).toBeGreaterThan(0)
-
-    const subTaskDirectlyUnderAction = collectFlowItems(
-      mainNode.node_flow,
-      (item, path) =>
-        item.type === 'task' &&
-        item.task_id === 91 &&
-        path[path.length - 2]?.type === 'action'
-    )
-    expect(subTaskDirectlyUnderAction.length).toBe(0)
-  })
-
-  it('attaches custom-rec subtasks to latest unfinished scope by timeline', async () => {
-    const customActionDetails = {
-      action_id: 500000022,
-      action: 'Custom',
-      box: [1, 2, 3, 4],
-      detail: {},
-      name: 'test',
-      success: true,
-    }
-
-    const lines = [
-      makeEventLine(100, 'Tasker.Task.Starting', { task_id: 200000021, entry: 'test', hash: 'h-main', uuid: 'u-main' }),
-      makeEventLine(101, 'Node.PipelineNode.Starting', { task_id: 200000021, node_id: 300000021, name: 'test' }),
-      makeEventLine(102, 'Node.Recognition.Starting', { task_id: 200000021, reco_id: 400000021, name: 'test' }),
-
-      makeEventLine(103, 'Tasker.Task.Starting', { task_id: 200000022, entry: 'Stop', hash: 'h-sub-a', uuid: 'u-sub-a' }),
-      makeEventLine(104, 'Node.PipelineNode.Starting', { task_id: 200000022, node_id: 300000022, name: 'Stop' }),
-      makeEventLine(105, 'Node.Recognition.Starting', { task_id: 200000022, reco_id: 400000022, name: 'Stop' }),
-      makeEventLine(106, 'Node.Recognition.Succeeded', { task_id: 200000022, reco_id: 400000022, name: 'Stop' }),
-      makeEventLine(107, 'Node.Action.Starting', { task_id: 200000022, action_id: 500000021, name: 'Stop' }),
-      makeEventLine(108, 'Node.Action.Succeeded', {
-        task_id: 200000022,
-        action_id: 500000021,
-        name: 'Stop',
-        action_details: { action: 'DoNothing', action_id: 500000021, box: [0, 0, 0, 0], detail: {}, name: 'Stop', success: true },
-      }),
-      makeEventLine(109, 'Node.PipelineNode.Succeeded', {
-        task_id: 200000022,
-        node_id: 300000022,
-        name: 'Stop',
-        reco_details: { algorithm: 'DirectHit', box: [0, 0, 1280, 720], detail: null, name: 'Stop', reco_id: 400000022 },
-        action_details: { action: 'DoNothing', action_id: 500000021, box: [0, 0, 0, 0], detail: {}, name: 'Stop', success: true },
-      }),
-      makeEventLine(110, 'Tasker.Task.Succeeded', { task_id: 200000022, entry: 'Stop', hash: 'h-sub-a', uuid: 'u-sub-a' }),
-
-      makeEventLine(111, 'Node.Recognition.Succeeded', {
-        task_id: 200000021,
-        reco_id: 400000021,
-        name: 'test',
-        reco_details: { algorithm: 'Custom', box: [1, 2, 3, 4], detail: {}, name: 'test', reco_id: 400000021 },
-      }),
-      makeEventLine(112, 'Node.Action.Starting', { task_id: 200000021, action_id: 500000022, name: 'test' }),
-
-      makeEventLine(113, 'Tasker.Task.Starting', { task_id: 200000023, entry: 'Stop', hash: 'h-sub-b', uuid: 'u-sub-b' }),
-      makeEventLine(114, 'Node.PipelineNode.Starting', { task_id: 200000023, node_id: 300000023, name: 'Stop' }),
-      makeEventLine(115, 'Node.Recognition.Starting', { task_id: 200000023, reco_id: 400000023, name: 'Stop' }),
-      makeEventLine(116, 'Node.Recognition.Succeeded', { task_id: 200000023, reco_id: 400000023, name: 'Stop' }),
-      makeEventLine(117, 'Node.Action.Starting', { task_id: 200000023, action_id: 500000023, name: 'Stop' }),
-      makeEventLine(118, 'Node.Action.Succeeded', {
-        task_id: 200000023,
-        action_id: 500000023,
-        name: 'Stop',
-        action_details: { action: 'DoNothing', action_id: 500000023, box: [0, 0, 0, 0], detail: {}, name: 'Stop', success: true },
-      }),
-      makeEventLine(119, 'Node.PipelineNode.Succeeded', {
-        task_id: 200000023,
-        node_id: 300000023,
-        name: 'Stop',
-        reco_details: { algorithm: 'DirectHit', box: [0, 0, 1280, 720], detail: null, name: 'Stop', reco_id: 400000023 },
-        action_details: { action: 'DoNothing', action_id: 500000023, box: [0, 0, 0, 0], detail: {}, name: 'Stop', success: true },
-      }),
-      makeEventLine(120, 'Tasker.Task.Succeeded', { task_id: 200000023, entry: 'Stop', hash: 'h-sub-b', uuid: 'u-sub-b' }),
-
-      makeEventLine(121, 'Node.Action.Succeeded', {
-        task_id: 200000021,
-        action_id: 500000022,
-        name: 'test',
-        action_details: customActionDetails,
-      }),
-      makeEventLine(122, 'Node.PipelineNode.Succeeded', {
-        task_id: 200000021,
-        node_id: 300000021,
-        name: 'test',
-        reco_details: { algorithm: 'Custom', box: [1, 2, 3, 4], detail: {}, name: 'test', reco_id: 400000021 },
-        action_details: customActionDetails,
-      }),
-      makeEventLine(123, 'Tasker.Task.Succeeded', { task_id: 200000021, entry: 'test', hash: 'h-main', uuid: 'u-main' }),
-    ]
-
-    const parser = new LogParser()
-    await parser.parseFile(lines.join('\n'))
-    const mainTask = parser.getTasksSnapshot().find(item => item.task_id === 200000021)
-
-    expect(mainTask).toBeTruthy()
-    const mainNode = mainTask!.nodes[0]
-
-    const subTaskAUnderRecognition = collectFlowItems(
-      mainNode.node_flow,
-      (item, path) =>
-        item.type === 'task' &&
-        item.task_id === 200000022 &&
-        path[path.length - 2]?.type === 'recognition'
-    )
-    expect(subTaskAUnderRecognition.length).toBeGreaterThan(0)
-
-    const subTaskBDirectlyUnderAction = collectFlowItems(
-      mainNode.node_flow,
-      (item, path) =>
-        item.type === 'task' &&
-        item.task_id === 200000023 &&
-        path[path.length - 2]?.type === 'action'
-    )
-    expect(subTaskBDirectlyUnderAction.length).toBeGreaterThan(0)
-  })
-
-  it('keeps custom-rec scope assignment during realtime running updates', () => {
-    const lines = [
-      makeEventLine(100, 'Tasker.Task.Starting', { task_id: 200000021, entry: 'test', hash: 'h-main', uuid: 'u-main' }),
-      makeEventLine(101, 'Node.PipelineNode.Starting', { task_id: 200000021, node_id: 300000021, name: 'test' }),
-      makeEventLine(102, 'Node.Recognition.Starting', { task_id: 200000021, reco_id: 400000021, name: 'test' }),
-
-      makeEventLine(103, 'Tasker.Task.Starting', { task_id: 200000022, entry: 'Stop', hash: 'h-sub-a', uuid: 'u-sub-a' }),
-      makeEventLine(104, 'Node.PipelineNode.Starting', { task_id: 200000022, node_id: 300000022, name: 'Stop' }),
-      makeEventLine(105, 'Node.Recognition.Starting', { task_id: 200000022, reco_id: 400000022, name: 'Stop' }),
-      makeEventLine(106, 'Node.Recognition.Succeeded', { task_id: 200000022, reco_id: 400000022, name: 'Stop' }),
-      makeEventLine(107, 'Node.Action.Starting', { task_id: 200000022, action_id: 500000021, name: 'Stop' }),
-      makeEventLine(108, 'Node.Action.Succeeded', {
-        task_id: 200000022,
-        action_id: 500000021,
-        name: 'Stop',
-        action_details: { action: 'DoNothing', action_id: 500000021, box: [0, 0, 0, 0], detail: {}, name: 'Stop', success: true },
-      }),
-      makeEventLine(109, 'Node.PipelineNode.Succeeded', {
-        task_id: 200000022,
-        node_id: 300000022,
-        name: 'Stop',
-        reco_details: { algorithm: 'DirectHit', box: [0, 0, 1280, 720], detail: null, name: 'Stop', reco_id: 400000022 },
-        action_details: { action: 'DoNothing', action_id: 500000021, box: [0, 0, 0, 0], detail: {}, name: 'Stop', success: true },
-      }),
-      makeEventLine(110, 'Tasker.Task.Succeeded', { task_id: 200000022, entry: 'Stop', hash: 'h-sub-a', uuid: 'u-sub-a' }),
-    ]
-
-    const parser = new LogParser()
-    for (const eventLine of lines) {
-      parser.appendRealtimeLines([eventLine])
-    }
-
-    const mainBeforeActionStart = parser.getTasksSnapshot().find(item => item.task_id === 200000021)
-    expect(mainBeforeActionStart).toBeTruthy()
-
-    const subTaskAUnderRecognitionWhileRunning = collectFlowItems(
-      mainBeforeActionStart!.nodes[0].node_flow,
-      (item, path) =>
-        item.type === 'task' &&
-        item.task_id === 200000022 &&
-        path[path.length - 2]?.type === 'recognition'
-    )
-    expect(subTaskAUnderRecognitionWhileRunning.length).toBeGreaterThan(0)
-
-    parser.appendRealtimeLines([
-      makeEventLine(111, 'Node.Recognition.Succeeded', {
-        task_id: 200000021,
-        reco_id: 400000021,
-        name: 'test',
-        reco_details: { algorithm: 'Custom', box: [1, 2, 3, 4], detail: {}, name: 'test', reco_id: 400000021 },
-      }),
-      makeEventLine(112, 'Node.Action.Starting', { task_id: 200000021, action_id: 500000022, name: 'test' }),
-
-      makeEventLine(113, 'Tasker.Task.Starting', { task_id: 200000023, entry: 'Stop', hash: 'h-sub-b', uuid: 'u-sub-b' }),
-      makeEventLine(114, 'Node.PipelineNode.Starting', { task_id: 200000023, node_id: 300000023, name: 'Stop' }),
-      makeEventLine(115, 'Node.Recognition.Starting', { task_id: 200000023, reco_id: 400000023, name: 'Stop' }),
-      makeEventLine(116, 'Node.Recognition.Succeeded', { task_id: 200000023, reco_id: 400000023, name: 'Stop' }),
-      makeEventLine(117, 'Node.Action.Starting', { task_id: 200000023, action_id: 500000023, name: 'Stop' }),
-      makeEventLine(118, 'Node.Action.Succeeded', {
-        task_id: 200000023,
-        action_id: 500000023,
-        name: 'Stop',
-        action_details: { action: 'DoNothing', action_id: 500000023, box: [0, 0, 0, 0], detail: {}, name: 'Stop', success: true },
-      }),
-      makeEventLine(119, 'Node.PipelineNode.Succeeded', {
-        task_id: 200000023,
-        node_id: 300000023,
-        name: 'Stop',
-        reco_details: { algorithm: 'DirectHit', box: [0, 0, 1280, 720], detail: null, name: 'Stop', reco_id: 400000023 },
-        action_details: { action: 'DoNothing', action_id: 500000023, box: [0, 0, 0, 0], detail: {}, name: 'Stop', success: true },
-      }),
-      makeEventLine(120, 'Tasker.Task.Succeeded', { task_id: 200000023, entry: 'Stop', hash: 'h-sub-b', uuid: 'u-sub-b' }),
-    ])
-
-    const mainDuringActionRunning = parser.getTasksSnapshot().find(item => item.task_id === 200000021)
-    expect(mainDuringActionRunning).toBeTruthy()
-
-    const subTaskAStillUnderRecognition = collectFlowItems(
-      mainDuringActionRunning!.nodes[0].node_flow,
-      (item, path) =>
-        item.type === 'task' &&
-        item.task_id === 200000022 &&
-        path[path.length - 2]?.type === 'recognition'
-    )
-    expect(subTaskAStillUnderRecognition.length).toBeGreaterThan(0)
-
-    const subTaskBUnderActionWhileRunning = collectFlowItems(
-      mainDuringActionRunning!.nodes[0].node_flow,
-      (item, path) =>
-        item.type === 'task' &&
-        item.task_id === 200000023 &&
-        path[path.length - 2]?.type === 'action'
-    )
-    expect(subTaskBUnderActionWhileRunning.length).toBeGreaterThan(0)
   })
 
   it('tolerates malformed NextList payloads', async () => {
