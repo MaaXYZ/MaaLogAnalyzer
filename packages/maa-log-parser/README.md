@@ -7,6 +7,7 @@ Repository-specific parser package for MaaLogAnalyzer.
 - Export current `LogParser` implementation as a workspace package
 - Keep parser entry stable for other internal packages
 - Provide raw value transformer hooks used by parser runtime
+- Project parsed protocol/trace state into UI-facing task trees
 
 Architecture design:
 
@@ -100,5 +101,7 @@ Subpath export:
 
 ## Notes
 
-- `LogParser` entry is now owned in this package (`src/logParser.ts`).
-- Remaining migration work mainly targets helper/type modules still referenced from non-package sources.
+- `LogParser` runtime implementation lives at `src/core/logParser.ts`.
+- `getTasksSnapshot()` projects the current parser state without clearing buffered events. Use it for realtime/incremental views that need repeated reads.
+- `getTasks()` projects tasks and then clears the buffered parse state. Use it for one-shot file parsing when the parsed result has already been handed off.
+- `image-lookup-helpers` is a low-level timestamp/suffix matcher used by the projector to attach error, vision, and `wait_freezes` screenshots. Most callers should prefer `LogParser#setErrorImages()`, `setVisionImages()`, and `setWaitFreezesImages()` instead of calling those helpers directly.

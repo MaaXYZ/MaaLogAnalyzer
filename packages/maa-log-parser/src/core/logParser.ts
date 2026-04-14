@@ -458,9 +458,6 @@ export class LogParser {
     })
   }
 
-  /**
-   * 获取所有任务
-   */
   private clearConsumedParseState(): void {
     this.events = []
     this.protocolEvents = []
@@ -492,6 +489,12 @@ export class LogParser {
     return tasks
   }
 
+  /**
+   * Project tasks from the current buffered parser state without clearing it.
+   *
+   * Use this for realtime/incremental consumers that need to read the current
+   * task tree repeatedly as new lines arrive.
+   */
   getTasksSnapshot(): TaskInfo[] {
     return this.projectTasksSnapshot(false)
   }
@@ -528,6 +531,12 @@ export class LogParser {
     }
   }
 
+  /**
+   * Project tasks and then clear buffered parser state.
+   *
+   * Use this for one-shot parse flows where the caller only needs the final
+   * projected task list and will not keep querying parser snapshots afterward.
+   */
   getTasks(): TaskInfo[] {
     return this.projectTasksSnapshot(true)
   }

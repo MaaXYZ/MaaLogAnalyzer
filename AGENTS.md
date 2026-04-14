@@ -15,8 +15,7 @@ The core purpose is to parse MaaFramework logs (`maa.log`, `maa.bak.log`, zip lo
 ## Repository Map
 
 - `src/`: main web app source
-- `packages/maa-log-parser/src/logParser.ts`: log parsing core implementation
-- `src/utils/logParser.ts`: compatibility facade for parser entry
+- `packages/maa-log-parser/src/core/logParser.ts`: log parsing core implementation
 - `src/utils/fileDialog.ts`: cross-platform file/folder open logic (Web/Tauri)
 - `src/views/ProcessView.vue`: task list + flow entry interactions
 - `src/views/FlowchartView.vue`: flowchart rendering
@@ -49,9 +48,10 @@ cd src-vscode && npm run compile
 1. User opens file/folder/zip
 2. `LogParser.parseFile()` parses in chunks (non-blocking)
 3. OnEventNotify events are extracted and deduplicated
-4. Tasks are assembled (`getTasks()`)
-5. Nodes/attempts are built (`getTaskNodes()`)
-6. UI renders Process/Detail/Flow/Search views
+4. Protocol events are reduced into a trace tree
+5. Tasks are projected from trace via `getTasksSnapshot()` or `getTasks()`
+6. UI-specific node flow / recognition views are derived from projected task data
+7. UI renders Process/Detail/Flow/Search views
 
 ### Key Data Types
 
@@ -67,6 +67,8 @@ Compatibility note:
 
 - `src/types.ts` is now a compatibility type facade.
 - Canonical parser-owned type definitions live in `packages/maa-log-parser/src/types.ts`.
+- `LogParser#getTasksSnapshot()` is non-consuming and should be used for realtime/incremental reads.
+- `LogParser#getTasks()` is consuming and clears buffered parser state after projection, which fits one-shot file parsing flows.
 
 ## Implementation Rules
 
