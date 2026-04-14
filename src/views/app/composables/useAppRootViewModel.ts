@@ -310,7 +310,6 @@ export const useAppRootViewModel = ({
     selectedNode,
     selectedFlowItemId,
     pendingScrollNodeId,
-    parser,
     textSearchViewProps,
     processViewMobileProps,
     processViewDesktopProps,

@@ -1,7 +1,6 @@
 import { resolveImageSrcPath } from '../../../utils/imageSrc'
 import { buildNodeFlowItems, buildNodeRecognitionAttempts } from '@windsland52/maa-log-parser/node-flow'
 import type { NodeInfo, RecognitionAttempt, UnifiedFlowItem } from '../../../types'
-import type { LogParser } from '@windsland52/maa-log-parser'
 
 export const convertFileSrc = (filePath: string) => {
   return resolveImageSrcPath(filePath)
@@ -34,7 +33,7 @@ function findImageInFlowItems(items: UnifiedFlowItem[] | undefined): string | un
   return undefined
 }
 
-export function findNodeInfoImage(info: NodeInfo, parser?: LogParser): string | undefined {
+export function findNodeInfoImage(info: NodeInfo): string | undefined {
   if (info.error_image) return info.error_image
 
   const recognitionAttempts = buildNodeRecognitionAttempts(info)
@@ -43,40 +42,6 @@ export function findNodeInfoImage(info: NodeInfo, parser?: LogParser): string | 
 
   const nodeFlowImage = findImageInFlowItems(buildNodeFlowItems(info))
   if (nodeFlowImage) return nodeFlowImage
-
-  if (parser) {
-    const nodeErr = parser.findErrorImage(info.ts, info.name)
-    if (nodeErr) return nodeErr
-
-    const flowItems = buildNodeFlowItems(info)
-    const stack: UnifiedFlowItem[] = [...flowItems]
-    while (stack.length > 0) {
-      const item = stack.pop()!
-      if (item.type === 'recognition' || item.type === 'recognition_node') {
-        const recoId = item.reco_id ?? item.reco_details?.reco_id
-        if (recoId != null) {
-          const vision = parser.findVisionImage(item.ts, item.name, recoId)
-          if (vision) return vision
-        }
-        const recognition = parser.findRecognitionImage(item.ts, item.name)
-        if (recognition) return recognition
-      } else {
-        const err = parser.findErrorImage(item.ts, item.name)
-        if (err) return err
-      }
-      if (item.children && item.children.length > 0) {
-        stack.push(...item.children)
-      }
-    }
-
-    for (let i = recognitionAttempts.length - 1; i >= 0; i--) {
-      const attempt = recognitionAttempts[i]
-      const vision = parser.findVisionImage(attempt.ts, attempt.name, attempt.reco_id)
-      if (vision) return vision
-      const recognition = parser.findRecognitionImage(attempt.ts, attempt.name)
-      if (recognition) return recognition
-    }
-  }
 
   return undefined
 }

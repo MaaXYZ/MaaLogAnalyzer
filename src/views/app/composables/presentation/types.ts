@@ -1,5 +1,4 @@
 import type { ComputedRef, Ref, VNodeChild } from 'vue'
-import type { LogParser } from '@windsland52/maa-log-parser'
 import type { NodeInfo, TaskInfo } from '../../../../types'
 import type { TourStep } from '../../../../tutorial/types'
 import type {
@@ -46,7 +45,6 @@ export interface UseAppPresentationBindingsOptions {
   selectedNode: Ref<NodeInfo | null>
   selectedFlowItemId: Ref<string | null>
   pendingScrollNodeId: Ref<number | null>
-  parser: LogParser
   textSearchViewProps: ComputedRef<TextSearchViewForwardProps>
   processViewMobileProps: ComputedRef<ProcessViewForwardProps>
   processViewDesktopProps: ComputedRef<ProcessViewForwardProps>

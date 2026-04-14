@@ -10,7 +10,6 @@ import FlowchartTopToolbar from './flowchart/components/FlowchartTopToolbar.vue'
 import FlowchartTimelineNavList from './flowchart/components/FlowchartTimelineNavList.vue'
 import FlowchartNodePopover from './flowchart/components/FlowchartNodePopover.vue'
 import type { TaskInfo, NodeInfo } from '../types'
-import type { LogParser } from '@windsland52/maa-log-parser'
 import { useIsMobile } from '../composables/useIsMobile'
 import { getSettings, saveSettings } from '../utils/settings'
 import { getRuntimeStatusTagType, getRuntimeStatusText } from '../utils/runtimeStatus'
@@ -26,7 +25,6 @@ import { findNodeInfoImage } from './flowchart/utils/nodeImageLookup'
 
 const props = defineProps<{
   tasks: TaskInfo[]
-  parser?: LogParser
   selectedTask?: TaskInfo | null
 }>()
 
@@ -174,7 +172,7 @@ const nodeImageMap = computed(() => {
   if (!task) return map
 
   for (const info of task.nodes) {
-    const img = findNodeInfoImage(info, props.parser)
+    const img = findNodeInfoImage(info)
     if (img) map.set(info.node_id, img)
   }
 

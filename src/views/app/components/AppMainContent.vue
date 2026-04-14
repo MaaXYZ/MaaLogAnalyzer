@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { defineAsyncComponent } from 'vue'
-import type { LogParser } from '@windsland52/maa-log-parser'
 import type { NodeInfo, TaskInfo } from '../../../types'
 import MainContentAnalysisSection from './MainContentAnalysisSection.vue'
 import type {
@@ -30,7 +29,6 @@ defineProps<{
   selectedTask: TaskInfo | null
   selectedNode: NodeInfo | null
   selectedFlowItemId: string | null
-  parser: LogParser
   textSearchViewProps: TextSearchViewForwardProps
   processViewMobileProps: ProcessViewForwardProps
   processViewDesktopProps: ProcessViewForwardProps
@@ -91,7 +89,6 @@ const emit = defineEmits<{
       v-else-if="viewMode === 'flowchart'"
       :active="true"
       :tasks="filteredTasks"
-      :parser="parser"
       :selected-task="selectedTask"
       :on-select-task="onSelectTask"
       :on-navigate-to-node="onNavigateToNode"

@@ -20,9 +20,6 @@ import {
   resolveTaskLifecycleEventDetails,
 } from '../task/lifecycle'
 import { parseEventLine as parseMaaEventLine, type ParsedEventLine } from '../event/line'
-import {
-  findImageByTimestampSuffix,
-} from '../event/imageLookupHelpers'
 import { createProtocolEvent } from '../protocol/eventFactory'
 import type { ProtocolEvent } from '../protocol/types'
 import { buildTraceTree, type TraceScopePayload } from '../trace/reducer'
@@ -533,36 +530,6 @@ export class LogParser {
 
   getTasks(): TaskInfo[] {
     return this.projectTasksSnapshot(true)
-  }
-
-  findRecognitionImage(timestamp: string, nodeName: string): string | undefined {
-    return findImageByTimestampSuffix(this.errorImages, timestamp, `_${nodeName}`)
-  }
-
-  /**
-   * 查找错误截图（匹配到秒级别 + 节点名）
-   */
-  findErrorImage(timestamp: string, nodeName: string): string | undefined {
-    return findImageByTimestampSuffix(this.errorImages, timestamp, `_${nodeName}`)
-  }
-
-  findErrorImageByNames(timestamp: string, candidateNames: Array<string | null | undefined>): string | undefined {
-    const seen = new Set<string>()
-    for (const candidate of candidateNames) {
-      if (!candidate || seen.has(candidate)) continue
-      seen.add(candidate)
-      const matched = this.findErrorImage(timestamp, candidate)
-      if (matched) return matched
-    }
-    return undefined
-  }
-
-  /**
-   * 查找 vision 调试截图（秒级时间戳 + 节点名 + reco_id 三重匹配）
-   * key 格式: YYYY.MM.DD-HH.MM.SS.ms_NodeName_RecoId
-   */
-  findVisionImage(timestamp: string, nodeName: string, recoId: number): string | undefined {
-    return findImageByTimestampSuffix(this.visionImages, timestamp, `_${nodeName}_${recoId}`)
   }
 
   /**

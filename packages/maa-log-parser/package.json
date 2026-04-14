@@ -63,10 +63,6 @@
       "import": "./dist/raw/store.js",
       "types": "./dist/raw/store.d.ts"
     },
-    "./service-types": {
-      "import": "./dist/service/types.js",
-      "types": "./dist/service/types.d.ts"
-    },
     "./service-session-store": {
       "import": "./dist/service/sessionStore.js",
       "types": "./dist/service/sessionStore.d.ts"
@@ -95,22 +91,6 @@
       "import": "./dist/task/lifecycle.js",
       "types": "./dist/task/lifecycle.d.ts"
     },
-    "./task-completion-helpers": {
-      "import": "./dist/task/completionHelpers.js",
-      "types": "./dist/task/completionHelpers.d.ts"
-    },
-    "./task-event-compaction": {
-      "import": "./dist/task/eventCompaction.js",
-      "types": "./dist/task/eventCompaction.d.ts"
-    },
-    "./scoped-node-dispatch-helpers": {
-      "import": "./dist/node/scopedDispatchHelpers.js",
-      "types": "./dist/node/scopedDispatchHelpers.d.ts"
-    },
-    "./task-event-loop-helpers": {
-      "import": "./dist/task/eventLoopHelpers.js",
-      "types": "./dist/task/eventLoopHelpers.d.ts"
-    },
     "./sub-task-collector": {
       "import": "./dist/subtask/collector.js",
       "types": "./dist/subtask/collector.d.ts"
@@ -123,33 +103,13 @@
       "import": "./dist/action/helpers.js",
       "types": "./dist/action/helpers.d.ts"
     },
-    "./action-runtime-helpers": {
-      "import": "./dist/action/runtimeHelpers.js",
-      "types": "./dist/action/runtimeHelpers.d.ts"
-    },
-    "./action-event-lifecycle-helpers": {
-      "import": "./dist/action/eventLifecycleHelpers.js",
-      "types": "./dist/action/eventLifecycleHelpers.d.ts"
-    },
     "./recognition-helpers": {
       "import": "./dist/recognition/helpers.js",
       "types": "./dist/recognition/helpers.d.ts"
     },
-    "./recognition-attempt-runtime": {
-      "import": "./dist/recognition/attemptRuntime.js",
-      "types": "./dist/recognition/attemptRuntime.d.ts"
-    },
-    "./recognition-collection-helpers": {
-      "import": "./dist/recognition/collectionHelpers.js",
-      "types": "./dist/recognition/collectionHelpers.d.ts"
-    },
     "./recognition-scope-helpers": {
       "import": "./dist/recognition/scopeHelpers.js",
       "types": "./dist/recognition/scopeHelpers.d.ts"
-    },
-    "./recognition-event-handlers": {
-      "import": "./dist/recognition/eventHandlers.js",
-      "types": "./dist/recognition/eventHandlers.d.ts"
     },
     "./image-lookup-helpers": {
       "import": "./dist/event/imageLookupHelpers.js",
@@ -163,73 +123,9 @@
       "import": "./dist/task/stackHelpers.js",
       "types": "./dist/task/stackHelpers.d.ts"
     },
-    "./task-lifecycle-context-factory": {
-      "import": "./dist/task/lifecycleContextFactory.js",
-      "types": "./dist/task/lifecycleContextFactory.d.ts"
-    },
-    "./node-event-value-helpers": {
-      "import": "./dist/node/eventValueHelpers.js",
-      "types": "./dist/node/eventValueHelpers.d.ts"
-    },
-    "./task-node-runtime-context": {
-      "import": "./dist/task/nodeRuntimeContext.js",
-      "types": "./dist/task/nodeRuntimeContext.d.ts"
-    },
-    "./next-list-event-helpers": {
-      "import": "./dist/node/nextListHelpers.js",
-      "types": "./dist/node/nextListHelpers.d.ts"
-    },
-    "./runtime-settlement-helpers": {
-      "import": "./dist/pipeline/runtimeSettlementHelpers.js",
-      "types": "./dist/pipeline/runtimeSettlementHelpers.d.ts"
-    },
-    "./node-aggregation-reset-helpers": {
-      "import": "./dist/node/aggregationResetHelpers.js",
-      "types": "./dist/node/aggregationResetHelpers.d.ts"
-    },
     "./sub-task-snapshot-helpers": {
       "import": "./dist/subtask/snapshotHelpers.js",
       "types": "./dist/subtask/snapshotHelpers.d.ts"
-    },
-    "./simple-node-event-router": {
-      "import": "./dist/node/simpleEventRouter.js",
-      "types": "./dist/node/simpleEventRouter.d.ts"
-    },
-    "./simple-node-event-handler-factory": {
-      "import": "./dist/node/simpleEventHandlerFactory.js",
-      "types": "./dist/node/simpleEventHandlerFactory.d.ts"
-    },
-    "./sub-task-action-node-helpers": {
-      "import": "./dist/subtask/actionNodeHelpers.js",
-      "types": "./dist/subtask/actionNodeHelpers.d.ts"
-    },
-    "./sub-task-action-node-lifecycle-handler": {
-      "import": "./dist/subtask/actionNodeLifecycleHandler.js",
-      "types": "./dist/subtask/actionNodeLifecycleHandler.d.ts"
-    },
-    "./sub-task-runtime-cleanup-helpers": {
-      "import": "./dist/subtask/runtimeCleanupHelpers.js",
-      "types": "./dist/subtask/runtimeCleanupHelpers.d.ts"
-    },
-    "./pipeline-node-start-helpers": {
-      "import": "./dist/pipeline/startHelpers.js",
-      "types": "./dist/pipeline/startHelpers.d.ts"
-    },
-    "./pipeline-runtime-state-helpers": {
-      "import": "./dist/pipeline/runtimeStateHelpers.js",
-      "types": "./dist/pipeline/runtimeStateHelpers.d.ts"
-    },
-    "./recognition-node-lifecycle-helpers": {
-      "import": "./dist/recognition/nodeLifecycleHelpers.js",
-      "types": "./dist/recognition/nodeLifecycleHelpers.d.ts"
-    },
-    "./node-dispatch-lifecycle-helpers": {
-      "import": "./dist/node/dispatchLifecycleHelpers.js",
-      "types": "./dist/node/dispatchLifecycleHelpers.d.ts"
-    },
-    "./node-dispatch-config-factory": {
-      "import": "./dist/node/dispatchConfigFactory.js",
-      "types": "./dist/node/dispatchConfigFactory.d.ts"
     },
     "./sub-task-nesting-helpers": {
       "import": "./dist/subtask/nestingHelpers.js",

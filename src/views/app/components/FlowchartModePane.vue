@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { defineAsyncComponent } from 'vue'
-import type { LogParser } from '@windsland52/maa-log-parser'
 import type { NodeInfo, TaskInfo } from '../../../types'
 import type { UploadContentHandler, UploadFileHandler } from './types'
 
@@ -9,7 +8,6 @@ const FlowchartView = defineAsyncComponent(() => import('../../FlowchartView.vue
 defineProps<{
   active: boolean
   tasks: TaskInfo[]
-  parser: LogParser
   selectedTask: TaskInfo | null
   onSelectTask: (task: TaskInfo) => void
   onNavigateToNode: (task: TaskInfo, node: NodeInfo) => void
@@ -22,7 +20,6 @@ defineProps<{
   <div v-if="active" data-tour="flowchart-main" style="height: 100%">
     <flowchart-view
       :tasks="tasks"
-      :parser="parser"
       :selected-task="selectedTask"
       style="height: 100%"
       @select-task="onSelectTask"

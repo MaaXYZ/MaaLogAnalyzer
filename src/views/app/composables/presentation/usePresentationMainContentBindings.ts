@@ -15,7 +15,6 @@ interface UsePresentationMainContentBindingsOptions {
   selectedNode: UseAppPresentationBindingsOptions['selectedNode']
   selectedFlowItemId: UseAppPresentationBindingsOptions['selectedFlowItemId']
   pendingScrollNodeId: UseAppPresentationBindingsOptions['pendingScrollNodeId']
-  parser: UseAppPresentationBindingsOptions['parser']
   textSearchViewProps: UseAppPresentationBindingsOptions['textSearchViewProps']
   processViewMobileProps: UseAppPresentationBindingsOptions['processViewMobileProps']
   processViewDesktopProps: UseAppPresentationBindingsOptions['processViewDesktopProps']
@@ -53,7 +52,6 @@ export const usePresentationMainContentBindings = (options: UsePresentationMainC
     selectedTask: options.selectedTask.value,
     selectedNode: options.selectedNode.value,
     selectedFlowItemId: options.selectedFlowItemId.value,
-    parser: options.parser,
     textSearchViewProps: options.textSearchViewProps.value,
     processViewMobileProps: options.processViewMobileProps.value,
     processViewDesktopProps: options.processViewDesktopProps.value,
