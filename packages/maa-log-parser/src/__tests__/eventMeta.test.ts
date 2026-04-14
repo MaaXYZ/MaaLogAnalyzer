@@ -9,7 +9,7 @@ import {
   resolveTaskLifecyclePhase,
   resolveTaskTerminalStatus,
   resolveTerminalCompletionStatus,
-} from '@windsland52/maa-log-parser/event-meta'
+} from '../event/meta'
 
 describe('EventMeta', () => {
   it('parses Tasker.Task message meta and resolves task lifecycle phase', () => {

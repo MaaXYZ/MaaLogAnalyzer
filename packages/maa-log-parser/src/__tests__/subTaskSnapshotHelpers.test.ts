@@ -6,7 +6,7 @@ import {
   getOrCreateSubTaskSnapshot,
   mergeSubTaskActionGroupWithSnapshot,
   type SubTaskSnapshot,
-} from '@windsland52/maa-log-parser/sub-task-snapshot-helpers'
+} from '../subtask/snapshotHelpers'
 
 const identity = (value: string) => value
 

@@ -4,7 +4,7 @@ import {
   partitionActionScopeWaitFreezes,
   sortFlowItemsByTimestamp,
   splitAndAttachWaitFreezesFlowItems,
-} from '@windsland52/maa-log-parser/flow-assembly-helpers'
+} from '../pipeline/flowAssemblyHelpers'
 
 const toTimestampMs = (value?: string): number => {
   if (!value) return Number.POSITIVE_INFINITY

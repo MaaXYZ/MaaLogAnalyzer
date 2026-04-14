@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { NestedActionGroup, RecognitionAttempt } from '@windsland52/maa-log-parser/types'
-import { createRecognitionAttemptHelpers } from '@windsland52/maa-log-parser/recognition-helpers'
+import { createRecognitionAttemptHelpers } from '../recognition/helpers'
 import {
   attachActionLevelRecognitionAcrossScopes,
   resolveFallbackRecoDetails,
   splitRecognitionAttemptsByActionWindow,
-} from '@windsland52/maa-log-parser/recognition-scope-helpers'
+} from '../recognition/scopeHelpers'
 
 const createAttempt = (
   recoId: number,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTaskStackTracker } from '@windsland52/maa-log-parser/task-stack-helpers'
+import { createTaskStackTracker } from '../task/stackHelpers'
 
 describe('TaskStackHelpers', () => {
   it('push keeps latest task on top and deduplicates existing task id', () => {

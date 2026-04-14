@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { parseMaaMessageMeta } from '@windsland52/maa-log-parser/event-meta'
+import { parseMaaMessageMeta } from '../event/meta'
 import {
   handleTaskLifecycleMetaEvent,
   resolveEventTaskId,
   resolveTaskLifecycleEventDetails,
   type TaskLifecycleMetaEventContext,
-} from '@windsland52/maa-log-parser/task-lifecycle'
+} from '../task/lifecycle'
 
 describe('TaskLifecycle', () => {
   it('parses lifecycle details and task id with numeric guard', () => {

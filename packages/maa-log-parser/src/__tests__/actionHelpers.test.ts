@@ -5,7 +5,7 @@ import {
   resolveActionNodeEventId,
   resolveRuntimeStatusFromPhase,
   resolveSubTaskActionKey,
-} from '@windsland52/maa-log-parser/action-helpers'
+} from '../action/helpers'
 
 describe('ActionHelpers', () => {
   it('maps known phase to runtime status', () => {

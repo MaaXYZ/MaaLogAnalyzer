@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseEventLine } from '@windsland52/maa-log-parser/event-line'
+import { parseEventLine } from '../event/line'
 
 const identity = (value: string) => value
 

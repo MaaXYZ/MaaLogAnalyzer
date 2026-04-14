@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { NestedActionGroup, RecognitionAttempt } from '@windsland52/maa-log-parser/types'
-import { createRecognitionAttemptHelpers } from '@windsland52/maa-log-parser/recognition-helpers'
-import { cloneNestedActionGroup } from '@windsland52/maa-log-parser/recognition-scope-helpers'
-import { nestSubTaskActionGroups } from '@windsland52/maa-log-parser/sub-task-nesting-helpers'
+import { createRecognitionAttemptHelpers } from '../recognition/helpers'
+import { cloneNestedActionGroup } from '../recognition/scopeHelpers'
+import { nestSubTaskActionGroups } from '../subtask/nestingHelpers'
 
 const toTimestampMs = (value?: string): number => {
   if (!value) return Number.POSITIVE_INFINITY

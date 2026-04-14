@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RecognitionAttempt } from '@windsland52/maa-log-parser/types'
-import { StringPool } from '@windsland52/maa-log-parser/string-pool'
-import { SubTaskCollector, summarizeRuntimeStatus } from '@windsland52/maa-log-parser/sub-task-collector'
+import { StringPool } from '../shared/stringPool'
+import { SubTaskCollector, summarizeRuntimeStatus } from '../subtask/collector'
 
 describe('SubTaskCollector', () => {
   it('summarizes runtime status by failed > running > success priority', () => {

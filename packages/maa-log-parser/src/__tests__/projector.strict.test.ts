@@ -96,6 +96,25 @@ describe('Strict task projector semantics', () => {
     expect(task.nodes[0]?.node_flow ?? []).toEqual([])
   })
 
+  it('does not synthesize fallback action when pipeline terminal action_details is absent', async () => {
+    const lines = [
+      makeEventLine(11, 'Tasker.Task.Starting', { task_id: 82, entry: 'MainTask', hash: 'h-82', uuid: 'u-82' }, '2026-04-11'),
+      makeEventLine(12, 'Node.PipelineNode.Starting', { task_id: 82, node_id: 8201, name: 'MainNode' }, '2026-04-11'),
+      makeEventLine(13, 'Node.PipelineNode.Failed', {
+        task_id: 82,
+        node_id: 8201,
+        name: 'MainNode',
+      }, '2026-04-11'),
+      makeEventLine(14, 'Tasker.Task.Failed', { task_id: 82, entry: 'MainTask', hash: 'h-82', uuid: 'u-82' }, '2026-04-11'),
+    ]
+
+    const parser = new LogParser()
+    await parser.parseFile(lines.join('\n'))
+
+    const task = findTask(parser.getTasksSnapshot(), 82)
+    expect(task.nodes[0]?.node_flow ?? []).toEqual([])
+  })
+
   it('keeps main wait_freezes as a top-level sibling instead of nesting it into subtask flow', async () => {
     const lines = [
       makeEventLine(1, 'Tasker.Task.Starting', { task_id: 1, entry: 'MainTask', hash: 'h-main', uuid: 'u-main' }),

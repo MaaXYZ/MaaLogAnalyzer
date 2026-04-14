@@ -5,7 +5,7 @@ import {
   getTaskNextList,
   resetTaskNodeAggregation,
   setTaskNextList,
-} from '@windsland52/maa-log-parser/task-scoped-aggregation-helpers'
+} from '../task/scopedAggregationHelpers'
 
 describe('TaskScopedAggregationHelpers', () => {
   it('creates and returns task scoped aggregation', () => {

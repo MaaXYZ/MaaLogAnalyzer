@@ -19,10 +19,6 @@
       "import": "./dist/shared/rawValue.js",
       "types": "./dist/shared/rawValue.d.ts"
     },
-    "./event-meta": {
-      "import": "./dist/event/meta.js",
-      "types": "./dist/event/meta.d.ts"
-    },
     "./protocol-types": {
       "import": "./dist/protocol/types.js",
       "types": "./dist/protocol/types.d.ts"
@@ -83,57 +79,9 @@
       "import": "./dist/shared/logEventDecoders.js",
       "types": "./dist/shared/logEventDecoders.d.ts"
     },
-    "./string-pool": {
-      "import": "./dist/shared/stringPool.js",
-      "types": "./dist/shared/stringPool.d.ts"
-    },
-    "./task-lifecycle": {
-      "import": "./dist/task/lifecycle.js",
-      "types": "./dist/task/lifecycle.d.ts"
-    },
-    "./sub-task-collector": {
-      "import": "./dist/subtask/collector.js",
-      "types": "./dist/subtask/collector.d.ts"
-    },
-    "./event-line": {
-      "import": "./dist/event/line.js",
-      "types": "./dist/event/line.d.ts"
-    },
-    "./action-helpers": {
-      "import": "./dist/action/helpers.js",
-      "types": "./dist/action/helpers.d.ts"
-    },
-    "./recognition-helpers": {
-      "import": "./dist/recognition/helpers.js",
-      "types": "./dist/recognition/helpers.d.ts"
-    },
-    "./recognition-scope-helpers": {
-      "import": "./dist/recognition/scopeHelpers.js",
-      "types": "./dist/recognition/scopeHelpers.d.ts"
-    },
     "./image-lookup-helpers": {
       "import": "./dist/event/imageLookupHelpers.js",
       "types": "./dist/event/imageLookupHelpers.d.ts"
-    },
-    "./task-scoped-aggregation-helpers": {
-      "import": "./dist/task/scopedAggregationHelpers.js",
-      "types": "./dist/task/scopedAggregationHelpers.d.ts"
-    },
-    "./task-stack-helpers": {
-      "import": "./dist/task/stackHelpers.js",
-      "types": "./dist/task/stackHelpers.d.ts"
-    },
-    "./sub-task-snapshot-helpers": {
-      "import": "./dist/subtask/snapshotHelpers.js",
-      "types": "./dist/subtask/snapshotHelpers.d.ts"
-    },
-    "./sub-task-nesting-helpers": {
-      "import": "./dist/subtask/nestingHelpers.js",
-      "types": "./dist/subtask/nestingHelpers.d.ts"
-    },
-    "./flow-assembly-helpers": {
-      "import": "./dist/pipeline/flowAssemblyHelpers.js",
-      "types": "./dist/pipeline/flowAssemblyHelpers.d.ts"
     },
     "./node-flow": {
       "import": "./dist/node/flow.js",
