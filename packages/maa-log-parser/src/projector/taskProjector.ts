@@ -9,6 +9,10 @@ import type {
   WaitFreezesDetail,
 } from '../shared/types'
 import { toTimestampMs } from '../shared/timestamp'
+import {
+  findImageByTimestampSuffix,
+  findWaitFreezesImages,
+} from '../event/imageLookupHelpers'
 import type { ScopeNode, ScopeStatus } from '../trace/scopeTypes'
 
 /**
@@ -19,11 +23,17 @@ import type { ScopeNode, ScopeStatus } from '../trace/scopeTypes'
  */
 interface ProjectionContext {
   currentNodeId?: number
+  options: ProjectTasksFromTraceOptions
 }
 
 export interface ProjectTasksFromTraceOptions {
   events?: EventNotification[]
+  errorImages?: Map<string, string>
+  visionImages?: Map<string, string>
+  waitFreezesImages?: Map<string, string>
 }
+
+const EMPTY_IMAGE_MAP = new Map<string, string>()
 
 const toTaskStatus = (
   status: ScopeStatus,
@@ -215,6 +225,7 @@ const normalizeActionDetail = (
 
 const normalizeWaitFreezesDetail = (
   scope: ScopeNode,
+  options: ProjectTasksFromTraceOptions,
 ): WaitFreezesDetail => {
   const payload = readScopePayload(scope)
   const roi = Array.isArray(payload.roi) && payload.roi.length === 4
@@ -232,7 +243,59 @@ const normalizeWaitFreezesDetail = (
     roi,
     param: readRecord(payload.param) as WaitFreezesDetail['param'] | undefined,
     focus: payload.focus,
+    images: findWaitFreezesImages(
+      options.waitFreezesImages ?? EMPTY_IMAGE_MAP,
+      scope.endTs ?? scope.ts,
+      readScopeName(scope),
+    ),
   }
+}
+
+const readNestedDetailName = (
+  payload: Record<string, unknown>,
+  field: string,
+): string | undefined => {
+  return readStringField(readRecord(payload[field]) ?? {}, 'name')
+}
+
+const findErrorImageByNames = (
+  options: ProjectTasksFromTraceOptions,
+  timestamp: string,
+  candidateNames: Array<string | undefined>,
+): string | undefined => {
+  const source = options.errorImages ?? EMPTY_IMAGE_MAP
+  if (source.size === 0) return undefined
+
+  for (const candidate of candidateNames) {
+    if (!candidate) continue
+    const matched = findImageByTimestampSuffix(source, timestamp, `_${candidate}`)
+    if (matched) return matched
+  }
+
+  return undefined
+}
+
+const resolveScopeErrorImage = (
+  scope: ScopeNode,
+  options: ProjectTasksFromTraceOptions,
+  candidateNames: Array<string | undefined>,
+): string | undefined => {
+  if (scope.status !== 'failed') return undefined
+  return findErrorImageByNames(options, scope.endTs ?? scope.ts, candidateNames)
+}
+
+const resolveScopeVisionImage = (
+  scope: ScopeNode,
+  options: ProjectTasksFromTraceOptions,
+  name: string,
+  recoId?: number,
+): string | undefined => {
+  if (recoId == null) return undefined
+  return findImageByTimestampSuffix(
+    options.visionImages ?? EMPTY_IMAGE_MAP,
+    scope.endTs ?? scope.ts,
+    `_${name}_${recoId}`,
+  )
 }
 
 const summarizeFlowItemStatus = (
@@ -371,10 +434,12 @@ const projectFlowChildren = (
 
 const projectTaskFlowItem = (
   scope: ScopeNode,
-  _context: ProjectionContext,
+  context: ProjectionContext,
 ): UnifiedFlowItem => {
   const payload = readScopePayload(scope)
-  const children = projectFlowChildren(scope, {})
+  const children = projectFlowChildren(scope, {
+    options: context.options,
+  })
 
   return {
     id: scope.id,
@@ -403,14 +468,16 @@ const projectPipelineNodeFlowItem = (
 ): UnifiedFlowItem => {
   const payload = readScopePayload(scope)
   const nodeId = readScopeNodeId(scope) ?? context.currentNodeId
+  const nodeName = readScopeName(scope)
   const children = projectFlowChildren(scope, {
     currentNodeId: nodeId,
+    options: context.options,
   })
 
   return {
     id: scope.id,
     type: 'pipeline_node',
-    name: readScopeName(scope),
+    name: nodeName,
     status: toRuntimeStatus(scope.status),
     ts: scope.ts,
     end_ts: scope.endTs,
@@ -418,6 +485,11 @@ const projectPipelineNodeFlowItem = (
     node_id: nodeId,
     reco_details: normalizeRecognitionDetail(payload.recoDetails),
     action_details: normalizeActionDetail(payload.actionDetails),
+    error_image: resolveScopeErrorImage(scope, context.options, [
+      nodeName,
+      readNestedDetailName(payload, 'actionDetails'),
+      readNestedDetailName(payload, 'recoDetails'),
+    ]),
     children: children.length > 0 ? children : undefined,
   }
 }
@@ -427,18 +499,25 @@ const projectRecognitionFlowItem = (
   context: ProjectionContext,
 ): UnifiedFlowItem => {
   const payload = readScopePayload(scope)
+  const name = readScopeName(scope)
+  const recoId = readScopeRecoId(scope)
   const children = projectFlowChildren(scope, context)
 
   return {
     id: scope.id,
     type: 'recognition',
-    name: readScopeName(scope),
+    name,
     status: toRuntimeStatus(scope.status),
     ts: scope.ts,
     end_ts: scope.endTs,
-    reco_id: readScopeRecoId(scope),
+    reco_id: recoId,
     anchor_name: readStringField(payload, 'anchor'),
     reco_details: normalizeRecognitionDetail(payload.recoDetails),
+    error_image: resolveScopeErrorImage(scope, context.options, [
+      name,
+      readNestedDetailName(payload, 'recoDetails'),
+    ]),
+    vision_image: resolveScopeVisionImage(scope, context.options, name, recoId),
     children: children.length > 0 ? children : undefined,
   }
 }
@@ -449,21 +528,29 @@ const projectRecognitionNodeFlowItem = (
 ): UnifiedFlowItem => {
   const payload = readScopePayload(scope)
   const nodeId = readScopeNodeId(scope) ?? context.currentNodeId
+  const name = readScopeName(scope)
+  const recoId = readScopeRecoId(scope)
   const children = projectFlowChildren(scope, {
     currentNodeId: nodeId,
+    options: context.options,
   })
 
   return {
     id: scope.id,
     type: 'recognition_node',
-    name: readScopeName(scope),
+    name,
     status: toRuntimeStatus(scope.status),
     ts: scope.ts,
     end_ts: scope.endTs,
     task_id: readScopeTaskId(scope),
     node_id: nodeId,
-    reco_id: readScopeRecoId(scope),
+    reco_id: recoId,
     reco_details: normalizeRecognitionDetail(payload.recoDetails),
+    error_image: resolveScopeErrorImage(scope, context.options, [
+      name,
+      readNestedDetailName(payload, 'recoDetails'),
+    ]),
+    vision_image: resolveScopeVisionImage(scope, context.options, name, recoId),
     children: children.length > 0 ? children : undefined,
   }
 }
@@ -473,17 +560,22 @@ const projectActionFlowItem = (
   context: ProjectionContext,
 ): UnifiedFlowItem => {
   const payload = readScopePayload(scope)
+  const name = readScopeName(scope)
   const children = projectFlowChildren(scope, context)
 
   return {
     id: scope.id,
     type: 'action',
-    name: readScopeName(scope),
+    name,
     status: toRuntimeStatus(scope.status),
     ts: scope.ts,
     end_ts: scope.endTs,
     action_id: readScopeActionId(scope),
     action_details: normalizeActionDetail(payload.actionDetails),
+    error_image: resolveScopeErrorImage(scope, context.options, [
+      name,
+      readNestedDetailName(payload, 'actionDetails'),
+    ]),
     children: children.length > 0 ? children : undefined,
   }
 }
@@ -494,14 +586,16 @@ const projectActionNodeFlowItem = (
 ): UnifiedFlowItem => {
   const payload = readScopePayload(scope)
   const nodeId = readScopeNodeId(scope) ?? context.currentNodeId
+  const name = readScopeName(scope)
   const children = projectFlowChildren(scope, {
     currentNodeId: nodeId,
+    options: context.options,
   })
 
   return {
     id: scope.id,
     type: 'action_node',
-    name: readScopeName(scope),
+    name,
     status: toRuntimeStatus(scope.status),
     ts: scope.ts,
     end_ts: scope.endTs,
@@ -509,6 +603,10 @@ const projectActionNodeFlowItem = (
     node_id: nodeId,
     action_id: readScopeActionId(scope),
     action_details: normalizeActionDetail(payload.actionDetails),
+    error_image: resolveScopeErrorImage(scope, context.options, [
+      name,
+      readNestedDetailName(payload, 'actionDetails'),
+    ]),
     children: children.length > 0 ? children : undefined,
   }
 }
@@ -528,7 +626,7 @@ const projectWaitFreezesFlowItem = (
     end_ts: scope.endTs,
     task_id: readScopeTaskId(scope),
     node_id: context.currentNodeId,
-    wait_freezes_details: normalizeWaitFreezesDetail(scope),
+    wait_freezes_details: normalizeWaitFreezesDetail(scope, context.options),
     children: children.length > 0 ? children : undefined,
   }
 }
@@ -575,17 +673,20 @@ const resolveNodeNextList = (
 
 const projectPipelineNodeScope = (
   scope: ScopeNode,
+  options: ProjectTasksFromTraceOptions,
 ): NodeInfo => {
   const payload = readScopePayload(scope)
   const nodeId = readScopeNodeId(scope) ?? 0
   const taskId = readScopeTaskId(scope) ?? 0
+  const nodeName = readScopeName(scope)
   const nodeFlow = projectFlowChildren(scope, {
     currentNodeId: nodeId,
+    options,
   })
 
   return {
     node_id: nodeId,
-    name: readScopeName(scope),
+    name: nodeName,
     ts: scope.ts,
     end_ts: scope.endTs,
     status: toRuntimeStatus(scope.status),
@@ -596,6 +697,11 @@ const projectPipelineNodeScope = (
     next_list: resolveNodeNextList(scope),
     node_flow: nodeFlow,
     node_details: normalizeNodeDetails(payload.nodeDetails),
+    error_image: resolveScopeErrorImage(scope, options, [
+      nodeName,
+      readNestedDetailName(payload, 'actionDetails'),
+      readNestedDetailName(payload, 'recoDetails'),
+    ]),
   }
 }
 
@@ -605,7 +711,7 @@ const projectTaskScope = (
 ): TaskInfo => {
   const payload = readScopePayload(scope)
   const pipelineScopes = sortScopesBySeq(scope.children).filter((child) => child.kind === 'pipeline_node')
-  const nodes = pipelineScopes.map(projectPipelineNodeScope)
+  const nodes = pipelineScopes.map((pipelineScope) => projectPipelineNodeScope(pipelineScope, options))
 
   return {
     task_id: readScopeTaskId(scope) ?? 0,

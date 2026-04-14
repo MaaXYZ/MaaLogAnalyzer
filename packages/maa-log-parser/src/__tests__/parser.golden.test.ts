@@ -64,6 +64,61 @@ const findTask = (
 }
 
 describe('LogParser strict public snapshots', () => {
+  it('projects non-realtime image links for failed nodes, recognitions, and wait_freezes', async () => {
+    const lines = [
+      makeEventLine(1, 'Tasker.Task.Starting', { task_id: 81, entry: 'ImageTask', hash: 'h-image', uuid: 'u-image' }),
+      makeEventLine(2, 'Node.PipelineNode.Starting', { task_id: 81, node_id: 8101, name: 'ImageNode' }),
+      makeEventLine(3, 'Node.Recognition.Starting', { task_id: 81, reco_id: 81001, name: 'ImageReco' }),
+      makeEventLine(4, 'Node.Recognition.Failed', {
+        task_id: 81,
+        reco_id: 81001,
+        name: 'ImageReco',
+        reco_details: { algorithm: 'Match', box: [0, 0, 1, 1], detail: null, name: 'ImageReco', reco_id: 81001 },
+      }),
+      makeEventLine(5, 'Node.WaitFreezes.Starting', { task_id: 81, wf_id: 81, phase: 'pre', name: 'ImageNode' }),
+      makeEventLine(6, 'Node.WaitFreezes.Succeeded', { task_id: 81, wf_id: 81, phase: 'post', elapsed: 12, name: 'ImageNode' }),
+      makeEventLine(7, 'Node.PipelineNode.Failed', {
+        task_id: 81,
+        node_id: 8101,
+        name: 'ImageNode',
+      }),
+      makeEventLine(8, 'Tasker.Task.Failed', { task_id: 81, entry: 'ImageTask', hash: 'h-image', uuid: 'u-image' }),
+    ]
+
+    const parser = new LogParser()
+    parser.setErrorImages(new Map([
+      ['2026.04.07-10.00.00.004_ImageReco', '/fixtures/reco-error.png'],
+      ['2026.04.07-10.00.00.007_ImageNode', '/fixtures/node-error.png'],
+    ]))
+    parser.setVisionImages(new Map([
+      ['2026.04.07-10.00.00.004_ImageReco_81001', '/fixtures/reco-vision.png'],
+    ]))
+    parser.setWaitFreezesImages(new Map([
+      ['2026.04.07-10.00.00.006_ImageNode_wait_freezes', '/fixtures/wait-freezes.png'],
+    ]))
+
+    await parser.parseFile(lines.join('\n'))
+
+    const mainTask = findTask(parser.getTasksSnapshot(), 81)
+    const mainNode = mainTask.nodes[0]
+    expect(mainNode?.error_image).toBe('/fixtures/node-error.png')
+
+    const imageRecognition = collectFlowItems(
+      mainNode?.node_flow,
+      (item) => item.type === 'recognition' && item.reco_id === 81001,
+    )[0]?.item
+    expect(imageRecognition).toBeTruthy()
+    expect(imageRecognition?.vision_image).toBe('/fixtures/reco-vision.png')
+    expect(imageRecognition?.error_image).toBe('/fixtures/reco-error.png')
+
+    const imageWaitFreezes = collectFlowItems(
+      mainNode?.node_flow,
+      (item) => item.type === 'wait_freezes' && item.wait_freezes_details?.wf_id === 81,
+    )[0]?.item
+    expect(imageWaitFreezes).toBeTruthy()
+    expect(imageWaitFreezes?.wait_freezes_details?.images).toEqual(['/fixtures/wait-freezes.png'])
+  })
+
   it('keeps explicit scope structure for recognition, action node, task, and wait_freezes', async () => {
     const lines = [
       makeEventLine(1, 'Tasker.Task.Starting', { task_id: 71, entry: 'MainTask', hash: 'h-main-71', uuid: 'u-main-71' }),

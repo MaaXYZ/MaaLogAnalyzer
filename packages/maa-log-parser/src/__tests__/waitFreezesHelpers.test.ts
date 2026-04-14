@@ -3,7 +3,7 @@ import {
   buildWaitFreezesFlowItems,
   normalizeWaitFreezesId,
   upsertWaitFreezesState,
-} from '@windsland52/maa-log-parser/wait-freezes-helpers'
+} from '../waitFreezes/helpers'
 
 const identity = (value: string) => value
 

@@ -105,6 +105,7 @@ export class LogParser {
   private syntheticLineNumber = 1
   private errorImages = new Map<string, string>()
   private visionImages = new Map<string, string>()
+  private waitFreezesImages = new Map<string, string>()
 
   /**
    * 设置错误截图映射
@@ -125,8 +126,8 @@ export class LogParser {
    * 设置 wait_freezes 调试截图映射
    * key 格式: YYYY.MM.DD-HH.MM.SS.ms_NodeName_wait_freezes
    */
-  setWaitFreezesImages(_images: Map<string, string>): void {
-    // Strict projector no longer reads wait_freezes debug assets from parser state.
+  setWaitFreezesImages(images: Map<string, string>): void {
+    this.waitFreezesImages = images
   }
 
   resetParsedEvents(): void {
@@ -482,6 +483,9 @@ export class LogParser {
     const trace = this.getTraceSnapshot()
     const tasks = projectTasksFromTrace(trace, {
       events: this.getEventsSnapshot(),
+      errorImages: this.errorImages,
+      visionImages: this.visionImages,
+      waitFreezesImages: this.waitFreezesImages,
     })
 
     if (consume) {
@@ -513,14 +517,6 @@ export class LogParser {
 
   getTraceIndexSnapshot(): TraceIndex {
     return buildTraceIndex(this.getTraceSnapshot(), this.protocolEvents)
-  }
-
-  /**
-   * Canonical projection built directly from the trace tree.
-   * Suitable for parser/tool consumers that need stable scope semantics.
-   */
-  getProjectedTasksSnapshot(): TaskInfo[] {
-    return this.projectTasksSnapshot(false)
   }
 
   getParseArtifactsSnapshot(): ParseArtifactsSnapshot {

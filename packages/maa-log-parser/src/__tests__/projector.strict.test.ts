@@ -92,7 +92,7 @@ describe('Strict task projector semantics', () => {
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
 
-    const task = findTask(parser.getProjectedTasksSnapshot(), 81)
+    const task = findTask(parser.getTasksSnapshot(), 81)
     expect(task.nodes[0]?.node_flow ?? []).toEqual([])
   })
 
@@ -137,7 +137,7 @@ describe('Strict task projector semantics', () => {
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
 
-    const mainTask = findTask(parser.getProjectedTasksSnapshot(), 1)
+    const mainTask = findTask(parser.getTasksSnapshot(), 1)
     const mainNode = mainTask.nodes[0]
 
     const topLevelMainWaitFreezes = (mainNode.node_flow ?? []).filter((item) =>
@@ -178,7 +178,7 @@ describe('Strict task projector semantics', () => {
       parser.appendRealtimeLines([line])
     }
 
-    const mainTask = findTask(parser.getProjectedTasksSnapshot(), 1)
+    const mainTask = findTask(parser.getTasksSnapshot(), 1)
     const mainNode = mainTask.nodes[0]
 
     const strictChildTask = collectFlowItems(
@@ -227,7 +227,7 @@ describe('Strict task projector semantics', () => {
       parser.appendRealtimeLines([line])
     }
 
-    const mainTask = findTask(parser.getProjectedTasksSnapshot(), 200000021)
+    const mainTask = findTask(parser.getTasksSnapshot(), 200000021)
     const mainNode = mainTask.nodes[0]
     const topLevelActionItems = (mainNode.node_flow ?? []).filter((item) => item.type === 'action')
     expect(topLevelActionItems).toHaveLength(0)
@@ -343,7 +343,7 @@ describe('Strict task projector semantics', () => {
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
 
-    const mainTask = findTask(parser.getProjectedTasksSnapshot(), 1)
+    const mainTask = findTask(parser.getTasksSnapshot(), 1)
     const mainNode = mainTask.nodes[0]
 
     const mainRecognition = collectFlowItems(
@@ -381,7 +381,7 @@ describe('Strict task projector semantics', () => {
 
     await parser.parseFile(fixture)
 
-    const mainTask = findTask(parser.getProjectedTasksSnapshot(), 200000001)
+    const mainTask = findTask(parser.getTasksSnapshot(), 200000001)
     const mainNode = mainTask.nodes.find((node) => node.node_id === 300001880)
     expect(mainNode).toBeTruthy()
 
@@ -460,7 +460,7 @@ describe('Strict task projector semantics', () => {
 
     await parser.parseFile(lines.join('\n'))
 
-    const mainTask = findTask(parser.getProjectedTasksSnapshot(), 401)
+    const mainTask = findTask(parser.getTasksSnapshot(), 401)
     const mainNode = mainTask.nodes[0]
 
     const startUpRecognitions = collectFlowItems(
@@ -538,7 +538,7 @@ describe('Strict task projector semantics', () => {
 
     await parser.parseFile(lines.join('\n'))
 
-    const mainTask = findTask(parser.getProjectedTasksSnapshot(), 301)
+    const mainTask = findTask(parser.getTasksSnapshot(), 301)
     const mainNode = mainTask.nodes[0]
 
     const runningStartUpRecognitions = collectFlowItems(
