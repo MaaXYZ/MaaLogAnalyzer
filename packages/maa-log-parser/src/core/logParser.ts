@@ -149,6 +149,7 @@ import type { ProtocolEvent } from '../protocol/types'
 import { buildTraceTree, type TraceScopePayload } from '../trace/reducer'
 import type { ScopeNode } from '../trace/scopeTypes'
 import { buildTraceIndex, type TraceIndex } from '../query/traceIndex'
+import { projectTasksFromTrace } from '../projector/taskProjector'
 import {
   cloneRawLineStore,
   createRawLineStore,
@@ -627,6 +628,13 @@ export class LogParser {
 
   getTraceIndexSnapshot(): TraceIndex {
     return buildTraceIndex(this.getTraceSnapshot(), this.protocolEvents)
+  }
+
+  getProjectedTasksSnapshot(): TaskInfo[] {
+    const trace = this.getTraceSnapshot()
+    return projectTasksFromTrace(trace, {
+      events: this.getEventsSnapshot(),
+    })
   }
 
   getParseArtifactsSnapshot(): ParseArtifactsSnapshot {
