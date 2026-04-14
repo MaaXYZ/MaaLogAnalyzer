@@ -48,7 +48,9 @@ jobs:
 
       - name: 核心类型检查
         if: matrix.platform == 'linux'
-        run: ./node_modules/.bin/vue-tsc --noEmit
+        run: |
+          pnpm run build:packages
+          ./node_modules/.bin/vue-tsc --noEmit
 
       - name: 核心回归测试
         if: matrix.platform == 'linux'
