@@ -238,15 +238,14 @@ jobs:
           body: |
             ## 📦 下载说明
 
-            ### Windows
-            - **x64**: 下载 `.msi` 安装包
+            ### Web
+            - 在线使用: [mla.maafw.com](https://mla.maafw.com)
 
-            ### macOS
-            - **Intel 芯片**: 下载 `x64.dmg` 文件
-            - **Apple Silicon (M1/M2/M3)**: 下载 `aarch64.dmg` 文件
+            ### VSCode 插件
+            - Visual Studio Marketplace: [Windsland52.maa-log-analyzer](https://marketplace.visualstudio.com/items?itemName=Windsland52.maa-log-analyzer)
 
-            ### Linux
-            - **x64**: 下载 `.deb` 文件
+            ### 桌面端安装包
+            - Windows (.msi)、macOS (.dmg) 与 Linux (.deb) 安装包见本页附件
 
             ## 📝 更新内容
             ${{ needs.changelog.outputs.release_body }}
