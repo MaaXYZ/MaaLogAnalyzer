@@ -696,4 +696,82 @@ describe('Strict task projector semantics', () => {
       pathNode.type === 'action' && pathNode.action_id === 5101,
     )).toBe(true)
   })
+
+  it('projects focus onto node, recognition, and action scopes without synthetic focus context', async () => {
+    const focus = {
+      'Node.PipelineNode.Succeeded': '{name} pipeline done in task {task_id}',
+      'Node.Recognition.Succeeded': '{name} recognition #{reco_id}',
+      'Node.Action.Succeeded': {
+        content: '{name} action #{action_id}',
+        display: ['log', 'toast'],
+      },
+    }
+
+    const lines = [
+      makeEventLine(1, 'Tasker.Task.Starting', { task_id: 71, entry: 'FocusTask', hash: 'h-71', uuid: 'u-71' }, '2026-04-12'),
+      makeEventLine(2, 'Node.PipelineNode.Starting', {
+        task_id: 71,
+        node_id: 7101,
+        name: 'FocusNode',
+        focus,
+      }, '2026-04-12'),
+      makeEventLine(3, 'Node.Recognition.Starting', {
+        task_id: 71,
+        reco_id: 7201,
+        name: 'FocusNode',
+        focus,
+      }, '2026-04-12'),
+      makeEventLine(4, 'Node.Recognition.Succeeded', {
+        task_id: 71,
+        reco_id: 7201,
+        name: 'FocusNode',
+        focus,
+        reco_details: { algorithm: 'DirectHit', box: [0, 0, 0, 0], detail: null, name: 'FocusNode', reco_id: 7201 },
+      }, '2026-04-12'),
+      makeEventLine(5, 'Node.Action.Starting', {
+        task_id: 71,
+        action_id: 7301,
+        name: 'FocusNode',
+        focus,
+      }, '2026-04-12'),
+      makeEventLine(6, 'Node.Action.Succeeded', {
+        task_id: 71,
+        action_id: 7301,
+        name: 'FocusNode',
+        focus,
+        action_details: makeActionDetails({ actionId: 7301, name: 'FocusNode', success: true }),
+      }, '2026-04-12'),
+      makeEventLine(7, 'Node.PipelineNode.Succeeded', {
+        task_id: 71,
+        node_id: 7101,
+        name: 'FocusNode',
+        focus,
+        reco_details: { algorithm: 'DirectHit', box: [0, 0, 0, 0], detail: null, name: 'FocusNode', reco_id: 7201 },
+        action_details: makeActionDetails({ actionId: 7301, name: 'FocusNode', success: true }),
+      }, '2026-04-12'),
+      makeEventLine(8, 'Tasker.Task.Succeeded', { task_id: 71, entry: 'FocusTask', hash: 'h-71', uuid: 'u-71' }, '2026-04-12'),
+    ]
+
+    const parser = new LogParser()
+    await parser.parseFile(lines.join('\n'))
+
+    const task = findTask(parser.getTasksSnapshot(), 71)
+    const node = task.nodes[0]
+    expect(node?.focus).toEqual(focus)
+    expect(node).not.toHaveProperty('focus_context')
+
+    const recognitionItem = collectFlowItems(
+      node?.node_flow,
+      (item) => item.type === 'recognition' && item.reco_id === 7201,
+    )[0]?.item
+    expect(recognitionItem?.focus).toEqual(focus)
+    expect(recognitionItem).not.toHaveProperty('focus_context')
+
+    const actionItem = collectFlowItems(
+      node?.node_flow,
+      (item) => item.type === 'action' && item.action_id === 7301,
+    )[0]?.item
+    expect(actionItem?.focus).toEqual(focus)
+    expect(actionItem).not.toHaveProperty('focus_context')
+  })
 })

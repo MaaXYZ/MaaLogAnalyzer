@@ -79,6 +79,7 @@ export interface UnifiedFlowItem {
   node_id?: number
   reco_id?: number
   action_id?: number
+  focus?: unknown
   task_details?: {
     task_id: number
     entry?: string
@@ -123,6 +124,7 @@ export interface NodeInfo {
   task_id: number
   reco_details?: RecognitionDetail
   action_details?: ActionDetail
+  focus?: unknown
   next_list: NextListItem[]
   node_flow?: UnifiedFlowItem[]
   recognitions?: RecognitionAttempt[]

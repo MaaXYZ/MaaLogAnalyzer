@@ -9,6 +9,7 @@ import RecognitionDetailCard from './detail/components/RecognitionDetailCard.vue
 import ActionDetailCard from './detail/components/ActionDetailCard.vue'
 import FlowFallbackCard from './detail/components/FlowFallbackCard.vue'
 import NodeDetailCard from './detail/components/NodeDetailCard.vue'
+import FocusDetailCard from './detail/components/FocusDetailCard.vue'
 
 const props = defineProps<{
   selectedNode: NodeInfo | null
@@ -62,6 +63,7 @@ const {
   formattedBridgeNodeDefinition,
   selectedNodeDisplayErrorImage,
   currentActionErrorImage,
+  currentFocusCard,
 } = useDetailViewController(props)
 </script>
 
@@ -77,6 +79,14 @@ const {
 
       <!-- 已选择节点 -->
       <template v-else>
+
+        <focus-detail-card
+          v-if="currentFocusCard"
+          :focus-card="currentFocusCard"
+          :raw-json-default-expanded="rawJsonDefaultExpanded"
+          :format-json="formatJson"
+          :copy-to-clipboard="copyToClipboard"
+        />
 
         <!-- 识别详情 -->
         <recognition-detail-card

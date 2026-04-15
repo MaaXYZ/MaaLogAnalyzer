@@ -7,6 +7,11 @@ import { useDetailFlowDetails } from './useDetailFlowDetails'
 import { useDetailBridgeRecognition } from './useDetailBridgeRecognition'
 import { useDetailNodeDefinition } from './useDetailNodeDefinition'
 import { useDetailUiHelpers } from './useDetailUiHelpers'
+import {
+  buildActionFocusCardData,
+  buildNodeFocusCardData,
+  buildRecognitionFocusCardData,
+} from './focus'
 import type { BridgeOpenCropRequest } from './types'
 import { buildNodeFlowItems, buildNodeRecognitionAttempts } from '@windsland52/maa-log-parser/node-flow'
 
@@ -150,6 +155,22 @@ export const useDetailViewController = (
     return props.selectedNode?.error_image ?? null
   })
 
+  const currentFocusCard = computed(() => {
+    if (currentRecognitionItem.value) {
+      return buildRecognitionFocusCardData(currentRecognitionItem.value, props.selectedNode)
+    }
+
+    if (currentActionItem.value) {
+      return buildActionFocusCardData(currentActionItem.value, props.selectedNode)
+    }
+
+    if (!isFlowItemSelected.value && props.selectedNode) {
+      return buildNodeFocusCardData(props.selectedNode)
+    }
+
+    return null
+  })
+
   return {
     rawJsonDefaultExpanded,
     resolveImageSrc,
@@ -184,5 +205,6 @@ export const useDetailViewController = (
     formattedBridgeNodeDefinition,
     selectedNodeDisplayErrorImage,
     currentActionErrorImage,
+    currentFocusCard,
   }
 }

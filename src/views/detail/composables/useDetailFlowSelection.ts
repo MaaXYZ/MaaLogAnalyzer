@@ -1,6 +1,6 @@
 import { computed, type Ref } from 'vue'
 import type { NodeInfo, UnifiedFlowItem } from '../../../types'
-import { buildNodeFlowItems } from '@windsland52/maa-log-parser/node-flow'
+import { buildNodeActionTimelineItems, buildNodeFlowItems } from '@windsland52/maa-log-parser/node-flow'
 
 interface UseDetailFlowSelectionOptions {
   selectedNode: Ref<NodeInfo | null>
@@ -32,18 +32,8 @@ const pickFirstErrorImage = (items: UnifiedFlowItem[] | undefined): string | nul
 }
 
 const resolveSyntheticFlowItem = (node: NodeInfo, flowItemId: string): UnifiedFlowItem | null => {
-  if (/^node\.action\.\d+$/.test(flowItemId) && node.action_details) {
-    const action = node.action_details
-    return {
-      id: flowItemId,
-      type: 'action',
-      name: action.name || node.name,
-      status: node.status === 'running' ? 'running' : (action.success ? 'success' : 'failed'),
-      ts: action.ts || action.end_ts || node.end_ts || node.ts,
-      end_ts: action.end_ts,
-      action_id: action.action_id,
-      action_details: action,
-    }
+  if (/^node\.action\.\d+$/.test(flowItemId)) {
+    return buildNodeActionTimelineItems(node).find(item => item.id === flowItemId) ?? null
   }
 
   return null

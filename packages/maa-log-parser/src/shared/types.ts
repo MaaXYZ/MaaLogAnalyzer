@@ -196,6 +196,7 @@ export interface UnifiedFlowItem {
 	node_id?: number
 	reco_id?: number
 	action_id?: number
+	focus?: any
 	task_details?: NestedActionGroup['task_details']
 	reco_details?: RecognitionDetail
 	action_details?: ActionDetail

@@ -548,6 +548,7 @@ const projectPipelineNodeFlowItem = (
     end_ts: scope.endTs,
     task_id: readScopeTaskId(scope),
     node_id: nodeId,
+    focus: payload.focus,
     reco_details: normalizeRecognitionDetail(payload.recoDetails),
     action_details: normalizeActionDetail(payload.actionDetails),
     error_image: resolveScopeErrorImage(scope, context.options, [
@@ -596,6 +597,7 @@ const projectRecognitionFlowItem = (
     ts: scope.ts,
     end_ts: scope.endTs,
     reco_id: recoId,
+    focus: payload.focus,
     anchor_name: readStringField(payload, 'anchor'),
     reco_details: normalizeRecognitionDetail(payload.recoDetails),
     error_image: resolveScopeErrorImage(scope, context.options, [
@@ -630,6 +632,7 @@ const projectRecognitionNodeFlowItem = (
     task_id: readScopeTaskId(scope),
     node_id: nodeId,
     reco_id: recoId,
+    focus: payload.focus,
     reco_details: normalizeRecognitionDetail(payload.recoDetails),
     error_image: resolveScopeErrorImage(scope, context.options, [
       name,
@@ -656,6 +659,7 @@ const projectActionFlowItem = (
     ts: scope.ts,
     end_ts: scope.endTs,
     action_id: readScopeActionId(scope),
+    focus: payload.focus,
     action_details: normalizeActionDetail(payload.actionDetails),
     error_image: resolveScopeErrorImage(scope, context.options, [
       name,
@@ -687,6 +691,7 @@ const projectActionNodeFlowItem = (
     task_id: readScopeTaskId(scope),
     node_id: nodeId,
     action_id: readScopeActionId(scope),
+    focus: payload.focus,
     action_details: normalizeActionDetail(payload.actionDetails),
     error_image: resolveScopeErrorImage(scope, context.options, [
       name,
@@ -700,6 +705,7 @@ const projectWaitFreezesFlowItem = (
   scope: ScopeNode,
   context: ProjectionContext,
 ): UnifiedFlowItem => {
+  const payload = readScopePayload(scope)
   const children = projectFlowChildren(scope, context)
 
   return {
@@ -711,6 +717,7 @@ const projectWaitFreezesFlowItem = (
     end_ts: scope.endTs,
     task_id: readScopeTaskId(scope),
     node_id: context.currentNodeId,
+    focus: payload.focus,
     wait_freezes_details: normalizeWaitFreezesDetail(scope, context.options),
     children: children.length > 0 ? children : undefined,
   }
