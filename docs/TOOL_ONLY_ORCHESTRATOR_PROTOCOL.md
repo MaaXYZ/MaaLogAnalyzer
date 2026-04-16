@@ -111,11 +111,18 @@ interface ParseLogBundleArgs {
   inputs: Array<{
     path: string
     kind: 'file' | 'folder' | 'zip'
+    focus?: {
+      keywords?: string[]
+      started_after?: string
+      started_before?: string
+    }
   }>
 }
 ```
 
 返回结构：
+
+说明：`inputs[].focus` 为可选字段，用于提示接入方在 `folder` 或 `zip` 日志源中，按关键词和时间边界缩小候选主日志/历史滚动日志范围；未传入时应保持原有默认加载行为。
 
 ```ts
 interface ParseLogBundleResult {

@@ -14,6 +14,7 @@ import {
   extractZipContentFromNodeBuffer,
   extractZipContentFromNodeFile,
   loadNodeLogDirectory,
+  type LogBundleFocus,
 } from './nodeInput'
 
 type ParseOptions = ParseFileOptions
@@ -21,18 +22,21 @@ type ParseOptions = ParseFileOptions
 export interface AnalyzeZipBufferInput {
   zipData: Uint8Array
   sourceRef?: string
+  focus?: LogBundleFocus
   parseOptions?: ParseOptions
   parserVersion?: string
 }
 
 export interface AnalyzeZipFileInput {
   zipFilePath: string
+  focus?: LogBundleFocus
   parseOptions?: ParseOptions
   parserVersion?: string
 }
 
 export interface AnalyzeDirectoryInput {
   directoryPath: string
+  focus?: LogBundleFocus
   parseOptions?: ParseOptions
   parserVersion?: string
 }
@@ -49,7 +53,9 @@ export const analyzeLogContent = async (
 export const analyzeZipBuffer = async (
   input: AnalyzeZipBufferInput,
 ): Promise<KernelOutput | null> => {
-  const extracted = extractZipContentFromNodeBuffer(input.zipData, input.sourceRef)
+  const extracted = extractZipContentFromNodeBuffer(input.zipData, input.sourceRef, {
+    focus: input.focus,
+  })
   if (!extracted) return null
 
   return analyzeLogContent({
@@ -65,7 +71,9 @@ export const analyzeZipBuffer = async (
 export const analyzeZipFile = async (
   input: AnalyzeZipFileInput,
 ): Promise<KernelOutput | null> => {
-  const extracted = await extractZipContentFromNodeFile(input.zipFilePath)
+  const extracted = await extractZipContentFromNodeFile(input.zipFilePath, {
+    focus: input.focus,
+  })
   if (!extracted) return null
 
   return analyzeLogContent({
@@ -81,7 +89,9 @@ export const analyzeZipFile = async (
 export const analyzeDirectory = async (
   input: AnalyzeDirectoryInput,
 ): Promise<KernelOutput | null> => {
-  const extracted = await loadNodeLogDirectory(input.directoryPath)
+  const extracted = await loadNodeLogDirectory(input.directoryPath, {
+    focus: input.focus,
+  })
   if (!extracted) return null
 
   return analyzeLogContent({

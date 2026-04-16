@@ -8,9 +8,16 @@ export interface AnalyzerSession {
   createdAt: string
 }
 
+export interface ParseLogBundleFocus {
+  keywords?: string[]
+  started_after?: string
+  started_before?: string
+}
+
 export interface ParseLogBundleInput {
   path: string
   kind: 'file' | 'folder' | 'zip'
+  focus?: ParseLogBundleFocus
 }
 
 export interface ResolvedLogSourceInput {

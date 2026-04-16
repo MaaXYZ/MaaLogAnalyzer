@@ -6,10 +6,11 @@ const MAIN_LOG_NAMES = ['maa.log', 'maafw.log'] as const
 const BAK_LOG_NAMES = ['maa.bak.log', 'maafw.bak.log'] as const
 const SEARCH_TEXT_EXTENSIONS = ['.log', '.txt', '.jsonl'] as const
 
-const PRIMARY_LOG_NAME_SET = new Set<string>([
-  ...MAIN_LOG_NAMES,
-  ...BAK_LOG_NAMES,
-].map((name) => name.toLowerCase()))
+const MAIN_LOG_NAME_SET = new Set<string>(MAIN_LOG_NAMES.map((name) => name.toLowerCase()))
+const HISTORY_LOG_NAME_PATTERNS = [
+  /^maa\.bak(?:\..+)?\.log$/i,
+  /^maafw\.bak(?:\..+)?\.log$/i,
+]
 
 export interface KernelTextFile {
   path: string
@@ -26,6 +27,20 @@ export interface NodeExtractedLogContent {
   textFiles: KernelTextFile[]
 }
 
+export interface LogBundleFocus {
+  keywords?: string[]
+  started_after?: string
+  started_before?: string
+}
+
+export interface ExtractZipContentOptions {
+  focus?: LogBundleFocus
+}
+
+export interface LoadNodeLogDirectoryOptions {
+  focus?: LogBundleFocus
+}
+
 const toPosixPath = (value: string): string => value.replace(/\\/g, '/')
 
 const normalizeLowerPath = (value: string): string => toPosixPath(value).toLowerCase()
@@ -33,6 +48,15 @@ const normalizeLowerPath = (value: string): string => toPosixPath(value).toLower
 const isSearchTextFile = (normalizedPath: string): boolean => {
   const lower = normalizedPath.toLowerCase()
   return SEARCH_TEXT_EXTENSIONS.some((ext) => lower.endsWith(ext))
+}
+
+const isHistoryLogName = (fileName: string): boolean => {
+  return HISTORY_LOG_NAME_PATTERNS.some((pattern) => pattern.test(fileName))
+}
+
+const isCoreLogName = (fileName: string): boolean => {
+  const lower = fileName.toLowerCase()
+  return MAIN_LOG_NAME_SET.has(lower) || isHistoryLogName(lower)
 }
 
 const decodeNodeBytes = (bytes: Uint8Array): string => {
@@ -120,8 +144,7 @@ const isNeededZipEntry = (entryPath: string): boolean => {
   const lower = normalizeLowerPath(entryPath)
   const name = lower.slice(lower.lastIndexOf('/') + 1)
   if (isSearchTextFile(lower)) return true
-  if (MAIN_LOG_NAMES.includes(name as (typeof MAIN_LOG_NAMES)[number])) return true
-  if (BAK_LOG_NAMES.includes(name as (typeof BAK_LOG_NAMES)[number])) return true
+  if (isCoreLogName(name)) return true
   if (lower.includes('/on_error/') && lower.endsWith('.png')) return true
   if (lower.includes('/vision/') && lower.endsWith('.jpg')) return true
   return false
@@ -135,6 +158,142 @@ const toFileReference = (absolutePath: string): string => {
   return `file:${toPosixPath(absolutePath)}`
 }
 
+const normalizeTimestampBoundary = (value: string | undefined): string | null => {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (trimmed.length === 0) return null
+  return trimmed.includes('.') ? trimmed : `${trimmed}.000`
+}
+
+const extractTimestamps = (content: string): string[] => {
+  const matches = content.match(/\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,3})?)\]/g) ?? []
+  return matches
+    .map((item) => item.slice(1, -1))
+    .map((item) => normalizeTimestampBoundary(item) ?? item)
+}
+
+const contentMatchesFocus = (
+  content: string,
+  focus: LogBundleFocus,
+): boolean => {
+  const keywords = (focus.keywords ?? []).filter((keyword) => keyword.trim().length > 0)
+  if (keywords.length > 0 && !keywords.some((keyword) => content.includes(keyword))) {
+    return false
+  }
+
+  const startedAfter = normalizeTimestampBoundary(focus.started_after)
+  const startedBefore = normalizeTimestampBoundary(focus.started_before)
+  if (!startedAfter && !startedBefore) {
+    return true
+  }
+
+  return extractTimestamps(content).some((timestamp) => {
+    if (startedAfter && timestamp < startedAfter) {
+      return false
+    }
+    if (startedBefore && timestamp > startedBefore) {
+      return false
+    }
+    return true
+  })
+}
+
+const joinMergedContent = (chunks: string[]): string => {
+  return chunks.reduce((result, chunk) => {
+    if (chunk.length === 0) return result
+    if (result.length === 0) return chunk
+    return result.endsWith('\n') ? `${result}${chunk}` : `${result}\n${chunk}`
+  }, '')
+}
+
+const rankLogPath = (filePath: string): number => {
+  const baseName = path.basename(filePath).toLowerCase()
+  if (baseName === 'maafw.bak.log' || baseName.startsWith('maafw.bak.')) {
+    return 0
+  }
+  if (baseName === 'maa.bak.log' || baseName.startsWith('maa.bak.')) {
+    return 1
+  }
+  if (baseName === 'maafw.log') {
+    return 2
+  }
+  if (baseName === 'maa.log') {
+    return 3
+  }
+  return 10
+}
+
+const sortLogPaths = (paths: string[]): string[] => {
+  return [...paths].sort((left, right) => {
+    const rankDiff = rankLogPath(left) - rankLogPath(right)
+    if (rankDiff !== 0) return rankDiff
+    return left.localeCompare(right)
+  })
+}
+
+const collectFocusedFileContents = async (
+  logPaths: string[],
+  focus: LogBundleFocus,
+): Promise<string> => {
+  const chunks: string[] = []
+  for (const logPath of sortLogPaths(logPaths)) {
+    const content = await readNodeTextFileContent(logPath)
+    if (!contentMatchesFocus(content, focus)) continue
+    chunks.push(content)
+  }
+  return joinMergedContent(chunks)
+}
+
+const collectFocusedZipContents = (
+  entries: Record<string, Uint8Array>,
+  paths: string[],
+  basePath: string,
+  focus: LogBundleFocus,
+): string => {
+  const normalizedBasePath = normalizeLowerPath(basePath)
+  const candidatePaths = sortLogPaths(paths.filter((entryPath) => {
+    const normalizedPath = toPosixPath(entryPath)
+    const lastSlash = normalizedPath.lastIndexOf('/')
+    const parentPath = lastSlash === -1 ? '' : normalizedPath.slice(0, lastSlash)
+    if (normalizeLowerPath(parentPath) !== normalizedBasePath) {
+      return false
+    }
+    const fileName = normalizedPath.slice(lastSlash + 1)
+    return isCoreLogName(fileName)
+  }))
+
+  const chunks: string[] = []
+  for (const entryPath of candidatePaths) {
+    const bytes = entries[entryPath]
+    if (!bytes) continue
+    const content = decodeNodeBytes(bytes)
+    if (!contentMatchesFocus(content, focus)) continue
+    chunks.push(content)
+  }
+  return joinMergedContent(chunks)
+}
+
+const buildDefaultZipContent = (
+  entries: Record<string, Uint8Array>,
+  paths: string[],
+  basePath: string,
+): string => {
+  const bakLogName = BAK_LOG_NAMES.find((name) => findZipEntry(entries, paths, joinPath(basePath, name)))
+  const mainLogName = MAIN_LOG_NAMES.find((name) => findZipEntry(entries, paths, joinPath(basePath, name)))
+
+  const bakData = bakLogName ? findZipEntry(entries, paths, joinPath(basePath, bakLogName)) : null
+  const mainData = mainLogName ? findZipEntry(entries, paths, joinPath(basePath, mainLogName)) : null
+
+  const chunks: string[] = []
+  if (bakData) {
+    chunks.push(decodeNodeBytes(bakData))
+  }
+  if (mainData) {
+    chunks.push(decodeNodeBytes(mainData))
+  }
+  return joinMergedContent(chunks)
+}
+
 export const readNodeTextFileContent = async (filePath: string): Promise<string> => {
   const bytes = await readFile(filePath)
   return decodeNodeBytes(new Uint8Array(bytes))
@@ -143,6 +302,7 @@ export const readNodeTextFileContent = async (filePath: string): Promise<string>
 export const extractZipContentFromNodeBuffer = (
   zipData: Uint8Array,
   sourceRef: string = 'memory.zip',
+  options: ExtractZipContentOptions = {},
 ): NodeExtractedLogContent | null => {
   const files = unzipSync(zipData, {
     filter: (entry) => isNeededZipEntry(entry.name),
@@ -151,20 +311,9 @@ export const extractZipContentFromNodeBuffer = (
   const basePath = findBaseDirectory(paths)
   if (basePath == null) return null
 
-  const bakLogName = BAK_LOG_NAMES.find((name) => findZipEntry(files, paths, joinPath(basePath, name)))
-  const mainLogName = MAIN_LOG_NAMES.find((name) => findZipEntry(files, paths, joinPath(basePath, name)))
-
-  const bakData = bakLogName ? findZipEntry(files, paths, joinPath(basePath, bakLogName)) : null
-  const mainData = mainLogName ? findZipEntry(files, paths, joinPath(basePath, mainLogName)) : null
-
-  let content = ''
-  if (bakData) {
-    content += decodeNodeBytes(bakData)
-  }
-  if (mainData) {
-    if (content && !content.endsWith('\n')) content += '\n'
-    content += decodeNodeBytes(mainData)
-  }
+  const content = options.focus
+    ? collectFocusedZipContents(files, paths, basePath, options.focus)
+    : buildDefaultZipContent(files, paths, basePath)
   if (!content) return null
 
   const errorImages = new Map<string, string>()
@@ -198,16 +347,17 @@ export const extractZipContentFromNodeBuffer = (
       }
     }
 
-    if (isSearchTextFile(normalizedPath)) {
-      const fileData = files[currentPath]
-      if (!fileData) continue
-      textFiles.push({
-        path: normalizedPath,
-        name: fileName,
-        content: decodeNodeBytes(fileData),
-        reference: toZipReference(sourceRef, normalizedPath),
-      })
-    }
+    if (!isSearchTextFile(normalizedPath)) continue
+    if (isCoreLogName(fileName)) continue
+
+    const fileData = files[currentPath]
+    if (!fileData) continue
+    textFiles.push({
+      path: normalizedPath,
+      name: fileName,
+      content: decodeNodeBytes(fileData),
+      reference: toZipReference(sourceRef, normalizedPath),
+    })
   }
 
   textFiles.sort((a, b) => a.path.localeCompare(b.path))
@@ -216,9 +366,10 @@ export const extractZipContentFromNodeBuffer = (
 
 export const extractZipContentFromNodeFile = async (
   zipFilePath: string,
+  options: ExtractZipContentOptions = {},
 ): Promise<NodeExtractedLogContent | null> => {
   const bytes = await readFile(zipFilePath)
-  return extractZipContentFromNodeBuffer(new Uint8Array(bytes), zipFilePath)
+  return extractZipContentFromNodeBuffer(new Uint8Array(bytes), zipFilePath, options)
 }
 
 const pathExists = async (targetPath: string): Promise<boolean> => {
@@ -303,24 +454,34 @@ const pickPrimaryLogPath = async (
   return null
 }
 
+const buildDefaultDirectoryContent = async (
+  debugPath: string,
+  allFiles: string[],
+): Promise<string> => {
+  const bakLogPath = await pickPrimaryLogPath(debugPath, allFiles, BAK_LOG_NAMES)
+  const mainLogPath = await pickPrimaryLogPath(debugPath, allFiles, MAIN_LOG_NAMES)
+
+  const chunks: string[] = []
+  if (bakLogPath) {
+    chunks.push(await readNodeTextFileContent(bakLogPath))
+  }
+  if (mainLogPath) {
+    chunks.push(await readNodeTextFileContent(mainLogPath))
+  }
+  return joinMergedContent(chunks)
+}
+
 export const loadNodeLogDirectory = async (
   inputDirectoryPath: string,
+  options: LoadNodeLogDirectoryOptions = {},
 ): Promise<NodeExtractedLogContent | null> => {
   const debugPath = await resolveDebugDirectory(inputDirectoryPath)
   if (!debugPath) return null
 
   const allFiles = await collectFilesRecursively(debugPath)
-  const bakLogPath = await pickPrimaryLogPath(debugPath, allFiles, BAK_LOG_NAMES)
-  const mainLogPath = await pickPrimaryLogPath(debugPath, allFiles, MAIN_LOG_NAMES)
-
-  let content = ''
-  if (bakLogPath) {
-    content += await readNodeTextFileContent(bakLogPath)
-  }
-  if (mainLogPath) {
-    if (content && !content.endsWith('\n')) content += '\n'
-    content += await readNodeTextFileContent(mainLogPath)
-  }
+  const content = options.focus
+    ? await collectFocusedFileContents(allFiles.filter((filePath) => isCoreLogName(path.basename(filePath))), options.focus)
+    : await buildDefaultDirectoryContent(debugPath, allFiles)
   if (!content) return null
 
   const errorImages = new Map<string, string>()
@@ -332,7 +493,6 @@ export const loadNodeLogDirectory = async (
     const relativePath = toPosixPath(path.relative(debugPath, absolutePath))
     const lowerRelativePath = relativePath.toLowerCase()
     const fileName = path.basename(absolutePath)
-    const lowerFileName = fileName.toLowerCase()
 
     if (lowerRelativePath.includes('/on_error/') && lowerRelativePath.endsWith('.png')) {
       const key = parseErrorImageKey(fileName)
@@ -353,7 +513,7 @@ export const loadNodeLogDirectory = async (
     }
 
     if (!isSearchTextFile(relativePath)) continue
-    if (PRIMARY_LOG_NAME_SET.has(lowerFileName)) continue
+    if (isCoreLogName(fileName)) continue
 
     textFiles.push({
       path: relativePath,

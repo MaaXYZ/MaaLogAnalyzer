@@ -189,4 +189,36 @@ describe('Analyzer tool handlers', () => {
       })
     }
   })
+
+  it('passes focus selectors through parse_log_bundle inputs to the resolver', async () => {
+    const captured: unknown[] = []
+    const handlers = createAnalyzerToolHandlers({
+      async resolve_input(input) {
+        captured.push(input.focus ?? null)
+        return { content: sourceAContent, source_key: 'focused.log', source_path: input.path }
+      },
+    })
+
+    const parsed = await handlers.parse_log_bundle({
+      session_id: 's-focus',
+      inputs: [
+        {
+          path: '/logs/focused',
+          kind: 'folder',
+          focus: {
+            keywords: ['MainTask'],
+            started_after: '2026-04-14 10:00:00',
+          },
+        },
+      ],
+    })
+
+    expect(parsed.ok).toBe(true)
+    expect(captured).toEqual([
+      {
+        keywords: ['MainTask'],
+        started_after: '2026-04-14 10:00:00',
+      },
+    ])
+  })
 })

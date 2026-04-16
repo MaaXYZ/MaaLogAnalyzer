@@ -24,8 +24,23 @@ The concrete adapter is provided by `@windsland52/maa-log-adapter`.
   - `DEFAULT_CORE_PARSE_OPTIONS`
 - `@windsland52/maa-log-tools/node-input`
   - Node file/zip/folder extraction helpers
+  - `LogBundleFocus`
 - `@windsland52/maa-log-tools/cli`
   - CLI entry module
+
+## Focused Loading
+
+`analyzeZipBuffer`, `analyzeZipFile`, `analyzeDirectory`, `extractZipContentFromNodeBuffer`, `extractZipContentFromNodeFile`, and `loadNodeLogDirectory` all accept an optional `focus` selector:
+
+```ts
+{
+  keywords?: string[]
+  started_after?: string
+  started_before?: string
+}
+```
+
+When `focus` is provided, the helpers scan candidate primary and history log files and only merge files whose content matches the keywords and/or timestamp boundaries. If `focus` is omitted, the previous default loading behavior is preserved.
 
 ## CLI
 
