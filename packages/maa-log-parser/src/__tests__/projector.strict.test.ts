@@ -697,6 +697,146 @@ describe('Strict task projector semantics', () => {
     )).toBe(true)
   })
 
+  it('ignores delayed cross-source mirrored recognition starts while the primary scope is still open', async () => {
+    const parser = new LogParser()
+    const lines = [
+      makeEventLine(100, 'Tasker.Task.Starting', { task_id: 401, entry: 'StartUp', hash: 'h-main', uuid: 'u-main' }, '2026-04-16'),
+      makeEventLine(101, 'Node.PipelineNode.Starting', { task_id: 401, node_id: 4101, name: 'StartUp' }, '2026-04-16'),
+      makeEventLine(102, 'Node.NextList.Starting', {
+        task_id: 401,
+        name: 'StartUp',
+        list: [
+          { name: 'AlreadyThere', anchor: false, jump_back: false },
+          { name: 'ClickTarget', anchor: false, jump_back: false },
+        ],
+      }, '2026-04-16'),
+      makeEventLine(940, 'Node.Recognition.Starting', {
+        task_id: 401,
+        reco_id: 5101,
+        name: 'AlreadyThere',
+      }, '2026-04-16', {
+        processId: 'Px1',
+        threadId: 'Tx1',
+      }),
+      makeEventLine(1657, 'Node.Recognition.Starting', {
+        task_id: 401,
+        reco_id: 5101,
+        name: 'AlreadyThere',
+      }, '2026-04-16', {
+        processId: 'Px2',
+        threadId: 'Tx2',
+      }),
+      makeEventLine(1678, 'Node.Recognition.Failed', {
+        task_id: 401,
+        reco_id: 5101,
+        name: 'AlreadyThere',
+        reco_details: {
+          algorithm: 'OCR',
+          box: null,
+          detail: {
+            all: [{ box: [122, 32, 78, 18], score: 0.986559, text: 'OtherPlace' }],
+            best: null,
+            filtered: [],
+          },
+          name: 'AlreadyThere',
+          reco_id: 5101,
+        },
+      }, '2026-04-16', {
+        processId: 'Px1',
+        threadId: 'Tx1',
+      }),
+      makeEventLine(1718, 'Node.Recognition.Failed', {
+        task_id: 401,
+        reco_id: 5101,
+        name: 'AlreadyThere',
+        reco_details: {
+          algorithm: 'OCR',
+          box: null,
+          detail: {
+            all: [{ box: [122, 32, 78, 18], score: 0.986559, text: 'OtherPlace' }],
+            best: null,
+            filtered: [],
+          },
+          name: 'AlreadyThere',
+          reco_id: 5101,
+        },
+      }, '2026-04-16', {
+        processId: 'Px2',
+        threadId: 'Tx2',
+      }),
+      makeEventLine(1719, 'Node.Recognition.Starting', {
+        task_id: 401,
+        reco_id: 5102,
+        name: 'ClickTarget',
+      }, '2026-04-16'),
+      makeEventLine(1723, 'Node.Recognition.Succeeded', {
+        task_id: 401,
+        reco_id: 5102,
+        name: 'ClickTarget',
+        reco_details: {
+          algorithm: 'TemplateMatch',
+          box: [1, 2, 3, 4],
+          detail: {},
+          name: 'ClickTarget',
+          reco_id: 5102,
+        },
+      }, '2026-04-16'),
+      makeEventLine(1731, 'Node.NextList.Succeeded', {
+        task_id: 401,
+        name: 'StartUp',
+        list: [
+          { name: 'AlreadyThere', anchor: false, jump_back: false },
+          { name: 'ClickTarget', anchor: false, jump_back: false },
+        ],
+      }, '2026-04-16'),
+      makeEventLine(2735, 'Node.Action.Starting', { task_id: 401, action_id: 6101, name: 'ClickTarget' }, '2026-04-16'),
+      makeEventLine(2789, 'Node.Action.Succeeded', {
+        task_id: 401,
+        action_id: 6101,
+        name: 'ClickTarget',
+        action_details: makeActionDetails({ actionId: 6101, name: 'ClickTarget', success: true }),
+      }, '2026-04-16'),
+      makeEventLine(5000, 'Tasker.Task.Starting', { task_id: 402, entry: 'ChildTask', hash: 'h-child', uuid: 'u-child' }, '2026-04-16'),
+      makeEventLine(5001, 'Node.PipelineNode.Starting', { task_id: 402, node_id: 4201, name: 'ChildNode' }, '2026-04-16'),
+      makeEventLine(5002, 'Node.PipelineNode.Succeeded', { task_id: 402, node_id: 4201, name: 'ChildNode' }, '2026-04-16'),
+      makeEventLine(5003, 'Tasker.Task.Succeeded', { task_id: 402, entry: 'ChildTask', hash: 'h-child', uuid: 'u-child' }, '2026-04-16'),
+      makeEventLine(5796, 'Node.PipelineNode.Succeeded', { task_id: 401, node_id: 4101, name: 'StartUp' }, '2026-04-16'),
+      makeEventLine(5800, 'Tasker.Task.Succeeded', { task_id: 401, entry: 'StartUp', hash: 'h-main', uuid: 'u-main' }, '2026-04-16'),
+    ]
+
+    await parser.parseFile(lines.join('\n'))
+
+    const mainTask = findTask(parser.getTasksSnapshot(), 401)
+    const mainNode = mainTask.nodes[0]
+
+    const runningAlreadyThere = collectFlowItems(
+      mainNode.node_flow,
+      (item) =>
+        item.type === 'recognition'
+        && item.reco_id === 5101
+        && item.status === 'running',
+    )
+    expect(runningAlreadyThere).toHaveLength(0)
+
+    const clickAction = collectFlowItems(
+      mainNode.node_flow,
+      (item) => item.type === 'action' && item.action_id === 6101,
+    )
+    expect(clickAction).toHaveLength(1)
+    expect(clickAction[0]?.path.some((pathNode) =>
+      pathNode.type === 'recognition' && pathNode.reco_id === 5101,
+    )).toBe(false)
+
+    const childTaskItems = collectFlowItems(
+      mainNode.node_flow,
+      (item) => item.type === 'task' && item.task_id === 402,
+    )
+    expect(childTaskItems).toHaveLength(1)
+    expect(childTaskItems[0]?.path.some((pathNode) =>
+      pathNode.type === 'recognition' && pathNode.reco_id === 5101,
+    )).toBe(false)
+  })
+
   it('projects focus onto node, recognition, and action scopes without synthetic focus context', async () => {
     const focus = {
       'Node.PipelineNode.Succeeded': '{name} pipeline done in task {task_id}',

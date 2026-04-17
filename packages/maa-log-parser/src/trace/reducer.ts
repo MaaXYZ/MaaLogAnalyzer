@@ -296,12 +296,24 @@ const openScope = (
   state: ReducerState,
   event: ProtocolEvent,
 ): TraceScopeNode => {
+  const scopeKey = buildScopeKey(event)
+  if (scopeKey) {
+    const existingScopes = state.openScopeStacksByKey.get(scopeKey)
+    if (existingScopes) {
+      for (let index = existingScopes.length - 1; index >= 0; index -= 1) {
+        const scope = existingScopes[index]
+        if (scope && !matchesScopeSource(scope, event)) {
+          return scope
+        }
+      }
+    }
+  }
+
   const scope = createScopeNode(event)
   const parent = resolveParentScope(state, event)
   attachChild(parent, scope)
   state.openScopes.push(scope)
 
-  const scopeKey = buildScopeKey(event)
   if (scopeKey) {
     pushMapStack(state.openScopeStacksByKey, scopeKey, scope)
   }

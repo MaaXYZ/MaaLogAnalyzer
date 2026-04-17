@@ -75,7 +75,7 @@ const forceCopyString = (value: string): string => {
 // milliseconds after the primary emitter. Keep the cross-source dedup window
 // wide enough so delayed mirrored terminal events do not create synthetic
 // empty scopes after the real scope has already been closed.
-const CROSS_SOURCE_DUPLICATE_WINDOW_MS = 100
+const CROSS_SOURCE_DUPLICATE_WINDOW_MS = 1000
 
 export class LogParser {
   private events: EventNotification[] = []
@@ -130,7 +130,7 @@ export class LogParser {
 
   private pruneDedupSignatures(currentTimestampMs: number): void {
     if (!Number.isFinite(currentTimestampMs)) return
-    const pruneBefore = currentTimestampMs - 100
+    const pruneBefore = currentTimestampMs - CROSS_SOURCE_DUPLICATE_WINDOW_MS
     while (this.dedupSignatureTimelineHead < this.dedupSignatureTimeline.length) {
       const item = this.dedupSignatureTimeline[this.dedupSignatureTimelineHead]
       if (!item || !Number.isFinite(item.timestampMs) || item.timestampMs >= pruneBefore) {
