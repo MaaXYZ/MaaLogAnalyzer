@@ -7,6 +7,12 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 import { extractZipContent } from '../zipExtractor'
 
+const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
+  const copy = new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  return copy.buffer
+}
+
 describe('extractZipContent', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -25,7 +31,7 @@ describe('extractZipContent', () => {
     })
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
 
-    const result = await extractZipContent(new File([zipData], 'root-images.zip'))
+    const result = await extractZipContent(new File([toArrayBuffer(zipData)], 'root-images.zip'))
 
     expect(result).not.toBeNull()
     expect(result?.content).toContain('AutoCollectStart')
