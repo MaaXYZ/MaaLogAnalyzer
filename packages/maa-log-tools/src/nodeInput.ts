@@ -145,8 +145,8 @@ const isNeededZipEntry = (entryPath: string): boolean => {
   const name = lower.slice(lower.lastIndexOf('/') + 1)
   if (isSearchTextFile(lower)) return true
   if (isCoreLogName(name)) return true
-  if (lower.includes('/on_error/') && lower.endsWith('.png')) return true
-  if (lower.includes('/vision/') && lower.endsWith('.jpg')) return true
+  if ((lower.includes('/on_error/') || lower.startsWith('on_error/')) && lower.endsWith('.png')) return true
+  if ((lower.includes('/vision/') || lower.startsWith('vision/')) && lower.endsWith('.jpg')) return true
   return false
 }
 

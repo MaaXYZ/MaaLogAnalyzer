@@ -94,4 +94,22 @@ describe('node input focus selectors', () => {
     expect(extracted?.content).not.toContain('OldHistory')
     expect(extracted?.textFiles.map((file) => file.name)).toContain('notes.txt')
   })
+
+  it('collects root-level zip screenshots for on_error and wait_freezes', () => {
+    const zipData = zipSync({
+      'maa.log': strToU8(`${makeTimestampedLine('2026-04-16 14:55:00.000', 'AutoCollectStart')}\n`),
+      'on_error/2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation.png': strToU8('fake-png'),
+      'vision/2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes.jpg': strToU8('fake-jpg'),
+    })
+
+    const extracted = extractZipContentFromNodeBuffer(zipData, 'logs.zip')
+
+    expect(extracted).not.toBeNull()
+    expect(extracted?.errorImages.get('2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation')).toBe(
+      'zip:logs.zip#on_error/2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation.png',
+    )
+    expect(extracted?.waitFreezesImages.get('2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes')).toBe(
+      'zip:logs.zip#vision/2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes.jpg',
+    )
+  })
 })

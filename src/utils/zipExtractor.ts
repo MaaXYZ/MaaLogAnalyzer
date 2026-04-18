@@ -33,9 +33,9 @@ function isNeededFile(path: string): boolean {
   if (isSearchTextFile(lower)) return true
   if (isPrimaryLogFileName(name)) return true
   // on_error 截图
-  if (lower.includes('/on_error/') && lower.endsWith('.png')) return true
+  if ((lower.includes('/on_error/') || lower.startsWith('on_error/')) && lower.endsWith('.png')) return true
   // vision 调试截图
-  if (lower.includes('/vision/') && lower.endsWith('.jpg')) return true
+  if ((lower.includes('/vision/') || lower.startsWith('vision/')) && lower.endsWith('.jpg')) return true
   return false
 }
 
