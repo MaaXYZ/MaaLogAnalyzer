@@ -4,6 +4,7 @@ import {
   createPrimaryLogParseInputs,
   type LoadedPrimaryLogFile,
 } from '../../../../utils/logFileDiscovery'
+import { isSupportedArchive, extractArchiveContent } from '../../../../utils/archiveExtractor'
 import type { LogLoadingPipelineOptions } from './types'
 import type { ProcessLogContentParams } from './types'
 import type { TextSearchLoadedTarget } from '../useTextSearchTargets'
@@ -47,13 +48,12 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
   ) => {
     pipeline.loading.value = true
     try {
-      if (file.name.toLowerCase().endsWith('.zip')) {
+      if (isSupportedArchive(file.name)) {
         pipeline.onFileLoadingStart?.()
         try {
-          const { extractZipContent } = await import('../../../../utils/zipExtractor')
-          const result = await extractZipContent(file, selectPrimaryLogs)
+          const result = await extractArchiveContent(file, selectPrimaryLogs)
           if (!result) {
-            pipeline.onWarning('ZIP 文件中未找到有效的日志文件')
+            pipeline.onWarning('压缩包中未找到有效的日志文件')
             return
           }
 

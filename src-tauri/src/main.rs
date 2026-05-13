@@ -45,7 +45,7 @@ struct LoadedPrimaryLogFileDto {
 }
 
 #[derive(Serialize)]
-struct ZipExtractResult {
+struct ArchiveExtractResult {
     content: String,
     primary_log_files: Vec<LoadedPrimaryLogFileDto>,
     error_images: HashMap<String, String>,
@@ -54,7 +54,12 @@ struct ZipExtractResult {
 }
 
 #[tauri::command]
-fn extract_zip_log(path: String) -> Result<ZipExtractResult, String> {
+fn extract_zip_log(path: String) -> Result<ArchiveExtractResult, String> {
+    let lower = path.to_lowercase();
+    if !lower.ends_with(".zip") {
+        return Err(format!("Tauri 桌面端目前仅支持 ZIP 格式。7z 和 RAR 请使用 Web 版本。"));
+    }
+
     let file = std::fs::File::open(&path).map_err(|e| format!("无法打开文件: {e}"))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("无法读取 ZIP: {e}"))?;
     let temp_dir = create_zip_temp_dir(&path)?;
@@ -135,7 +140,7 @@ fn extract_zip_log(path: String) -> Result<ZipExtractResult, String> {
         return Err("ZIP 中未找到有效的日志内容".to_string());
     }
 
-    Ok(ZipExtractResult {
+    Ok(ArchiveExtractResult {
         content: String::new(),
         primary_log_files,
         error_images,

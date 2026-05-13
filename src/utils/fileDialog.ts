@@ -121,16 +121,19 @@ async function openLogFileWithTauri(): Promise<string | null> {
       multiple: false,
       filters: [{
         name: 'Log Files',
-        extensions: ['log', 'jsonl', 'txt', 'zip']
+        extensions: ['log', 'jsonl', 'txt', 'zip', '7z', 'rar']
+      }, {
+        name: 'Archive Files',
+        extensions: ['zip', '7z', 'rar']
       }],
       directory: false,
       title: '选择日志文件'
     })
 
     if (selected && typeof selected === 'string') {
-      if (selected.toLowerCase().endsWith('.zip')) {
-        // ZIP 文件：使用 Rust 侧原生解压
-        return await openZipFileWithTauri(selected)
+      const lower = selected.toLowerCase()
+      if (lower.endsWith('.zip') || lower.endsWith('.7z') || lower.endsWith('.rar')) {
+        return await openArchiveFileWithTauri(selected)
       }
       const { readFile } = await import('@tauri-apps/plugin-fs')
       const bytes = await readFile(selected)
@@ -157,10 +160,7 @@ export function consumeTauriZipErrorImages(): Map<string, string> | null {
   return images
 }
 
-/**
- * 使用 Tauri Rust 命令解压 ZIP 文件
- */
-async function openZipFileWithTauri(path: string): Promise<string | null> {
+async function openArchiveFileWithTauri(path: string): Promise<string | null> {
   const result = await invoke<{ content: string; error_images: Record<string, string> }>('extract_zip_log', { path })
 
   const errorImages = new Map<string, string>()
