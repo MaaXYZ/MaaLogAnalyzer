@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import {
   NCard, NDescriptions, NDescriptionsItem, NFlex, NTag, NIcon, NText,
   NCollapse, NCollapseItem, NButton, NCode, NEmpty,
@@ -6,6 +7,7 @@ import {
 import { CopyOutlined } from '@vicons/antd'
 import type { NodeInfo } from '../../../types'
 import SafePreviewImage from '../../../components/SafePreviewImage.vue'
+import RawJsonCollapseItem from './RawJsonCollapseItem.vue'
 
 const props = defineProps<{
   selectedNode: NodeInfo | null
@@ -28,6 +30,16 @@ const props = defineProps<{
   formatJson: (obj: any) => string
   copyToClipboard: (text: string) => void
 }>()
+
+const expandedNames = ref<string[]>([...props.rawJsonDefaultExpanded])
+watch(
+  () => props.rawJsonDefaultExpanded,
+  (names) => {
+    expandedNames.value = [...names]
+  },
+)
+
+const nodeDefinitionExpanded = computed(() => expandedNames.value.includes('node-definition'))
 </script>
 
 <template>
@@ -88,7 +100,7 @@ const props = defineProps<{
       />
     </div>
 
-    <n-collapse style="margin-top: 16px" :default-expanded-names="props.rawJsonDefaultExpanded">
+    <n-collapse v-model:expanded-names="expandedNames" style="margin-top: 16px">
       <n-collapse-item v-if="props.isVscodeLaunchEmbed" title="节点定义" name="node-definition">
         <template #header-extra>
           <n-button
@@ -105,7 +117,7 @@ const props = defineProps<{
         <n-text v-if="props.bridgeNodeDefinitionLoading" depth="3" style="font-size: 13px">正在加载节点定义...</n-text>
         <n-text v-else-if="props.bridgeNodeDefinitionError" type="error" style="font-size: 13px">{{ props.bridgeNodeDefinitionError }}</n-text>
         <n-code
-          v-else-if="props.formattedBridgeNodeDefinition"
+          v-else-if="props.formattedBridgeNodeDefinition && nodeDefinitionExpanded"
           :code="props.formattedBridgeNodeDefinition"
           language="json"
           :word-wrap="true"
@@ -113,25 +125,14 @@ const props = defineProps<{
         />
         <n-empty v-else description="未获取到节点定义" />
       </n-collapse-item>
-      <n-collapse-item title="原始节点数据" name="node-json">
-        <template #header-extra>
-          <n-button
-            size="tiny"
-            @click.stop="props.copyToClipboard(props.formatJson(props.selectedNode))"
-          >
-            <template #icon>
-              <n-icon><copy-outlined /></n-icon>
-            </template>
-            复制
-          </n-button>
-        </template>
-        <n-code
-          :code="props.formatJson(props.selectedNode)"
-          language="json"
-          :word-wrap="true"
-          style="max-height: 500px; overflow: auto; max-width: 100%"
-        />
-      </n-collapse-item>
+      <raw-json-collapse-item
+        title="原始节点数据"
+        name="node-json"
+        :value="props.selectedNode"
+        :expanded-names="expandedNames"
+        :format-json="props.formatJson"
+        :copy-to-clipboard="props.copyToClipboard"
+      />
     </n-collapse>
   </n-card>
 </template>

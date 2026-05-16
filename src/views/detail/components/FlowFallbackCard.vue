@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import {
   NCard, NDescriptions, NDescriptionsItem, NFlex, NTag,
-  NCollapse, NCollapseItem, NButton, NIcon, NCode, NText,
+  NCollapse, NText,
 } from 'naive-ui'
-import { CopyOutlined } from '@vicons/antd'
 import type { UnifiedFlowItem } from '../../../types'
 import { getRuntimeStatusTagType, getRuntimeStatusText } from '../../../utils/runtimeStatus'
 import SafePreviewImage from '../../../components/SafePreviewImage.vue'
+import RawJsonCollapseItem from './RawJsonCollapseItem.vue'
 
 const props = defineProps<{
   selectedFlowItem: UnifiedFlowItem | null
@@ -22,6 +23,14 @@ const props = defineProps<{
   formatJson: (obj: any) => string
   copyToClipboard: (text: string) => void
 }>()
+
+const expandedNames = ref<string[]>([...props.rawJsonDefaultExpanded])
+watch(
+  () => props.rawJsonDefaultExpanded,
+  (names) => {
+    expandedNames.value = [...names]
+  },
+)
 </script>
 
 <template>
@@ -143,26 +152,15 @@ const props = defineProps<{
       </n-flex>
     </div>
 
-    <n-collapse style="margin-top: 16px" :default-expanded-names="props.rawJsonDefaultExpanded">
-      <n-collapse-item title="原始事件数据" name="task-json">
-        <template #header-extra>
-          <n-button
-            size="tiny"
-            @click.stop="props.copyToClipboard(props.formatJson(props.selectedFlowItem))"
-          >
-            <template #icon>
-              <n-icon><copy-outlined /></n-icon>
-            </template>
-            复制
-          </n-button>
-        </template>
-        <n-code
-          :code="props.formatJson(props.selectedFlowItem)"
-          language="json"
-          :word-wrap="true"
-          style="max-height: 500px; overflow: auto; max-width: 100%"
-        />
-      </n-collapse-item>
+    <n-collapse v-model:expanded-names="expandedNames" style="margin-top: 16px">
+      <raw-json-collapse-item
+        title="原始事件数据"
+        name="task-json"
+        :value="props.selectedFlowItem"
+        :expanded-names="expandedNames"
+        :format-json="props.formatJson"
+        :copy-to-clipboard="props.copyToClipboard"
+      />
     </n-collapse>
   </n-card>
 </template>

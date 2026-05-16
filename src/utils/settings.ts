@@ -45,7 +45,7 @@ const defaultSettings: AppSettings = {
   defaultCollapseRootActionList: false,
   defaultCollapseNestedRecognition: true,
   defaultCollapseNestedActionNodes: true,
-  defaultExpandRawJson: true,
+  defaultExpandRawJson: false,
   displayMode: 'tree',
 
   flowchartEdgeStyle: 'orthogonal',

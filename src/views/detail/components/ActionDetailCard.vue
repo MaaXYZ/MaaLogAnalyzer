@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import {
   NCard, NDescriptions, NDescriptionsItem, NTag,
-  NText, NCollapse, NCollapseItem, NButton, NIcon, NCode,
+  NText, NCollapse,
 } from 'naive-ui'
-import { CopyOutlined } from '@vicons/antd'
 import type { NodeInfo } from '../../../types'
 import { getRuntimeStatusTagType, getRuntimeStatusText } from '../../../utils/runtimeStatus'
 import SafePreviewImage from '../../../components/SafePreviewImage.vue'
+import RawJsonCollapseItem from './RawJsonCollapseItem.vue'
 
 const props = defineProps<{
   currentActionDetails: any
@@ -20,6 +21,14 @@ const props = defineProps<{
   formatJson: (obj: any) => string
   copyToClipboard: (text: string) => void
 }>()
+
+const expandedNames = ref<string[]>([...props.rawJsonDefaultExpanded])
+watch(
+  () => props.rawJsonDefaultExpanded,
+  (names) => {
+    expandedNames.value = [...names]
+  },
+)
 </script>
 
 <template>
@@ -67,26 +76,16 @@ const props = defineProps<{
       />
     </div>
 
-    <n-collapse style="margin-top: 16px" :default-expanded-names="props.rawJsonDefaultExpanded">
-      <n-collapse-item title="原始动作数据" name="action-json">
-        <template #header-extra>
-          <n-button
-            size="tiny"
-            @click.stop="props.copyToClipboard(props.formatJson(props.currentActionDetails))"
-          >
-            <template #icon>
-              <n-icon><copy-outlined /></n-icon>
-            </template>
-            复制
-          </n-button>
-        </template>
-        <n-code
-          :code="props.formatJson(props.currentActionDetails)"
-          language="json"
-          :word-wrap="true"
-          style="max-height: 400px; overflow: auto; max-width: 100%"
-        />
-      </n-collapse-item>
+    <n-collapse v-model:expanded-names="expandedNames" style="margin-top: 16px">
+      <raw-json-collapse-item
+        title="原始动作数据"
+        name="action-json"
+        :value="props.currentActionDetails"
+        :expanded-names="expandedNames"
+        :format-json="props.formatJson"
+        :copy-to-clipboard="props.copyToClipboard"
+        max-height="400px"
+      />
     </n-collapse>
   </n-card>
 </template>

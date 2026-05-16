@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import {
-  NButton, NCard, NCode, NCollapse, NCollapseItem, NDivider, NFlex,
+  NButton, NCard, NCollapse, NDivider, NFlex,
   NIcon, NTag, NText,
 } from 'naive-ui'
 import { CopyOutlined } from '@vicons/antd'
 import type { FocusCardData } from '../composables/types'
 import { renderFocusRichText } from '../composables/focusRichText'
+import RawJsonCollapseItem from './RawJsonCollapseItem.vue'
 
 const props = defineProps<{
   focusCard: FocusCardData
@@ -13,6 +15,14 @@ const props = defineProps<{
   formatJson: (obj: any) => string
   copyToClipboard: (text: string) => void
 }>()
+
+const expandedNames = ref<string[]>([...props.rawJsonDefaultExpanded])
+watch(
+  () => props.rawJsonDefaultExpanded,
+  (names) => {
+    expandedNames.value = [...names]
+  },
+)
 
 const sourceLabelMap: Record<FocusCardData['sourceKind'], string> = {
   node: '节点',
@@ -91,26 +101,16 @@ const phaseTagTypeMap = {
       <n-divider v-if="index < props.focusCard.entries.length - 1" style="margin: 16px 0" />
     </div>
 
-    <n-collapse style="margin-top: 16px" :default-expanded-names="props.rawJsonDefaultExpanded">
-      <n-collapse-item title="原始 focus 配置" name="focus-config">
-        <template #header-extra>
-          <n-button
-            size="tiny"
-            @click.stop="props.copyToClipboard(props.formatJson(props.focusCard.rawFocus))"
-          >
-            <template #icon>
-              <n-icon><copy-outlined /></n-icon>
-            </template>
-            复制
-          </n-button>
-        </template>
-        <n-code
-          :code="props.formatJson(props.focusCard.rawFocus)"
-          language="json"
-          :word-wrap="true"
-          style="max-height: 320px; overflow: auto; max-width: 100%"
-        />
-      </n-collapse-item>
+    <n-collapse v-model:expanded-names="expandedNames" style="margin-top: 16px">
+      <raw-json-collapse-item
+        title="原始 focus 配置"
+        name="focus-config"
+        :value="props.focusCard.rawFocus"
+        :expanded-names="expandedNames"
+        :format-json="props.formatJson"
+        :copy-to-clipboard="props.copyToClipboard"
+        max-height="320px"
+      />
     </n-collapse>
   </n-card>
 </template>
