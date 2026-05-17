@@ -23,6 +23,7 @@ export const useProcessFollowNav = (
     toggleFollowLast,
     stopFollowOnScrollUp,
     scrollToNode,
+    safeScrollToItem,
   } = useRealtimeFollow({
     tasks: computed(() => options.props.tasks),
     selectedTask: computed(() => options.props.selectedTask),
@@ -63,6 +64,7 @@ export const useProcessFollowNav = (
     toggleFollowLast,
     stopFollowOnScrollUp,
     scrollToNode,
+    safeScrollToItem,
     nodeNavSearchText,
     normalizedNodeNavSearchText,
     nodeNavFailedOnly,

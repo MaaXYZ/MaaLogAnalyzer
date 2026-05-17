@@ -95,6 +95,7 @@ const {
   toggleFollowLast,
   stopFollowOnScrollUp,
   scrollToNode,
+  safeScrollToItem,
   nodeNavSearchText,
   normalizedNodeNavSearchText,
   nodeNavFailedOnly,
@@ -227,6 +228,7 @@ void fileInputRef
       :on-toggle-node-nav-failed-only="toggleNodeNavFailedOnly"
       :on-select-node-nav="scrollToNode"
       :on-manual-scroll-up="stopFollowOnScrollUp"
+      :safe-scroll-to-item="safeScrollToItem"
     />
 
     <primary-log-selection-modal

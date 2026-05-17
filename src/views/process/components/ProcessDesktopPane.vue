@@ -47,6 +47,7 @@ const props = defineProps<{
   bridgeRevealTask?: ((task: string) => Promise<void>) | null
   setTaskListPanelRef?: (instance: unknown | null) => void
   setNodeNavPanelRef?: (instance: unknown | null) => void
+  safeScrollToItem?: (index: number) => Promise<boolean>
 }>()
 
 const emit = defineEmits<{
@@ -146,6 +147,8 @@ const handleSelectNodeNavItem = (item: NodeNavViewItem) => {
         :is-vscode-launch-embed="isVscodeLaunchEmbed"
         :bridge-request-task-doc="bridgeRequestTaskDoc"
         :bridge-reveal-task="bridgeRevealTask"
+        :selected-node-id="selectedNodeId ?? null"
+        :safe-scroll-to-item="safeScrollToItem"
         @manual-scroll-up="emit('manual-scroll-up')"
         @scroller-mounted="emit('scroller-mounted', $event)"
         @select-node="emit('select-node', $event)"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import NodeTimelineList from './NodeTimelineList.vue'
 import type { NodeInfo } from '../../../types'
+import type { DynamicScroller } from 'vue-virtual-scroller'
 
 type NodeTimelineItem = NodeInfo & { _uniqueKey: string }
 
@@ -15,6 +16,8 @@ const props = withDefaults(defineProps<{
   scrollerStyle?: string
   wrapperStyle?: string
   captureWheelUp?: boolean
+  selectedNodeId?: number | null
+  safeScrollToItem?: (index: number) => Promise<boolean>
 }>(), {
   selectedTaskKey: null,
   isVscodeLaunchEmbed: false,
@@ -24,10 +27,12 @@ const props = withDefaults(defineProps<{
   scrollerStyle: 'height: 100%',
   wrapperStyle: 'height: 100%; display: flex; flex-direction: column; position: relative',
   captureWheelUp: true,
+  selectedNodeId: null,
+  safeScrollToItem: undefined,
 })
 
 const emit = defineEmits<{
-  'scroller-mounted': [scroller: object | null]
+  'scroller-mounted': [scroller: InstanceType<typeof DynamicScroller> | null]
   'manual-scroll-up': []
   'select-node': [node: NodeInfo]
   'select-action': [node: NodeInfo]
@@ -48,6 +53,8 @@ const emit = defineEmits<{
     :scroller-style="props.scrollerStyle"
     :wrapper-style="props.wrapperStyle"
     :capture-wheel-up="props.captureWheelUp"
+    :selected-node-id="props.selectedNodeId ?? null"
+    :safe-scroll-to-item="props.safeScrollToItem"
     @scroller-mounted="emit('scroller-mounted', $event)"
     @manual-scroll-up="emit('manual-scroll-up')"
     @select-node="emit('select-node', $event)"
