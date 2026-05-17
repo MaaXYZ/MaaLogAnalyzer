@@ -139,22 +139,6 @@ const sortLoadedPrimaryLogSegments = <T extends { path: string; name: string; co
   })
 }
 
-const combineLoadedPrimaryLogSegments = <T extends { path: string; name: string; content: string }>(
-  entries: T[],
-): string => {
-  const sorted = sortLoadedPrimaryLogSegments(entries)
-
-  let combined = ''
-  for (const entry of sorted) {
-    if (!entry.content) continue
-    if (combined && !combined.endsWith('\n')) {
-      combined += '\n'
-    }
-    combined += entry.content
-  }
-  return combined
-}
-
 const postThemeChangedToWebview = (panel: vscode.WebviewPanel | undefined) => {
   panel?.webview.postMessage({
     type: 'vscodeThemeChanged',
@@ -795,9 +779,9 @@ async function handleZipFile(uri: vscode.Uri): Promise<void> {
         }
       })
       .filter((entry): entry is { path: string; name: string; content: string } => entry != null)
-    const content = combineLoadedPrimaryLogSegments(loadedSegments)
+    const primaryLogFiles = sortLoadedPrimaryLogSegments(loadedSegments)
 
-    if (!content) {
+    if (primaryLogFiles.length === 0) {
       vscode.window.showWarningMessage('ZIP 文件中未找到有效的日志内容')
       return
     }
@@ -846,8 +830,10 @@ async function handleZipFile(uri: vscode.Uri): Promise<void> {
     }
 
     currentPanel?.webview.postMessage({
-      type: 'loadZipFile',
-      content,
+      type: 'loadFile',
+      content: '',
+      primaryLogFiles,
+      fileName: path.posix.basename(uri.path),
       errorImages,
       visionImages,
       waitFreezesImages,
