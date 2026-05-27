@@ -99,6 +99,7 @@ const actionDetailRows = computed(() => buildActionDetailRows(props.currentActio
         :format-json="props.formatJson"
         :copy-to-clipboard="props.copyToClipboard"
         max-height="400px"
+        default-expand-all
       />
     </n-collapse>
   </n-card>

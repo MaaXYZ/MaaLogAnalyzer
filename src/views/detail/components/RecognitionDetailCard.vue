@@ -178,6 +178,7 @@ const getRecognitionHitTagType = (value: unknown) => value === '命中' ? 'succe
         :format-json="props.formatJson"
         :copy-to-clipboard="props.copyToClipboard"
         max-height="400px"
+        default-expand-all
       />
     </n-collapse>
   </n-card>

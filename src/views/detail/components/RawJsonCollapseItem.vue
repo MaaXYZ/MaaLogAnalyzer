@@ -12,6 +12,7 @@ const props = defineProps<{
   formatJson: (obj: any) => string
   copyToClipboard: (text: string) => void
   maxHeight?: string
+  defaultExpandAll?: boolean
 }>()
 
 const code = ref('')
@@ -106,6 +107,7 @@ const handleCopy = () => {
       <raw-json-tree
         v-if="treeReady"
         :value="props.value"
+        :default-expand-all="props.defaultExpandAll"
         :format-json="props.formatJson"
         :copy-to-clipboard="props.copyToClipboard"
         root

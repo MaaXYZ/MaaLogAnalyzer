@@ -7,17 +7,19 @@ const props = withDefaults(defineProps<{
   value: unknown
   depth?: number
   root?: boolean
+  defaultExpandAll?: boolean
   formatJson: (obj: any) => string
   copyToClipboard: (text: string) => void
 }>(), {
   name: '',
   depth: 0,
   root: false,
+  defaultExpandAll: false,
 })
 
 const MAX_VISIBLE_ENTRIES = 200
 
-const expanded = ref(props.root)
+const expanded = ref(props.root || props.defaultExpandAll)
 
 const isRecordLike = computed(() => props.value !== null && typeof props.value === 'object')
 const isArrayValue = computed(() => Array.isArray(props.value))
@@ -96,6 +98,7 @@ const handleCopy = () => {
         :name="entryName"
         :value="entryValue"
         :depth="props.depth + 1"
+        :default-expand-all="props.defaultExpandAll"
         :format-json="props.formatJson"
         :copy-to-clipboard="props.copyToClipboard"
       />
