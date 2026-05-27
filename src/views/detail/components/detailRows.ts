@@ -49,6 +49,37 @@ const formatRecognitionResultSummary = (value: unknown) => {
   return parts.length > 0 ? parts.join(' | ') : formatDetailValue(value, 240)
 }
 
+const formatCount = (value: unknown) => Array.isArray(value) ? String(value.length) : '-'
+
+const formatChildBestSummary = (value: unknown) => {
+  if (!isRecord(value)) return '-'
+  const parts: string[] = []
+  if (hasDetailValue(value.text)) parts.push(`text=${value.text}`)
+  if (hasDetailValue(value.score)) parts.push(`score=${value.score}`)
+  if (hasDetailValue(value.count)) parts.push(`count=${value.count}`)
+  if (hasDetailValue(value.label)) parts.push(`label=${value.label}`)
+  if (hasDetailValue(value.cls_index)) parts.push(`cls_index=${value.cls_index}`)
+  if (Array.isArray(value.box) && parts.length === 0) parts.push(`box=[${value.box.join(', ')}]`)
+  return parts.length > 0 ? parts.join(', ') : formatDetailValue(value, 120)
+}
+
+const formatChildRecognitionSummary = (item: Record<string, any>) => {
+  const hit = !!item.box
+  const parts = [`${hit ? '命中' : '未命中'} ${item.name ?? '-'} (${item.algorithm ?? '-'})`]
+
+  if (Array.isArray(item.box)) {
+    parts.push(`box=[${item.box.join(', ')}]`)
+  }
+
+  if (isRecord(item.detail)) {
+    parts.push(`all ${formatCount(item.detail.all)}`)
+    parts.push(`filtered ${formatCount(item.detail.filtered)}`)
+    parts.push(`best ${formatChildBestSummary(item.detail.best)}`)
+  }
+
+  return parts.join('，')
+}
+
 export const buildRecognitionDetailRows = (
   recognition: any,
   descriptionColumns: number,
@@ -62,19 +93,25 @@ export const buildRecognitionDetailRows = (
 
   const detail = recognition.detail
   if (Array.isArray(detail)) {
-    const hitChildren = detail.filter((item) => isRecord(item) && item.box).length
+    const childRecognitions = detail.filter(isRecord)
+    const hitChildren = childRecognitions.filter((item) => item.box).length
     rows.push(
-      { label: '子识别数量', value: detail.length },
-      { label: '命中子识别数量', value: hitChildren },
+      {
+        label: '整体判定',
+        value: `${recognition.box ? '命中' : '未命中'}（${hitChildren}/${detail.length}）`,
+      },
     )
 
-    const children = detail
-      .filter(isRecord)
+    childRecognitions
+      .sort((left, right) => Number(!!left.box) - Number(!!right.box))
       .slice(0, 8)
-      .map((item) => `${item.name ?? '-'} (${item.algorithm ?? '-'})${item.box ? ` [${item.box.join(', ')}]` : ''}`)
-    if (children.length > 0) {
-      rows.push({ label: '子识别列表', value: children.join('\n'), span: descriptionColumns })
-    }
+      .forEach((item, index) => {
+        rows.push({
+          label: `子识别 ${index + 1}`,
+          value: formatChildRecognitionSummary(item),
+          span: descriptionColumns,
+        })
+      })
     return rows
   }
 

@@ -32,16 +32,34 @@ describe('detailRows', () => {
     const rows = buildRecognitionDetailRows({
       box: null,
       detail: [
-        { name: 'Icon', algorithm: 'TemplateMatch', box: [1, 2, 3, 4] },
-        { name: 'Text', algorithm: 'OCR', box: null },
+        {
+          name: 'Icon',
+          algorithm: 'TemplateMatch',
+          box: [1, 2, 3, 4],
+          detail: {
+            all: [{ box: [1, 2, 3, 4], score: 0.9 }],
+            filtered: [{ box: [1, 2, 3, 4], score: 0.9 }],
+            best: { box: [1, 2, 3, 4], score: 0.9 },
+          },
+        },
+        {
+          name: 'Text',
+          algorithm: 'OCR',
+          box: null,
+          detail: {
+            all: [{ box: [5, 6, 7, 8], score: 0.8, text: 'NO' }],
+            filtered: [],
+            best: null,
+          },
+        },
       ],
     }, 3)
 
-    expect(rows.map((row) => row.label)).toEqual(['命中状态', '子识别数量', '命中子识别数量', '子识别列表'])
+    expect(rows.map((row) => row.label)).toEqual(['命中状态', '整体判定', '子识别 1', '子识别 2'])
     expect(rows[0].value).toBe('未命中')
-    expect(rows[1].value).toBe(2)
-    expect(rows[2].value).toBe(1)
-    expect(rows[3].value).toContain('Icon (TemplateMatch) [1, 2, 3, 4]')
+    expect(rows[1].value).toBe('未命中（1/2）')
+    expect(rows[2].value).toBe('未命中 Text (OCR)，all 1，filtered 0，best -')
+    expect(rows[3].value).toBe('命中 Icon (TemplateMatch)，box=[1, 2, 3, 4]，all 1，filtered 1，best score=0.9')
   })
 
   it('builds click action rows in action-specific order', () => {
