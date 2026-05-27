@@ -37,7 +37,7 @@ describe('detailRows', () => {
       ],
     }, 3)
 
-    expect(rows.map((row) => row.label)).toEqual(['命中状态', '子识别数量', '命中子识别', '子识别列表'])
+    expect(rows.map((row) => row.label)).toEqual(['命中状态', '子识别数量', '命中子识别数量', '子识别列表'])
     expect(rows[0].value).toBe('未命中')
     expect(rows[1].value).toBe(2)
     expect(rows[2].value).toBe(1)

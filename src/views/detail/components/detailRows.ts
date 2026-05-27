@@ -65,7 +65,7 @@ export const buildRecognitionDetailRows = (
     const hitChildren = detail.filter((item) => isRecord(item) && item.box).length
     rows.push(
       { label: '子识别数量', value: detail.length },
-      { label: '命中子识别', value: hitChildren },
+      { label: '命中子识别数量', value: hitChildren },
     )
 
     const children = detail
