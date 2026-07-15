@@ -7,7 +7,9 @@ export type ApplyLoadedTargetAction = (target: LoadedSearchTarget | undefined) =
 export const createApplyLoadedTargetAction = (
   options: LoadedSourceActionOptions,
 ): ApplyLoadedTargetAction => {
+  let applyToken = 0
   return async (target: LoadedSearchTarget | undefined) => {
+    const token = ++applyToken
     await applyLoadedTargetToState(
       {
         fileName: options.fileName,
@@ -20,6 +22,7 @@ export const createApplyLoadedTargetAction = (
         contentKey: options.contentKey,
         isLoadingFile: options.isLoadingFile,
         resetSearchResultsOnly: options.resetSearchResultsOnly,
+        shouldApply: () => token === applyToken,
       },
       target,
     )

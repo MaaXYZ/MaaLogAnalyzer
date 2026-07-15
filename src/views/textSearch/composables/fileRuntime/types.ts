@@ -60,13 +60,13 @@ export interface ClearRuntimeContentOptions {
 export interface JumpToLineRuntimeOptions {
   selectedLine: Ref<number | null>
   isLargeFile: Ref<boolean>
-  fileHandle: Ref<File | null>
   showFileContent: Ref<boolean>
   contentPaneRef: Ref<{ scrollToLine: (lineNumber: number) => void } | null>
 }
 
 export interface LoadContextLinesOptions {
   fileHandle: Ref<File | null>
+  fileContent: Ref<string>
   totalLines: Ref<number>
   contextLines: Ref<string[]>
   contextStartLine: Ref<number>

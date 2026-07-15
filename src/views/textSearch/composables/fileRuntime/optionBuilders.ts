@@ -45,6 +45,7 @@ export const buildLoadContextLinesOptions = (
   options: TextSearchFileRuntimeOptions,
 ): LoadContextLinesOptions => ({
   fileHandle: options.fileHandle,
+  fileContent: options.fileContent,
   totalLines: options.totalLines,
   contextLines: options.contextLines,
   contextStartLine: options.contextStartLine,
@@ -55,7 +56,6 @@ export const buildJumpToLineOptions = (
 ): JumpToLineRuntimeOptions => ({
   selectedLine: options.selectedLine,
   isLargeFile: options.isLargeFile,
-  fileHandle: options.fileHandle,
   showFileContent: options.showFileContent,
   contentPaneRef: options.contentPaneRef,
 })

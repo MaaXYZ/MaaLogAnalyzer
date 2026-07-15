@@ -8,6 +8,7 @@ export const useTextSearchFileRuntime = (options: TextSearchFileRuntimeOptions) 
 
   const fileLines = useFileLines({
     fileContent: options.fileContent,
+    isLargeFile: options.isLargeFile,
     filterDebugInfo: options.filterDebugInfo,
   })
 

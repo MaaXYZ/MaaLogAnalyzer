@@ -1,18 +1,22 @@
-import { readContextLinesFromFile } from './contextRead'
+import { readContextLinesFromContent, readContextLinesFromFile } from './contextRead'
 import type { LoadContextLinesOptions } from './types'
 
 export const loadContextLinesForRuntime = async (
   options: LoadContextLinesOptions,
   targetLine: number,
 ) => {
-  if (!options.fileHandle.value) return
-
   try {
-    const { lines, startLine } = await readContextLinesFromFile({
-      file: options.fileHandle.value,
-      totalLines: options.totalLines.value,
-      targetLine,
-    })
+    const file = options.fileHandle.value
+    const { lines, startLine } = file
+      ? await readContextLinesFromFile({
+          file,
+          totalLines: options.totalLines.value,
+          targetLine,
+        })
+      : await readContextLinesFromContent(options.fileContent.value, {
+          totalLines: options.totalLines.value,
+          targetLine,
+        })
     options.contextLines.value = lines
     options.contextStartLine.value = startLine
   } catch (error) {

@@ -2,12 +2,13 @@ import { computed, type Ref } from 'vue'
 
 interface UseFileLinesOptions {
   fileContent: Ref<string>
+  isLargeFile: Ref<boolean>
   filterDebugInfo: (line: string) => string
 }
 
 export const useFileLines = (options: UseFileLinesOptions) => {
   return computed(() => {
-    if (!options.fileContent.value) return []
+    if (!options.fileContent.value || options.isLargeFile.value) return []
     return options.fileContent.value.split('\n').map((line, index) => ({
       key: index,
       content: options.filterDebugInfo(line),

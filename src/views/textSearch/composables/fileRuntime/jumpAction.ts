@@ -8,7 +8,7 @@ export const jumpToLineRuntime = async (
 ) => {
   options.selectedLine.value = lineNumber
 
-  if (options.isLargeFile.value && options.fileHandle.value) {
+  if (options.isLargeFile.value) {
     await loadContextLines(lineNumber)
     return
   }
