@@ -10,6 +10,7 @@ import type {
 
 export interface LogLoadingPipelineOptions {
   parser: LogParser
+  createParser?: () => LogParser
   loading: Ref<boolean>
   showParsingModal: Ref<boolean>
   parseProgress: Ref<number>

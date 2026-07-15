@@ -46,6 +46,10 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
     file: File,
     selectPrimaryLogs = pipeline.selectPrimaryLogs,
   ) => {
+    if (pipeline.loading.value) {
+      pipeline.onWarning('正在处理上一个文件，请稍候')
+      return
+    }
     pipeline.loading.value = true
     try {
       if (isSupportedArchive(file.name)) {
@@ -102,6 +106,10 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
     textFiles?: LoadedTextFile[],
     primaryLogFiles?: LoadedPrimaryLogFile[],
   ) => {
+    if (pipeline.loading.value) {
+      pipeline.onWarning('正在处理上一个文件，请稍候')
+      return
+    }
     pipeline.loading.value = true
     try {
       const loadedTargets = createLoadedTargetsFromTextFiles(content, textFiles, primaryLogFiles)
