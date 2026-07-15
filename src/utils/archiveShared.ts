@@ -15,12 +15,21 @@ export const isSearchTextFile = (normalizedPath: string) => {
 
 export function isNeededFile(path: string): boolean {
   const lower = path.replace(/\\/g, '/').toLowerCase()
-  const name = lower.substring(lower.lastIndexOf('/') + 1)
   if (isSearchTextFile(lower)) return true
-  if (isPrimaryLogFileName(name)) return true
   if ((lower.includes('/on_error/') || lower.startsWith('on_error/')) && lower.endsWith('.png')) return true
   if ((lower.includes('/vision/') || lower.startsWith('vision/')) && lower.endsWith('.jpg')) return true
   return false
+}
+
+const toBlobArrayBuffer = (data: Uint8Array): ArrayBuffer => {
+  if (
+    data.buffer instanceof ArrayBuffer
+    && data.byteOffset === 0
+    && data.byteLength === data.buffer.byteLength
+  ) {
+    return data.buffer
+  }
+  return data.slice().buffer as ArrayBuffer
 }
 
 export function joinPath(base: string, name: string): string {
@@ -70,7 +79,7 @@ export function extractErrorImages(
         const data = files.get(p)
         if (data) {
           const url = URL.createObjectURL(
-            new Blob([data.slice().buffer as ArrayBuffer], { type: 'image/png' }),
+            new Blob([toBlobArrayBuffer(data)], { type: 'image/png' }),
           )
           imageMap.set(key, url)
         }
@@ -99,7 +108,7 @@ export function extractVisionImages(
         const data = files.get(p)
         if (data) {
           const url = URL.createObjectURL(
-            new Blob([data.slice().buffer as ArrayBuffer], { type: 'image/jpeg' }),
+            new Blob([toBlobArrayBuffer(data)], { type: 'image/jpeg' }),
           )
           const prev = imageMap.get(key)
           if (prev) URL.revokeObjectURL(prev)
@@ -130,7 +139,7 @@ export function extractWaitFreezesImages(
         const data = files.get(p)
         if (data) {
           const url = URL.createObjectURL(
-            new Blob([data.slice().buffer as ArrayBuffer], { type: 'image/jpeg' }),
+            new Blob([toBlobArrayBuffer(data)], { type: 'image/jpeg' }),
           )
           imageMap.set(key, url)
         }
@@ -154,11 +163,13 @@ export function extractSearchTextFiles(
     const lower = normalized.toLowerCase()
     if (basePrefix && !lower.startsWith(basePrefix)) continue
     if (!isSearchTextFile(normalized)) continue
+    const name = normalized.substring(normalized.lastIndexOf('/') + 1)
+    if (isPrimaryLogFileName(name)) continue
     const data = files.get(p)
     if (!data) continue
     textFiles.push({
       path: normalized,
-      name: normalized.substring(normalized.lastIndexOf('/') + 1),
+      name,
       content: decodeContent(data),
     })
   }

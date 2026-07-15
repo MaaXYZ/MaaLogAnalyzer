@@ -21,6 +21,7 @@ describe('extractZipContent', () => {
   it('loads root-level debug images from zip archives', async () => {
     const zipData = zipSync({
       'maa.log': strToU8('[2026-04-16 14:55:00.000][INF][Px1][Tx1][test] AutoCollectStart\n'),
+      'runtime.txt': strToU8('extra searchable text'),
       'on_error/2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation.png': strToU8('fake-png'),
       'vision/2026.04.16-14.57.57.123_AutoCollectRoute1_123456789.jpg': strToU8('fake-jpg'),
       'vision/2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes.jpg': strToU8('fake-jpg'),
@@ -39,6 +40,11 @@ describe('extractZipContent', () => {
       path: 'maa.log',
       name: 'maa.log',
       content: '[2026-04-16 14:55:00.000][INF][Px1][Tx1][test] AutoCollectStart\n',
+    }])
+    expect(result?.textFiles).toEqual([{
+      path: 'runtime.txt',
+      name: 'runtime.txt',
+      content: 'extra searchable text',
     }])
     expect(result?.errorImages.has('2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation')).toBe(true)
     expect(result?.visionImages.has('2026.04.16-14.57.57.123_AutoCollectRoute1_123456789')).toBe(true)
