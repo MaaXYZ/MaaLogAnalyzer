@@ -34,6 +34,28 @@ export interface RecognitionActionStatistics {
   successRate: number
 }
 
+export const summarizeDurations = (durations: number[]) => {
+  if (durations.length === 0) {
+    return { total: 0, average: 0, min: 0, max: 0 }
+  }
+
+  let total = 0
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+  for (const duration of durations) {
+    total += duration
+    if (duration < min) min = duration
+    if (duration > max) max = duration
+  }
+
+  return {
+    total,
+    average: total / durations.length,
+    min,
+    max,
+  }
+}
+
 export class NodeStatisticsAnalyzer {
   static analyze(tasks: TaskInfo[]): NodeStatistics[] {
     const statsMap = new Map<string, {
@@ -96,20 +118,17 @@ export class NodeStatisticsAnalyzer {
 
       if (count === 0) continue
 
-      const totalDuration = durations.reduce((sum, d) => sum + d, 0)
-      const avgDuration = totalDuration / count
-      const minDuration = Math.min(...durations)
-      const maxDuration = Math.max(...durations)
+      const durationSummary = summarizeDurations(durations)
       const settledCount = stats.successCount + stats.failCount
       const successRate = settledCount > 0 ? (stats.successCount / settledCount) * 100 : 0
 
       result.push({
         name,
         count,
-        totalDuration,
-        avgDuration,
-        minDuration,
-        maxDuration,
+        totalDuration: durationSummary.total,
+        avgDuration: durationSummary.average,
+        minDuration: durationSummary.min,
+        maxDuration: durationSummary.max,
         successCount: stats.successCount,
         failCount: stats.failCount,
         successRate,
@@ -174,7 +193,7 @@ export class NodeStatisticsAnalyzer {
           const lastAttemptTime = new Date(lastAttempt.end_ts || lastAttempt.ts).getTime()
           const recognitionDuration = lastAttemptTime - firstAttemptTs
 
-          if (attempts.length > 1 && recognitionDuration >= 0 && recognitionDuration < 3600000) {
+          if (recognitionDuration >= 0 && recognitionDuration < 3600000) {
             stats.recognitionDurations.push(recognitionDuration)
           }
 
@@ -202,17 +221,11 @@ export class NodeStatisticsAnalyzer {
 
       const recognitionDurations = stats.recognitionDurations
       const recognitionCount = recognitionDurations.length
-      const totalRecognitionDuration = recognitionDurations.reduce((sum, d) => sum + d, 0)
-      const avgRecognitionDuration = recognitionCount > 0 ? totalRecognitionDuration / recognitionCount : 0
-      const minRecognitionDuration = recognitionCount > 0 ? Math.min(...recognitionDurations) : 0
-      const maxRecognitionDuration = recognitionCount > 0 ? Math.max(...recognitionDurations) : 0
+      const recognitionSummary = summarizeDurations(recognitionDurations)
 
       const actionDurations = stats.actionDurations
       const actionCount = actionDurations.length
-      const totalActionDuration = actionDurations.reduce((sum, d) => sum + d, 0)
-      const avgActionDuration = actionCount > 0 ? totalActionDuration / actionCount : 0
-      const minActionDuration = actionCount > 0 ? Math.min(...actionDurations) : 0
-      const maxActionDuration = actionCount > 0 ? Math.max(...actionDurations) : 0
+      const actionSummary = summarizeDurations(actionDurations)
 
       const totalRecognitionAttempts = stats.recognitionAttempts.reduce((sum, a) => sum + a, 0)
       const avgRecognitionAttempts = totalRecognitionAttempts / stats.recognitionAttempts.length
@@ -222,15 +235,15 @@ export class NodeStatisticsAnalyzer {
       result.push({
         name,
         count,
-        avgRecognitionDuration,
-        minRecognitionDuration,
-        maxRecognitionDuration,
-        totalRecognitionDuration,
+        avgRecognitionDuration: recognitionSummary.average,
+        minRecognitionDuration: recognitionSummary.min,
+        maxRecognitionDuration: recognitionSummary.max,
+        totalRecognitionDuration: recognitionSummary.total,
         recognitionCount,
-        avgActionDuration,
-        minActionDuration,
-        maxActionDuration,
-        totalActionDuration,
+        avgActionDuration: actionSummary.average,
+        minActionDuration: actionSummary.min,
+        maxActionDuration: actionSummary.max,
+        totalActionDuration: actionSummary.total,
         actionCount,
         avgRecognitionAttempts,
         totalRecognitionAttempts,
