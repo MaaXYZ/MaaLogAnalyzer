@@ -469,21 +469,52 @@ const createReducerState = (events: ProtocolEvent[]): ReducerState => ({
   openNextListScopesByTaskId: new Map(),
 })
 
+const appendEventToReducerState = (
+  state: ReducerState,
+  event: ProtocolEvent,
+): void => {
+  if (!state.root.ts) state.root.ts = event.ts
+
+  if (event.phase === 'starting') {
+    openScope(state, event)
+  } else {
+    closeScope(state, event)
+  }
+
+  state.root.endTs = event.ts
+  state.root.endSeq = event.seq
+}
+
+export interface IncrementalTraceReducer {
+  append: (event: ProtocolEvent) => void
+  getTrace: () => TraceRootNode
+  reset: () => void
+}
+
+/** Keep reducer state between realtime batches and only reduce new events. */
+export const createIncrementalTraceReducer = (): IncrementalTraceReducer => {
+  let state = createReducerState([])
+
+  return {
+    append(event) {
+      appendEventToReducerState(state, event)
+    },
+    getTrace() {
+      return state.root
+    },
+    reset() {
+      state = createReducerState([])
+    },
+  }
+}
+
 export const buildTraceTree = (
   events: ProtocolEvent[],
 ): TraceRootNode => {
   const state = createReducerState(events)
 
   for (const event of events) {
-    if (event.phase === 'starting') {
-      openScope(state, event)
-      continue
-    }
-
-    closeScope(state, event)
+    appendEventToReducerState(state, event)
   }
-
-  state.root.endTs = events.length > 0 ? events[events.length - 1]?.ts : state.root.endTs
-  state.root.endSeq = events.length > 0 ? events[events.length - 1]?.seq : state.root.endSeq
   return state.root
 }

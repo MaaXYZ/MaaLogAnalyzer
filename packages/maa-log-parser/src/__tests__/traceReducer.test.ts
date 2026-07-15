@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTraceTree } from '../trace/reducer'
+import { buildTraceTree, createIncrementalTraceReducer } from '../trace/reducer'
 import type { ProtocolEvent } from '../protocol/types'
 
 const makeEvent = <T extends ProtocolEvent>(event: T): T => event
@@ -272,6 +272,10 @@ describe('TraceReducer', () => {
     ]
 
     const trace = buildTraceTree(events)
+    const incrementalReducer = createIncrementalTraceReducer()
+    for (const event of events) incrementalReducer.append(event)
+
+    expect(incrementalReducer.getTrace()).toEqual(trace)
 
     expect(trace.children).toHaveLength(1)
     const task1 = trace.children[0]

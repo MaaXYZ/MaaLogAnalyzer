@@ -14,7 +14,7 @@ export interface UseAppRuntimeOrchestrationOptions extends RuntimeOptionOverride
   resetAnalysisState: () => void
 }
 
-const REALTIME_PARSE_INTERVAL_MS = 16
+const REALTIME_PARSE_INTERVAL_MS = 100
 const REALTIME_SNAPSHOT_REQUEST_TIMEOUT_MS = 12000
 const REALTIME_SNAPSHOT_MAX_BATCH_SIZE = 300
 

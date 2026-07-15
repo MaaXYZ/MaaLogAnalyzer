@@ -108,7 +108,6 @@ export const useRealtimeSession = (options: UseRealtimeSessionOptions) => {
 
     if (hasGap && appended === 0) return
     if (appended === 0) return
-    options.syncRealtimeLoadedTarget(session)
     scheduleRealtimeParse()
   }
 

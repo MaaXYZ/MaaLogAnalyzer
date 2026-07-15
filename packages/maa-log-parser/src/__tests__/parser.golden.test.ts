@@ -269,4 +269,25 @@ describe('LogParser strict public snapshots', () => {
     expect(task23).toBeTruthy()
     expect(task23?.path.some((pathNode) => pathNode.type === 'task' && pathNode.task_id === 22)).toBe(true)
   })
+
+  it('reuses completed task projections across realtime snapshots', async () => {
+    const parser = new LogParser()
+    await parser.parseFile([
+      makeEventLine(201, 'Tasker.Task.Starting', { task_id: 31, entry: 'Completed', hash: 'h-31', uuid: 'u-31' }),
+      makeEventLine(202, 'Tasker.Task.Succeeded', { task_id: 31, entry: 'Completed', hash: 'h-31', uuid: 'u-31' }),
+    ].join('\n'))
+
+    const firstCompleted = findTask(parser.getTasksSnapshot(), 31)
+    expect(findTask(parser.getTasksSnapshot(), 31)).toBe(firstCompleted)
+
+    parser.appendRealtimeLines([
+      makeEventLine(203, 'Tasker.Task.Starting', { task_id: 32, entry: 'Running', hash: 'h-32', uuid: 'u-32' }),
+    ])
+    const withRunningTask = parser.getTasksSnapshot()
+    expect(findTask(withRunningTask, 31)).toBe(firstCompleted)
+    expect(findTask(withRunningTask, 32).status).toBe('running')
+
+    parser.setErrorImages(new Map())
+    expect(findTask(parser.getTasksSnapshot(), 31)).not.toBe(firstCompleted)
+  })
 })

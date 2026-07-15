@@ -33,8 +33,15 @@ interface ProjectedTaskEntry {
   task: TaskInfo
 }
 
+export interface ProjectedTaskCacheEntry {
+  endSeq: number
+  task: TaskInfo
+}
+
 export interface ProjectTasksFromTraceOptions {
   events?: EventNotification[]
+  eventsByTaskId?: ReadonlyMap<number, EventNotification[]>
+  completedTaskCache?: Map<string, ProjectedTaskCacheEntry>
   errorImages?: Map<string, string>
   visionImages?: Map<string, string>
   waitFreezesImages?: Map<string, string>
@@ -442,7 +449,9 @@ const projectTaskEvents = (
   options: ProjectTasksFromTraceOptions,
 ): EventNotification[] => {
   const taskId = readScopeTaskId(scope)
-  const events = options.events
+  const events = taskId == null
+    ? undefined
+    : options.eventsByTaskId?.get(taskId) ?? options.events
   if (taskId == null || !events || events.length === 0) return []
 
   const startMs = toTimestampMs(scope.ts)
@@ -824,6 +833,24 @@ const projectTaskScope = (
   }
 }
 
+const projectTaskScopeWithCache = (
+  scope: ScopeNode,
+  options: ProjectTasksFromTraceOptions,
+): TaskInfo => {
+  const endSeq = scope.endSeq
+  const canCache = scope.status !== 'running' && endSeq != null
+  if (!canCache || !options.completedTaskCache) {
+    return projectTaskScope(scope, options)
+  }
+
+  const cached = options.completedTaskCache.get(scope.id)
+  if (cached?.endSeq === endSeq) return cached.task
+
+  const task = projectTaskScope(scope, options)
+  options.completedTaskCache.set(scope.id, { endSeq, task })
+  return task
+}
+
 const collectRootResourceScopeGroups = (
   root: ScopeNode,
 ): ScopeNode[][] => {
@@ -907,7 +934,7 @@ export const projectTasksFromTrace = (
   const projectedTaskEntries: ProjectedTaskEntry[] = sortScopesBySeq(taskScopes)
     .map((scope) => ({
       seq: scope.seq,
-      task: projectTaskScope(scope, options),
+      task: projectTaskScopeWithCache(scope, options),
     }))
 
   const rootResourceTaskEntries = collectRootResourceScopeGroups(root)

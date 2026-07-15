@@ -14,10 +14,17 @@ import type {
 import { parseEventLine as parseMaaEventLine, type ParsedEventLine } from '../event/line'
 import { createProtocolEvent } from '../protocol/eventFactory'
 import type { ProtocolEvent } from '../protocol/types'
-import { buildTraceTree, type TraceScopePayload } from '../trace/reducer'
+import {
+  buildTraceTree,
+  createIncrementalTraceReducer,
+  type TraceScopePayload,
+} from '../trace/reducer'
 import type { ScopeNode } from '../trace/scopeTypes'
 import { buildTraceIndex, type TraceIndex } from '../query/traceIndex'
-import { projectTasksFromTrace } from '../projector/taskProjector'
+import {
+  projectTasksFromTrace,
+  type ProjectedTaskCacheEntry,
+} from '../projector/taskProjector'
 import {
   cloneRawLineStore,
   createRawLineStore,
@@ -87,6 +94,9 @@ const CROSS_SOURCE_DUPLICATE_WINDOW_MS = 1000
 export class LogParser {
   private events: EventNotification[] = []
   private protocolEvents: ProtocolEvent[] = []
+  private traceReducer = createIncrementalTraceReducer()
+  private eventsByTaskId = new Map<number, EventNotification[]>()
+  private completedTaskCache = new Map<string, ProjectedTaskCacheEntry>()
   private rawLines: RawLineStore | null = null
   private eventTokenPool = new Map<string, string>()
   private lastEventBySignature = new Map<string, {
@@ -106,6 +116,7 @@ export class LogParser {
    */
   setErrorImages(images: Map<string, string>): void {
     this.errorImages = images
+    this.completedTaskCache.clear()
   }
 
   /**
@@ -114,6 +125,7 @@ export class LogParser {
    */
   setVisionImages(images: Map<string, string>): void {
     this.visionImages = images
+    this.completedTaskCache.clear()
   }
 
   /**
@@ -122,11 +134,15 @@ export class LogParser {
    */
   setWaitFreezesImages(images: Map<string, string>): void {
     this.waitFreezesImages = images
+    this.completedTaskCache.clear()
   }
 
   resetParsedEvents(): void {
     this.events = []
     this.protocolEvents = []
+    this.traceReducer.reset()
+    this.eventsByTaskId.clear()
+    this.completedTaskCache.clear()
     this.rawLines = null
     this.lastEventBySignature.clear()
     this.dedupSignatureTimeline = []
@@ -216,6 +232,15 @@ export class LogParser {
     })
     if (protocolEvent) {
       this.protocolEvents.push(protocolEvent)
+      this.traceReducer.append(protocolEvent)
+      if ('taskId' in protocolEvent && protocolEvent.taskId != null) {
+        const taskEvents = this.eventsByTaskId.get(protocolEvent.taskId)
+        if (taskEvents) {
+          taskEvents.push(storedEvent)
+        } else {
+          this.eventsByTaskId.set(protocolEvent.taskId, [storedEvent])
+        }
+      }
     }
     this.lastEventBySignature.set(event._dedupSignature, {
       timestampMs: eventMs,
@@ -437,6 +462,9 @@ export class LogParser {
   private clearConsumedParseState(): void {
     this.events = []
     this.protocolEvents = []
+    this.traceReducer.reset()
+    this.eventsByTaskId.clear()
+    this.completedTaskCache.clear()
     this.rawLines = null
     this.lastEventBySignature.clear()
     this.dedupSignatureTimeline = []
@@ -447,9 +475,10 @@ export class LogParser {
   }
 
   private projectTasksSnapshot(consume: boolean): TaskInfo[] {
-    const trace = this.getTraceSnapshot()
+    const trace = this.traceReducer.getTrace()
     const tasks = projectTasksFromTrace(trace, {
-      events: this.getEventsSnapshot(),
+      eventsByTaskId: this.eventsByTaskId,
+      completedTaskCache: this.completedTaskCache,
       errorImages: this.errorImages,
       visionImages: this.visionImages,
       waitFreezesImages: this.waitFreezesImages,
