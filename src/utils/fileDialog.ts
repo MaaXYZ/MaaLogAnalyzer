@@ -5,6 +5,7 @@
 
 import { isTauri, isVSCode } from './platform'
 import { invoke } from '@tauri-apps/api/core'
+import { joinNativePath } from './nativePath'
 import {
   createPrimaryLogSelectionOptions,
   isPrimaryLogFileName,
@@ -267,7 +268,7 @@ async function findDebugFolder(basePath: string): Promise<string | null> {
     const { readDir, exists } = await import('@tauri-apps/plugin-fs')
 
     // 检查当前路径下是否有debug文件夹
-    const debugPath = `${basePath}\\debug`
+    const debugPath = joinNativePath(basePath, 'debug')
     if (await exists(debugPath)) {
       return debugPath
     }
@@ -276,7 +277,7 @@ async function findDebugFolder(basePath: string): Promise<string | null> {
     const entries = await readDir(basePath)
     for (const entry of entries) {
       if (entry.isDirectory) {
-        const found = await findDebugFolder(`${basePath}\\${entry.name}`)
+        const found = await findDebugFolder(joinNativePath(basePath, entry.name))
         if (found) return found
       }
     }
@@ -294,7 +295,7 @@ async function readErrorImages(debugPath: string): Promise<Map<string, string>> 
   try {
     const { readDir, exists } = await import('@tauri-apps/plugin-fs')
 
-    const onErrorPath = `${debugPath}\\on_error`
+    const onErrorPath = joinNativePath(debugPath, 'on_error')
     console.log('[截图] 检查路径:', onErrorPath)
 
     if (!(await exists(onErrorPath))) {
@@ -314,7 +315,7 @@ async function readErrorImages(debugPath: string): Promise<Map<string, string>> 
           // 将毫秒补齐为3位
           const paddedMs = ms.padEnd(3, '0')
           const key = `${timestamp}.${paddedMs}_${nodeName}`
-          const fullPath = `${onErrorPath}\\${entry.name}`
+          const fullPath = joinNativePath(onErrorPath, entry.name)
           imageMap.set(key, fullPath)
           console.log('[截图] 添加映射:', key, '->', fullPath)
         } else {
@@ -353,7 +354,7 @@ async function readVisionImages(debugPath: string): Promise<Map<string, string>>
   try {
     const { readDir, exists } = await import('@tauri-apps/plugin-fs')
 
-    const visionPath = `${debugPath}\\vision`
+    const visionPath = joinNativePath(debugPath, 'vision')
     if (!(await exists(visionPath))) {
       return imageMap
     }
@@ -363,7 +364,7 @@ async function readVisionImages(debugPath: string): Promise<Map<string, string>>
       if (!entry.isDirectory && entry.name.toLowerCase().endsWith('.jpg')) {
         const key = parseVisionImageKey(entry.name)
         if (key != null) {
-          const fullPath = `${visionPath}\\${entry.name}`
+          const fullPath = joinNativePath(visionPath, entry.name)
           // 同一 key 覆盖（取最后出现的文件）
           imageMap.set(key, fullPath)
         }
@@ -385,7 +386,7 @@ async function collectTextFilesTauri(rootPath: string): Promise<LoadedTextFile[]
   const walk = async (dirPath: string) => {
     const entries = await readDir(dirPath)
     for (const entry of entries) {
-      const fullPath = `${dirPath}\\${entry.name}`
+      const fullPath = joinNativePath(dirPath, entry.name)
       if (entry.isDirectory) {
         await walk(fullPath)
         continue
@@ -436,7 +437,7 @@ async function listPrimaryLogFilesTauri(dirPath: string): Promise<Array<{ path: 
   return entries
     .filter(entry => !entry.isDirectory && !!entry.name && isPrimaryLogFileName(entry.name))
     .map(entry => ({
-      path: `${dirPath}\\${entry.name}`,
+      path: joinNativePath(dirPath, entry.name),
       name: entry.name!,
     }))
 }
@@ -551,7 +552,7 @@ async function openFolderDialogTauri(options: OpenFolderDialogOptions): Promise<
     let debugPath = selected
 
     if (!(await hasPrimaryLogInTauri(debugPath))) {
-      debugPath = `${selected}\\debug`
+      debugPath = joinNativePath(selected, 'debug')
 
       if (!(await exists(debugPath)) || !(await hasPrimaryLogInTauri(debugPath))) {
         console.log('[文件夹] debug文件夹不存在或不含日志，开始递归查找')
@@ -617,7 +618,7 @@ async function readWaitFreezesImages(debugPath: string): Promise<Map<string, str
   try {
     const { readDir, exists } = await import('@tauri-apps/plugin-fs')
 
-    const visionPath = `${debugPath}\\vision`
+    const visionPath = joinNativePath(debugPath, 'vision')
     if (!(await exists(visionPath))) {
       return imageMap
     }
@@ -627,7 +628,7 @@ async function readWaitFreezesImages(debugPath: string): Promise<Map<string, str
       if (!entry.isDirectory && entry.name.toLowerCase().endsWith('.jpg')) {
         const key = parseWaitFreezesKey(entry.name)
         if (key != null) {
-          const fullPath = `${visionPath}\\${entry.name}`
+          const fullPath = joinNativePath(visionPath, entry.name)
           imageMap.set(key, fullPath)
         }
       }
