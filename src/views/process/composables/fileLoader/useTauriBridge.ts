@@ -1,4 +1,5 @@
 import type { UseProcessFileLoaderOptions } from './types'
+import { toastError } from '../../../../utils/toast'
 import { invoke } from '@tauri-apps/api/core'
 import {
   createPrimaryLogSelectionOptions,
@@ -89,7 +90,7 @@ export const useTauriBridge = (
     } catch (error) {
       setFileLoading(false)
       options.onFileLoadingEnd()
-      alert('打开文件失败: ' + error)
+      toastError('打开文件失败: ' + error)
     }
   }
 
@@ -114,7 +115,7 @@ export const useTauriBridge = (
         )
       }
     } catch (error) {
-      alert('打开文件夹失败: ' + error)
+      toastError('打开文件夹失败: ' + error)
     } finally {
       setFileLoading(false)
       options.onFileLoadingEnd()

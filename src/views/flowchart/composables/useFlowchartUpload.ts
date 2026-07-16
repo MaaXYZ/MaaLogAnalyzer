@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { toastWarning } from '../../../utils/toast'
 import { isTauri } from '../../../utils/platform'
 import type { LoadedTextFile } from '../../process/utils/fileLoadingHelpers'
 import {
@@ -154,7 +155,7 @@ export const useFlowchartUpload = ({
 
     const { scopedFiles, primaryLogFiles } = await resolveSelectedLogContentFromFiles(files)
     if (primaryLogFiles.length === 0) {
-      alert(`文件夹中未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
+      toastWarning(`文件夹中未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
       input.value = ''
       return
     }

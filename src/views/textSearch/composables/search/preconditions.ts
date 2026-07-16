@@ -4,6 +4,7 @@ import {
   showSourceNotReadyMessage,
 } from './executorHelpers'
 import { buildSearchResultState, buildSourceReadyOptions } from './optionBuilders'
+import { toastWarning } from '../../../../utils/toast'
 import { ensureSearchSourceReady } from './sourceGuard'
 import type { TextSearchSearchExecutorOptions } from './executorTypes'
 
@@ -31,7 +32,7 @@ export const ensureSearchPreconditions = async (
     options.fileContent.value,
     options.fileHandle.value,
   )) {
-    alert('请先选择文件')
+    toastWarning('请先选择文件')
     return false
   }
 

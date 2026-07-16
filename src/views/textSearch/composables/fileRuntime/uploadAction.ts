@@ -1,4 +1,5 @@
 import { applyUploadedFileToState } from './applyUploadedFile'
+import { toastError } from '../../../../utils/toast'
 import { readUploadedFile } from './fileUpload'
 import type { HandleRuntimeFileUploadOptions } from './types'
 
@@ -25,7 +26,7 @@ export const handleRuntimeFileUpload = async (
       totalLines: options.totalLines,
     }, loadedFile)
   } catch (error) {
-    alert('文件读取失败: ' + error)
+    toastError('文件读取失败: ' + error)
   } finally {
     options.isLoadingFile.value = false
   }

@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { toastError, toastWarning } from '../../../../utils/toast'
 import {
   collectTextFilesFromFiles,
   collectDebugAssetsFromFiles,
@@ -98,7 +99,7 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
       const { scopedFiles, primaryLogFiles, cancelled } = await resolveSelectedLogContent(files, options.selectPrimaryLogs)
       if (cancelled) return
       if (primaryLogFiles.length === 0) {
-        alert(`文件夹中未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
+        toastWarning(`文件夹中未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
         return
       }
 
@@ -113,7 +114,7 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
         primaryLogFiles,
       )
     } catch (error) {
-      alert('读取文件夹失败: ' + error)
+      toastError('读取文件夹失败: ' + error)
     } finally {
       setFileLoading(false)
       options.onFileLoadingEnd()
@@ -157,7 +158,7 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
       const { scopedFiles, primaryLogFiles, cancelled } = await resolveSelectedLogContent(files, options.selectPrimaryLogs)
       if (cancelled) return
       if (primaryLogFiles.length === 0) {
-        alert(`文件夹中未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
+        toastWarning(`文件夹中未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
         return
       }
 
@@ -172,7 +173,7 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
         primaryLogFiles,
       )
     } catch (error) {
-      alert('读取文件失败: ' + error)
+      toastError('读取文件失败: ' + error)
     } finally {
       setFileLoading(false)
       options.onFileLoadingEnd()

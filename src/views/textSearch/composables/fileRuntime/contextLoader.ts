@@ -1,4 +1,5 @@
 import { readContextLinesFromContent, readContextLinesFromFile } from './contextRead'
+import { toastError } from '../../../../utils/toast'
 import type { LoadContextLinesOptions } from './types'
 
 export const loadContextLinesForRuntime = async (
@@ -20,6 +21,6 @@ export const loadContextLinesForRuntime = async (
     options.contextLines.value = lines
     options.contextStartLine.value = startLine
   } catch (error) {
-    alert('加载上下文失败: ' + error)
+    toastError('加载上下文失败: ' + error)
   }
 }

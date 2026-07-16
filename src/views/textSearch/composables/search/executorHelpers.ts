@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import { toastWarning } from '../../../../utils/toast'
 import type { SearchResult } from '../types'
 import type { SourceMode } from '../loadedSource/types'
 
@@ -14,9 +15,9 @@ export const clearSearchResultState = (state: SearchResultState) => {
 
 export const showSourceNotReadyMessage = (sourceMode: SourceMode) => {
   if (sourceMode === 'loaded') {
-    alert('请先选择已加载目标文件')
+    toastWarning('请先选择已加载目标文件')
   } else {
-    alert('请先选择文件')
+    toastWarning('请先选择文件')
   }
 }
 

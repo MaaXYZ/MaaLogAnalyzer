@@ -4,6 +4,7 @@
  */
 
 import { isTauri, isVSCode } from './platform'
+import { toastError, toastWarning } from './toast'
 import { invoke } from '@tauri-apps/api/core'
 import { joinNativePath } from './nativePath'
 import {
@@ -143,7 +144,7 @@ async function openLogFileWithTauri(): Promise<string | null> {
       return content
     }
   } catch (error) {
-    alert('打开文件失败: ' + error)
+    toastError('打开文件失败: ' + error)
   }
   return null
 }
@@ -197,7 +198,7 @@ async function openLogFileWithWeb(): Promise<string | null> {
           const content = await file.text()
           resolve(content)
         } catch (error) {
-          alert('读取文件失败: ' + error)
+          toastError('读取文件失败: ' + error)
           resolve(null)
         }
       } else {
@@ -235,7 +236,7 @@ export async function saveFile(content: string, filename: string): Promise<boole
         return true
       }
     } catch (error) {
-      alert('保存失败: ' + error)
+      toastError('保存失败: ' + error)
     }
   } else {
     // Web 环境使用下载
@@ -566,7 +567,7 @@ async function openFolderDialogTauri(options: OpenFolderDialogOptions): Promise<
         console.log('[文件夹] debug文件夹不存在或不含日志，开始递归查找')
         const found = await findDebugFolder(selected)
         if (!found || !(await hasPrimaryLogInTauri(found))) {
-          alert(`未找到debug文件夹或日志文件（${PRIMARY_LOG_FILE_HINT}）`)
+          toastWarning(`未找到debug文件夹或日志文件（${PRIMARY_LOG_FILE_HINT}）`)
           return null
         }
         debugPath = found
@@ -582,7 +583,7 @@ async function openFolderDialogTauri(options: OpenFolderDialogOptions): Promise<
     }
 
     if (primaryLogFiles.length === 0) {
-      alert(`未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
+      toastWarning(`未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
       return null
     }
 
@@ -601,7 +602,7 @@ async function openFolderDialogTauri(options: OpenFolderDialogOptions): Promise<
     return { content: '', errorImages, visionImages, waitFreezesImages, textFiles, primaryLogFiles }
   } catch (error) {
     console.error('[文件夹] 打开失败:', error)
-    alert('打开文件夹失败: ' + error)
+    toastError('打开文件夹失败: ' + error)
     return null
   }
 }
@@ -740,7 +741,7 @@ async function readVisionImagesWeb(debugHandle: FileSystemDirectoryHandle): Prom
 async function openFolderDialogWeb(options: OpenFolderDialogOptions): Promise<OpenFolderResult | null> {
   try {
     if (!('showDirectoryPicker' in window)) {
-      alert('您的浏览器不支持文件夹选择功能，请使用 Chrome/Edge 等现代浏览器')
+      toastWarning('您的浏览器不支持文件夹选择功能，请使用 Chrome/Edge 等现代浏览器')
       return null
     }
 
@@ -761,7 +762,7 @@ async function openFolderDialogWeb(options: OpenFolderDialogOptions): Promise<Op
         console.log('[文件夹] debug子文件夹不存在或不含日志，开始递归查找')
         const found = await findDebugFolderWeb(dirHandle)
         if (!found || !(await hasPrimaryLogInWeb(found))) {
-          alert(`未找到debug文件夹或日志文件（${PRIMARY_LOG_FILE_HINT}）`)
+          toastWarning(`未找到debug文件夹或日志文件（${PRIMARY_LOG_FILE_HINT}）`)
           return null
         }
         debugHandle = found
@@ -778,7 +779,7 @@ async function openFolderDialogWeb(options: OpenFolderDialogOptions): Promise<Op
     }
 
     if (primaryLogFiles.length === 0) {
-      alert(`未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
+      toastWarning(`未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
       return null
     }
 
@@ -800,7 +801,7 @@ async function openFolderDialogWeb(options: OpenFolderDialogOptions): Promise<Op
     if ((error as Error).name === 'AbortError') {
       return null
     }
-    alert('打开文件夹失败: ' + error)
+    toastError('打开文件夹失败: ' + error)
     return null
   }
 }

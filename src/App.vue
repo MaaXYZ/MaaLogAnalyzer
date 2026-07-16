@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { toRef } from 'vue'
+import { useMessage } from 'naive-ui'
+import { registerToastMessageApi } from './utils/toast'
 import AppHeaderBar from './views/app/components/AppHeaderBar.vue'
 import AppOverlayStack from './views/app/components/AppOverlayStack.vue'
 import AppMainContent from './views/app/components/AppMainContent.vue'
@@ -18,6 +20,9 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'toggle-theme': []
 }>()
+
+// Register the global toast message api so non-component modules can notify.
+registerToastMessageApi(useMessage())
 
 const {
   isVscodeLaunchEmbed,

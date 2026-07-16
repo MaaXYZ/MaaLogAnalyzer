@@ -1,4 +1,5 @@
 import { executeAndCommitSearch } from './executeAndCommit'
+import { toastError } from '../../../../utils/toast'
 import { ensureSearchPreconditions } from './preconditions'
 import type { TextSearchSearchExecutorOptions } from './executorTypes'
 
@@ -15,7 +16,7 @@ export const createPerformSearchAction = (options: TextSearchSearchExecutorOptio
     try {
       await executeAndCommitSearch(options)
     } catch (error) {
-      alert('搜索失败: ' + error)
+      toastError('搜索失败: ' + error)
     } finally {
       options.isSearching.value = false
     }
