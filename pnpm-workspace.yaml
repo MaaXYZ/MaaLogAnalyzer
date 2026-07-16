@@ -1,4 +1,7 @@
 packages:
   - packages/*
+allowBuilds:
+  esbuild: false
+  vue-demi: false
 patchedDependencies:
   vue-virtual-scroller@2.0.0-beta.8: patches/vue-virtual-scroller@2.0.0-beta.8.patch
