@@ -1,18 +1,22 @@
 /**
- * String pool used for tracking unique strings while returning original values.
+ * String pool that interns strings so equal values share a single reference.
  */
 export class StringPool {
-  private pool = new Set<string>()
+  private pool = new Map<string, string>()
 
   /**
-   * Record and return the original string value.
+   * Return the pooled instance for the given string, deduplicating equal values.
    */
   intern(str: string | undefined | null): string {
     if (str === undefined || str === null) {
       return ''
     }
 
-    this.pool.add(str)
+    const pooled = this.pool.get(str)
+    if (pooled !== undefined) {
+      return pooled
+    }
+    this.pool.set(str, str)
     return str
   }
 
