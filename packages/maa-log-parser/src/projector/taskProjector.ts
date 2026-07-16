@@ -444,6 +444,16 @@ const readTaskEventTaskId = (
   return readNumberField(details, 'taskId', 'task_id')
 }
 
+const eventTimestampMsCache = new WeakMap<EventNotification, number>()
+
+const getEventTimestampMs = (event: EventNotification): number => {
+  const cached = eventTimestampMsCache.get(event)
+  if (cached !== undefined) return cached
+  const parsed = toTimestampMs(event.timestamp)
+  eventTimestampMsCache.set(event, parsed)
+  return parsed
+}
+
 const projectTaskEvents = (
   scope: ScopeNode,
   options: ProjectTasksFromTraceOptions,
@@ -460,7 +470,7 @@ const projectTaskEvents = (
   return events
     .filter((event) => {
       if (readTaskEventTaskId(event) !== taskId) return false
-      const eventMs = toTimestampMs(event.timestamp)
+      const eventMs = getEventTimestampMs(event)
       if (!Number.isFinite(startMs) || !Number.isFinite(eventMs)) return true
       return eventMs >= startMs && eventMs <= endMs + 1
     })
