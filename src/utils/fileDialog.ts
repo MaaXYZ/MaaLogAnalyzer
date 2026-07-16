@@ -7,6 +7,7 @@ import { isTauri, isVSCode } from './platform'
 import { invoke } from '@tauri-apps/api/core'
 import { joinNativePath } from './nativePath'
 import {
+  combineLoadedPrimaryLogSegments,
   createPrimaryLogSelectionOptions,
   isPrimaryLogFileName,
   type LoadedPrimaryLogFile,
@@ -162,7 +163,11 @@ export function consumeTauriZipErrorImages(): Map<string, string> | null {
 }
 
 async function openArchiveFileWithTauri(path: string): Promise<string | null> {
-  const result = await invoke<{ content: string; error_images: Record<string, string> }>('extract_zip_log', { path })
+  const result = await invoke<{
+    content: string
+    primary_log_files: LoadedPrimaryLogFile[]
+    error_images: Record<string, string>
+  }>('extract_zip_log', { path })
 
   const errorImages = new Map<string, string>()
   for (const [key, value] of Object.entries(result.error_images ?? {})) {
@@ -170,7 +175,10 @@ async function openArchiveFileWithTauri(path: string): Promise<string | null> {
   }
   _lastTauriZipErrorImages = errorImages
 
-  return result.content
+  // Rust extract_zip_log returns empty content; real logs live in primary_log_files
+  const primaryLogFiles = result.primary_log_files ?? []
+  if (primaryLogFiles.length === 0) return null
+  return combineLoadedPrimaryLogSegments(primaryLogFiles)
 }
 
 /**
