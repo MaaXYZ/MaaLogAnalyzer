@@ -265,14 +265,14 @@ fn select_primary_log_group(paths: &[String]) -> Vec<PrimaryLogCandidate> {
         let main_count_b = group_b.iter().filter(|entry| entry.kind == PrimaryLogKind::Main).count();
         let has_main_a = main_count_a > 0;
         let has_main_b = main_count_b > 0;
-        if has_main_a != has_main_b {
-            return if has_main_a { Ordering::Less } else { Ordering::Greater };
-        }
-
         let depth_a = if dir_a.is_empty() { 0 } else { dir_a.split('/').filter(|part| !part.is_empty()).count() };
         let depth_b = if dir_b.is_empty() { 0 } else { dir_b.split('/').filter(|part| !part.is_empty()).count() };
         if depth_a != depth_b {
             return depth_a.cmp(&depth_b);
+        }
+
+        if has_main_a != has_main_b {
+            return if has_main_a { Ordering::Less } else { Ordering::Greater };
         }
 
         if main_count_a != main_count_b {
