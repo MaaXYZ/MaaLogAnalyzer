@@ -13,6 +13,10 @@ import {
   sortLoadedPrimaryLogSegments,
 } from '../../../../utils/logFileDiscovery'
 import type { UseProcessFileLoaderOptions } from './types'
+import {
+  collectMxuZipVolumes,
+  findMxuZipVolumes,
+} from '../../../../utils/mxuZipVolumes'
 
 const getFileRelativePath = (file: File): string => {
   return (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
@@ -25,6 +29,11 @@ const filterFilesBySelectedDir = (files: Iterable<File>, selectedDirPath: string
     const normalizedPath = getFileRelativePath(file).replace(/\\/g, '/')
     return normalizedPath.startsWith(`${normalizedDir}/`)
   })
+}
+
+const getMxuZipUpload = (files: File[], anchor: File): File | File[] => {
+  const volumes = collectMxuZipVolumes(files, anchor)
+  return volumes.length > 1 ? volumes : anchor
 }
 
 const resolveSelectedLogContent = async (
@@ -91,6 +100,7 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
   const fileInputRef = ref<HTMLInputElement | null>(null)
 
   const handleDirectoryEntry = async (dirEntry: FileSystemDirectoryEntry) => {
+    let delegatedArchive = false
     try {
       setFileLoading(true)
       options.onFileLoadingStart()
@@ -99,6 +109,14 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
       const { scopedFiles, primaryLogFiles, cancelled } = await resolveSelectedLogContent(files, options.selectPrimaryLogs)
       if (cancelled) return
       if (primaryLogFiles.length === 0) {
+        const volumes = findMxuZipVolumes(files)
+        if (volumes.length > 0) {
+          delegatedArchive = true
+          setFileLoading(false)
+          options.onFileLoadingEnd()
+          options.onUploadFile(volumes.length > 1 ? volumes : volumes[0], options.selectPrimaryLogs)
+          return
+        }
         toastWarning(`文件夹中未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
         return
       }
@@ -116,8 +134,10 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
     } catch (error) {
       toastError('读取文件夹失败: ' + error)
     } finally {
-      setFileLoading(false)
-      options.onFileLoadingEnd()
+      if (!delegatedArchive) {
+        setFileLoading(false)
+        options.onFileLoadingEnd()
+      }
     }
   }
 
@@ -135,9 +155,12 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
       return
     }
 
-    const file = firstItem.getAsFile()
+    const files = Array.from(items)
+      .map(item => item.getAsFile())
+      .filter((file): file is File => file != null)
+    const file = files[0]
     if (file) {
-      options.onUploadFile(file, options.selectPrimaryLogs)
+      options.onUploadFile(getMxuZipUpload(files, file), options.selectPrimaryLogs)
     }
   }
 
@@ -151,6 +174,7 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
     const files = input.files
     if (!files || files.length === 0) return
 
+    let delegatedArchive = false
     try {
       setFileLoading(true)
       options.onFileLoadingStart()
@@ -158,6 +182,14 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
       const { scopedFiles, primaryLogFiles, cancelled } = await resolveSelectedLogContent(files, options.selectPrimaryLogs)
       if (cancelled) return
       if (primaryLogFiles.length === 0) {
+        const volumes = findMxuZipVolumes(files)
+        if (volumes.length > 0) {
+          delegatedArchive = true
+          setFileLoading(false)
+          options.onFileLoadingEnd()
+          options.onUploadFile(volumes.length > 1 ? volumes : volumes[0], options.selectPrimaryLogs)
+          return
+        }
         toastWarning(`文件夹中未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
         return
       }
@@ -175,8 +207,10 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
     } catch (error) {
       toastError('读取文件失败: ' + error)
     } finally {
-      setFileLoading(false)
-      options.onFileLoadingEnd()
+      if (!delegatedArchive) {
+        setFileLoading(false)
+        options.onFileLoadingEnd()
+      }
       input.value = ''
     }
   }
@@ -191,9 +225,10 @@ export const useWebFileInputs = (options: UseProcessFileLoaderOptions, setFileLo
 
   const handleFileInputChange = (event: Event) => {
     const input = event.target as HTMLInputElement
-    const file = input.files?.[0]
+    const files = Array.from(input.files ?? [])
+    const file = files[0]
     if (file) {
-      options.onUploadFile(file, options.selectPrimaryLogs)
+      options.onUploadFile(getMxuZipUpload(files, file), options.selectPrimaryLogs)
     }
     input.value = ''
   }

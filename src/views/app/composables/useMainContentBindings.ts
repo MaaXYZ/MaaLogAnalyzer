@@ -39,7 +39,7 @@ interface UseMainContentBindingsOptions {
   ensureTextSearchTargetsHydrated: (() => Promise<void>) | undefined
   handleSelectTask: (task: TaskInfo) => void
   handleFileUpload: (
-    file: File,
+    file: File | File[],
     selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
   ) => void | Promise<void>
   handleContentUpload: (

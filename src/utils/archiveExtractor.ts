@@ -154,12 +154,23 @@ export async function extractArchiveContent(
   selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
   onProgress?: (message: string) => void,
 ): Promise<ArchiveExtractResult | null> {
+  return extractArchiveContents([file], selectPrimaryLogs, onProgress)
+}
+
+export async function extractArchiveContents(
+  archiveFiles: readonly File[],
+  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+  onProgress?: (message: string) => void,
+): Promise<ArchiveExtractResult | null> {
+  const file = archiveFiles[0]
+  if (!file) return null
+
   const format = getArchiveFormat(file.name)
 
   switch (format) {
     case 'zip':
-      const { extractZipContent } = await import('./zipExtractor')
-      return extractZipContent(file, selectPrimaryLogs)
+      const { extractZipContents } = await import('./zipExtractor')
+      return extractZipContents(archiveFiles, selectPrimaryLogs)
 
     case '7z':
     case 'rar':

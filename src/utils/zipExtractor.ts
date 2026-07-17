@@ -55,26 +55,14 @@ function findFile(
   return null
 }
 
-/**
- * 从 ZIP 文件中提取日志内容和错误截图
- */
-export async function extractZipContent(
+async function unzipNeededFiles(
   file: File,
-  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
-  options: ExtractZipContentOptions = {},
-): Promise<{
-  content: string
-  errorImages: Map<string, string>
-  visionImages: Map<string, string>
-  waitFreezesImages: Map<string, string>
-  textFiles: ExtractedTextFile[]
-  primaryLogFiles: LoadedPrimaryLogFile[]
-} | null> {
+  includeAuxiliaryFiles: boolean,
+): Promise<Unzipped> {
   const buffer = await file.arrayBuffer()
   const zipData = new Uint8Array(buffer)
 
-  const includeAuxiliaryFiles = options.includeAuxiliaryFiles !== false
-  const files = await new Promise<Unzipped>((resolve, reject) => {
+  return new Promise<Unzipped>((resolve, reject) => {
     unzip(
       zipData,
       {
@@ -87,9 +75,35 @@ export async function extractZipContent(
       (err, unzipped) => {
         if (err) reject(err)
         else resolve(unzipped)
-      }
+      },
     )
   })
+}
+
+/**
+ * Extract logs and debug assets from one or more independent ZIP files.
+ * MXU volumes are complete ZIP files, so entries must be merged before log discovery.
+ */
+export async function extractZipContents(
+  archiveFiles: readonly File[],
+  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+  options: ExtractZipContentOptions = {},
+): Promise<{
+  content: string
+  errorImages: Map<string, string>
+  visionImages: Map<string, string>
+  waitFreezesImages: Map<string, string>
+  textFiles: ExtractedTextFile[]
+  primaryLogFiles: LoadedPrimaryLogFile[]
+} | null> {
+  const includeAuxiliaryFiles = options.includeAuxiliaryFiles !== false
+  const files = Object.create(null) as Unzipped
+  for (const archiveFile of archiveFiles) {
+    const unzipped = await unzipNeededFiles(archiveFile, includeAuxiliaryFiles)
+    for (const [path, data] of Object.entries(unzipped)) {
+      files[path] = data
+    }
+  }
 
   const fileMap = toMap(files)
   const paths = Object.keys(files)
@@ -137,4 +151,15 @@ export async function extractZipContent(
     : []
 
   return { content: '', errorImages, visionImages, waitFreezesImages, textFiles, primaryLogFiles }
+}
+
+/**
+ * Extract logs and debug assets from a single ZIP file.
+ */
+export async function extractZipContent(
+  file: File,
+  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+  options: ExtractZipContentOptions = {},
+) {
+  return extractZipContents([file], selectPrimaryLogs, options)
 }

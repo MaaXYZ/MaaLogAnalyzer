@@ -12,7 +12,7 @@ export interface LoadedSearchTarget {
 }
 
 export type UploadFileHandler = (
-  file: File,
+  file: File | File[],
   selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
 ) => void | Promise<void>
 export type UploadContentHandler = (

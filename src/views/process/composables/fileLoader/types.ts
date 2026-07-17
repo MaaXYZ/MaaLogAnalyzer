@@ -6,7 +6,7 @@ export interface UseProcessFileLoaderOptions {
   isInTauri: Ref<boolean>
   isInVSCode: Ref<boolean>
   onUploadFile: (
-    file: File,
+    file: File | File[],
     selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
   ) => void
   onUploadContent: (

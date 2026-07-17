@@ -19,7 +19,7 @@ export type ProcessViewControllerProps = Readonly<{
 export interface ProcessViewControllerEmitters {
   onSelectTask: (task: TaskInfo) => void
   onUploadFile: (
-    file: File,
+    file: File | File[],
     selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
   ) => void
   onUploadContent: (

@@ -73,7 +73,7 @@
         },
         {
           "command": "maaLogAnalyzer.analyzeFile",
-          "when": "resourceExtname == .log || resourceFilename =~ /maa.*\\.log/i",
+          "when": "resourceExtname == .log || resourceExtname == .zip || resourceFilename =~ /maa.*\\.log/i",
           "group": "navigation"
         }
       ],

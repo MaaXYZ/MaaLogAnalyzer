@@ -5,7 +5,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }))
 
-import { extractZipContent } from '../zipExtractor'
+import { extractZipContent, extractZipContents } from '../zipExtractor'
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const copy = new Uint8Array(bytes.byteLength)
@@ -73,5 +73,29 @@ describe('extractZipContent', () => {
     expect(result?.visionImages.size).toBe(0)
     expect(result?.waitFreezesImages.size).toBe(0)
     expect(createObjectUrl).not.toHaveBeenCalled()
+  })
+
+  it('merges independent MXU ZIP volumes before discovering logs and assets', async () => {
+    const firstVolume = zipSync({
+      'maa.log': strToU8('[2026-04-16 14:55:00.000][INF] primary log\n'),
+    })
+    const secondVolume = zipSync({
+      'runtime.txt': strToU8('text from another volume'),
+      'on_error/2026.04.16-14.57.56.745_Node.png': strToU8('fake-png'),
+    })
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
+
+    const result = await extractZipContents([
+      new File([toArrayBuffer(firstVolume)], 'MXU-logs-20260717-120000-part01.zip'),
+      new File([toArrayBuffer(secondVolume)], 'MXU-logs-20260717-120000-part02.zip'),
+    ])
+
+    expect(result?.primaryLogFiles).toHaveLength(1)
+    expect(result?.textFiles).toEqual([{
+      path: 'runtime.txt',
+      name: 'runtime.txt',
+      content: 'text from another volume',
+    }])
+    expect(result?.errorImages.has('2026.04.16-14.57.56.745_Node')).toBe(true)
   })
 })

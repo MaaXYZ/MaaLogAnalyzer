@@ -46,7 +46,7 @@ export interface UseAppPresentationBindingsOptions {
   detailViewProps: ComputedRef<DetailViewForwardProps>
   onSelectTask: (task: TaskInfo) => void
   onUploadFile: (
-    file: File,
+    file: File | File[],
     selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
   ) => void | Promise<void>
   onUploadContent: UploadContentHandler

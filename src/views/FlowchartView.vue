@@ -33,7 +33,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'select-task': [task: TaskInfo]
   'navigate-to-node': [task: TaskInfo, node: NodeInfo]
-  'upload-file': [file: File]
+  'upload-file': [file: File | File[]]
   'upload-content': [content: string, errorImages?: Map<string, string>, visionImages?: Map<string, string>, waitFreezesImages?: Map<string, string>, textFiles?: LoadedTextFile[], primaryLogFiles?: LoadedPrimaryLogFile[]]
 }>()
 
@@ -238,7 +238,7 @@ const { onNodeClick, onPaneClick } = useFlowchartNodeInteraction({
     />
 
     <!-- Hidden file inputs -->
-    <input ref="fileInputRef" type="file" accept=".log,.jsonl,.txt,.zip" style="display: none" @change="handleFileInputChange" />
+    <input ref="fileInputRef" type="file" multiple accept=".log,.jsonl,.txt,.zip" style="display: none" @change="handleFileInputChange" />
     <input ref="folderInputRef" type="file" webkitdirectory style="display: none" @change="handleFolderInputChange" />
 
     <div class="flowchart-body">

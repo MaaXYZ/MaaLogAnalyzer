@@ -12,9 +12,13 @@ import {
   selectPrimaryLogGroup,
   sortLoadedPrimaryLogSegments,
 } from '../../../utils/logFileDiscovery'
+import {
+  collectMxuZipVolumes,
+  findMxuZipVolumes,
+} from '../../../utils/mxuZipVolumes'
 
 interface UseFlowchartUploadOptions {
-  onUploadFile: (file: File) => void
+  onUploadFile: (file: File | File[]) => void
   onUploadContent: (
     content: string,
     errorImages?: Map<string, string>,
@@ -36,6 +40,13 @@ export const useFlowchartUpload = ({
     { label: '选择文件', key: 'file' },
     { label: '选择文件夹', key: 'folder' },
   ]
+
+  const toImageMap = (entries: Record<string, string>) => new Map(Object.entries(entries ?? {}))
+
+  const getMxuZipUpload = (files: File[], anchor: File): File | File[] => {
+    const volumes = collectMxuZipVolumes(files, anchor)
+    return volumes.length > 1 ? volumes : anchor
+  }
 
   function emitUploadContent(
     content: string,
@@ -121,9 +132,22 @@ export const useFlowchartUpload = ({
         if (!selected) return
         const path = typeof selected === 'string' ? selected : (selected as any).path
         if (path.toLowerCase().endsWith('.zip')) {
-          const { readFile } = await import('@tauri-apps/plugin-fs')
-          const bytes = await readFile(path)
-          onUploadFile(new File([bytes], path.split(/[/\\]/).pop() || 'file.zip'))
+          const { invoke } = await import('@tauri-apps/api/core')
+          const result = await invoke<{
+            content: string
+            primary_log_files: LoadedPrimaryLogFile[]
+            error_images: Record<string, string>
+            vision_images: Record<string, string>
+            wait_freezes_images: Record<string, string>
+          }>('extract_zip_log', { path })
+          emitUploadContent(
+            result.content,
+            toImageMap(result.error_images),
+            toImageMap(result.vision_images),
+            toImageMap(result.wait_freezes_images),
+            undefined,
+            sortLoadedPrimaryLogSegments(result.primary_log_files ?? []),
+          )
         } else {
           const { readFile } = await import('@tauri-apps/plugin-fs')
           const content = decodeFileContent(await readFile(path))
@@ -149,8 +173,9 @@ export const useFlowchartUpload = ({
 
   function handleFileInputChange(event: Event) {
     const input = event.target as HTMLInputElement
-    const file = input.files?.[0]
-    if (file) onUploadFile(file)
+    const files = Array.from(input.files ?? [])
+    const file = files[0]
+    if (file) onUploadFile(getMxuZipUpload(files, file))
     input.value = ''
   }
 
@@ -161,6 +186,12 @@ export const useFlowchartUpload = ({
 
     const { scopedFiles, primaryLogFiles } = await resolveSelectedLogContentFromFiles(files)
     if (primaryLogFiles.length === 0) {
+      const volumes = findMxuZipVolumes(files)
+      if (volumes.length > 0) {
+        onUploadFile(volumes.length > 1 ? volumes : volumes[0])
+        input.value = ''
+        return
+      }
       toastWarning(`文件夹中未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
       input.value = ''
       return

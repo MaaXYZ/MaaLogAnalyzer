@@ -4,7 +4,7 @@ import {
   createPrimaryLogParseInputs,
   type LoadedPrimaryLogFile,
 } from '../../../../utils/logFileDiscovery'
-import { isSupportedArchive, extractArchiveContent } from '../../../../utils/archiveExtractor'
+import { isSupportedArchive, extractArchiveContents } from '../../../../utils/archiveExtractor'
 import type { LogLoadingPipelineOptions } from './types'
 import type { ProcessLogContentParams } from './types'
 import type { TextSearchLoadedTarget } from '../useTextSearchTargets'
@@ -43,9 +43,13 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
   const { pipeline, processLogContent } = options
 
   const handleFileUpload = async (
-    file: File,
+    upload: File | File[],
     selectPrimaryLogs = pipeline.selectPrimaryLogs,
   ) => {
+    const files = Array.isArray(upload) ? upload : [upload]
+    const file = files[0]
+    if (!file) return
+
     if (pipeline.loading.value) {
       pipeline.onWarning('正在处理上一个文件，请稍候')
       return
@@ -55,7 +59,7 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
       if (isSupportedArchive(file.name)) {
         pipeline.onFileLoadingStart?.()
         try {
-          const result = await extractArchiveContent(file, selectPrimaryLogs)
+          const result = await extractArchiveContents(files, selectPrimaryLogs)
           if (!result) {
             pipeline.onWarning('压缩包中未找到有效的日志文件')
             return

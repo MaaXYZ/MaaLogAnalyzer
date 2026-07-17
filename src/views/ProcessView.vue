@@ -34,7 +34,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'select-task': [task: TaskInfo]
-  'upload-file': [file: File, selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>]
+  'upload-file': [file: File | File[], selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>]
   'upload-content': [content: string, errorImages?: Map<string, string>, visionImages?: Map<string, string>, waitFreezesImages?: Map<string, string>, textFiles?: LoadedTextFile[], primaryLogFiles?: LoadedPrimaryLogFile[]]
   'select-node': [node: NodeInfo]
   'select-action': [node: NodeInfo]
@@ -243,6 +243,7 @@ void fileInputRef
       v-if="!isInTauri"
       ref="fileInputRef"
       type="file"
+      multiple
       accept=".log,.txt,.jsonl,.zip"
       style="display: none"
       @change="handleFileInputChange"

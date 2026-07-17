@@ -53,6 +53,70 @@ struct ArchiveExtractResult {
     wait_freezes_images: HashMap<String, String>,
 }
 
+fn parse_mxu_zip_volume_name(file_name: &str) -> Option<(String, usize)> {
+    let lower = file_name.to_ascii_lowercase();
+    let stem_end = lower.strip_suffix(".zip")?.len();
+    let stem = &file_name[..stem_end];
+    let lower_stem = &lower[..stem_end];
+    let marker = lower_stem.rfind("-part")?;
+    let base_name = &stem[..marker];
+    let digits = &stem[marker + "-part".len()..];
+    if base_name.is_empty() || digits.len() < 2 || !digits.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+
+    let index = digits.parse::<usize>().ok()?;
+    if index == 0 {
+        return None;
+    }
+    Some((base_name.to_string(), index))
+}
+
+fn collect_mxu_zip_volume_paths(path: &Path) -> Vec<PathBuf> {
+    let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+        return vec![path.to_path_buf()];
+    };
+    let Some((base_name, _)) = parse_mxu_zip_volume_name(file_name) else {
+        return vec![path.to_path_buf()];
+    };
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return vec![path.to_path_buf()];
+    };
+
+    let mut volumes: Vec<(usize, String, PathBuf)> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .file_type()
+                .map(|kind| kind.is_file())
+                .unwrap_or(false)
+        })
+        .filter_map(|entry| {
+            let candidate_name = entry.file_name().to_string_lossy().into_owned();
+            let (candidate_base, index) = parse_mxu_zip_volume_name(&candidate_name)?;
+            candidate_base.eq_ignore_ascii_case(&base_name).then_some((
+                index,
+                candidate_name,
+                entry.path(),
+            ))
+        })
+        .collect();
+
+    if volumes.is_empty() {
+        return vec![path.to_path_buf()];
+    }
+
+    volumes.sort_by(|left, right| {
+        left.0.cmp(&right.0).then_with(|| {
+            left.1
+                .to_ascii_lowercase()
+                .cmp(&right.1.to_ascii_lowercase())
+        })
+    });
+    volumes.into_iter().map(|(_, _, path)| path).collect()
+}
+
 #[tauri::command]
 fn extract_zip_log(path: String) -> Result<ArchiveExtractResult, String> {
     let lower = path.to_lowercase();
@@ -60,15 +124,24 @@ fn extract_zip_log(path: String) -> Result<ArchiveExtractResult, String> {
         return Err(format!("Tauri 桌面端目前仅支持 ZIP 格式。7z 和 RAR 请使用 Web 版本。"));
     }
 
-    let file = std::fs::File::open(&path).map_err(|e| format!("无法打开文件: {e}"))?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("无法读取 ZIP: {e}"))?;
+    let archive_paths = collect_mxu_zip_volume_paths(Path::new(&path));
+    let mut archives = Vec::with_capacity(archive_paths.len());
+    let mut names = Vec::new();
+    for archive_path in archive_paths {
+        let file = std::fs::File::open(&archive_path)
+            .map_err(|e| format!("无法打开文件 [{}]: {e}", archive_path.display()))?;
+        let mut archive = zip::ZipArchive::new(file)
+            .map_err(|e| format!("无法读取 ZIP [{}]: {e}", archive_path.display()))?;
+        for index in 0..archive.len() {
+            if let Ok(entry) = archive.by_index(index) {
+                names.push(entry.name().to_string());
+            }
+        }
+        archives.push((archive_path, archive));
+    }
+
     let temp_dir = create_zip_temp_dir(&path)?;
     let mut temp_seq: u64 = 0;
-
-    // Collect all file names
-    let names: Vec<String> = (0..archive.len())
-        .filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
-        .collect();
 
     let selected_logs = select_primary_log_group(&names);
     if selected_logs.is_empty() {
@@ -88,39 +161,54 @@ fn extract_zip_log(path: String) -> Result<ArchiveExtractResult, String> {
     let mut vision_images: HashMap<String, String> = HashMap::new();
     let mut wait_freezes_images: HashMap<String, String> = HashMap::new();
 
-    for i in 0..archive.len() {
-        let mut entry = archive.by_index(i).map_err(|e| format!("读取条目失败: {e}"))?;
-        let name = entry.name().replace('\\', "/");
-        let lower = name.to_lowercase();
+    for (archive_path, archive) in &mut archives {
+        for i in 0..archive.len() {
+            let mut entry = archive
+                .by_index(i)
+                .map_err(|e| format!("读取条目失败 [{}]: {e}", archive_path.display()))?;
+            let name = entry.name().replace('\\', "/");
+            let lower = name.to_lowercase();
 
-        if let Some(candidate) = selected_log_lookup.get(&lower) {
-            let mut buf = Vec::new();
-            entry.read_to_end(&mut buf).map_err(|e| format!("读取失败: {e}"))?;
-            let content = decode_content(&buf);
-            log_segments.push(LoadedPrimaryLogSegment {
-                path: candidate.path.clone(),
-                name: candidate.path.rsplit('/').next().unwrap_or(&candidate.path).to_string(),
-                kind: candidate.kind,
-                rotated_timestamp_hint: candidate.rotated_timestamp_hint.clone(),
-                content_timestamp: extract_first_log_timestamp(&content),
-                content,
-            });
-        } else if lower.starts_with(&on_error_prefix.to_lowercase()) && lower.ends_with(".png") {
-            // Extract filename
-            let file_name = name.rsplit('/').next().unwrap_or("");
-            if let Some(key) = parse_error_image_key(file_name) {
-                let saved_path = save_zip_entry_to_temp_file(&mut entry, &temp_dir, &mut temp_seq, "png")?;
-                error_images.insert(key, saved_path);
-            }
-        } else if lower.starts_with(&vision_prefix.to_lowercase()) && lower.ends_with(".jpg") {
-            let file_name = name.rsplit('/').next().unwrap_or("");
-            if let Some(key) = parse_wait_freezes_key(file_name) {
-                let saved_path = save_zip_entry_to_temp_file(&mut entry, &temp_dir, &mut temp_seq, "jpg")?;
-                wait_freezes_images.insert(key, saved_path);
-            } else if let Some(key) = parse_vision_image_key(file_name) {
-                let saved_path = save_zip_entry_to_temp_file(&mut entry, &temp_dir, &mut temp_seq, "jpg")?;
-                // 同一 key 覆盖（取最后出现的文件）
-                vision_images.insert(key, saved_path);
+            if let Some(candidate) = selected_log_lookup.get(&lower) {
+                let mut buf = Vec::new();
+                entry
+                    .read_to_end(&mut buf)
+                    .map_err(|e| format!("读取失败: {e}"))?;
+                let content = decode_content(&buf);
+                log_segments.push(LoadedPrimaryLogSegment {
+                    path: candidate.path.clone(),
+                    name: candidate
+                        .path
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or(&candidate.path)
+                        .to_string(),
+                    kind: candidate.kind,
+                    rotated_timestamp_hint: candidate.rotated_timestamp_hint.clone(),
+                    content_timestamp: extract_first_log_timestamp(&content),
+                    content,
+                });
+            } else if lower.starts_with(&on_error_prefix.to_lowercase()) && lower.ends_with(".png")
+            {
+                // Extract filename
+                let file_name = name.rsplit('/').next().unwrap_or("");
+                if let Some(key) = parse_error_image_key(file_name) {
+                    let saved_path =
+                        save_zip_entry_to_temp_file(&mut entry, &temp_dir, &mut temp_seq, "png")?;
+                    error_images.insert(key, saved_path);
+                }
+            } else if lower.starts_with(&vision_prefix.to_lowercase()) && lower.ends_with(".jpg") {
+                let file_name = name.rsplit('/').next().unwrap_or("");
+                if let Some(key) = parse_wait_freezes_key(file_name) {
+                    let saved_path =
+                        save_zip_entry_to_temp_file(&mut entry, &temp_dir, &mut temp_seq, "jpg")?;
+                    wait_freezes_images.insert(key, saved_path);
+                } else if let Some(key) = parse_vision_image_key(file_name) {
+                    let saved_path =
+                        save_zip_entry_to_temp_file(&mut entry, &temp_dir, &mut temp_seq, "jpg")?;
+                    // 同一 key 覆盖（取最后出现的文件）
+                    vision_images.insert(key, saved_path);
+                }
             }
         }
     }
@@ -449,4 +537,33 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_mxu_zip_volume_name;
+
+    #[test]
+    fn parses_two_and_three_digit_mxu_zip_volumes() {
+        assert_eq!(
+            parse_mxu_zip_volume_name("project-logs-20260717-120000-part01.zip"),
+            Some(("project-logs-20260717-120000".to_string(), 1)),
+        );
+        assert_eq!(
+            parse_mxu_zip_volume_name("project-logs-20260717-120000-part001.ZIP"),
+            Some(("project-logs-20260717-120000".to_string(), 1)),
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_mxu_zip_volume_numbers() {
+        assert_eq!(
+            parse_mxu_zip_volume_name("project-logs-20260717-120000-part1.zip"),
+            None,
+        );
+        assert_eq!(
+            parse_mxu_zip_volume_name("project-logs-20260717-120000-part000.zip"),
+            None,
+        );
+    }
 }

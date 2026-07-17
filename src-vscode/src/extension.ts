@@ -481,6 +481,11 @@ async function analyzeFolderUri(folderUri: vscode.Uri): Promise<void> {
     const selectedLogs = selectPrimaryLogGroup(primaryLogEntries)
 
     if (selectedLogs.length === 0) {
+      const splitZipUri = await findFirstMxuZipVolumeUri(folderUri)
+      if (splitZipUri) {
+        await handleZipFile(splitZipUri)
+        return
+      }
       vscode.window.showErrorMessage(`文件夹中未找到日志文件（${PRIMARY_LOG_FILE_HINT}）`)
       return
     }
@@ -747,15 +752,73 @@ function parseWaitFreezesKey(fileName: string): string | null {
   return `${timestamp}.${paddedMs}_${rest}`
 }
 
+interface MxuZipVolumeInfo {
+  baseName: string
+  index: number
+}
+
+function parseMxuZipVolumeName(fileName: string): MxuZipVolumeInfo | null {
+  const match = fileName.match(/^(.*)-part(\d{2,})\.zip$/i)
+  if (!match || !match[1]) return null
+  const index = Number(match[2])
+  if (!Number.isSafeInteger(index) || index < 1) return null
+  return { baseName: match[1], index }
+}
+
+async function collectMxuZipVolumeUris(uri: vscode.Uri): Promise<vscode.Uri[]> {
+  const selectedName = path.posix.basename(uri.path)
+  const selectedInfo = parseMxuZipVolumeName(selectedName)
+  if (!selectedInfo) return [uri]
+
+  const directory = getParentUri(uri)
+  let entries: [string, vscode.FileType][]
+  try {
+    entries = await vscode.workspace.fs.readDirectory(directory)
+  } catch {
+    return [uri]
+  }
+
+  const baseName = selectedInfo.baseName.toLowerCase()
+  const volumes = entries
+    .filter(([, type]) => type === vscode.FileType.File)
+    .map(([name]) => ({ name, info: parseMxuZipVolumeName(name) }))
+    .filter(({ info }) => info?.baseName.toLowerCase() === baseName)
+    .sort((left, right) => (
+      left.info!.index - right.info!.index
+      || left.name.localeCompare(right.name)
+    ))
+    .map(({ name }) => vscode.Uri.joinPath(directory, name))
+
+  return volumes.length > 0 ? volumes : [uri]
+}
+
+async function findFirstMxuZipVolumeUri(directory: vscode.Uri): Promise<vscode.Uri | null> {
+  const entries: [string, vscode.FileType][] = await vscode.workspace.fs.readDirectory(directory)
+  const first = entries
+    .filter(([, type]) => type === vscode.FileType.File)
+    .map(([name]) => ({ name, info: parseMxuZipVolumeName(name) }))
+    .filter(({ info }) => info != null)
+    .sort((left, right) => (
+      left.name.localeCompare(right.name)
+      || left.info!.index - right.info!.index
+    ))[0]
+
+  return first ? vscode.Uri.joinPath(directory, first.name) : null
+}
+
 /** 处理 ZIP 文件：Node.js 侧解压 */
 async function handleZipFile(uri: vscode.Uri): Promise<void> {
   try {
-    const fileContent = await vscode.workspace.fs.readFile(uri)
-    const zipData = new Uint8Array(fileContent)
-
-    const files = unzipSync(zipData, {
-      filter: (file) => isNeededFile(file.name),
-    })
+    const volumeUris = await collectMxuZipVolumeUris(uri)
+    const files: Record<string, Uint8Array> = Object.create(null)
+    for (const volumeUri of volumeUris) {
+      const fileContent = await vscode.workspace.fs.readFile(volumeUri)
+      const zipData = new Uint8Array(fileContent)
+      const unzipped = unzipSync(zipData, {
+        filter: (file) => isNeededFile(file.name),
+      })
+      Object.assign(files, unzipped)
+    }
 
     const paths = Object.keys(files)
     const selectedLogs = selectPrimaryLogGroup(paths.map(filePath => ({
