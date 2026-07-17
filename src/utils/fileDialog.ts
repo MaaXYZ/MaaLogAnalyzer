@@ -291,15 +291,12 @@ async function readErrorImages(debugPath: string): Promise<Map<string, string>> 
     const { readDir, exists } = await import('@tauri-apps/plugin-fs')
 
     const onErrorPath = joinNativePath(debugPath, 'on_error')
-    console.log('[截图] 检查路径:', onErrorPath)
 
     if (!(await exists(onErrorPath))) {
-      console.log('[截图] on_error 文件夹不存在')
       return imageMap
     }
 
     const entries = await readDir(onErrorPath)
-    console.log('[截图] 找到文件数:', entries.length)
 
     for (const entry of entries) {
       if (!entry.isDirectory && entry.name.endsWith('.png')) {
@@ -312,14 +309,10 @@ async function readErrorImages(debugPath: string): Promise<Map<string, string>> 
           const key = `${timestamp}.${paddedMs}_${nodeName}`
           const fullPath = joinNativePath(onErrorPath, entry.name)
           imageMap.set(key, fullPath)
-          console.log('[截图] 添加映射:', key, '->', fullPath)
-        } else {
-          console.log('[截图] 文件名格式不匹配:', entry.name)
         }
       }
     }
 
-    console.log('[截图] 总共加载截图数:', imageMap.size)
   } catch (error) {
     console.warn('[截图] 读取截图失败:', error)
   }
@@ -365,7 +358,6 @@ async function readVisionImages(debugPath: string): Promise<Map<string, string>>
         }
       }
     }
-    console.log('[vision] 总共加载调试截图数:', imageMap.size)
   } catch (error) {
     console.warn('[vision] 读取调试截图失败:', error)
   }
@@ -530,7 +522,6 @@ async function openFolderDialogTauri(options: OpenFolderDialogOptions): Promise<
     const { open } = await import('@tauri-apps/plugin-dialog')
     const { exists } = await import('@tauri-apps/plugin-fs')
 
-    console.log('[文件夹] 打开文件夹对话框')
 
     const selected = await open({
       multiple: false,
@@ -539,29 +530,24 @@ async function openFolderDialogTauri(options: OpenFolderDialogOptions): Promise<
     })
 
     if (!selected || typeof selected !== 'string') {
-      console.log('[文件夹] 未选择文件夹')
       return null
     }
 
-    console.log('[文件夹] 选择的路径:', selected)
     let debugPath = selected
 
     if (!(await hasPrimaryLogInTauri(debugPath))) {
       debugPath = joinNativePath(selected, 'debug')
 
       if (!(await exists(debugPath)) || !(await hasPrimaryLogInTauri(debugPath))) {
-        console.log('[文件夹] debug文件夹不存在或不含日志，开始递归查找')
         const found = await findDebugFolder(selected)
         if (!found || !(await hasPrimaryLogInTauri(found))) {
           toastWarning(`未找到debug文件夹或日志文件（${PRIMARY_LOG_FILE_HINT}）`)
           return null
         }
         debugPath = found
-        console.log('[文件夹] 找到debug文件夹:', debugPath)
       }
     }
 
-    console.log('[文件夹] 读取日志文件')
     const primaryLogFiles = await readPrimaryLogFilesTauri(debugPath, options.selectPrimaryLogs)
 
     if (primaryLogFiles == null) {
@@ -573,7 +559,6 @@ async function openFolderDialogTauri(options: OpenFolderDialogOptions): Promise<
       return null
     }
 
-    console.log('[文件夹] 日志文件读取完成，数量:', primaryLogFiles.length)
 
     const errorImages = await readErrorImages(debugPath)
     const visionImages = await readVisionImages(debugPath)
@@ -628,7 +613,6 @@ async function readWaitFreezesImages(debugPath: string): Promise<Map<string, str
         }
       }
     }
-    console.log('[wait_freezes] 总共加载调试截图数:', imageMap.size)
   } catch (error) {
     console.warn('[wait_freezes] 读取调试截图失败:', error)
   }
@@ -668,7 +652,6 @@ async function readErrorImagesWeb(debugHandle: FileSystemDirectoryHandle): Promi
   const imageMap = new Map<string, string>()
   try {
     const onErrorHandle = await debugHandle.getDirectoryHandle('on_error')
-    console.log('[截图] 找到 on_error 文件夹')
 
     for await (const entry of onErrorHandle.values()) {
       if (entry.kind === 'file' && entry.name.endsWith('.png')) {
@@ -681,13 +664,11 @@ async function readErrorImagesWeb(debugHandle: FileSystemDirectoryHandle): Promi
           const file = await (entry as FileSystemFileHandle).getFile()
           const url = URL.createObjectURL(file)
           imageMap.set(key, url)
-          console.log('[截图] 添加映射:', key)
         }
       }
     }
-    console.log('[截图] 总共加载截图数:', imageMap.size)
-  } catch (error) {
-    console.log('[截图] on_error 文件夹不存在')
+  } catch {
+    // Optional debug image directory is absent.
   }
   return imageMap
 }
@@ -699,7 +680,6 @@ async function readVisionImagesWeb(debugHandle: FileSystemDirectoryHandle): Prom
   const imageMap = new Map<string, string>()
   try {
     const visionHandle = await debugHandle.getDirectoryHandle('vision')
-    console.log('[vision] 找到 vision 文件夹')
 
     for await (const entry of visionHandle.values()) {
       if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.jpg')) {
@@ -714,9 +694,8 @@ async function readVisionImagesWeb(debugHandle: FileSystemDirectoryHandle): Prom
         }
       }
     }
-    console.log('[vision] 总共加载调试截图数:', imageMap.size)
-  } catch (error) {
-    console.log('[vision] vision 文件夹不存在')
+  } catch {
+    // Optional debug image directory is absent.
   }
   return imageMap
 }
@@ -731,9 +710,7 @@ async function openFolderDialogWeb(options: OpenFolderDialogOptions): Promise<Op
       return null
     }
 
-    console.log('[文件夹] 打开文件夹对话框 (Web)')
     const dirHandle = await (window as any).showDirectoryPicker()
-    console.log('[文件夹] 选择的文件夹:', dirHandle.name)
 
     let debugHandle = dirHandle
 
@@ -743,19 +720,14 @@ async function openFolderDialogWeb(options: OpenFolderDialogOptions): Promise<Op
         if (!(await hasPrimaryLogInWeb(debugHandle))) {
           throw new Error('debug 不含日志')
         }
-        console.log('[文件夹] 找到 debug 子文件夹')
       } catch {
-        console.log('[文件夹] debug子文件夹不存在或不含日志，开始递归查找')
         const found = await findDebugFolderWeb(dirHandle)
         if (!found || !(await hasPrimaryLogInWeb(found))) {
           toastWarning(`未找到debug文件夹或日志文件（${PRIMARY_LOG_FILE_HINT}）`)
           return null
         }
         debugHandle = found
-        console.log('[文件夹] 递归找到debug文件夹')
       }
-    } else {
-      console.log('[文件夹] 当前文件夹就是 debug 文件夹')
     }
 
     const primaryLogFiles = await readPrimaryLogFilesWeb(debugHandle, options.selectPrimaryLogs)
@@ -769,7 +741,6 @@ async function openFolderDialogWeb(options: OpenFolderDialogOptions): Promise<Op
       return null
     }
 
-    console.log('[文件夹] 日志文件读取完成，数量:', primaryLogFiles.length)
 
     const errorImages = await readErrorImagesWeb(debugHandle)
     const visionImages = await readVisionImagesWeb(debugHandle)
@@ -809,9 +780,8 @@ async function readWaitFreezesImagesWeb(debugHandle: FileSystemDirectoryHandle):
         }
       }
     }
-    console.log('[wait_freezes] 总共加载调试截图数:', imageMap.size)
-  } catch (error) {
-    console.log('[wait_freezes] vision 文件夹不存在')
+  } catch {
+    // Optional debug image directory is absent.
   }
   return imageMap
 }
