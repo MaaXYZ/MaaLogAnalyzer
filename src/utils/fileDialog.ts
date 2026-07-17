@@ -156,32 +156,11 @@ async function openLogFileWithTauri(): Promise<string | null> {
   return null
 }
 
-/**
- * Tauri ZIP 解压结果缓存（用于 openLogFileWithTauri 返回后，由 ProcessView 获取 errorImages）
- */
-let _lastTauriZipErrorImages: Map<string, string> | null = null
-
-/**
- * 获取上一次 Tauri ZIP 解压的 errorImages（调用后清空）
- */
-export function consumeTauriZipErrorImages(): Map<string, string> | null {
-  const images = _lastTauriZipErrorImages
-  _lastTauriZipErrorImages = null
-  return images
-}
-
 async function openArchiveFileWithTauri(path: string): Promise<string | null> {
   const result = await invoke<{
     content: string
     primary_log_files: LoadedPrimaryLogFile[]
-    error_images: Record<string, string>
   }>('extract_zip_log', { path })
-
-  const errorImages = new Map<string, string>()
-  for (const [key, value] of Object.entries(result.error_images ?? {})) {
-    errorImages.set(key, value)
-  }
-  _lastTauriZipErrorImages = errorImages
 
   // Rust extract_zip_log returns empty content; real logs live in primary_log_files
   const primaryLogFiles = result.primary_log_files ?? []
