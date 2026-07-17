@@ -6,7 +6,7 @@
  */
 
 import { unzip, type Unzipped } from 'fflate'
-import { decodeFileContent } from './fileDialog'
+import { decodeFileContent } from './textEncoding'
 import {
   createPrimaryLogSelectionOptions,
   isPrimaryLogFileName,

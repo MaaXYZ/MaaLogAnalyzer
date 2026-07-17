@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { toastWarning } from '../../../utils/toast'
 import { isTauri } from '../../../utils/platform'
-import { decodeFileContent } from '../../../utils/fileDialog'
+import { decodeFileContent } from '../../../utils/textEncoding'
 import {
   collectTextFilesFromFiles,
   type LoadedTextFile,

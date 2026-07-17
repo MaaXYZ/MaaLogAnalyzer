@@ -5,6 +5,7 @@
 
 import { isTauri, isVSCode } from './platform'
 import { toastError, toastWarning } from './toast'
+import { decodeFileContent } from './textEncoding'
 import { invoke } from '@tauri-apps/api/core'
 import { joinNativePath } from './nativePath'
 import {
@@ -69,42 +70,6 @@ const normalizeLoadedPath = (rawPath: string, rootPath?: string) => {
     return normalized.slice(debugIdx + 1)
   }
   return normalized
-}
-
-/**
- * 解码文件内容，自动尝试多种编码
- * @param bytes 文件的原始字节数组
- * @returns 解码后的字符串
- */
-const DECODE_CANDIDATE_ENCODINGS = ['utf-8', 'gbk', 'gb18030', 'gb2312'] as const
-const ENCODING_SAMPLE_SIZE = 256 * 1024
-
-// Fatally decode a sample, tolerating a multi-byte sequence split at the sample edge.
-const sampleMatchesEncoding = (sample: Uint8Array, encoding: string): boolean => {
-  for (let trim = 0; trim <= 3; trim += 1) {
-    if (sample.length - trim <= 0) return false
-    try {
-      new TextDecoder(encoding, { fatal: true }).decode(sample.subarray(0, sample.length - trim))
-      return true
-    } catch {
-      // retry with a shorter sample
-    }
-  }
-  return false
-}
-
-const detectEncoding = (bytes: Uint8Array): string => {
-  const sample = bytes.length > ENCODING_SAMPLE_SIZE ? bytes.subarray(0, ENCODING_SAMPLE_SIZE) : bytes
-  for (const encoding of DECODE_CANDIDATE_ENCODINGS) {
-    if (sampleMatchesEncoding(sample, encoding)) return encoding
-  }
-  return 'utf-8'
-}
-
-export function decodeFileContent(bytes: Uint8Array): string {
-  const encoding = detectEncoding(bytes)
-  // Non-fatal so a rare invalid sequence outside the sample does not throw.
-  return new TextDecoder(encoding, { fatal: false }).decode(bytes)
 }
 
 /**

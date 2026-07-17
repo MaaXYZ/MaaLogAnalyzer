@@ -1,7 +1,7 @@
 import type { UseProcessFileLoaderOptions } from './types'
 import { toastError } from '../../../../utils/toast'
 import { invoke } from '@tauri-apps/api/core'
-import { decodeFileContent } from '../../../../utils/fileDialog'
+import { decodeFileContent } from '../../../../utils/textEncoding'
 import {
   createPrimaryLogSelectionOptions,
   sortLoadedPrimaryLogSegments,

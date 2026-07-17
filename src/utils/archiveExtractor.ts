@@ -6,7 +6,14 @@
  * 7z/RAR 使用 7z-wasm（按需懒加载 WASM 模块）
  */
 
-import type { PrimaryLogSelectionOption, LoadedPrimaryLogFile } from './logFileDiscovery'
+import {
+  createPrimaryLogSelectionOptions,
+  selectPrimaryLogGroup,
+  sortLoadedPrimaryLogSegments,
+  type PrimaryLogSelectionOption,
+  type LoadedPrimaryLogFile,
+} from './logFileDiscovery'
+import { decodeFileContent } from './textEncoding'
 import type { ExtractedTextFile } from './archiveShared'
 import {
   isNeededFile,
@@ -168,12 +175,6 @@ async function extractSevenZipOrRar(
   selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
   onProgress?: (message: string) => void,
 ): Promise<ArchiveExtractResult | null> {
-  const { decodeFileContent } = await import('./fileDialog')
-  const {
-    createPrimaryLogSelectionOptions,
-    selectPrimaryLogGroup,
-    sortLoadedPrimaryLogSegments,
-  } = await import('./logFileDiscovery')
 
   const files = await extractWithSevenZip(file, onProgress)
 
