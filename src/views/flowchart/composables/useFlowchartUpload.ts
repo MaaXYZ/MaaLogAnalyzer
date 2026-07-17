@@ -2,7 +2,10 @@ import { ref } from 'vue'
 import { toastWarning } from '../../../utils/toast'
 import { isTauri } from '../../../utils/platform'
 import { decodeFileContent } from '../../../utils/fileDialog'
-import type { LoadedTextFile } from '../../process/utils/fileLoadingHelpers'
+import {
+  collectTextFilesFromFiles,
+  type LoadedTextFile,
+} from '../../process/utils/fileLoadingHelpers'
 import {
   type LoadedPrimaryLogFile,
   PRIMARY_LOG_FILE_HINT,
@@ -39,6 +42,7 @@ export const useFlowchartUpload = ({
     errorImages: Map<string, string>,
     visionImages: Map<string, string>,
     waitFreezesImages: Map<string, string>,
+    textFiles?: LoadedTextFile[],
     primaryLogFiles?: LoadedPrimaryLogFile[],
   ) {
     onUploadContent(
@@ -46,7 +50,7 @@ export const useFlowchartUpload = ({
       errorImages.size > 0 ? errorImages : undefined,
       visionImages.size > 0 ? visionImages : undefined,
       waitFreezesImages.size > 0 ? waitFreezesImages : undefined,
-      undefined,
+      textFiles,
       primaryLogFiles,
     )
   }
@@ -134,6 +138,7 @@ export const useFlowchartUpload = ({
           result.errorImages,
           result.visionImages,
           result.waitFreezesImages,
+          result.textFiles,
           result.primaryLogFiles,
         )
       }
@@ -181,7 +186,8 @@ export const useFlowchartUpload = ({
     }
 
     if (primaryLogFiles.length > 0) {
-      emitUploadContent('', errorImages, visionImages, waitFreezesImages, primaryLogFiles)
+      const textFiles = await collectTextFilesFromFiles(scopedFiles)
+      emitUploadContent('', errorImages, visionImages, waitFreezesImages, textFiles, primaryLogFiles)
     }
     input.value = ''
   }
