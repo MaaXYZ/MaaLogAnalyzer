@@ -52,28 +52,53 @@ const emit = defineEmits<{
 
 <template>
   <div style="flex: 1; min-height: 0">
-    <main-content-analysis-section
-      v-if="viewMode === 'analysis'"
-      :active="true"
-      :is-mobile="isMobile"
-      :split-size="splitSize"
-      :process-view-mobile-props="processViewMobileProps"
-      :process-view-desktop-props="processViewDesktopProps"
-      :process-view-event-handlers="processViewEventHandlers"
-      :detail-view-props="detailViewProps"
-      :show-task-drawer="showTaskDrawer"
-      :show-detail-drawer="showDetailDrawer"
-      :tasks="filteredTasks"
-      :selected-task="selectedTask"
-      @update:split-size="emit('update:splitSize', $event)"
-      @update:show-task-drawer="emit('update:showTaskDrawer', $event)"
-      @update:show-detail-drawer="emit('update:showDetailDrawer', $event)"
-      @select-mobile-task="onMobileTaskSelect"
-      @toggle-detail="onToggleDetailView"
-    />
+    <keep-alive>
+      <main-content-analysis-section
+        v-if="viewMode === 'analysis'"
+        :active="true"
+        :is-mobile="isMobile"
+        :split-size="splitSize"
+        :process-view-mobile-props="processViewMobileProps"
+        :process-view-desktop-props="processViewDesktopProps"
+        :process-view-event-handlers="processViewEventHandlers"
+        :detail-view-props="detailViewProps"
+        :show-task-drawer="showTaskDrawer"
+        :show-detail-drawer="showDetailDrawer"
+        :tasks="filteredTasks"
+        :selected-task="selectedTask"
+        @update:split-size="emit('update:splitSize', $event)"
+        @update:show-task-drawer="emit('update:showTaskDrawer', $event)"
+        @update:show-detail-drawer="emit('update:showDetailDrawer', $event)"
+        @select-mobile-task="onMobileTaskSelect"
+        @toggle-detail="onToggleDetailView"
+      />
+
+      <main-content-split-section
+        v-else-if="viewMode === 'split'"
+        :active="true"
+        :is-mobile="isMobile"
+        :split-vertical-size="splitVerticalSize"
+        :split-size="splitSize"
+        :process-view-mobile-props="processViewMobileProps"
+        :process-view-desktop-props="processViewDesktopProps"
+        :process-view-event-handlers="processViewEventHandlers"
+        :text-search-view-props="textSearchViewProps"
+        :detail-view-props="detailViewProps"
+        :show-task-drawer="showTaskDrawer"
+        :show-detail-drawer="showDetailDrawer"
+        :tasks="filteredTasks"
+        :selected-task="selectedTask"
+        @update:split-vertical-size="emit('update:splitVerticalSize', $event)"
+        @update:split-size="emit('update:splitSize', $event)"
+        @update:show-task-drawer="emit('update:showTaskDrawer', $event)"
+        @update:show-detail-drawer="emit('update:showDetailDrawer', $event)"
+        @select-mobile-task="onMobileTaskSelect"
+        @toggle-detail="onToggleDetailView"
+      />
+    </keep-alive>
 
     <search-mode-pane
-      v-else-if="viewMode === 'search'"
+      v-if="viewMode === 'search'"
       :active="true"
       :text-search-view-props="textSearchViewProps"
     />
@@ -96,27 +121,5 @@ const emit = defineEmits<{
       :on-upload-content="onUploadContent"
     />
 
-    <main-content-split-section
-      v-else-if="viewMode === 'split'"
-      :active="true"
-      :is-mobile="isMobile"
-      :split-vertical-size="splitVerticalSize"
-      :split-size="splitSize"
-      :process-view-mobile-props="processViewMobileProps"
-      :process-view-desktop-props="processViewDesktopProps"
-      :process-view-event-handlers="processViewEventHandlers"
-      :text-search-view-props="textSearchViewProps"
-      :detail-view-props="detailViewProps"
-      :show-task-drawer="showTaskDrawer"
-      :show-detail-drawer="showDetailDrawer"
-      :tasks="filteredTasks"
-      :selected-task="selectedTask"
-      @update:split-vertical-size="emit('update:splitVerticalSize', $event)"
-      @update:split-size="emit('update:splitSize', $event)"
-      @update:show-task-drawer="emit('update:showTaskDrawer', $event)"
-      @update:show-detail-drawer="emit('update:showDetailDrawer', $event)"
-      @select-mobile-task="onMobileTaskSelect"
-      @toggle-detail="onToggleDetailView"
-    />
   </div>
 </template>
