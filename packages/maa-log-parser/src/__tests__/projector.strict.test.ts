@@ -914,4 +914,43 @@ describe('Strict task projector semantics', () => {
     expect(actionItem?.focus).toEqual(focus)
     expect(actionItem).not.toHaveProperty('focus_context')
   })
+
+  it('does not expose NaN durations for invalid or reversed timestamps', async () => {
+    const invalidStart = makeEventLine(1, 'Tasker.Task.Starting', {
+      task_id: 91,
+      entry: 'InvalidTimestamp',
+      hash: 'h-91',
+      uuid: 'u-91',
+    }).replace(/^\[[^\]]+\]/, '[invalid-start]')
+    const invalidEnd = makeEventLine(2, 'Tasker.Task.Succeeded', {
+      task_id: 91,
+      entry: 'InvalidTimestamp',
+      hash: 'h-91',
+      uuid: 'u-91',
+    }).replace(/^\[[^\]]+\]/, '[invalid-end]')
+    const reversedStart = makeEventLine(2000, 'Tasker.Task.Starting', {
+      task_id: 92,
+      entry: 'ReversedTimestamp',
+      hash: 'h-92',
+      uuid: 'u-92',
+    })
+    const reversedEnd = makeEventLine(1000, 'Tasker.Task.Succeeded', {
+      task_id: 92,
+      entry: 'ReversedTimestamp',
+      hash: 'h-92',
+      uuid: 'u-92',
+    })
+
+    const parser = new LogParser()
+    await parser.parseFile([
+      invalidStart,
+      invalidEnd,
+      reversedStart,
+      reversedEnd,
+    ].join('\n'))
+
+    const tasks = parser.getTasksSnapshot()
+    expect(findTask(tasks, 91).duration).toBeUndefined()
+    expect(findTask(tasks, 92).duration).toBe(0)
+  })
 })

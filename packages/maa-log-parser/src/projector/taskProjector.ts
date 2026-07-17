@@ -373,7 +373,10 @@ const buildDuration = (
   endTime?: string,
 ): number | undefined => {
   if (!endTime) return undefined
-  return Math.max(0, Date.parse(endTime) - Date.parse(startTime))
+  const startMs = Date.parse(startTime)
+  const endMs = Date.parse(endTime)
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return undefined
+  return Math.max(0, endMs - startMs)
 }
 
 const shouldSynthesizeForeignTaskGroup = (
@@ -837,9 +840,7 @@ const projectTaskScope = (
     status: toTaskStatus(scope.status),
     nodes,
     events: projectTaskEvents(scope, options),
-    duration: scope.endTs
-      ? Math.max(0, Date.parse(scope.endTs) - Date.parse(scope.ts))
-      : undefined,
+    duration: buildDuration(scope.ts, scope.endTs),
   }
 }
 
