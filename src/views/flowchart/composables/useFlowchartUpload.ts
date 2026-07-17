@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { toastWarning } from '../../../utils/toast'
 import { isTauri } from '../../../utils/platform'
+import { decodeFileContent } from '../../../utils/fileDialog'
 import type { LoadedTextFile } from '../../process/utils/fileLoadingHelpers'
 import {
   type LoadedPrimaryLogFile,
@@ -114,14 +115,14 @@ export const useFlowchartUpload = ({
           title: '选择日志文件',
         })
         if (!selected) return
-        const { readTextFile } = await import('@tauri-apps/plugin-fs')
         const path = typeof selected === 'string' ? selected : (selected as any).path
         if (path.toLowerCase().endsWith('.zip')) {
           const { readFile } = await import('@tauri-apps/plugin-fs')
           const bytes = await readFile(path)
           onUploadFile(new File([bytes], path.split(/[/\\]/).pop() || 'file.zip'))
         } else {
-          const content = await readTextFile(path)
+          const { readFile } = await import('@tauri-apps/plugin-fs')
+          const content = decodeFileContent(await readFile(path))
           onUploadContent(content)
         }
       } else {
