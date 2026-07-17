@@ -46,13 +46,10 @@ const scheduleTreeLoad = () => {
 watch(
   () => props.value,
   () => {
-    if (loadTimer != null) {
-      window.clearTimeout(loadTimer)
-      loadTimer = null
-    }
     code.value = ''
     codeReady.value = false
-    treeReady.value = false
+    // Realtime snapshots replace object references even when the selected item is unchanged.
+    // Keep an already-rendered tree mounted; its computed nodes react to the new value in place.
     scheduleTreeLoad()
   },
 )
