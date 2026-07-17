@@ -1,6 +1,7 @@
 import type { UseProcessFileLoaderOptions } from './types'
 import { toastError } from '../../../../utils/toast'
 import { invoke } from '@tauri-apps/api/core'
+import { decodeFileContent } from '../../../../utils/fileDialog'
 import {
   createPrimaryLogSelectionOptions,
   sortLoadedPrimaryLogSegments,
@@ -68,8 +69,8 @@ export const useTauriBridge = (
               selectedPrimaryLogFiles,
             )
           } else {
-            const { readTextFile } = await import('@tauri-apps/plugin-fs')
-            const content = await readTextFile(selected)
+            const { readFile } = await import('@tauri-apps/plugin-fs')
+            const content = decodeFileContent(await readFile(selected))
 
             if (content) {
               const fileName = selected.split(/[/\\]/).pop() || 'loaded.log'
