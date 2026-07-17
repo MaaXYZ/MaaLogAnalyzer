@@ -9,6 +9,7 @@ import { unzip, type Unzipped } from 'fflate'
 import { decodeFileContent } from './fileDialog'
 import {
   createPrimaryLogSelectionOptions,
+  isPrimaryLogFileName,
   type LoadedPrimaryLogFile,
   type PrimaryLogSelectionOption,
   selectPrimaryLogGroup,
@@ -24,6 +25,10 @@ import {
 import type { ExtractedTextFile } from './archiveShared'
 
 export type { ExtractedTextFile } from './archiveShared'
+
+export interface ExtractZipContentOptions {
+  includeAuxiliaryFiles?: boolean
+}
 
 function toMap(record: Record<string, Uint8Array>): Map<string, Uint8Array> {
   const map = new Map<string, Uint8Array>()
@@ -56,6 +61,7 @@ function findFile(
 export async function extractZipContent(
   file: File,
   selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+  options: ExtractZipContentOptions = {},
 ): Promise<{
   content: string
   errorImages: Map<string, string>
@@ -67,10 +73,17 @@ export async function extractZipContent(
   const buffer = await file.arrayBuffer()
   const zipData = new Uint8Array(buffer)
 
+  const includeAuxiliaryFiles = options.includeAuxiliaryFiles !== false
   const files = await new Promise<Unzipped>((resolve, reject) => {
     unzip(
       zipData,
-      { filter: (f) => isNeededFile(f.name) },
+      {
+        filter: (entry) => {
+          if (includeAuxiliaryFiles) return isNeededFile(entry.name)
+          const fileName = entry.name.replace(/\\/g, '/').split('/').pop() ?? ''
+          return isPrimaryLogFileName(fileName)
+        },
+      },
       (err, unzipped) => {
         if (err) reject(err)
         else resolve(unzipped)
@@ -116,10 +129,12 @@ export async function extractZipContent(
     return null
   }
 
-  const errorImages = extractErrorImages(fileMap, paths, basePath)
-  const visionImages = extractVisionImages(fileMap, paths, basePath)
-  const waitFreezesImages = extractWaitFreezesImages(fileMap, paths, basePath)
-  const textFiles = extractSearchTextFiles(fileMap, paths, basePath, decodeFileContent)
+  const errorImages = includeAuxiliaryFiles ? extractErrorImages(fileMap, paths, basePath) : new Map<string, string>()
+  const visionImages = includeAuxiliaryFiles ? extractVisionImages(fileMap, paths, basePath) : new Map<string, string>()
+  const waitFreezesImages = includeAuxiliaryFiles ? extractWaitFreezesImages(fileMap, paths, basePath) : new Map<string, string>()
+  const textFiles = includeAuxiliaryFiles
+    ? extractSearchTextFiles(fileMap, paths, basePath, decodeFileContent)
+    : []
 
   return { content: '', errorImages, visionImages, waitFreezesImages, textFiles, primaryLogFiles }
 }

@@ -98,7 +98,7 @@ const emit = defineEmits<{
       :key="props.uploadKey"
       :custom-request="props.handleNaiveUpload"
       :show-file-list="false"
-      accept=".log,.txt"
+      accept=".log,.txt,.zip"
     >
       <n-button size="small" tertiary :circle="props.isMobile" :loading="props.loading">
         <template #icon>

@@ -60,7 +60,7 @@ const emit = defineEmits<{
       :key="props.uploadKey"
       :custom-request="props.handleNaiveUpload"
       :show-file-list="false"
-      accept=".log,.txt"
+      accept=".log,.txt,.zip"
     >
       <n-upload-dragger>
         <div style="margin-bottom: 12px">
@@ -72,7 +72,7 @@ const emit = defineEmits<{
           点击或拖拽日志文件到此区域上传
         </n-text>
         <n-text depth="3" style="margin-top: 8px">
-          支持 .log 和 .txt 格式的 MAA 日志文件
+          支持 .log、.txt 和 .zip 格式的 MAA 日志文件
         </n-text>
       </n-upload-dragger>
     </n-upload>

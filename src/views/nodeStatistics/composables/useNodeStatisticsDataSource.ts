@@ -4,6 +4,22 @@ import type { TaskInfo } from '../../../types'
 import { LogParser } from '@windsland52/maa-log-parser'
 import { getErrorMessage } from '../../../utils/errorHandler'
 import { isTauri } from '../../../utils/platform'
+import { combineLoadedPrimaryLogSegments } from '../../../utils/logFileDiscovery'
+import { extractZipContent } from '../../../utils/zipExtractor'
+
+const readUploadedLogContent = async (file: File): Promise<string> => {
+  if (!file.name.toLowerCase().endsWith('.zip')) {
+    return file.text()
+  }
+
+  const extracted = await extractZipContent(file, undefined, {
+    includeAuxiliaryFiles: false,
+  })
+  if (!extracted) {
+    throw new Error('ZIP 中未找到有效的 MAA 日志文件')
+  }
+  return combineLoadedPrimaryLogSegments(extracted.primaryLogFiles)
+}
 
 interface NodeStatisticsMessageApi {
   warning: (message: string) => void
@@ -69,7 +85,7 @@ export const useNodeStatisticsDataSource = (
     isUploading.value = true
     loading.value = true
     try {
-      const content = await file.text()
+      const content = await readUploadedLogContent(file)
       await processLogContent(content)
     } catch (error) {
       options.message.error(getErrorMessage(error), { duration: 5000 })

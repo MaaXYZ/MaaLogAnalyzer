@@ -51,4 +51,27 @@ describe('extractZipContent', () => {
     expect(result?.waitFreezesImages.has('2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes')).toBe(true)
     expect(createObjectUrl).toHaveBeenCalledTimes(3)
   })
+
+  it('can extract only primary logs without inflating auxiliary files', async () => {
+    const zipData = zipSync({
+      'debug/maa.log': strToU8('[2026-04-16 14:55:00.000][INF] primary log\n'),
+      'debug/runtime.txt': strToU8('large searchable text'),
+      'debug/on_error/2026.04.16-14.57.56.745_Node.png': strToU8('fake-png'),
+    })
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL')
+
+    const result = await extractZipContent(
+      new File([toArrayBuffer(zipData)], 'primary-only.zip'),
+      undefined,
+      { includeAuxiliaryFiles: false },
+    )
+
+    expect(result?.primaryLogFiles).toHaveLength(1)
+    expect(result?.primaryLogFiles[0]?.path).toBe('debug/maa.log')
+    expect(result?.textFiles).toEqual([])
+    expect(result?.errorImages.size).toBe(0)
+    expect(result?.visionImages.size).toBe(0)
+    expect(result?.waitFreezesImages.size).toBe(0)
+    expect(createObjectUrl).not.toHaveBeenCalled()
+  })
 })
