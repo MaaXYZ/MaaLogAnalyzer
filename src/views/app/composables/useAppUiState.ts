@@ -1,11 +1,7 @@
-import { computed, ref, watch, type Ref } from 'vue'
-import type { NodeInfo, TaskInfo } from '../../../types'
+import { computed, ref, type Ref } from 'vue'
 
 interface UseAppUiStateOptions {
   isMobile: Ref<boolean>
-  selectedNode: Ref<NodeInfo | null>
-  selectedFlowItemId: Ref<string | null>
-  onSelectTask: (task: TaskInfo) => void
 }
 
 export const useAppUiState = (options: UseAppUiStateOptions) => {
@@ -29,22 +25,11 @@ export const useAppUiState = (options: UseAppUiStateOptions) => {
     showFileLoadingModal.value = false
   }
 
-  const handleMobileSelectTask = (task: TaskInfo) => {
-    options.onSelectTask(task)
-    showTaskDrawer.value = false
+  const openMobileDetailDrawer = () => {
+    if (options.isMobile.value) {
+      showDetailDrawer.value = true
+    }
   }
-
-  watch(
-    [
-      options.selectedNode,
-      options.selectedFlowItemId,
-    ],
-    () => {
-      if (options.isMobile.value && options.selectedNode.value) {
-        showDetailDrawer.value = true
-      }
-    },
-  )
 
   return {
     showTaskDrawer,
@@ -56,6 +41,6 @@ export const useAppUiState = (options: UseAppUiStateOptions) => {
     modalWidthSmall,
     handleFileLoadingStart,
     handleFileLoadingEnd,
-    handleMobileSelectTask,
+    openMobileDetailDrawer,
   }
 }

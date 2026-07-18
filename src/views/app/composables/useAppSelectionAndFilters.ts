@@ -18,6 +18,21 @@ interface UseAppSelectionAndFiltersOptions {
 
 export const useAppSelectionAndFilters = (options: UseAppSelectionAndFiltersOptions) => {
   const {
+    showTaskDrawer,
+    showDetailDrawer,
+    showAboutModal,
+    showSettingsModal,
+    showFileLoadingModal,
+    modalWidth,
+    modalWidthSmall,
+    handleFileLoadingStart,
+    handleFileLoadingEnd,
+    openMobileDetailDrawer,
+  } = useAppUiState({
+    isMobile: options.isMobile,
+  })
+
+  const {
     hasFlowItemId,
     resetSelectionState,
     handleSelectTask,
@@ -32,26 +47,16 @@ export const useAppSelectionAndFilters = (options: UseAppSelectionAndFiltersOpti
     pendingScrollNodeId: options.pendingScrollNodeId,
     buildNodeFlowItems: options.buildNodeFlowItems,
     buildNodeRecognitionFlowItems: options.buildNodeRecognitionFlowItems,
-    afterSelect: options.afterSelect,
+    afterSelect: () => {
+      options.afterSelect?.()
+      openMobileDetailDrawer()
+    },
   })
 
-  const {
-    showTaskDrawer,
-    showDetailDrawer,
-    showAboutModal,
-    showSettingsModal,
-    showFileLoadingModal,
-    modalWidth,
-    modalWidthSmall,
-    handleFileLoadingStart,
-    handleFileLoadingEnd,
-    handleMobileSelectTask,
-  } = useAppUiState({
-    isMobile: options.isMobile,
-    selectedNode: options.selectedNode,
-    selectedFlowItemId: options.selectedFlowItemId,
-    onSelectTask: handleSelectTask,
-  })
+  const handleMobileSelectTask = (task: TaskInfo) => {
+    handleSelectTask(task)
+    showTaskDrawer.value = false
+  }
 
   const filteredTasks = computed(() => options.tasks.value)
   const refreshAvailableTaskIds = () => {}

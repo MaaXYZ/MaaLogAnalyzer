@@ -37,6 +37,9 @@ export const usePresentationMainContentBindings = (options: UsePresentationMainC
     options.selectedFlowItemId.value = null
     options.pendingScrollNodeId.value = node.node_id
     options.viewMode.value = 'analysis'
+    if (options.isMobile.value) {
+      options.showDetailDrawer.value = true
+    }
   }
 
   const mainContentProps = computed(() => ({
