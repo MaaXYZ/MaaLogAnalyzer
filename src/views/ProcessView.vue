@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import {
   NCard
 } from 'naive-ui'
@@ -24,6 +24,7 @@ const props = defineProps<{
   onExpandDetailView?: () => void
   isMobile?: boolean
   pendingScrollNodeId?: number | null
+  followLast?: boolean
   isRealtimeStreaming?: boolean
   showRealtimeStatus?: boolean
   showReloadControls?: boolean
@@ -44,7 +45,18 @@ const emit = defineEmits<{
   'file-loading-end': []
   'open-task-drawer': []
   'scroll-done': []
+  'update:follow-last': [value: boolean]
 }>()
+
+const followLastModel = ref(props.followLast ?? true)
+
+watch(() => props.followLast, (value) => {
+  if (typeof value === 'boolean') followLastModel.value = value
+}, { flush: 'sync' })
+
+watch(followLastModel, (value) => {
+  if (value !== props.followLast) emit('update:follow-last', value)
+}, { flush: 'sync' })
 
 let resolvePrimaryLogSelection: ((options: PrimaryLogSelectionOption[] | null) => void) | null = null
 const showPrimaryLogSelection = ref(false)
@@ -125,6 +137,7 @@ const {
   setNodeNavPanelRef,
 } = useProcessViewController({
   props,
+  followLast: followLastModel,
   selectPrimaryLogs,
   emitters: {
     onSelectTask: (task) => emit('select-task', task),
@@ -191,6 +204,7 @@ void fileInputRef
       :show-realtime-status="showRealtimeStatus"
       :is-realtime-streaming="isRealtimeStreaming"
       :follow-last="followLast"
+      :pending-scroll-node-id="pendingScrollNodeId"
       :task-list-collapsed="taskListCollapsed"
       :node-nav-collapsed="nodeNavCollapsed"
       :task-list-size="taskListSize"

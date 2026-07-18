@@ -11,9 +11,12 @@ import type {
 import NodeNavItem from './NodeNavItem.vue'
 import NodeNavHeader from './NodeNavHeader.vue'
 import NodeNavSearchInput from './NodeNavSearchInput.vue'
+import { useKeepAliveScrollPosition } from '../composables/keepAliveScrollPosition'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   items: NodeNavViewItem[]
+  selectedTaskKey?: string | null
+  preserveScrollOnActivate?: boolean
   selectedNodeId?: number | null
   currentNodesLength: number
   displayMode: string
@@ -22,7 +25,10 @@ const props = defineProps<{
   mode: NodeNavMode
   failedOnly: boolean
   emptyDescription: string
-}>()
+}>(), {
+  selectedTaskKey: null,
+  preserveScrollOnActivate: true,
+})
 
 const emit = defineEmits<{
   'update:search-text': [value: string]
@@ -47,6 +53,15 @@ const getScrollerElement = (): HTMLElement | null => {
   const nested = root.querySelector('.vue-recycle-scroller') as HTMLElement | null
   return nested || root
 }
+
+const {
+  captureCurrentScrollPosition,
+  cancelScrollRestore,
+} = useKeepAliveScrollPosition({
+  getScrollerElement,
+  getContextKey: () => props.selectedTaskKey ?? null,
+  shouldPreserve: () => props.preserveScrollOnActivate,
+})
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -104,6 +119,7 @@ const scrollToBottom = () => {
 }
 
 const handleWheel = (event: WheelEvent) => {
+  cancelScrollRestore()
   if (event.deltaY < 0) {
     emit('manual-scroll-up')
   }
@@ -144,6 +160,8 @@ defineExpose({
         key-field="navKey"
         :min-item-size="navMinItemSize"
         class="node-nav-scroller"
+        @pointerdown.capture="cancelScrollRestore"
+        @scroll.passive="captureCurrentScrollPosition"
         @wheel.passive="handleWheel"
       >
         <template #default="{ item, active }">

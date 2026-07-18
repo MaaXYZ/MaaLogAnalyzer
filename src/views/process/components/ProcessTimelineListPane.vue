@@ -18,6 +18,7 @@ const props = withDefaults(defineProps<{
   captureWheelUp?: boolean
   selectedNodeId?: number | null
   safeScrollToItem?: (index: number) => Promise<boolean>
+  preserveScrollOnActivate?: boolean
 }>(), {
   selectedTaskKey: null,
   isVscodeLaunchEmbed: false,
@@ -29,6 +30,7 @@ const props = withDefaults(defineProps<{
   captureWheelUp: true,
   selectedNodeId: null,
   safeScrollToItem: undefined,
+  preserveScrollOnActivate: true,
 })
 
 const emit = defineEmits<{
@@ -55,6 +57,7 @@ const emit = defineEmits<{
     :capture-wheel-up="props.captureWheelUp"
     :selected-node-id="props.selectedNodeId ?? null"
     :safe-scroll-to-item="props.safeScrollToItem"
+    :preserve-scroll-on-activate="props.preserveScrollOnActivate"
     @scroller-mounted="emit('scroller-mounted', $event)"
     @manual-scroll-up="emit('manual-scroll-up')"
     @select-node="emit('select-node', $event)"

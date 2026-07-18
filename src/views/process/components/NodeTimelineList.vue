@@ -6,6 +6,7 @@ import type { NodeInfo } from '../../../types'
 import NodeCard from '../../../components/NodeCard.vue'
 import NodeTimelineMinimap from './NodeTimelineMinimap.vue'
 import { MINIMAP_CONFIG } from '../utils/minimapColors'
+import { useKeepAliveScrollPosition } from '../composables/keepAliveScrollPosition'
 
 type NodeTimelineItem = NodeInfo & {
   _uniqueKey: string
@@ -24,6 +25,7 @@ const props = withDefaults(defineProps<{
   captureWheelUp?: boolean
   selectedNodeId?: number | null
   safeScrollToItem?: (index: number) => Promise<boolean>
+  preserveScrollOnActivate?: boolean
 }>(), {
   selectedTaskKey: null,
   isVscodeLaunchEmbed: false,
@@ -35,6 +37,7 @@ const props = withDefaults(defineProps<{
   captureWheelUp: false,
   selectedNodeId: null,
   safeScrollToItem: undefined,
+  preserveScrollOnActivate: true,
 })
 
 const emit = defineEmits<{
@@ -46,14 +49,32 @@ const emit = defineEmits<{
   'scroller-mounted': [scroller: InstanceType<typeof DynamicScroller> | null]
 }>()
 
+const localScrollerRef = ref<InstanceType<typeof DynamicScroller> | null>(null)
+
+const getScrollerElement = (): HTMLElement | null => {
+  const scroller = localScrollerRef.value as unknown
+  if (!scroller) return null
+  const rootCandidate = (scroller as { $el?: unknown }).$el ?? scroller
+  if (typeof HTMLElement === 'undefined' || !(rootCandidate instanceof HTMLElement)) return null
+  return rootCandidate.querySelector('.vue-recycle-scroller') as HTMLElement | null ?? rootCandidate
+}
+
+const {
+  captureCurrentScrollPosition,
+  cancelScrollRestore,
+} = useKeepAliveScrollPosition({
+  getScrollerElement,
+  getContextKey: () => props.selectedTaskKey ?? null,
+  shouldPreserve: () => props.preserveScrollOnActivate,
+})
+
 const handleWheel = (event: WheelEvent) => {
+  cancelScrollRestore()
   if (!props.captureWheelUp) return
   if (event.deltaY < 0) {
     emit('manual-scroll-up')
   }
 }
-
-const localScrollerRef = ref<InstanceType<typeof DynamicScroller> | null>(null)
 
 const setLocalScrollerRef = (value: Element | object | null) => {
   localScrollerRef.value = value as InstanceType<typeof DynamicScroller> | null
@@ -62,7 +83,11 @@ const setLocalScrollerRef = (value: Element | object | null) => {
 </script>
 
 <template>
-  <div :style="wrapperStyle" @wheel.capture.passive="handleWheel">
+  <div
+    :style="wrapperStyle"
+    @pointerdown.capture="cancelScrollRestore"
+    @wheel.capture.passive="handleWheel"
+  >
     <div v-if="nodes.length === 0" style="padding: 40px 0">
       <n-empty description="暂无节点数据" />
     </div>
@@ -75,6 +100,7 @@ const setLocalScrollerRef = (value: Element | object | null) => {
       key-field="_uniqueKey"
       class="virtual-scroller"
       :style="scrollerStyle"
+      @scroll.passive="captureCurrentScrollPosition"
     >
       <template #default="{ item, index, active }">
         <DynamicScrollerItem

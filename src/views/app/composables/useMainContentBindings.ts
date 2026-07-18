@@ -17,6 +17,7 @@ interface UseMainContentBindingsOptions {
   bridgeRequestTaskDoc: ((task: string) => Promise<string | null>) | null
   bridgeRevealTask: ((task: string) => Promise<void>) | null
   pendingScrollNodeId: Ref<number | null>
+  followLast: Ref<boolean>
   isRealtimeContext: ComputedRef<boolean>
   showRealtimeStatus: boolean
   showReloadControls: boolean
@@ -74,6 +75,7 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
     bridgeRequestTaskDoc: options.bridgeRequestTaskDoc,
     bridgeRevealTask: options.bridgeRevealTask,
     pendingScrollNodeId: options.pendingScrollNodeId.value,
+    followLast: options.followLast.value,
     isRealtimeStreaming: options.isRealtimeContext.value,
     showRealtimeStatus: options.showRealtimeStatus,
     showReloadControls: options.showReloadControls,
@@ -102,6 +104,7 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
     'file-loading-end': options.handleFileLoadingEnd,
     'open-task-drawer': () => { options.showTaskDrawer.value = true },
     'scroll-done': () => { options.pendingScrollNodeId.value = null },
+    'update:follow-last': (value) => { options.followLast.value = value },
   }
 
   const detailViewProps = computed(() => ({

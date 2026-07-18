@@ -25,7 +25,7 @@ const attachNodeTimelineKey = (
 
 export const useRealtimeFollow = (options: UseRealtimeFollowOptions) => {
   const activeTaskIndex = ref(0)
-  const followLast = ref(true)
+  const followLast = options.followLast
 
   const taskListPanelRef = ref<ScrollablePanelRef | null>(null)
   const nodeNavPanelRef = ref<ScrollablePanelRef | null>(null)

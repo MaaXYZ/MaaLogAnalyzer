@@ -34,6 +34,7 @@ const props = defineProps<{
   showRealtimeStatus: boolean
   isRealtimeStreaming: boolean
   followLast: boolean
+  pendingScrollNodeId?: number | null
   taskListCollapsed: boolean
   nodeNavCollapsed: boolean
   taskListSize: number
@@ -101,6 +102,7 @@ const props = defineProps<{
         :is-vscode-launch-embed="props.isVscodeLaunchEmbed"
         :bridge-request-task-doc="props.bridgeRequestTaskDoc"
         :bridge-reveal-task="props.bridgeRevealTask"
+        :preserve-scroll-on-activate="props.pendingScrollNodeId == null && (!props.isRealtimeStreaming || !props.followLast)"
         @scroller-mounted="props.onScrollerMounted"
         @manual-scroll-up="props.onManualScrollUp"
         @select-node="props.onSelectNode"
@@ -123,6 +125,7 @@ const props = defineProps<{
         :current-nodes="props.currentNodes"
         :selected-node-id="props.selectedNode?.node_id ?? null"
         :selected-task-key="getSelectedTaskKey(props.selectedTask)"
+        :preserve-scroll-on-activate="props.pendingScrollNodeId == null && (!props.isRealtimeStreaming || !props.followLast)"
         :display-mode="props.settingsDisplayMode"
         :show-realtime-status="props.showRealtimeStatus"
         :is-realtime-streaming="props.isRealtimeStreaming"

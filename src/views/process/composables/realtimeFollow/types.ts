@@ -14,6 +14,7 @@ export interface UseRealtimeFollowOptions {
   selectedTask: Ref<TaskInfo | null>
   pendingScrollNodeId: Ref<number | null | undefined>
   isRealtimeStreaming: Ref<boolean>
+  followLast: Ref<boolean>
   onSelectTask: (task: TaskInfo) => void
   onScrollDone: () => void
 }

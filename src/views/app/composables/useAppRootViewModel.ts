@@ -61,6 +61,7 @@ export const useAppRootViewModel = ({
   const selectedFlowItemId = ref<string | null>(null)
   const loading = ref(false)
   const pendingScrollNodeId = ref<number | null>(null)
+  const followLast = ref(true)
   const parseProgress = ref(0)
   const showParsingModal = ref(false)
 
@@ -231,6 +232,7 @@ export const useAppRootViewModel = ({
     bridgeRequestTaskDoc,
     bridgeRevealTask,
     pendingScrollNodeId,
+    followLast,
     isRealtimeContext,
     showRealtimeStatus,
     showReloadControls,

@@ -11,6 +11,7 @@ export type ProcessViewControllerProps = Readonly<{
   detailViewCollapsed?: boolean
   isMobile?: boolean
   pendingScrollNodeId?: number | null
+  followLast?: boolean
   isRealtimeStreaming?: boolean
   showRealtimeStatus?: boolean
   showReloadControls?: boolean

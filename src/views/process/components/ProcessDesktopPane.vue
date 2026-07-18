@@ -48,6 +48,7 @@ const props = defineProps<{
   setTaskListPanelRef?: (instance: unknown | null) => void
   setNodeNavPanelRef?: (instance: unknown | null) => void
   safeScrollToItem?: (index: number) => Promise<boolean>
+  preserveScrollOnActivate?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -123,6 +124,8 @@ const handleSelectNodeNavItem = (item: NodeNavViewItem) => {
       <node-nav-panel
         :ref="props.setNodeNavPanelRef"
         :items="nodeNavItems"
+        :selected-task-key="selectedTaskKey"
+        :preserve-scroll-on-activate="preserveScrollOnActivate"
         :selected-node-id="selectedNodeId ?? null"
         :current-nodes-length="currentNodes.length"
         :display-mode="displayMode"
@@ -149,6 +152,7 @@ const handleSelectNodeNavItem = (item: NodeNavViewItem) => {
         :bridge-reveal-task="bridgeRevealTask"
         :selected-node-id="selectedNodeId ?? null"
         :safe-scroll-to-item="safeScrollToItem"
+        :preserve-scroll-on-activate="preserveScrollOnActivate"
         @manual-scroll-up="emit('manual-scroll-up')"
         @scroller-mounted="emit('scroller-mounted', $event)"
         @select-node="emit('select-node', $event)"

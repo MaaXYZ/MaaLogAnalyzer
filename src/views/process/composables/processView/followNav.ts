@@ -7,6 +7,7 @@ interface UseProcessFollowNavOptions {
   props: ProcessViewControllerProps
   emitters: ProcessViewControllerEmitters
   isRealtimeStreaming: Ref<boolean>
+  followLast: Ref<boolean>
 }
 
 export const useProcessFollowNav = (
@@ -29,6 +30,7 @@ export const useProcessFollowNav = (
     selectedTask: computed(() => options.props.selectedTask),
     pendingScrollNodeId: computed(() => options.props.pendingScrollNodeId),
     isRealtimeStreaming: options.isRealtimeStreaming,
+    followLast: options.followLast,
     onSelectTask: options.emitters.onSelectTask,
     onScrollDone: options.emitters.onScrollDone,
   })

@@ -11,6 +11,7 @@ const props = defineProps<{
   isVscodeLaunchEmbed?: boolean
   bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
   bridgeRevealTask?: ((task: string) => Promise<void>) | null
+  preserveScrollOnActivate?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -31,6 +32,7 @@ const emit = defineEmits<{
     :is-vscode-launch-embed="props.isVscodeLaunchEmbed"
     :bridge-request-task-doc="props.bridgeRequestTaskDoc"
     :bridge-reveal-task="props.bridgeRevealTask"
+    :preserve-scroll-on-activate="props.preserveScrollOnActivate"
     item-padding="8px 4px"
     wrapper-style="flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative"
     @scroller-mounted="emit('scroller-mounted', $event)"

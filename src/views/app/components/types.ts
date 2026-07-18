@@ -34,6 +34,7 @@ export interface ProcessViewForwardProps {
   onExpandDetailView?: () => void
   isMobile?: boolean
   pendingScrollNodeId?: number | null
+  followLast?: boolean
   isRealtimeStreaming?: boolean
   showRealtimeStatus?: boolean
   showReloadControls?: boolean
@@ -54,6 +55,7 @@ export interface ProcessViewEventHandlers {
   'file-loading-end': () => void
   'open-task-drawer': () => void
   'scroll-done': () => void
+  'update:follow-last': (value: boolean) => void
 }
 
 export interface DetailViewForwardProps {
