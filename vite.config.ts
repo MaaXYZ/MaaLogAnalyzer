@@ -1,11 +1,26 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { readFileSync } from 'node:fs'
 
 const isTauriDev = Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_DEV_HOST)
+const { version: appVersion } = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+) as { version: string }
 
 export default defineConfig({
   plugins: [
     vue(),
+    {
+      name: 'emit-app-version-manifest',
+      apply: 'build',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'version.json',
+          source: JSON.stringify({ version: appVersion }) + '\n',
+        })
+      },
+    },
     // 自定义插件：强制忽略 "pkgs copy" 目录下的模块
     {
       name: 'ignore-pkgs-copy',
