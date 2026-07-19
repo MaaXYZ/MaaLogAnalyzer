@@ -45,7 +45,11 @@ When `focus` is provided, the helpers scan candidate primary and history log fil
 ## CLI
 
 ```bash
-pnpm kernel:cli <path> [--pretty] [--no-events]
+pnpm kernel:cli <path> [--pretty] [--no-events] [--preflight]
 ```
 
 `<path>` can be a log file, a zip file, or a log directory.
+
+The `--preflight` option emits a compact `mla-preflight/v1` compatibility result. It exits
+with 0 when Notify events produce at least one task lifecycle, 3 for an unsupported log format,
+and 2 when the input contains no analyzable log content.

@@ -11,7 +11,7 @@ import {
 } from './index'
 
 const printUsage = (): void => {
-  console.error('Usage: mla-log-tools <path> [--pretty] [--no-events]')
+  console.error('Usage: mla-log-tools <path> [--pretty] [--no-events] [--preflight]')
   console.error('  <path>: log file path, zip path, or log directory path')
 }
 
@@ -19,10 +19,12 @@ const parseArgs = (argv: string[]): {
   targetPath: string | null
   pretty: boolean
   noEvents: boolean
+  preflight: boolean
 } => {
   let targetPath: string | null = null
   let pretty = false
   let noEvents = false
+  let preflight = false
 
   for (const arg of argv) {
     if (arg === '--pretty') {
@@ -31,6 +33,10 @@ const parseArgs = (argv: string[]): {
     }
     if (arg === '--no-events') {
       noEvents = true
+      continue
+    }
+    if (arg === '--preflight') {
+      preflight = true
       continue
     }
     if (arg === '--help' || arg === '-h') {
@@ -42,7 +48,7 @@ const parseArgs = (argv: string[]): {
     }
   }
 
-  return { targetPath, pretty, noEvents }
+  return { targetPath, pretty, noEvents, preflight }
 }
 
 const renderOutput = (
@@ -56,8 +62,71 @@ const renderOutput = (
   return JSON.stringify(payload, null, pretty ? 2 : 0)
 }
 
-const main = async (): Promise<void> => {
-  const { targetPath, pretty, noEvents } = parseArgs(process.argv.slice(2))
+export const MLA_PREFLIGHT_SCHEMA_VERSION = 'mla-preflight/v1'
+
+export type PreflightReason =
+  | 'notify_events_parsed'
+  | 'empty_log'
+  | 'no_notify_events'
+  | 'no_task_lifecycle'
+  | 'no_analyzable_content'
+
+export interface PreflightOutput {
+  schemaVersion: typeof MLA_PREFLIGHT_SCHEMA_VERSION
+  status: 'supported' | 'unsupported'
+  reason: PreflightReason
+  parserVersion: string | null
+  taskCount: number
+  eventCount: number
+  nodeStatisticCount: number
+  recognitionStatisticCount: number
+  warnings: string[]
+}
+
+export const buildPreflightOutput = (
+  output: KernelOutput | null,
+): PreflightOutput => {
+  if (!output) {
+    return {
+      schemaVersion: MLA_PREFLIGHT_SCHEMA_VERSION,
+      status: 'unsupported',
+      reason: 'no_analyzable_content',
+      parserVersion: null,
+      taskCount: 0,
+      eventCount: 0,
+      nodeStatisticCount: 0,
+      recognitionStatisticCount: 0,
+      warnings: [],
+    }
+  }
+
+  const reason: PreflightReason = output.events.length > 0
+    ? output.tasks.length > 0
+      ? 'notify_events_parsed'
+      : 'no_task_lifecycle'
+    : output.warnings.includes('Empty log content.')
+      ? 'empty_log'
+      : 'no_notify_events'
+  return {
+    schemaVersion: MLA_PREFLIGHT_SCHEMA_VERSION,
+    status: reason === 'notify_events_parsed' ? 'supported' : 'unsupported',
+    reason,
+    parserVersion: output.meta.parserVersion,
+    taskCount: output.tasks.length,
+    eventCount: output.events.length,
+    nodeStatisticCount: output.stats.nodes.length,
+    recognitionStatisticCount: output.stats.recognitionActions.length,
+    warnings: output.warnings,
+  }
+}
+
+export const main = async (): Promise<void> => {
+  const {
+    targetPath,
+    pretty,
+    noEvents,
+    preflight,
+  } = parseArgs(process.argv.slice(2))
   if (!targetPath) {
     printUsage()
     process.exit(1)
@@ -78,8 +147,26 @@ const main = async (): Promise<void> => {
   }
 
   if (!result) {
+    if (preflight) {
+      process.stdout.write(JSON.stringify(
+        buildPreflightOutput(null),
+        null,
+        pretty ? 2 : 0,
+      ))
+      process.stdout.write('\n')
+    }
     console.error('No analyzable log content found in the provided path.')
     process.exit(2)
+  }
+
+  if (preflight) {
+    const output = buildPreflightOutput(result)
+    process.stdout.write(JSON.stringify(output, null, pretty ? 2 : 0))
+    process.stdout.write('\n')
+    if (output.status === 'unsupported') {
+      process.exit(3)
+    }
+    return
   }
 
   process.stdout.write(renderOutput(result, pretty, noEvents))
