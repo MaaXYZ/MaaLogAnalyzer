@@ -35,8 +35,25 @@ describe('buildPreflightOutput', () => {
       eventCount: 8,
       nodeStatisticCount: 0,
       recognitionStatisticCount: 0,
+      frameworkVersionSummary: { status: 'none', versions: [] },
+      frameworkSessions: [],
       warnings: [],
     })
+  })
+
+  it('includes framework sessions and their warnings', () => {
+    const frameworkWarning = 'Multiple MaaFramework versions found in selected logs: v5.10.4, v5.11.1.'
+    const result = buildPreflightOutput(output(8, 2), {
+      sessions: [],
+      summary: { status: 'multiple', versions: ['v5.10.4', 'v5.11.1'] },
+      warnings: [frameworkWarning],
+    })
+
+    expect(result.frameworkVersionSummary).toEqual({
+      status: 'multiple',
+      versions: ['v5.10.4', 'v5.11.1'],
+    })
+    expect(result.warnings).toContain(frameworkWarning)
   })
 
   it('distinguishes logs without Notify events', () => {
@@ -53,6 +70,8 @@ describe('buildPreflightOutput', () => {
       status: 'unsupported',
       reason: 'no_analyzable_content',
       parserVersion: null,
+      frameworkVersionSummary: { status: 'none', versions: [] },
+      frameworkSessions: [],
     })
   })
 })

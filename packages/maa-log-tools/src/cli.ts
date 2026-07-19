@@ -3,6 +3,13 @@ import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { KernelOutput } from '@windsland52/maa-log-kernel/protocol'
+import { loadFrameworkLogSources } from './frameworkInput'
+import {
+  extractFrameworkSessions,
+  type FrameworkSession,
+  type FrameworkSessionExtraction,
+  type FrameworkVersionSummary,
+} from './frameworkVersion'
 import { readNodeTextFileContent } from './nodeInput'
 import {
   analyzeLogContent,
@@ -80,11 +87,20 @@ export interface PreflightOutput {
   eventCount: number
   nodeStatisticCount: number
   recognitionStatisticCount: number
+  frameworkVersionSummary: FrameworkVersionSummary
+  frameworkSessions: FrameworkSession[]
   warnings: string[]
+}
+
+const EMPTY_FRAMEWORK_EXTRACTION: FrameworkSessionExtraction = {
+  sessions: [],
+  summary: { status: 'none', versions: [] },
+  warnings: [],
 }
 
 export const buildPreflightOutput = (
   output: KernelOutput | null,
+  framework: FrameworkSessionExtraction = EMPTY_FRAMEWORK_EXTRACTION,
 ): PreflightOutput => {
   if (!output) {
     return {
@@ -96,7 +112,9 @@ export const buildPreflightOutput = (
       eventCount: 0,
       nodeStatisticCount: 0,
       recognitionStatisticCount: 0,
-      warnings: [],
+      frameworkVersionSummary: framework.summary,
+      frameworkSessions: framework.sessions,
+      warnings: framework.warnings,
     }
   }
 
@@ -116,7 +134,9 @@ export const buildPreflightOutput = (
     eventCount: output.events.length,
     nodeStatisticCount: output.stats.nodes.length,
     recognitionStatisticCount: output.stats.recognitionActions.length,
-    warnings: output.warnings,
+    frameworkVersionSummary: framework.summary,
+    frameworkSessions: framework.sessions,
+    warnings: [...output.warnings, ...framework.warnings],
   }
 }
 
@@ -134,6 +154,9 @@ export const main = async (): Promise<void> => {
 
   const resolvedPath = path.resolve(targetPath)
   const targetStat = await stat(resolvedPath)
+  const framework = preflight
+    ? extractFrameworkSessions(await loadFrameworkLogSources(resolvedPath))
+    : EMPTY_FRAMEWORK_EXTRACTION
 
   let result: KernelOutput | null = null
 
@@ -149,7 +172,7 @@ export const main = async (): Promise<void> => {
   if (!result) {
     if (preflight) {
       process.stdout.write(JSON.stringify(
-        buildPreflightOutput(null),
+        buildPreflightOutput(null, framework),
         null,
         pretty ? 2 : 0,
       ))
@@ -160,7 +183,7 @@ export const main = async (): Promise<void> => {
   }
 
   if (preflight) {
-    const output = buildPreflightOutput(result)
+    const output = buildPreflightOutput(result, framework)
     process.stdout.write(JSON.stringify(output, null, pretty ? 2 : 0))
     process.stdout.write('\n')
     if (output.status === 'unsupported') {

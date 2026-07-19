@@ -109,3 +109,5 @@ export {
 } from '@windsland52/maa-log-runtime'
 export type { AnalyzeLogContentInput, ParseFileOptions } from '@windsland52/maa-log-runtime'
 export * from './nodeInput'
+export * from './frameworkInput'
+export * from './frameworkVersion'
