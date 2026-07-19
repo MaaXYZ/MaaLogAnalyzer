@@ -14,7 +14,7 @@
     "build": "pnpm build:packages && vue-tsc && vite build",
     "build:vscode": "pnpm build:packages && vue-tsc && vite build --config src-vscode/vite.config.ts",
     "typecheck:packages": "pnpm -r --filter @windsland52/maa-* run typecheck",
-    "build:packages": "pnpm -r --filter @windsland52/maa-* run build",
+    "build:packages": "pnpm -r --filter @windsland52/maa-* run build && node scripts/check-esm-output.mjs packages/maa-log-kernel/dist packages/maa-log-parser/dist packages/maa-log-runtime/dist packages/maa-log-adapter/dist packages/maa-log-tools/dist",
     "kernel:cli": "pnpm build:packages && tsx src/kernel/cli.ts",
     "test": "pnpm build:packages && vitest run",
     "test:watch": "vitest",
