@@ -1,6 +1,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { unzipSync } from 'fflate'
+import type { SourceSegment } from './runtimeInspection'
 
 const MAIN_LOG_NAMES = ['maa.log', 'maafw.log'] as const
 const BAK_LOG_NAMES = ['maa.bak.log', 'maafw.bak.log'] as const
@@ -25,6 +26,7 @@ export interface NodeExtractedLogContent {
   visionImages: Map<string, string>
   waitFreezesImages: Map<string, string>
   textFiles: KernelTextFile[]
+  sourceSegments: SourceSegment[]
 }
 
 export interface LogBundleFocus {
@@ -209,12 +211,64 @@ const contentMatchesFocus = (
   })
 }
 
-const joinMergedContent = (chunks: string[]): string => {
-  return chunks.reduce((result, chunk) => {
-    if (chunk.length === 0) return result
-    if (result.length === 0) return chunk
-    return result.endsWith('\n') ? `${result}${chunk}` : `${result}\n${chunk}`
-  }, '')
+interface TaggedChunk {
+  content: string
+  source: string
+  path: string
+}
+
+interface MergedContent {
+  content: string
+  segments: SourceSegment[]
+}
+
+const countNewlines = (content: string): number => {
+  let count = 0
+  let pos = 0
+  while ((pos = content.indexOf(String.fromCharCode(10), pos)) >= 0) {
+    count += 1
+    pos += 1
+  }
+  return count
+}
+
+const joinMergedWithSources = (chunks: TaggedChunk[]): MergedContent => {
+  let content = ""
+  let runningNewlines = 0
+  const chunkStarts: { startLine: number, source: string, path: string }[] = []
+
+  for (const chunk of chunks) {
+    if (chunk.content.length === 0) continue
+
+    if (content.length === 0) {
+      content = chunk.content
+    } else if (content.endsWith(String.fromCharCode(10))) {
+      content += chunk.content
+    } else {
+      content += String.fromCharCode(10) + chunk.content
+      runningNewlines += 1
+    }
+
+    const startLine = runningNewlines + 1
+    chunkStarts.push({ startLine, source: chunk.source, path: chunk.path })
+    runningNewlines += countNewlines(chunk.content)
+  }
+
+  if (chunkStarts.length === 0) {
+    return { content: "", segments: [] }
+  }
+
+  const totalLines = runningNewlines + 1
+  const segments: SourceSegment[] = chunkStarts.map((info, i) => ({
+    source: info.source,
+    path: info.path,
+    startLine: info.startLine,
+    lineCount: i < chunkStarts.length - 1
+      ? chunkStarts[i + 1].startLine - info.startLine
+      : totalLines - info.startLine + 1,
+  }))
+
+  return { content, segments }
 }
 
 const rankLogPath = (filePath: string): number => {
@@ -245,14 +299,18 @@ const sortLogPaths = (paths: string[]): string[] => {
 const collectFocusedFileContents = async (
   logPaths: string[],
   focus: LogBundleFocus,
-): Promise<string> => {
-  const chunks: string[] = []
+): Promise<MergedContent> => {
+  const chunks: TaggedChunk[] = []
   for (const logPath of sortLogPaths(logPaths)) {
     const content = await readNodeTextFileContent(logPath)
     if (!contentMatchesFocus(content, focus)) continue
-    chunks.push(content)
+    chunks.push({
+      content,
+      source: toFileReference(logPath),
+      path: toPosixPath(path.basename(logPath)),
+    })
   }
-  return joinMergedContent(chunks)
+  return joinMergedWithSources(chunks)
 }
 
 const collectFocusedZipContents = (
@@ -260,7 +318,8 @@ const collectFocusedZipContents = (
   paths: string[],
   basePath: string,
   focus: LogBundleFocus,
-): string => {
+  sourceRef: string,
+): MergedContent => {
   const normalizedBasePath = normalizeLowerPath(basePath)
   const candidatePaths = sortLogPaths(paths.filter((entryPath) => {
     const normalizedPath = toPosixPath(entryPath)
@@ -273,36 +332,52 @@ const collectFocusedZipContents = (
     return isCoreLogName(fileName)
   }))
 
-  const chunks: string[] = []
+  const chunks: TaggedChunk[] = []
   for (const entryPath of candidatePaths) {
     const bytes = entries[entryPath]
     if (!bytes) continue
     const content = decodeNodeBytes(bytes)
     if (!contentMatchesFocus(content, focus)) continue
-    chunks.push(content)
+    chunks.push({
+      content,
+      source: toZipReference(sourceRef, toPosixPath(entryPath)),
+      path: toPosixPath(entryPath),
+    })
   }
-  return joinMergedContent(chunks)
+  return joinMergedWithSources(chunks)
 }
 
 const buildDefaultZipContent = (
   entries: Record<string, Uint8Array>,
   paths: string[],
   basePath: string,
-): string => {
+  sourceRef: string,
+): MergedContent => {
   const bakLogName = BAK_LOG_NAMES.find((name) => findZipEntry(entries, paths, joinPath(basePath, name)))
   const mainLogName = MAIN_LOG_NAMES.find((name) => findZipEntry(entries, paths, joinPath(basePath, name)))
 
-  const bakData = bakLogName ? findZipEntry(entries, paths, joinPath(basePath, bakLogName)) : null
-  const mainData = mainLogName ? findZipEntry(entries, paths, joinPath(basePath, mainLogName)) : null
-
-  const chunks: string[] = []
-  if (bakData) {
-    chunks.push(decodeNodeBytes(bakData))
+  const chunks: TaggedChunk[] = []
+  if (bakLogName) {
+    const data = findZipEntry(entries, paths, joinPath(basePath, bakLogName))
+    if (data) {
+      chunks.push({
+        content: decodeNodeBytes(data),
+        source: toZipReference(sourceRef, joinPath(basePath, bakLogName)),
+        path: toPosixPath(joinPath(basePath, bakLogName)),
+      })
+    }
   }
-  if (mainData) {
-    chunks.push(decodeNodeBytes(mainData))
+  if (mainLogName) {
+    const data = findZipEntry(entries, paths, joinPath(basePath, mainLogName))
+    if (data) {
+      chunks.push({
+        content: decodeNodeBytes(data),
+        source: toZipReference(sourceRef, joinPath(basePath, mainLogName)),
+        path: toPosixPath(joinPath(basePath, mainLogName)),
+      })
+    }
   }
-  return joinMergedContent(chunks)
+  return joinMergedWithSources(chunks)
 }
 
 export const readNodeTextFileContent = async (filePath: string): Promise<string> => {
@@ -322,10 +397,10 @@ export const extractZipContentFromNodeBuffer = (
   const basePath = findBaseDirectory(paths)
   if (basePath == null) return null
 
-  const content = options.focus
-    ? collectFocusedZipContents(files, paths, basePath, options.focus)
-    : buildDefaultZipContent(files, paths, basePath)
-  if (!content) return null
+  const merged = options.focus
+    ? collectFocusedZipContents(files, paths, basePath, options.focus, sourceRef)
+    : buildDefaultZipContent(files, paths, basePath, sourceRef)
+  if (!merged.content) return null
 
   const errorImages = new Map<string, string>()
   const visionImages = new Map<string, string>()
@@ -372,7 +447,7 @@ export const extractZipContentFromNodeBuffer = (
   }
 
   textFiles.sort((a, b) => a.path.localeCompare(b.path))
-  return { content, errorImages, visionImages, waitFreezesImages, textFiles }
+  return { content: merged.content, sourceSegments: merged.segments, errorImages, visionImages, waitFreezesImages, textFiles }
 }
 
 export const extractZipContentFromNodeFile = async (
@@ -468,18 +543,26 @@ const pickPrimaryLogPath = async (
 const buildDefaultDirectoryContent = async (
   debugPath: string,
   allFiles: string[],
-): Promise<string> => {
+): Promise<MergedContent> => {
   const bakLogPath = await pickPrimaryLogPath(debugPath, allFiles, BAK_LOG_NAMES)
   const mainLogPath = await pickPrimaryLogPath(debugPath, allFiles, MAIN_LOG_NAMES)
 
-  const chunks: string[] = []
+  const chunks: TaggedChunk[] = []
   if (bakLogPath) {
-    chunks.push(await readNodeTextFileContent(bakLogPath))
+    chunks.push({
+      content: await readNodeTextFileContent(bakLogPath),
+      source: toFileReference(bakLogPath),
+      path: toPosixPath(path.relative(debugPath, bakLogPath)),
+    })
   }
   if (mainLogPath) {
-    chunks.push(await readNodeTextFileContent(mainLogPath))
+    chunks.push({
+      content: await readNodeTextFileContent(mainLogPath),
+      source: toFileReference(mainLogPath),
+      path: toPosixPath(path.relative(debugPath, mainLogPath)),
+    })
   }
-  return joinMergedContent(chunks)
+  return joinMergedWithSources(chunks)
 }
 
 export const loadNodeLogDirectory = async (
@@ -490,10 +573,10 @@ export const loadNodeLogDirectory = async (
   if (!debugPath) return null
 
   const allFiles = await collectFilesRecursively(debugPath)
-  const content = options.focus
+  const merged = options.focus
     ? await collectFocusedFileContents(allFiles.filter((filePath) => isCoreLogName(path.basename(filePath))), options.focus)
     : await buildDefaultDirectoryContent(debugPath, allFiles)
-  if (!content) return null
+  if (!merged.content) return null
 
   const errorImages = new Map<string, string>()
   const visionImages = new Map<string, string>()
@@ -537,7 +620,8 @@ export const loadNodeLogDirectory = async (
   textFiles.sort((a, b) => a.path.localeCompare(b.path))
 
   return {
-    content,
+    content: merged.content,
+    sourceSegments: merged.segments,
     errorImages,
     visionImages,
     waitFreezesImages,

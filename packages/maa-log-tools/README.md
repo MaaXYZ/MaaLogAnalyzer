@@ -25,6 +25,7 @@ The concrete adapter is provided by `@windsland52/maa-log-adapter`.
   - `loadFrameworkLogSources`
   - `extractFrameworkSessions`
   - `resolveFrameworkSessionForTimestamp`
+  - `buildRuntimeInspection`
   - `DEFAULT_CORE_PARSE_OPTIONS`
 - `@windsland52/maa-log-tools/node-input`
   - Node file/zip/folder extraction helpers
@@ -49,7 +50,7 @@ When `focus` is provided, the helpers scan candidate primary and history log fil
 ## CLI
 
 ```bash
-pnpm kernel:cli <path> [--pretty] [--no-events] [--preflight]
+pnpm kernel:cli <path> [--pretty] [--no-events] [--preflight|--runtime-inspection]
 ```
 
 `<path>` can be a log file, a zip file, or a log directory.
@@ -67,3 +68,33 @@ and content before a process-start marker is explicitly marked as a partial file
 Use the session containing the relevant failure timestamp when selecting version-matched source.
 `resolveFrameworkSessionForTimestamp` returns a session only when exactly one resolved,
 process-start-bounded interval contains the timestamp; otherwise it returns `null`.
+
+## Runtime inspection
+
+`buildRuntimeInspection(kernelOutput, frameworkExtraction, sourceSegments?)` emits
+`mla-runtime-inspection/v1`. It nests task executions under their runtime session and keeps three
+different semantics separate:
+
+- `failures`: direct `next_list_timeout` and `action_failed` facts.
+- `outcomes`: failed or still-running pipeline nodes and tasks, with direct-failure references
+  when the propagation can be linked deterministically.
+- `signals`: useful non-failure behavior such as recognition succeeding after earlier misses and
+  repeated completed-node sequences.
+
+An unsuccessful recognition attempt is retry telemetry, not a failure. A next-list failure is
+reported only when the node finishes without matching a candidate. Repeated recognition attempts
+inside one node are not treated as pipeline loops.
+
+Tasks are assigned to a process-start session by timestamp. A file segment without a
+`MAA Process Start` marker can also contain tasks when it is the only matching partial interval;
+ambiguous tasks remain in `unscopedTasks` and produce a warning.
+
+Use `--runtime-inspection` to emit this result directly from a file, zip, or directory. It is a
+separate output mode from `--preflight`; the two flags are mutually exclusive.
+
+When `sourceSegments` is provided, each evidence position is enriched with `source`, `path`, and
+`localLine` describing which original log file the evidence came from and its 1-based line within
+that file. Segments are built by the Node extraction helpers (`loadNodeLogDirectory`,
+`extractZipContentFromNodeFile`) when merging multiple log files; `parserInputLine` remains the
+line in the merged parser input, while `localLine` is the offset within the individual source
+file. Callers without segments leave these fields as `null`.

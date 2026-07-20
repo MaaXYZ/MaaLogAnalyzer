@@ -111,3 +111,4 @@ export type { AnalyzeLogContentInput, ParseFileOptions } from '@windsland52/maa-
 export * from './nodeInput'
 export * from './frameworkInput'
 export * from './frameworkVersion'
+export * from './runtimeInspection'

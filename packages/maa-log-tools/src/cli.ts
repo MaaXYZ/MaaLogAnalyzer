@@ -10,15 +10,19 @@ import {
   type FrameworkSessionExtraction,
   type FrameworkVersionSummary,
 } from './frameworkVersion'
-import { readNodeTextFileContent } from './nodeInput'
+import {
+  loadNodeLogDirectory,
+  extractZipContentFromNodeFile,
+  readNodeTextFileContent,
+} from './nodeInput'
+import type { SourceSegment } from './runtimeInspection'
 import {
   analyzeLogContent,
-  analyzeDirectory,
-  analyzeZipFile,
+  buildRuntimeInspection,
 } from './index'
 
 const printUsage = (): void => {
-  console.error('Usage: mla-log-tools <path> [--pretty] [--no-events] [--preflight]')
+  console.error('Usage: mla-log-tools <path> [--pretty] [--no-events] [--preflight|--runtime-inspection]')
   console.error('  <path>: log file path, zip path, or log directory path')
 }
 
@@ -27,11 +31,13 @@ const parseArgs = (argv: string[]): {
   pretty: boolean
   noEvents: boolean
   preflight: boolean
+  runtimeInspection: boolean
 } => {
   let targetPath: string | null = null
   let pretty = false
   let noEvents = false
   let preflight = false
+  let runtimeInspection = false
 
   for (const arg of argv) {
     if (arg === '--pretty') {
@@ -46,6 +52,10 @@ const parseArgs = (argv: string[]): {
       preflight = true
       continue
     }
+    if (arg === '--runtime-inspection') {
+      runtimeInspection = true
+      continue
+    }
     if (arg === '--help' || arg === '-h') {
       printUsage()
       process.exit(0)
@@ -55,7 +65,7 @@ const parseArgs = (argv: string[]): {
     }
   }
 
-  return { targetPath, pretty, noEvents, preflight }
+  return { targetPath, pretty, noEvents, preflight, runtimeInspection }
 }
 
 const renderOutput = (
@@ -146,7 +156,12 @@ export const main = async (): Promise<void> => {
     pretty,
     noEvents,
     preflight,
+    runtimeInspection,
   } = parseArgs(process.argv.slice(2))
+  if (preflight && runtimeInspection) {
+    console.error('--preflight and --runtime-inspection are mutually exclusive.')
+    process.exit(1)
+  }
   if (!targetPath) {
     printUsage()
     process.exit(1)
@@ -154,18 +169,44 @@ export const main = async (): Promise<void> => {
 
   const resolvedPath = path.resolve(targetPath)
   const targetStat = await stat(resolvedPath)
-  const framework = preflight
+  const framework = preflight || runtimeInspection
     ? extractFrameworkSessions(await loadFrameworkLogSources(resolvedPath))
     : EMPTY_FRAMEWORK_EXTRACTION
 
   let result: KernelOutput | null = null
+  let sourceSegments: readonly SourceSegment[] | undefined
 
   if (targetStat.isDirectory()) {
-    result = await analyzeDirectory({ directoryPath: resolvedPath })
+    const extracted = await loadNodeLogDirectory(resolvedPath)
+    if (extracted) {
+      sourceSegments = extracted.sourceSegments
+      result = await analyzeLogContent({
+        content: extracted.content,
+        errorImages: extracted.errorImages,
+        visionImages: extracted.visionImages,
+        waitFreezesImages: extracted.waitFreezesImages,
+      })
+    }
   } else if (resolvedPath.toLowerCase().endsWith('.zip')) {
-    result = await analyzeZipFile({ zipFilePath: resolvedPath })
+    const extracted = await extractZipContentFromNodeFile(resolvedPath)
+    if (extracted) {
+      sourceSegments = extracted.sourceSegments
+      result = await analyzeLogContent({
+        content: extracted.content,
+        errorImages: extracted.errorImages,
+        visionImages: extracted.visionImages,
+        waitFreezesImages: extracted.waitFreezesImages,
+      })
+    }
   } else {
     const content = await readNodeTextFileContent(resolvedPath)
+    const lineCount = (content.match(/\n/g) ?? []).length + 1
+    sourceSegments = [{
+      source: `file:${resolvedPath.replace(/\\/g, '/')}`,
+      path: path.basename(resolvedPath),
+      startLine: 1,
+      lineCount,
+    }]
     result = await analyzeLogContent({ content })
   }
 
@@ -189,6 +230,16 @@ export const main = async (): Promise<void> => {
     if (output.status === 'unsupported') {
       process.exit(3)
     }
+    return
+  }
+
+  if (runtimeInspection) {
+    process.stdout.write(JSON.stringify(
+      buildRuntimeInspection(result, framework, sourceSegments),
+      null,
+      pretty ? 2 : 0,
+    ))
+    process.stdout.write('\n')
     return
   }
 
