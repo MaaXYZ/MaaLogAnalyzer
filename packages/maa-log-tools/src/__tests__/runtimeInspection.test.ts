@@ -25,6 +25,10 @@ const framework: FrameworkSessionExtraction = {
   warnings: ['partial session'],
 }
 
+const sourceSegments: SourceSegment[] = [
+  { source: 'file:test/maa.log', path: 'maa.log', startLine: 1, lineCount: 1000 },
+]
+
 const node = (
   nodeId: number,
   name: string,
@@ -140,13 +144,14 @@ describe('runtime inspection', () => {
       )),
     })
 
-    const inspection = buildRuntimeInspection(output([failedTask, loopingTask]), framework)
+    const inspection = buildRuntimeInspection(output([failedTask, loopingTask]), framework, sourceSegments)
 
     expect(inspection.sessions[0]?.startKind).toBe('partial_file')
     expect(inspection.sessions[0]?.tasks).toHaveLength(2)
     expect(inspection.unscopedTasks).toHaveLength(0)
     expect(inspection.failures.map(item => item.kind)).toEqual(['action_failed', 'next_list_timeout'])
-    expect(inspection.failures[0]?.evidence.parserInputLine).toBe(20)
+    expect(inspection.failures[0]?.evidence.localLine).toBe(20)
+    expect(inspection.failures[0]?.evidence.source).toBe('file:test/maa.log')
     expect(inspection.outcomes.some(item => item.kind === 'task' && item.status === 'failed')).toBe(true)
     expect(inspection.outcomes.some(item => (
       item.nodeName === 'UnknownFailure' && item.directFailureIds.length === 0
@@ -220,7 +225,7 @@ describe('runtime inspection', () => {
     const first = task({ task_id: 0, entry: 'First', status: 'succeeded' })
     const second = task({ task_id: 0, entry: 'Second', status: 'succeeded' })
 
-    const inspection = buildRuntimeInspection(output([first, second]), framework)
+    const inspection = buildRuntimeInspection(output([first, second]), framework, sourceSegments)
 
     expect(inspection.sessions[0]?.tasks.map(item => item.executionId)).toEqual([
       'task-execution-0-1',
@@ -270,12 +275,10 @@ describe('runtime inspection', () => {
     expect(actionFailure?.evidence.source).toBe('file:C:/logs/maa.bak.log')
     expect(actionFailure?.evidence.path).toBe('maa.bak.log')
     expect(actionFailure?.evidence.localLine).toBe(20)
-    expect(actionFailure?.evidence.parserInputLine).toBe(20)
 
     const timeoutFailure = inspection.failures.find(item => item.kind === 'next_list_timeout')
     expect(timeoutFailure?.evidence.source).toBe('file:C:/logs/maa.log')
     expect(timeoutFailure?.evidence.path).toBe('maa.log')
     expect(timeoutFailure?.evidence.localLine).toBe(5)
-    expect(timeoutFailure?.evidence.parserInputLine).toBe(30)
   })
 })

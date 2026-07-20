@@ -92,9 +92,8 @@ ambiguous tasks remain in `unscopedTasks` and produce a warning.
 Use `--runtime-inspection` to emit this result directly from a file, zip, or directory. It is a
 separate output mode from `--preflight`; the two flags are mutually exclusive.
 
-When `sourceSegments` is provided, each evidence position is enriched with `source`, `path`, and
-`localLine` describing which original log file the evidence came from and its 1-based line within
-that file. Segments are built by the Node extraction helpers (`loadNodeLogDirectory`,
-`extractZipContentFromNodeFile`) when merging multiple log files; `parserInputLine` remains the
-line in the merged parser input, while `localLine` is the offset within the individual source
-file. Callers without segments leave these fields as `null`.
+Each evidence position carries `source`, `path`, and `localLine` describing which original log
+file the evidence came from and its 1-based line within that file. Segments are built by the Node
+extraction helpers (`loadNodeLogDirectory`, `extractZipContentFromNodeFile`) when merging multiple
+log files and are required by `buildRuntimeInspection`; `localLine` is the offset within the
+individual source file, not the merged parser input line.

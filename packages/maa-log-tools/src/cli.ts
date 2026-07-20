@@ -174,7 +174,7 @@ export const main = async (): Promise<void> => {
     : EMPTY_FRAMEWORK_EXTRACTION
 
   let result: KernelOutput | null = null
-  let sourceSegments: readonly SourceSegment[] | undefined
+  let sourceSegments: readonly SourceSegment[] = []
 
   if (targetStat.isDirectory()) {
     const extracted = await loadNodeLogDirectory(resolvedPath)

@@ -6,10 +6,14 @@ export const MLA_RUNTIME_INSPECTION_SCHEMA_VERSION = 'mla-runtime-inspection/v1'
 
 export interface RuntimeEvidencePosition {
   timestamp: string | null
-  parserInputLine: number | null
   source: string | null
   path: string | null
   localLine: number | null
+}
+
+interface InternalEvidencePosition {
+  timestamp: string | null
+  mergedLine: number | null
 }
 
 export interface SourceSegment {
@@ -243,14 +247,14 @@ const buildEvidenceIndex = (task: TaskInfo): RuntimeEvidenceIndex => {
   return { exactLines, ordered }
 }
 
-const evidence = (index: RuntimeEvidenceIndex, timestamp?: string): RuntimeEvidencePosition => {
+const evidence = (index: RuntimeEvidenceIndex, timestamp?: string): InternalEvidencePosition => {
   if (timestamp) {
     const exactLine = index.exactLines.get(timestamp)
-    if (exactLine != null) return { timestamp, parserInputLine: exactLine , source: null, path: null, localLine: null}
+    if (exactLine != null) return { timestamp, mergedLine: exactLine }
   }
   const target = timestampMs(timestamp)
   if (target == null || index.ordered.length === 0) {
-    return { timestamp: timestamp ?? null, parserInputLine: null , source: null, path: null, localLine: null}
+    return { timestamp: timestamp ?? null, mergedLine: null }
   }
   let low = 0
   let high = index.ordered.length
@@ -264,7 +268,7 @@ const evidence = (index: RuntimeEvidenceIndex, timestamp?: string): RuntimeEvide
   const nearest = before == null
     ? after
     : after == null || target - before.timestamp <= after.timestamp - target ? before : after
-  return { timestamp: timestamp ?? null, parserInputLine: nearest?.line ?? null , source: null, path: null, localLine: null}
+  return { timestamp: timestamp ?? null, mergedLine: nearest?.line ?? null }
 }
 
 const recognitionItems = (items?: readonly UnifiedFlowItem[]): UnifiedFlowItem[] => (
@@ -413,10 +417,10 @@ const canonicalCycle = (pattern: readonly string[]): string[] => {
 
 const findSourceSegment = (
   segments: readonly SourceSegment[],
-  parserInputLine: number,
+  mergedLine: number,
 ): SourceSegment | null => {
   for (const segment of segments) {
-    if (parserInputLine >= segment.startLine && parserInputLine < segment.startLine + segment.lineCount) {
+    if (mergedLine >= segment.startLine && mergedLine < segment.startLine + segment.lineCount) {
       return segment
     }
   }
@@ -424,28 +428,32 @@ const findSourceSegment = (
 }
 
 const enrichWithSource = (
-  position: RuntimeEvidencePosition,
-  segments: readonly SourceSegment[] | undefined,
+  position: InternalEvidencePosition,
+  segments: readonly SourceSegment[],
 ): RuntimeEvidencePosition => {
-  if (!segments || position.parserInputLine == null) return position
-  const segment = findSourceSegment(segments, position.parserInputLine)
-  if (!segment) return position
+  if (position.mergedLine == null) {
+    return { timestamp: position.timestamp, source: null, path: null, localLine: null }
+  }
+  const segment = findSourceSegment(segments, position.mergedLine)
+  if (!segment) {
+    return { timestamp: position.timestamp, source: null, path: null, localLine: null }
+  }
   return {
-    ...position,
+    timestamp: position.timestamp,
     source: segment.source,
     path: segment.path,
-    localLine: position.parserInputLine - segment.startLine + 1,
+    localLine: position.mergedLine - segment.startLine + 1,
   }
 }
 
-const createEvidenceFn = (segments: readonly SourceSegment[] | undefined) =>
+const createEvidenceFn = (segments: readonly SourceSegment[]) =>
   (index: RuntimeEvidenceIndex, timestamp?: string): RuntimeEvidencePosition =>
     enrichWithSource(evidence(index, timestamp), segments)
 
 export const buildRuntimeInspection = (
   output: KernelOutput,
   framework: FrameworkSessionExtraction,
-  sourceSegments?: readonly SourceSegment[],
+  sourceSegments: readonly SourceSegment[],
 ): RuntimeInspection => {
   const failures: RuntimeFailure[] = []
   const outcomes: RuntimeOutcome[] = []
