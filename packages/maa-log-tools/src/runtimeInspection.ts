@@ -85,6 +85,16 @@ export interface RecognitionOccurrenceSample {
   evidence: { start: RuntimeEvidencePosition, end: RuntimeEvidencePosition }
 }
 
+export interface RepeatedNodeOccurrenceSample {
+  pattern: string[]
+  firstSeenAt: string
+  lastSeenAt: string
+  repeatCount: number
+  durationMs: number
+  termination: 'left_pattern' | 'task_ended' | 'still_repeating_at_log_end'
+  evidence: RuntimeEvidencePosition
+}
+
 export interface RecognitionActivitySignal extends RuntimeScope {
   signalId: string
   kind: 'recognition_activity'
@@ -125,9 +135,9 @@ export interface RepeatedNodeSequenceSignal extends RuntimeScope {
   durationMs: RuntimeMetricDistribution
   terminations: { leftPattern: number, taskEnded: number, stillRepeatingAtLogEnd: number }
   representatives: {
-    first: { firstSeenAt: string, lastSeenAt: string, repeatCount: number, evidence: RuntimeEvidencePosition }
-    longest: { firstSeenAt: string, lastSeenAt: string, repeatCount: number, evidence: RuntimeEvidencePosition }
-    last: { firstSeenAt: string, lastSeenAt: string, repeatCount: number, evidence: RuntimeEvidencePosition }
+    first: RepeatedNodeOccurrenceSample
+    longest: RepeatedNodeOccurrenceSample
+    last: RepeatedNodeOccurrenceSample
   }
   detector: {
     name: 'repeated-completed-node-sequence'
@@ -651,35 +661,38 @@ export const buildRuntimeInspection = (
     }
 
     const completed = timeline.map(item => item.nodeInfo).filter(node => node.status !== 'running')
-    const repetitionGroups = new Map<string, {
-      pattern: string[]
-      repeatCount: number
-      durationMs: number
-      termination: 'left_pattern' | 'task_ended' | 'still_repeating_at_log_end'
-      firstSeenAt: string
-      lastSeenAt: string
-      evidence: RuntimeEvidencePosition
-    }[]>()
+    const repetitionGroups = new Map<string, RepeatedNodeOccurrenceSample[]>()
     for (const repeated of repetitions(completed)) {
       const first = completed[repeated.start]
       const lastIndex = repeated.start + repeated.length * repeated.count - 1
       const last = completed[lastIndex]
       if (!first || !last) continue
-      const reachesEnd = lastIndex === completed.length - 1
       const rawPattern = completed.slice(repeated.start, repeated.start + repeated.length).map(node => node.name)
       const pattern = repeated.length === 1 ? rawPattern : canonicalCycle(rawPattern)
       const kind = repeated.length === 1 ? 'repeated_node' : 'repeated_node_cycle'
       const key = JSON.stringify([kind, pattern])
       const group = repetitionGroups.get(key) ?? []
+      const timelineLastIndex = timeline.findIndex(item => item.nodeInfo === last)
+      const trailing = timelineLastIndex < 0 ? [] : timeline.slice(timelineLastIndex + 1)
+      const reachesCompletedEnd = lastIndex === completed.length - 1
+      const continuesAtLogEnd = reachesCompletedEnd
+        && task.status === 'running'
+        && trailing.every((item, offset) => (
+          item.nodeInfo.status === 'running'
+          && item.nodeInfo.name === rawPattern[offset % rawPattern.length]
+        ))
+      const taskEndedAtPattern = reachesCompletedEnd
+        && timelineLastIndex === timeline.length - 1
+        && task.status !== 'running'
       group.push({
         pattern,
         repeatCount: repeated.count,
         durationMs: elapsed(first.ts, last.end_ts ?? last.ts) ?? 0,
         firstSeenAt: first.ts,
         lastSeenAt: last.end_ts ?? last.ts,
-        termination: reachesEnd
-          ? task.status === 'running' ? 'still_repeating_at_log_end' : 'task_ended'
-          : 'left_pattern',
+        termination: continuesAtLogEnd
+          ? 'still_repeating_at_log_end'
+          : taskEndedAtPattern ? 'task_ended' : 'left_pattern',
         evidence: evidenceAt(evidenceIndex, first.ts),
       })
       repetitionGroups.set(key, group)
@@ -698,7 +711,6 @@ export const buildRuntimeInspection = (
       const totalRepeatCount = group.reduce((sum, item) => sum + item.repeatCount, 0)
       const maximumRepeatCount = Math.max(...group.map(item => item.repeatCount))
       const repetitionReasons: RuntimeSignalPriorityReason[] = []
-      if (terminations.leftPattern > 0) repetitionReasons.push('incomplete_repetition')
       if (terminations.stillRepeatingAtLogEnd > 0) repetitionReasons.push('still_repeating_at_log_end')
       if (maximumRepeatCount >= 10 || totalRepeatCount >= 20) repetitionReasons.push('high_repeat_count')
       const repetitionRanking = prioritize(repetitionReasons)
@@ -750,10 +762,11 @@ export const buildRuntimeInspection = (
     const visionImages = imageSets.flatMap(set => set.vision)
     const ownFailures = failures.filter(failure => directFailureIds.includes(failure.failureId))
     const ownSignals = signals.filter(signal => signalIds.includes(signal.signalId))
-    const recognitionActivity = ownSignals
+    const recognitionSignals = ownSignals
       .filter((signal): signal is RecognitionActivitySignal => (
         signal.kind === 'recognition_activity'
       ))
+    const recognitionActivity = [...recognitionSignals]
       .sort((left, right) => (
         right.unsuccessfulAttempts.maximum - left.unsuccessfulAttempts.maximum
         || right.occurrenceCount - left.occurrenceCount
@@ -792,7 +805,7 @@ export const buildRuntimeInspection = (
           const statuses = new Set(attempts.map(attempt => attempt.status))
           return statuses.has('failed') && statuses.has('success')
         }).length,
-        recognitionActivityGroups: recognitionActivity.length,
+        recognitionActivityGroups: recognitionSignals.length,
         maximumRecognitionAttemptsPerNode: Math.max(0, ...attemptsByNode.map(attempts => attempts.length)),
         maximumUnsuccessfulRecognitionAttemptsPerNode: Math.max(
           0,

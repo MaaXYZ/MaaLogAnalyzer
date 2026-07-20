@@ -31,6 +31,13 @@ describe('node input focus selectors', () => {
     expect(extracted?.content).toContain('BaselineTask')
     expect(extracted?.content).toContain('FocusedTask')
     expect(extracted?.content).not.toContain('OldHistory')
+    expect(extracted?.sourceSegments.map(segment => ({
+      path: segment.path,
+      startLine: segment.startLine,
+    }))).toEqual([
+      { path: 'maa.bak.log', startLine: 1 },
+      { path: 'maa.log', startLine: 2 },
+    ])
   })
 
   it('filters directory logs by keywords and time boundaries when focus is provided', async () => {
@@ -111,5 +118,13 @@ describe('node input focus selectors', () => {
     expect(extracted?.waitFreezesImages.get('2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes')).toBe(
       'zip:logs.zip#vision/2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes.jpg',
     )
+    expect(extracted?.sourceSegments).toEqual([
+      {
+        source: 'zip:logs.zip#maa.log',
+        path: 'maa.log',
+        startLine: 1,
+        lineCount: 2,
+      },
+    ])
   })
 })

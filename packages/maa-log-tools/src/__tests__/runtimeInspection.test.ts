@@ -215,6 +215,13 @@ describe('runtime inspection', () => {
       totalRepeatCount: 3,
       maximumRepeatCount: 3,
       terminations: { leftPattern: 0, taskEnded: 0, stillRepeatingAtLogEnd: 1 },
+      representatives: {
+        longest: {
+          pattern: ['A', 'B'],
+          durationMs: 5000,
+          termination: 'still_repeating_at_log_end',
+        },
+      },
     })
     expect(inspection.sessions[0]?.tasks[1]?.signalHighlights.repetitions).toEqual([
       repetition?.signalId,
@@ -231,6 +238,78 @@ describe('runtime inspection', () => {
       'task-execution-0-1',
       'task-execution-0-2',
     ])
+  })
+
+  it('treats a completed repetition that leaves its pattern as normal telemetry', () => {
+    const repeatedNodes = Array.from({ length: 5 }, (_, index) => node(
+      200 + index,
+      'RetryNode',
+      `2026-07-20 10:10:0${index}.000`,
+    ))
+    const completedTask = task({
+      status: 'succeeded',
+      nodes: [
+        ...repeatedNodes,
+        node(210, 'NextNode', '2026-07-20 10:10:05.000'),
+      ],
+    })
+
+    const inspection = buildRuntimeInspection(output([completedTask]), framework, sourceSegments)
+    const repetition = inspection.signals.find(item => item.kind === 'repeated_node')
+
+    expect(repetition).toMatchObject({
+      pattern: ['RetryNode'],
+      terminations: { leftPattern: 1, taskEnded: 0, stillRepeatingAtLogEnd: 0 },
+      priority: 'low',
+      priorityReasons: [],
+    })
+  })
+
+  it('does not report an earlier pattern as still repeating when another node is running', () => {
+    const repeatedNodes = Array.from({ length: 5 }, (_, index) => node(
+      300 + index,
+      'RetryNode',
+      `2026-07-20 10:15:0${index}.000`,
+    ))
+    const runningTask = task({
+      status: 'running',
+      end_time: undefined,
+      nodes: [
+        ...repeatedNodes,
+        node(310, 'DifferentNode', '2026-07-20 10:15:05.000', { status: 'running' }),
+      ],
+    })
+
+    const inspection = buildRuntimeInspection(output([runningTask]), framework, sourceSegments)
+    const repetition = inspection.signals.find(item => item.kind === 'repeated_node')
+
+    expect(repetition).toMatchObject({
+      pattern: ['RetryNode'],
+      terminations: { leftPattern: 1, taskEnded: 0, stillRepeatingAtLogEnd: 0 },
+    })
+  })
+
+  it('counts all recognition activity groups while limiting highlights to five', () => {
+    const recognitionNodes = Array.from({ length: 6 }, (_, index) => {
+      const candidate = `Candidate${index}`
+      return node(400 + index, `Pipeline${index}`, `2026-07-20 10:20:0${index}.000`, {
+        next_list: [{ name: candidate, anchor: false, jump_back: false }],
+        node_flow: [{
+          id: `recognition-${index}`,
+          type: 'recognition',
+          name: candidate,
+          status: 'success',
+          ts: `2026-07-20 10:20:0${index}.000`,
+        }],
+      })
+    })
+    const recognitionTask = task({ status: 'succeeded', nodes: recognitionNodes })
+
+    const inspection = buildRuntimeInspection(output([recognitionTask]), framework, sourceSegments)
+    const taskResult = inspection.sessions[0]?.tasks[0]
+
+    expect(taskResult?.statistics.recognitionActivityGroups).toBe(6)
+    expect(taskResult?.signalHighlights.recognitionActivity).toHaveLength(5)
   })
 
   it('enriches evidence positions with source segments and local line numbers', () => {

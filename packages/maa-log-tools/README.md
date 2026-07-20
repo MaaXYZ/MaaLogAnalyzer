@@ -71,7 +71,7 @@ process-start-bounded interval contains the timestamp; otherwise it returns `nul
 
 ## Runtime inspection
 
-`buildRuntimeInspection(kernelOutput, frameworkExtraction, sourceSegments?)` emits
+`buildRuntimeInspection(kernelOutput, frameworkExtraction, sourceSegments)` emits
 `mla-runtime-inspection/v1`. It nests task executions under their runtime session and keeps three
 different semantics separate:
 
