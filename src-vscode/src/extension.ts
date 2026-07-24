@@ -188,8 +188,8 @@ export function activate(context: vscode.ExtensionContext) {
   // 注册分析文件夹命令（资源管理器右键或侧边栏入口）
   const analyzeFolderCommand = vscode.commands.registerCommand(
     'maaLogAnalyzer.analyzeFolder',
-    async (_uri?: vscode.Uri) => {
-      const targetUri = await pickUriForAnalysis()
+    async (uri?: vscode.Uri) => {
+      const targetUri = uri ?? await pickUriForAnalysis()
 
       if (targetUri) {
         createOrShowPanel(context)
@@ -344,11 +344,15 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
           break
 
         case 'openFolder':
-          // Open file or folder picker
-          const targetUri = await pickUriForAnalysis()
+          const folderUri = await vscode.window.showOpenDialog({
+            canSelectMany: false,
+            canSelectFolders: true,
+            canSelectFiles: false,
+            title: t('Select Log Folder', '\u9009\u62e9\u65e5\u5fd7\u6587\u4ef6\u5939'),
+          })
 
-          if (targetUri) {
-            await analyzeUri(targetUri)
+          if (folderUri && folderUri[0]) {
+            await analyzeFolderUri(folderUri[0])
           }
           break
 
