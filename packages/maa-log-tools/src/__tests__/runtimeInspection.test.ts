@@ -1,4 +1,4 @@
-import type { KernelOutput, NodeInfo, TaskInfo } from '@windsland52/maa-log-kernel'
+import type { KernelOutput, NodeInfo, TaskInfo, UnifiedFlowItem } from '@windsland52/maa-log-kernel'
 import { describe, expect, it } from 'vitest'
 import type { FrameworkSessionExtraction } from '../frameworkVersion'
 import { buildRuntimeInspection, type SourceSegment } from '../runtimeInspection'
@@ -238,6 +238,106 @@ describe('runtime inspection', () => {
       'task-execution-0-1',
       'task-execution-0-2',
     ])
+  })
+
+  it('retains direct failure evidence from tasks nested inside custom actions', () => {
+    const nestedTask: UnifiedFlowItem = {
+      id: 'nested-task',
+      type: 'task',
+      name: 'WildernessProductTask',
+      status: 'failed',
+      ts: '2026-07-20 10:01:10.000',
+      end_ts: '2026-07-20 10:01:30.000',
+      task_id: 2,
+      task_details: {
+        task_id: 2,
+        entry: 'WildernessProductTask',
+        status: 'failed',
+      },
+      children: [{
+        id: 'nested-pipeline',
+        type: 'pipeline_node',
+        name: 'WildernessProductTask',
+        status: 'failed',
+        ts: '2026-07-20 10:01:11.000',
+        end_ts: '2026-07-20 10:01:30.000',
+        task_id: 2,
+        node_id: 201,
+        error_image: 'file:C:/logs/on_error/WildernessProductTask.png',
+        children: [{
+          id: 'nested-recognition',
+          type: 'recognition',
+          name: 'EnterProduct',
+          status: 'failed',
+          ts: '2026-07-20 10:01:29.000',
+          vision_image: 'file:C:/logs/vision/EnterProduct.png',
+        }],
+      }],
+    }
+    const parentNode = node(16, 'FlagInWilderness', '2026-07-20 10:01:09.000', {
+      end_ts: '2026-07-20 10:01:31.000',
+      status: 'failed',
+      next_list: [{ name: 'FlagInWilderness', anchor: false, jump_back: false }],
+      action_details: {
+        action_id: 1,
+        action: 'Custom',
+        box: [0, 0, 0, 0],
+        detail: {},
+        name: 'FlagInWilderness',
+        success: false,
+      },
+      node_flow: [{
+        id: 'parent-action',
+        type: 'action',
+        name: 'FlagInWilderness',
+        status: 'failed',
+        ts: '2026-07-20 10:01:09.000',
+        children: [nestedTask],
+      }],
+    })
+    const failedTask = task({
+      nodes: [parentNode],
+      events: [
+        {
+          timestamp: '2026-07-20 10:01:30.000',
+          level: 'ERR',
+          message: 'nested timeout',
+          details: {},
+          _lineNumber: 40,
+        },
+        {
+          timestamp: '2026-07-20 10:01:31.000',
+          level: 'ERR',
+          message: 'parent action failed',
+          details: {},
+          _lineNumber: 41,
+        },
+      ],
+    })
+
+    const inspection = buildRuntimeInspection(output([failedTask]), framework, sourceSegments)
+    const nestedFailure = inspection.failures.find(failure => failure.taskId === 2)
+    const parentFailure = inspection.failures.find(failure => failure.taskId === 1)
+    const nestedTaskOutcome = inspection.outcomes.find(outcome => (
+      outcome.kind === 'task' && outcome.taskId === 2
+    ))
+    const taskExecution = inspection.sessions[0]?.tasks[0]
+
+    expect(nestedFailure).toMatchObject({
+      kind: 'next_list_timeout',
+      executionId: 'task-execution-1-1',
+      taskName: 'WildernessProductTask',
+      nodeId: 201,
+      nodeName: 'WildernessProductTask',
+      errorImages: ['file:C:/logs/on_error/WildernessProductTask.png'],
+      visionImages: ['file:C:/logs/vision/EnterProduct.png'],
+      evidence: { localLine: 40 },
+    })
+    expect(parentFailure).toMatchObject({ kind: 'action_failed', nodeName: 'FlagInWilderness' })
+    expect(nestedTaskOutcome?.directFailureIds).toEqual([nestedFailure?.failureId])
+    expect(taskExecution?.directFailureIds).toEqual([parentFailure?.failureId])
+    expect(taskExecution?.directFailureIds).not.toContain(nestedFailure?.failureId)
+    expect(taskExecution?.outcomeIds).toEqual(expect.arrayContaining([nestedTaskOutcome?.outcomeId]))
   })
 
   it('treats a completed repetition that leaves its pattern as normal telemetry', () => {

@@ -297,6 +297,49 @@ const imagesFor = (node: NodeInfo): { error: string[], vision: string[] } => {
   }
 }
 
+const ownedRecognitionItems = (items?: readonly UnifiedFlowItem[]): UnifiedFlowItem[] => (
+  (items ?? []).flatMap(item => {
+    if (item.type === 'task' || item.type === 'pipeline_node') return []
+    return [
+      ...(item.type === 'recognition' || item.type === 'recognition_node' ? [item] : []),
+      ...ownedRecognitionItems(item.children),
+    ]
+  })
+)
+
+const imagesForFlowItem = (item: UnifiedFlowItem): { error: string[], vision: string[] } => {
+  const attempts = ownedRecognitionItems(item.children)
+  return {
+    error: [item.error_image, ...attempts.map(attempt => attempt.error_image)]
+      .filter((image): image is string => Boolean(image)),
+    vision: [item.vision_image, ...attempts.map(attempt => attempt.vision_image)]
+      .filter((image): image is string => Boolean(image)),
+  }
+}
+
+const hasFailedOwnedAction = (items?: readonly UnifiedFlowItem[]): boolean => (
+  (items ?? []).some(item => {
+    if (item.type === 'task' || item.type === 'pipeline_node') return false
+    if (
+      (item.type === 'action' || item.type === 'action_node')
+      && (item.status === 'failed' || item.action_details?.success === false)
+    ) return true
+    return hasFailedOwnedAction(item.children)
+  })
+)
+
+const hasFailedNestedTask = (items?: readonly UnifiedFlowItem[]): boolean => (
+  (items ?? []).some(item => (
+    item.type === 'task' ? item.status === 'failed' : hasFailedNestedTask(item.children)
+  ))
+)
+
+const nestedPipelineFailureKind = (item: UnifiedFlowItem): RuntimeFailure['kind'] | null => {
+  if (item.status !== 'failed') return null
+  if (item.action_details?.success === false || hasFailedOwnedAction(item.children)) return 'action_failed'
+  return hasFailedNestedTask(item.children) ? null : 'next_list_timeout'
+}
+
 const scopeFor = (
   task: TaskInfo,
   sessionId: string | null,
@@ -494,8 +537,101 @@ export const buildRuntimeInspection = (
     const recognitionOccurrences: RecognitionOccurrence[] = []
     const evidenceIndex = buildEvidenceIndex(task)
     const timeline = buildNodeExecutionTimeline(task.nodes, { rootTaskId: task.task_id })
+    const seenNestedTasks = new Set<string>()
+    const seenNestedPipelines = new Set<string>()
+
+    const inspectNestedTask = (taskItem: UnifiedFlowItem): void => {
+      if (seenNestedTasks.has(taskItem.id)) return
+      seenNestedTasks.add(taskItem.id)
+      const taskId = taskItem.task_details?.task_id ?? taskItem.task_id
+      if (taskId == null) {
+        inspectNestedTasks(taskItem.children)
+        return
+      }
+      const nestedScope: RuntimeScope = {
+        sessionId,
+        executionId,
+        taskId,
+        taskName: taskItem.task_details?.entry ?? taskItem.name,
+      }
+      const nestedDirectFailureIds: string[] = []
+
+      const inspectOwnedItems = (items?: readonly UnifiedFlowItem[]): void => {
+        for (const child of items ?? []) {
+          if (child.type === 'task') {
+            inspectNestedTask(child)
+            continue
+          }
+          if (child.type !== 'pipeline_node') {
+            inspectOwnedItems(child.children)
+            continue
+          }
+          if (seenNestedPipelines.has(child.id)) continue
+          seenNestedPipelines.add(child.id)
+          inspectOwnedItems(child.children)
+
+          const failureKind = nestedPipelineFailureKind(child)
+          let nodeFailureId: string | null = null
+          if (failureKind && child.node_id != null) {
+            nodeFailureId = `failure-${failures.length + 1}`
+            const images = imagesForFlowItem(child)
+            failures.push({
+              ...nestedScope,
+              failureId: nodeFailureId,
+              kind: failureKind,
+              nodeId: child.node_id,
+              nodeName: child.name,
+              startedAt: child.ts,
+              endedAt: child.end_ts ?? null,
+              errorImages: [...new Set(images.error)],
+              visionImages: [...new Set(images.vision)],
+              evidence: evidenceAt(evidenceIndex, child.end_ts ?? child.ts),
+            })
+            nestedDirectFailureIds.push(nodeFailureId)
+          }
+          if (child.status !== 'success') {
+            const outcomeId = `outcome-${outcomes.length + 1}`
+            outcomes.push({
+              ...nestedScope,
+              outcomeId,
+              kind: 'pipeline_node',
+              status: child.status,
+              nodeId: child.node_id ?? null,
+              nodeName: child.name,
+              directFailureIds: nodeFailureId ? [nodeFailureId] : [],
+              evidence: evidenceAt(evidenceIndex, child.end_ts ?? child.ts),
+            })
+            outcomeIds.push(outcomeId)
+          }
+        }
+      }
+
+      inspectOwnedItems(taskItem.children)
+      if (taskItem.status !== 'success') {
+        const outcomeId = `outcome-${outcomes.length + 1}`
+        outcomes.push({
+          ...nestedScope,
+          outcomeId,
+          kind: 'task',
+          status: taskItem.status,
+          nodeId: null,
+          nodeName: null,
+          directFailureIds: nestedDirectFailureIds,
+          evidence: evidenceAt(evidenceIndex, taskItem.end_ts ?? taskItem.ts),
+        })
+        outcomeIds.push(outcomeId)
+      }
+    }
+
+    const inspectNestedTasks = (items?: readonly UnifiedFlowItem[]): void => {
+      for (const item of items ?? []) {
+        if (item.type === 'task') inspectNestedTask(item)
+        else inspectNestedTasks(item.children)
+      }
+    }
 
     for (const item of timeline) {
+      inspectNestedTasks(item.nodeInfo.node_flow)
       const failureKind = item.navStatus === 'action-failed'
         ? 'action_failed'
         : item.navStatus === 'timeout' && item.nodeInfo.next_list.length > 0

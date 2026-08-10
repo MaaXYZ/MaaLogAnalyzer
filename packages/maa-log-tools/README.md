@@ -87,7 +87,9 @@ process-start-bounded interval contains the timestamp; otherwise it returns `nul
 `mla-runtime-inspection/v1`. It nests task executions under their runtime session and keeps three
 different semantics separate:
 
-- `failures`: direct `next_list_timeout` and `action_failed` facts.
+- `failures`: directly observed `next_list_timeout` and `action_failed` facts, including failures
+  inside tasks launched by custom actions. Nested failures retain the nested task identity and
+  images while sharing the enclosing top-level `executionId`.
 - `outcomes`: failed or still-running pipeline nodes and tasks, with direct-failure references
   when the propagation can be linked deterministically.
 - `signals`: useful non-failure behavior such as recognition succeeding after earlier misses and
@@ -96,6 +98,10 @@ different semantics separate:
 An unsuccessful recognition attempt is retry telemetry, not a failure. A next-list failure is
 reported only when the node finishes without matching a candidate. Repeated recognition attempts
 inside one node are not treated as pipeline loops.
+
+`RuntimeTaskExecution.directFailureIds` and its failure statistics remain limited to the
+top-level task's own pipeline nodes. Nested task failures are available through `failures` and
+`outcomes`, so a propagated parent action failure and its underlying nested failure stay distinct.
 
 Tasks are assigned to a process-start session by timestamp. A file segment without a
 `MAA Process Start` marker can also contain tasks when it is the only matching partial interval;
