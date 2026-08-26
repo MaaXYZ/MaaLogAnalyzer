@@ -22,7 +22,7 @@ describe('browser input resource budgets', () => {
     chargeBrowserInputFile(budget, file)
     chargeBrowserInputFile(budget, file)
 
-    expect(budget.entryCount).toBe(1)
+    expect(budget.registeredPaths.size).toBe(1)
     expect(budget.selectedBytes).toBe(file.size)
   })
 
@@ -39,7 +39,7 @@ describe('browser input resource budgets', () => {
     chargeInputResourceBytes(budget, 10)
     chargeInputResourceBytes(budget, 20)
 
-    expect(budget.entryCount).toBe(1)
+    expect(budget.registeredPaths.size).toBe(1)
     expect(budget.selectedBytes).toBe(30)
   })
 

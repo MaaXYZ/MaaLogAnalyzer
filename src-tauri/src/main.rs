@@ -15,7 +15,7 @@ use serde::Serialize;
 mod archive_safety;
 
 use archive_safety::{
-    add_archive_entry_count, canonicalize_archive_entry_path, create_private_child_directory,
+    canonicalize_archive_entry_path, create_private_child_directory,
     create_private_output_file, create_private_temp_directory, inspect_zip_directory,
     validate_archive_entry_path, validate_archive_inputs, validate_authorized_archive_paths,
     ArchiveLimitKind, ArchiveLimits, ArchivePreflightBudget, ArchiveRuntimeBudget,
@@ -441,16 +441,11 @@ fn extract_zip_log_inner(
     }
     validate_archive_inputs(&compressed_sizes, limits).map_err(|error| error.to_string())?;
 
-    let mut total_directory_entries = 0_u64;
     let mut directory_infos = Vec::with_capacity(snapshots.len());
     for snapshot in &mut snapshots {
-        let info =
-            inspect_zip_directory(&mut snapshot.file, limits.max_entries).map_err(|error| {
-                format!("无法预检 ZIP [{}]: {error}", snapshot.source_path.display())
-            })?;
-        total_directory_entries =
-            add_archive_entry_count(total_directory_entries, info.entries, limits)
-                .map_err(|error| error.to_string())?;
+        let info = inspect_zip_directory(&mut snapshot.file).map_err(|error| {
+            format!("无法预检 ZIP [{}]: {error}", snapshot.source_path.display())
+        })?;
         directory_infos.push(info);
     }
 

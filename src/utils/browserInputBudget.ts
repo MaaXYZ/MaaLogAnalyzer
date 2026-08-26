@@ -15,7 +15,6 @@ export { InputResourceLimitError as BrowserInputLimitError }
 
 export interface InputResourceBudget {
   readonly limits: Readonly<ArchiveLimits>
-  entryCount: number
   totalPathBytes: number
   selectedBytes: number
   readonly registeredPaths: Set<string>
@@ -31,7 +30,6 @@ export const createInputResourceBudget = (
   limits: Readonly<ArchiveLimits> = DEFAULT_ARCHIVE_LIMITS,
 ): InputResourceBudget => ({
   limits,
-  entryCount: 0,
   totalPathBytes: 0,
   selectedBytes: 0,
   registeredPaths: new Set<string>(),
@@ -69,11 +67,7 @@ export const registerInputResourceEntry = (
     throw new ArchiveLimitError('path-size', pathBytes, budget.limits.maxPathBytes)
   }
 
-  const nextEntryCount = budget.entryCount + 1
   const nextTotalPathBytes = budget.totalPathBytes + pathBytes
-  if (!Number.isSafeInteger(nextEntryCount) || nextEntryCount > budget.limits.maxEntries) {
-    throw new ArchiveLimitError('entry-count', nextEntryCount, budget.limits.maxEntries)
-  }
   if (
     !Number.isSafeInteger(nextTotalPathBytes) ||
     nextTotalPathBytes > budget.limits.maxTotalPathBytes
@@ -85,7 +79,6 @@ export const registerInputResourceEntry = (
     )
   }
 
-  budget.entryCount = nextEntryCount
   budget.totalPathBytes = nextTotalPathBytes
   budget.registeredPaths.add(normalizedPath)
 }

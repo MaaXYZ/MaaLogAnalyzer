@@ -1,9 +1,6 @@
 import type { FileSystem } from '7z-wasm'
 import { describe, expect, it } from 'vitest'
-import {
-  ArchiveLimitError,
-  resolveArchiveLimits,
-} from '../archiveLimits'
+import { resolveArchiveLimits } from '../archiveLimits'
 import { extractArchiveContent } from '../archiveExtractor'
 import {
   ensureSevenZipModule,
@@ -109,16 +106,6 @@ describe('7z/RAR archive extraction safety', () => {
     }), limits)).toThrow(SevenZipArchiveError)
   })
 
-  it('enforces directory metadata budgets while parsing the listing', () => {
-    expect(() => parseSevenZipListing(listing(
-      { Path: 'maa.log', Size: '1' },
-      { Path: 'notes.txt', Size: '1' },
-    ), resolveArchiveLimits({ maxEntries: 1 }))).toThrow(expect.objectContaining<Partial<ArchiveLimitError>>({
-      name: 'ArchiveLimitError',
-      code: 'entry-count',
-    }))
-  })
-
   it('selectively extracts a real 7z file and applies selected output limits', async () => {
     const file = await createSevenZipFixture()
     const extracted = await extractSevenZipEntries(file, async entries => (
@@ -141,13 +128,6 @@ describe('7z/RAR archive extraction safety', () => {
     })).rejects.toMatchObject({
       name: 'ArchiveLimitError',
       code: 'file-size',
-    })
-
-    await expect(extractSevenZipEntries(file, async () => [], {
-      archiveLimits: { maxEntries: 0 },
-    })).rejects.toMatchObject({
-      name: 'ArchiveLimitError',
-      code: 'entry-count',
     })
   })
 })

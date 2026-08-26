@@ -44,22 +44,6 @@ describe('ZIP extraction resource budgets', () => {
     expect(unzipCall).not.toHaveBeenCalled()
   })
 
-  it('rejects central-directory entry overflow before selecting or inflating files', async () => {
-    const zipData = zipSync({
-      'maa.log': strToU8('primary'),
-      'runtime.txt': strToU8('auxiliary'),
-    })
-    const selectPrimaryLogs = vi.fn()
-
-    await expect(extractZipContent(
-      new File([toArrayBuffer(zipData)], 'too-many-entries.zip'),
-      selectPrimaryLogs,
-      { archiveLimits: { maxEntries: 1 } },
-    )).rejects.toMatchObject({ code: 'entry-count' })
-    expect(selectPrimaryLogs).not.toHaveBeenCalled()
-    expect(unzipCall).not.toHaveBeenCalled()
-  })
-
   it('uses preserved compressed and original sizes before inflating selected files', async () => {
     const zipData = zipSync({
       'maa.log': [strToU8('x'.repeat(2_048)), { level: 9 }],

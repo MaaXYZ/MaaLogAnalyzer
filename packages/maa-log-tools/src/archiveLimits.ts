@@ -10,7 +10,6 @@ import {
 export interface ArchiveLimits {
   maxVolumes: number
   maxCompressedBytes: number
-  maxEntries: number
   maxPathBytes: number
   maxTotalPathBytes: number
   maxFileBytes: number
@@ -23,7 +22,6 @@ export interface ArchiveLimits {
 export type ArchiveLimitCode =
   | 'volume-count'
   | 'compressed-size'
-  | 'entry-count'
   | 'path-size'
   | 'total-path-size'
   | 'file-size'
@@ -74,7 +72,6 @@ export interface ArchiveEntryMetadata {
 }
 
 export interface ArchiveDirectoryBudget {
-  entryCount: number
   totalPathBytes: number
 }
 
@@ -87,7 +84,6 @@ export interface ExtractionBudget {
 export const DEFAULT_ARCHIVE_LIMITS: Readonly<ArchiveLimits> = Object.freeze({
   maxVolumes: 16,
   maxCompressedBytes: 268_435_456,
-  maxEntries: 10_000,
   maxPathBytes: 4_096,
   maxTotalPathBytes: 8_388_608,
   maxFileBytes: 268_435_456,
@@ -100,7 +96,6 @@ export const DEFAULT_ARCHIVE_LIMITS: Readonly<ArchiveLimits> = Object.freeze({
 const integerLimitKeys = [
   'maxVolumes',
   'maxCompressedBytes',
-  'maxEntries',
   'maxPathBytes',
   'maxTotalPathBytes',
   'maxFileBytes',
@@ -130,7 +125,6 @@ export const resolveArchiveLimits = (
 })
 
 export const EMPTY_ARCHIVE_DIRECTORY_BUDGET: Readonly<ArchiveDirectoryBudget> = Object.freeze({
-  entryCount: 0,
   totalPathBytes: 0,
 })
 
@@ -241,11 +235,6 @@ export const addArchiveDirectoryEntry = (
   assertMetadataInteger(entry.originalSize, 'original entry size')
   assertMetadataInteger(entry.compression, 'compression method')
 
-  const entryCount = addSize(current.entryCount, 1, 'entry count')
-  if (entryCount > limits.maxEntries) {
-    throwLimitError('entry-count', entryCount, limits.maxEntries)
-  }
-
   const pathBytes = utf8Encoder.encode(entry.name).byteLength
   if (pathBytes > limits.maxPathBytes) {
     throwLimitError('path-size', pathBytes, limits.maxPathBytes)
@@ -255,7 +244,7 @@ export const addArchiveDirectoryEntry = (
     throwLimitError('total-path-size', totalPathBytes, limits.maxTotalPathBytes)
   }
 
-  return { entryCount, totalPathBytes }
+  return { totalPathBytes }
 }
 
 const copyEntryMetadata = (entry: UnzipFileInfo): ArchiveEntryMetadata => ({

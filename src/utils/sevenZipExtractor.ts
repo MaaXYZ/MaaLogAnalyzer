@@ -47,7 +47,6 @@ interface CommandCapture {
   limits: Readonly<ArchiveLimits>
   inspectListing: boolean
   listingStarted: boolean
-  entryCount: number
   totalPathBytes: number
   capturedBytes: number
   capturedLines: number
@@ -75,6 +74,9 @@ let workspaceSequence = 0
 const captureEncoder = new TextEncoder()
 const MAX_COMMAND_CAPTURE_BYTES = 64 * 1024 * 1024
 const MAX_COMMAND_CAPTURE_LINES = 400_000
+// Generous structural bounds for pathological listings; real memory use stays
+// bounded by maxTotalPathBytes plus these fixed capture ceilings.
+const LISTING_CAPTURE_ENTRY_RESERVE = 20_000
 
 const boundedCaptureLimit = (
   fixed: number,
@@ -91,18 +93,17 @@ const createCommandCapture = (
   limits,
   inspectListing,
   listingStarted: false,
-  entryCount: 0,
   totalPathBytes: 0,
   capturedBytes: 0,
   capturedLines: 0,
   maxCaptureBytes: boundedCaptureLimit(
     1024 * 1024,
-    limits.maxTotalPathBytes + Math.min(limits.maxEntries, 20_000) * 2048,
+    limits.maxTotalPathBytes + LISTING_CAPTURE_ENTRY_RESERVE * 2048,
     MAX_COMMAND_CAPTURE_BYTES,
   ),
   maxCaptureLines: boundedCaptureLimit(
     1024,
-    Math.min(limits.maxEntries, 20_000) * 32,
+    LISTING_CAPTURE_ENTRY_RESERVE * 32,
     MAX_COMMAND_CAPTURE_LINES,
   ),
   limitError: null,
@@ -131,15 +132,6 @@ const captureCommandLine = (
     if (line.trim() === '----------') {
       capture.listingStarted = true
     } else if (capture.listingStarted && line.startsWith('Path = ')) {
-      capture.entryCount += 1
-      if (capture.entryCount > capture.limits.maxEntries) {
-        capture.limitError = new ArchiveLimitError(
-          'entry-count',
-          capture.entryCount,
-          capture.limits.maxEntries,
-        )
-        return
-      }
       const pathBytes = captureEncoder.encode(line.slice('Path = '.length)).byteLength
       if (pathBytes > capture.limits.maxPathBytes) {
         capture.limitError = new ArchiveLimitError(

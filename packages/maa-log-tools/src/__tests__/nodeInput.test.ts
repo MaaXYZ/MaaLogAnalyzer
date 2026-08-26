@@ -1,4 +1,4 @@
-import { lstat, mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { strToU8, zipSync } from 'fflate'
@@ -163,7 +163,7 @@ describe('node input focus selectors', () => {
     })
   })
 
-  it('bounds cumulative directory text reads and directory entry counts', async () => {
+  it('bounds cumulative directory text reads', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'mla-node-input-'))
     tempRoots.push(root)
     const debugDir = path.join(root, 'debug')
@@ -176,51 +176,6 @@ describe('node input focus selectors', () => {
     })).rejects.toMatchObject({
       name: 'ArchiveLimitError',
       code: 'extracted-size',
-    })
-
-    await expect(loadNodeLogDirectory(root, {
-      archiveLimits: { maxEntries: 1 },
-    })).rejects.toMatchObject({
-      name: 'ArchiveLimitError',
-      code: 'entry-count',
-    })
-  })
-
-  it('shares entry budgets across debug discovery, collection, and reads', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'mla-node-input-'))
-    tempRoots.push(root)
-    const debugDir = path.join(root, 'container', 'debug')
-    await mkdir(debugDir, { recursive: true })
-    await writeFile(path.join(debugDir, 'maa.log'), 'main\n')
-    await writeFile(path.join(debugDir, 'notes.txt'), 'notes\n')
-
-    await expect(loadNodeLogDirectory(root, {
-      archiveLimits: { maxEntries: 3 },
-    })).rejects.toMatchObject({
-      name: 'ArchiveLimitError',
-      code: 'entry-count',
-    })
-  })
-
-  it('charges case-distinct paths separately on case-sensitive filesystems', async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'mla-node-input-'))
-    tempRoots.push(root)
-    const debugDir = path.join(root, 'debug')
-    const lowerPath = path.join(debugDir, 'maa.log')
-    const upperPath = path.join(debugDir, 'MAA.LOG')
-    await mkdir(debugDir, { recursive: true })
-    await writeFile(lowerPath, 'main\n')
-    await writeFile(upperPath, 'other\n')
-
-    const lowerStats = await lstat(lowerPath)
-    const upperStats = await lstat(upperPath)
-    if (lowerStats.dev === upperStats.dev && lowerStats.ino === upperStats.ino) return
-
-    await expect(loadNodeLogDirectory(root, {
-      archiveLimits: { maxEntries: 2 },
-    })).rejects.toMatchObject({
-      name: 'ArchiveLimitError',
-      code: 'entry-count',
     })
   })
 

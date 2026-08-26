@@ -38,7 +38,6 @@ describe('archive limits', () => {
     expect(DEFAULT_ARCHIVE_LIMITS).toEqual({
       maxVolumes: 16,
       maxCompressedBytes: 256 * 1024 * 1024,
-      maxEntries: 10_000,
       maxPathBytes: 4_096,
       maxTotalPathBytes: 8 * 1024 * 1024,
       maxFileBytes: 256 * 1024 * 1024,
@@ -52,7 +51,6 @@ describe('archive limits', () => {
   it('relaxes byte budgets while retaining structural limits for insist parsing', () => {
     expect(INSIST_ARCHIVE_LIMITS).toMatchObject({
       maxVolumes: DEFAULT_ARCHIVE_LIMITS.maxVolumes,
-      maxEntries: DEFAULT_ARCHIVE_LIMITS.maxEntries,
       maxPathBytes: DEFAULT_ARCHIVE_LIMITS.maxPathBytes,
       maxTotalPathBytes: DEFAULT_ARCHIVE_LIMITS.maxTotalPathBytes,
       maxCompressedBytes: Number.MAX_SAFE_INTEGER,
@@ -82,15 +80,7 @@ describe('archive limits', () => {
     )
   })
 
-  it('applies aggregate entry count and UTF-8 path budgets', () => {
-    captureLimitError(
-      () => addArchiveDirectoryEntries(
-        EMPTY_ARCHIVE_DIRECTORY_BUDGET,
-        [entry({ name: 'a' }), entry({ name: 'b' })],
-        resolveArchiveLimits({ maxEntries: 1 }),
-      ),
-      'entry-count',
-    )
+  it('applies UTF-8 path budgets', () => {
     captureLimitError(
       () => addArchiveDirectoryEntries(
         EMPTY_ARCHIVE_DIRECTORY_BUDGET,

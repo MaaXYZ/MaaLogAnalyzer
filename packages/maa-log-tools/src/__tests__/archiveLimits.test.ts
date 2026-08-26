@@ -62,7 +62,7 @@ describe('Node archive resource budgets', () => {
   })
 
   it('rejects invalid budget overrides', () => {
-    expect(() => resolveArchiveLimits({ maxEntries: -1 })).toThrow(RangeError)
+    expect(() => resolveArchiveLimits({ maxPathBytes: -1 })).toThrow(RangeError)
     expect(() => resolveArchiveLimits({ maxCompressionRatio: Number.POSITIVE_INFINITY })).toThrow(RangeError)
   })
 
@@ -80,16 +80,11 @@ describe('Node archive resource budgets', () => {
     ), 'compressed-size')
   })
 
-  it('bounds central-directory entry and path metadata', () => {
+  it('bounds central-directory path metadata', () => {
     const zipData = zipSync({
       'maa.log': strToU8('main'),
       'notes.txt': strToU8('notes'),
     })
-    expectLimitCode(() => extractZipEntriesWithinLimits(
-      zipData,
-      () => true,
-      resolveArchiveLimits({ maxEntries: 1 }),
-    ), 'entry-count')
     expectLimitCode(() => extractZipEntriesWithinLimits(
       zipData,
       () => true,

@@ -4,7 +4,6 @@ import { Unzip, UnzipInflate, unzipSync, type UnzipFileInfo } from 'fflate'
 export interface ArchiveLimits {
   maxVolumes: number
   maxCompressedBytes: number
-  maxEntries: number
   maxPathBytes: number
   maxTotalPathBytes: number
   maxFileBytes: number
@@ -17,7 +16,6 @@ export interface ArchiveLimits {
 export type ArchiveBudgetCode =
   | 'volume-count'
   | 'compressed-size'
-  | 'entry-count'
   | 'path-size'
   | 'total-path-size'
   | 'file-size'
@@ -28,7 +26,6 @@ export type ArchiveBudgetCode =
 const archiveBudgetCodes: ReadonlySet<ArchiveBudgetCode> = new Set([
   'volume-count',
   'compressed-size',
-  'entry-count',
   'path-size',
   'total-path-size',
   'file-size',
@@ -195,7 +192,6 @@ export type ArchiveActivityCheck = () => void
 const noArchiveActivityCheck: ArchiveActivityCheck = () => {}
 
 export interface ArchiveDirectoryBudget {
-  entryCount: number
   totalPathBytes: number
 }
 
@@ -220,7 +216,6 @@ export type NeededArchiveEntryKind = 'primary-log' | 'text' | 'image'
 const integerLimitKeys = [
   'maxVolumes',
   'maxCompressedBytes',
-  'maxEntries',
   'maxPathBytes',
   'maxTotalPathBytes',
   'maxFileBytes',
@@ -261,7 +256,6 @@ export const resolveArchiveLimits = (
 })
 
 export const EMPTY_ARCHIVE_DIRECTORY_BUDGET: Readonly<ArchiveDirectoryBudget> = Object.freeze({
-  entryCount: 0,
   totalPathBytes: 0,
 })
 
@@ -326,11 +320,6 @@ const addDirectoryEntry = (
   assertMetadataInteger(entry.originalSize, 'original entry size')
   assertMetadataInteger(entry.compression, 'compression method')
 
-  const entryCount = addSize(current.entryCount, 1, 'entry count')
-  if (entryCount > limits.maxEntries) {
-    throwBudgetError('entry-count', entryCount, limits.maxEntries)
-  }
-
   const pathBytes = utf8Encoder.encode(entry.name).byteLength
   if (pathBytes > limits.maxPathBytes) {
     throwBudgetError('path-size', pathBytes, limits.maxPathBytes)
@@ -340,7 +329,7 @@ const addDirectoryEntry = (
     throwBudgetError('total-path-size', totalPathBytes, limits.maxTotalPathBytes)
   }
 
-  return { entryCount, totalPathBytes }
+  return { totalPathBytes }
 }
 
 export const inspectZipDirectory = (

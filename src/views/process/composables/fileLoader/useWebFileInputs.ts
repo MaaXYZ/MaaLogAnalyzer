@@ -62,9 +62,6 @@ const resolveSelectedLogContent = async (
   budget: BrowserInputBudget,
 ) => {
   const fileList = Array.from(files)
-  for (const file of fileList) {
-    registerBrowserInputFile(budget, file, getFileRelativePath(file))
-  }
   const selectedLogs = selectPrimaryLogGroup(
     fileList.map(file => ({
       file,
@@ -108,6 +105,7 @@ const resolveSelectedLogContent = async (
     .filter(({ item }) => selectedPaths.has(item.path))
     .sort((a, b) => (selectedOrder.get(a.item.path) ?? 0) - (selectedOrder.get(b.item.path) ?? 0))
   for (const { item } of selectedLogItems) {
+    registerBrowserInputFile(budget, item.file, item.path)
     chargeBrowserInputFile(budget, item.file)
   }
   const primaryLogFiles: FilePrimaryLogFile[] = selectedLogItems.map(({ item }) => ({
@@ -144,7 +142,7 @@ export const useWebFileInputs = (
       if (!operationGate.startLoading(generation)) return
 
       await withInsistBrowserBudget(async (budget) => {
-        const files = await readDirectoryFiles(dirEntry, '', budget)
+        const files = await readDirectoryFiles(dirEntry, '')
         if (!operationGate.isCurrent(generation)) return
         const { scopedFiles, primaryLogFiles, cancelled } = await resolveSelectedLogContent(
           files,

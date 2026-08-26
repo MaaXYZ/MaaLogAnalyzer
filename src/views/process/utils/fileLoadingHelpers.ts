@@ -3,9 +3,8 @@ import {
   chargeBrowserInputFile,
   BROWSER_INPUT_MAX_DIRECTORY_DEPTH,
   createBrowserInputBudget,
-  registerBrowserInputEntry,
+  InputResourceLimitError,
   registerBrowserInputFile,
-  type BrowserInputBudget,
 } from '../../../utils/browserInputBudget'
 import { isPrimaryLogFileName } from '../../../utils/logFileDiscovery'
 import type { TextFileSource } from '../../../utils/textFileSource'
@@ -167,7 +166,6 @@ const getFileFromEntry = (fileEntry: FileSystemFileEntry, relativePath: string):
 
 const readDirectoryEntries = (
   reader: FileSystemDirectoryReader,
-  onEntry: (entry: FileSystemEntry) => void,
 ): Promise<FileSystemEntry[]> => {
   return new Promise((resolve, reject) => {
     const entries: FileSystemEntry[] = []
@@ -179,7 +177,6 @@ const readDirectoryEntries = (
           return
         }
         for (const entry of batch) {
-          onEntry(entry)
           entries.push(entry)
         }
         readBatch()
@@ -193,16 +190,15 @@ const readDirectoryEntries = (
 export const readDirectoryFiles = async (
   dirEntry: FileSystemDirectoryEntry,
   relativePrefix = '',
-  budget: BrowserInputBudget = createBrowserInputBudget(),
   depth = 0,
 ): Promise<File[]> => {
   if (depth > BROWSER_INPUT_MAX_DIRECTORY_DEPTH) {
-    registerBrowserInputEntry(budget, relativePrefix || dirEntry.name, depth)
+    throw new InputResourceLimitError(
+      `目录嵌套层级超过限制 (${BROWSER_INPUT_MAX_DIRECTORY_DEPTH})`,
+    )
   }
   const reader = dirEntry.createReader()
-  const entries = await readDirectoryEntries(reader, (entry) => {
-    registerBrowserInputEntry(budget, `${relativePrefix}${entry.name}`, depth)
-  })
+  const entries = await readDirectoryEntries(reader)
   const files: File[] = []
 
   for (const entry of entries) {
@@ -211,7 +207,6 @@ export const readDirectoryFiles = async (
         entry as FileSystemFileEntry,
         `${relativePrefix}${entry.name}`,
       )
-      budget.registeredFiles.add(file)
       files.push(file)
       continue
     }
@@ -220,7 +215,6 @@ export const readDirectoryFiles = async (
       const nestedFiles = await readDirectoryFiles(
         entry as FileSystemDirectoryEntry,
         `${relativePrefix}${entry.name}/`,
-        budget,
         depth + 1,
       )
       files.push(...nestedFiles)

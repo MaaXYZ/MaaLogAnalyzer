@@ -3,7 +3,6 @@ import configuredArchiveLimits from '../../config/archive-limits.json'
 export interface ArchiveLimits {
   maxVolumes: number
   maxCompressedBytes: number
-  maxEntries: number
   maxPathBytes: number
   maxTotalPathBytes: number
   maxFileBytes: number
@@ -27,7 +26,6 @@ export interface ArchiveEntryMetadata {
 export type ArchiveLimitCode =
   | 'volume-count'
   | 'compressed-size'
-  | 'entry-count'
   | 'path-size'
   | 'total-path-size'
   | 'file-size'
@@ -50,7 +48,6 @@ export class ArchiveLimitError extends Error {
 const integerLimitKeys = [
   'maxVolumes',
   'maxCompressedBytes',
-  'maxEntries',
   'maxPathBytes',
   'maxTotalPathBytes',
   'maxFileBytes',
@@ -169,12 +166,10 @@ export const assertArchiveInputsWithinLimits = (
 const utf8Encoder = new TextEncoder()
 
 export interface ArchiveDirectoryBudget {
-  entryCount: number
   totalPathBytes: number
 }
 
 export const EMPTY_ARCHIVE_DIRECTORY_BUDGET: Readonly<ArchiveDirectoryBudget> = Object.freeze({
-  entryCount: 0,
   totalPathBytes: 0,
 })
 
@@ -183,7 +178,6 @@ export const addArchiveDirectoryEntry = (
   entry: ArchiveEntryMetadata,
   limits: Readonly<ArchiveLimits> = DEFAULT_ARCHIVE_LIMITS,
 ): ArchiveDirectoryBudget => {
-  assertMetadataInteger(current.entryCount, 'entry count')
   assertMetadataInteger(current.totalPathBytes, 'path size')
   if (typeof entry.name !== 'string') {
     throw new Error('Invalid ZIP metadata: entry name must be a string')
@@ -191,14 +185,6 @@ export const addArchiveDirectoryEntry = (
   assertMetadataInteger(entry.size, 'compressed entry size')
   assertMetadataInteger(entry.originalSize, 'original entry size')
   assertMetadataInteger(entry.compression, 'compression method')
-
-  const entryCount = current.entryCount + 1
-  if (!Number.isSafeInteger(entryCount)) {
-    throw new Error('Invalid ZIP metadata: entry count exceeds the safe integer range')
-  }
-  if (entryCount > limits.maxEntries) {
-    throwLimitError('entry-count', entryCount, limits.maxEntries)
-  }
 
   const pathBytes = utf8Encoder.encode(entry.name).byteLength
   if (pathBytes > limits.maxPathBytes) {
@@ -209,7 +195,7 @@ export const addArchiveDirectoryEntry = (
     throwLimitError('total-path-size', totalPathBytes, limits.maxTotalPathBytes)
   }
 
-  return { entryCount, totalPathBytes }
+  return { totalPathBytes }
 }
 
 export const addArchiveDirectoryEntries = (

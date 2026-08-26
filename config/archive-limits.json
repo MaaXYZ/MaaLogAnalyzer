@@ -1,7 +1,6 @@
 {
   "maxVolumes": 16,
   "maxCompressedBytes": 268435456,
-  "maxEntries": 10000,
   "maxPathBytes": 4096,
   "maxTotalPathBytes": 8388608,
   "maxFileBytes": 268435456,

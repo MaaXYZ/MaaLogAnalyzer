@@ -87,15 +87,11 @@ describe('VS Code archive reader budgets', () => {
     expect(readVolume).not.toHaveBeenCalled()
   })
 
-  it('checks all central-directory entries and UTF-8 path bytes without inflating them', async () => {
+  it('checks all central-directory UTF-8 path bytes without inflating them', async () => {
     const archive = makeZip({ 'maa.log': 'log', '日志.txt': 'text' })
     const input = { source: archive, name: 'logs.zip', size: archive.byteLength }
     const readVolume = vi.fn(async ({ source }: ArchiveVolumeInput<Uint8Array>) => source)
 
-    await expectBudgetCode(
-      inspectArchiveVolumes([input], readVolume, { maxEntries: 1 }),
-      'entry-count',
-    )
     await expectBudgetCode(
       inspectArchiveVolumes([input], readVolume, { maxPathBytes: 8 }),
       'path-size',
@@ -115,15 +111,6 @@ describe('VS Code archive reader budgets', () => {
     overrides: Partial<ArchiveLimits>
     code: ArchiveBudgetCode
   }>([
-    {
-      name: 'entry counts',
-      entries: [
-        { name: 'a.txt', size: 0, originalSize: 0, compression: 0 },
-        { name: 'b.txt', size: 0, originalSize: 0, compression: 0 },
-      ],
-      overrides: { maxEntries: 1 },
-      code: 'entry-count',
-    },
     {
       name: 'single files',
       entries: [{ name: 'maa.log', size: 11, originalSize: 11, compression: 0 }],

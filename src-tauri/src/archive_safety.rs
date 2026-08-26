@@ -40,7 +40,6 @@ const FILE_SHARE_DELETE: u32 = 0x0000_0004;
 pub(crate) struct ArchiveLimits {
     pub max_volumes: u64,
     pub max_compressed_bytes: u64,
-    pub max_entries: u64,
     pub max_path_bytes: u64,
     pub max_total_path_bytes: u64,
     pub max_file_bytes: u64,
@@ -55,7 +54,6 @@ pub(crate) struct ArchiveLimits {
 pub(crate) const ARCHIVE_LIMITS: ArchiveLimits = ArchiveLimits {
     max_volumes: 16,
     max_compressed_bytes: 256 * 1024 * 1024,
-    max_entries: 10_000,
     max_path_bytes: 4 * 1024,
     max_total_path_bytes: 8 * 1024 * 1024,
     max_file_bytes: 256 * 1024 * 1024,
@@ -70,7 +68,6 @@ pub(crate) const ARCHIVE_LIMITS: ArchiveLimits = ArchiveLimits {
 pub(crate) const INSIST_ARCHIVE_LIMITS: ArchiveLimits = ArchiveLimits {
     max_volumes: ARCHIVE_LIMITS.max_volumes,
     max_compressed_bytes: u64::MAX,
-    max_entries: ARCHIVE_LIMITS.max_entries,
     max_path_bytes: ARCHIVE_LIMITS.max_path_bytes,
     max_total_path_bytes: ARCHIVE_LIMITS.max_total_path_bytes,
     max_file_bytes: u64::MAX,
@@ -84,7 +81,6 @@ pub(crate) const INSIST_ARCHIVE_LIMITS: ArchiveLimits = ArchiveLimits {
 pub(crate) enum ArchiveLimitKind {
     VolumeCount,
     CompressedSize,
-    EntryCount,
     PathSize,
     TotalPathSize,
     FileSize,
@@ -98,7 +94,6 @@ impl fmt::Display for ArchiveLimitKind {
         let label = match self {
             Self::VolumeCount => "volume-count",
             Self::CompressedSize => "compressed-size",
-            Self::EntryCount => "entry-count",
             Self::PathSize => "path-size",
             Self::TotalPathSize => "total-path-size",
             Self::FileSize => "file-size",
@@ -172,24 +167,6 @@ pub(crate) fn validate_archive_inputs(
     Ok(())
 }
 
-pub(crate) fn add_archive_entry_count(
-    current: u64,
-    volume_entries: u64,
-    limits: ArchiveLimits,
-) -> Result<u64, ArchiveLimitError> {
-    let total = current.checked_add(volume_entries).ok_or_else(|| {
-        ArchiveLimitError::new(ArchiveLimitKind::EntryCount, u64::MAX, limits.max_entries)
-    })?;
-    if total > limits.max_entries {
-        return Err(ArchiveLimitError::new(
-            ArchiveLimitKind::EntryCount,
-            total,
-            limits.max_entries,
-        ));
-    }
-    Ok(total)
-}
-
 pub(crate) fn validate_authorized_archive_paths<F>(
     paths: &[PathBuf],
     mut is_allowed: F,
@@ -210,7 +187,6 @@ where
 
 #[derive(Default)]
 pub(crate) struct ArchivePreflightBudget {
-    entry_count: u64,
     total_path_bytes: u64,
     selected_extracted_bytes: u64,
 }
@@ -221,16 +197,6 @@ impl ArchivePreflightBudget {
         path_bytes: u64,
         limits: ArchiveLimits,
     ) -> Result<(), ArchiveLimitError> {
-        let entry_count = self.entry_count.checked_add(1).ok_or_else(|| {
-            ArchiveLimitError::new(ArchiveLimitKind::EntryCount, u64::MAX, limits.max_entries)
-        })?;
-        if entry_count > limits.max_entries {
-            return Err(ArchiveLimitError::new(
-                ArchiveLimitKind::EntryCount,
-                entry_count,
-                limits.max_entries,
-            ));
-        }
         if path_bytes > limits.max_path_bytes {
             return Err(ArchiveLimitError::new(
                 ArchiveLimitKind::PathSize,
@@ -257,7 +223,6 @@ impl ArchivePreflightBudget {
             ));
         }
 
-        self.entry_count = entry_count;
         self.total_path_bytes = total_path_bytes;
         Ok(())
     }
@@ -484,7 +449,6 @@ pub(crate) struct ZipDirectoryInfo {
 
 pub(crate) fn inspect_zip_directory<R: Read + Seek>(
     reader: &mut R,
-    max_entries: u64,
 ) -> Result<ZipDirectoryInfo, String> {
     let file_size = reader
         .seek(SeekFrom::End(0))
@@ -515,13 +479,12 @@ pub(crate) fn inspect_zip_directory<R: Read + Seek>(
         || central_directory_offset == u32::MAX;
 
     let info = if uses_zip64 {
-        inspect_zip64_directory(reader, file_size, eocd_position, max_entries)?
+        inspect_zip64_directory(reader, file_size, eocd_position)?
     } else {
         if disk_number != 0 || central_directory_disk != 0 || entries_on_disk != total_entries {
             return Err("Multi-disk ZIP archives are not supported".to_string());
         }
         let entries = total_entries as u64;
-        ensure_entry_count(entries, max_entries)?;
 
         let relative_end = (central_directory_offset as u64)
             .checked_add(central_directory_size as u64)
@@ -557,7 +520,6 @@ fn inspect_zip64_directory<R: Read + Seek>(
     reader: &mut R,
     file_size: u64,
     eocd_position: u64,
-    max_entries: u64,
 ) -> Result<ZipDirectoryInfo, String> {
     let locator_position = eocd_position
         .checked_sub(ZIP64_LOCATOR_SIZE)
@@ -610,7 +572,6 @@ fn inspect_zip64_directory<R: Read + Seek>(
     if disk_number != 0 || central_directory_disk != 0 || entries_on_disk != entries {
         return Err("Multi-disk ZIP64 archives are not supported".to_string());
     }
-    ensure_entry_count(entries, max_entries)?;
 
     let central_directory_size = read_u64(&record, 40)?;
     let relative_central_directory_offset = read_u64(&record, 48)?;
@@ -700,15 +661,6 @@ fn validate_central_directory<R: Read + Seek>(
         }
     } else if info.central_directory_size != 0 {
         return Err("Empty ZIP declares a non-empty central directory".to_string());
-    }
-    Ok(())
-}
-
-fn ensure_entry_count(entries: u64, max_entries: u64) -> Result<(), String> {
-    if entries > max_entries {
-        return Err(
-            ArchiveLimitError::new(ArchiveLimitKind::EntryCount, entries, max_entries).to_string(),
-        );
     }
     Ok(())
 }
@@ -1081,7 +1033,7 @@ mod tests {
     #[cfg(unix)]
     use super::create_private_output_file;
     use super::{
-        add_archive_entry_count, canonicalize_archive_entry_path, copy_snapshot_bytes,
+        canonicalize_archive_entry_path, copy_snapshot_bytes,
         create_private_child_directory, create_private_temp_directory,
         has_windows_reparse_attribute, inspect_zip_directory, validate_archive_entry_path,
         validate_archive_inputs, validate_authorized_archive_paths, ArchiveLimitKind,
@@ -1093,7 +1045,6 @@ mod tests {
         ArchiveLimits {
             max_volumes: 2,
             max_compressed_bytes: 10,
-            max_entries: 2,
             max_path_bytes: 5,
             max_total_path_bytes: 8,
             max_file_bytes: 8,
@@ -1209,7 +1160,6 @@ mod tests {
         let expected = [
             ("maxVolumes", ARCHIVE_LIMITS.max_volumes),
             ("maxCompressedBytes", ARCHIVE_LIMITS.max_compressed_bytes),
-            ("maxEntries", ARCHIVE_LIMITS.max_entries),
             ("maxPathBytes", ARCHIVE_LIMITS.max_path_bytes),
             ("maxTotalPathBytes", ARCHIVE_LIMITS.max_total_path_bytes),
             ("maxFileBytes", ARCHIVE_LIMITS.max_file_bytes),
@@ -1234,10 +1184,6 @@ mod tests {
             ARCHIVE_LIMITS.max_volumes
         );
         assert_eq!(
-            super::INSIST_ARCHIVE_LIMITS.max_entries,
-            ARCHIVE_LIMITS.max_entries
-        );
-        assert_eq!(
             super::INSIST_ARCHIVE_LIMITS.max_path_bytes,
             ARCHIVE_LIMITS.max_path_bytes
         );
@@ -1254,18 +1200,12 @@ mod tests {
     }
 
     #[test]
-    fn rejects_excessive_archive_inputs_and_cross_volume_entries() {
+    fn rejects_excessive_archive_inputs() {
         let volume_error = validate_archive_inputs(&[1, 1, 1], test_limits()).unwrap_err();
         assert_eq!(volume_error.kind, ArchiveLimitKind::VolumeCount);
 
         let compressed_error = validate_archive_inputs(&[6, 5], test_limits()).unwrap_err();
         assert_eq!(compressed_error.kind, ArchiveLimitKind::CompressedSize);
-
-        let mut limits = test_limits();
-        limits.max_entries = 10_000;
-        let first = add_archive_entry_count(0, 6_000, limits).unwrap();
-        let entry_error = add_archive_entry_count(first, 5_000, limits).unwrap_err();
-        assert_eq!(entry_error.kind, ArchiveLimitKind::EntryCount);
     }
 
     #[test]
@@ -1283,14 +1223,14 @@ mod tests {
     #[test]
     fn rejects_forged_classic_eocd_before_directory_allocation() {
         let mut bytes = Cursor::new(forged_classic_eocd(10_001, 0, 0));
-        let error = inspect_zip_directory(&mut bytes, 10_000).unwrap_err();
-        assert!(error.contains("entry-count"));
+        let error = inspect_zip_directory(&mut bytes).unwrap_err();
+        assert!(error.contains("too small for its declared entry count"));
     }
 
     #[test]
     fn accepts_real_zip_central_directory() {
         let mut bytes = real_zip_bytes();
-        let info = inspect_zip_directory(&mut bytes, 10_000).unwrap();
+        let info = inspect_zip_directory(&mut bytes).unwrap();
         assert_eq!(info.entries, 1);
         assert!(info.central_directory_size >= super::CENTRAL_DIRECTORY_HEADER_MIN_SIZE);
     }
@@ -1298,7 +1238,7 @@ mod tests {
     #[test]
     fn accepts_real_zip64_with_leading_junk() {
         let (mut bytes, expected_central_offset) = real_zip64_with_leading_junk();
-        let info = inspect_zip_directory(&mut bytes, 10_000).unwrap();
+        let info = inspect_zip_directory(&mut bytes).unwrap();
         assert_eq!(info.entries, 1);
         assert_eq!(info.central_directory_offset, expected_central_offset);
 
@@ -1309,14 +1249,14 @@ mod tests {
     #[test]
     fn rejects_forged_zip64_eocd_before_directory_allocation() {
         let mut bytes = Cursor::new(forged_zip64_eocd(10_001));
-        let error = inspect_zip_directory(&mut bytes, 10_000).unwrap_err();
-        assert!(error.contains("entry-count"));
+        let error = inspect_zip_directory(&mut bytes).unwrap_err();
+        assert!(error.contains("too small for its declared entry count"));
     }
 
     #[test]
     fn rejects_central_directory_outside_snapshot() {
         let mut bytes = Cursor::new(forged_classic_eocd(1, 46, 1));
-        let error = inspect_zip_directory(&mut bytes, 10_000).unwrap_err();
+        let error = inspect_zip_directory(&mut bytes).unwrap_err();
         assert!(error.contains("central-directory"));
     }
 
@@ -1345,7 +1285,7 @@ mod tests {
         let mut snapshot = workspace
             .snapshot_source(&source_path, 0, ARCHIVE_LIMITS.max_compressed_bytes)
             .unwrap();
-        let info = inspect_zip_directory(&mut snapshot.file, ARCHIVE_LIMITS.max_entries).unwrap();
+        let info = inspect_zip_directory(&mut snapshot.file).unwrap();
         assert_eq!(info.entries, 1);
 
         let mut copied = Vec::new();
@@ -1379,25 +1319,17 @@ mod tests {
     #[test]
     fn enforces_directory_entry_and_path_budgets() {
         let limits = test_limits();
-        let mut budget = ArchivePreflightBudget::default();
-        budget.add_directory_entry(4, limits).unwrap();
-        budget.add_directory_entry(4, limits).unwrap();
-
-        let count_error = budget.add_directory_entry(1, limits).unwrap_err();
-        assert_eq!(count_error.kind, ArchiveLimitKind::EntryCount);
 
         let mut path_budget = ArchivePreflightBudget::default();
         let path_error = path_budget.add_directory_entry(6, limits).unwrap_err();
         assert_eq!(path_error.kind, ArchiveLimitKind::PathSize);
 
-        let mut total_path_limits = limits;
-        total_path_limits.max_entries = 3;
         let mut total_path_budget = ArchivePreflightBudget::default();
         total_path_budget
-            .add_directory_entry(5, total_path_limits)
+            .add_directory_entry(5, limits)
             .unwrap();
         let total_path_error = total_path_budget
-            .add_directory_entry(4, total_path_limits)
+            .add_directory_entry(4, limits)
             .unwrap_err();
         assert_eq!(total_path_error.kind, ArchiveLimitKind::TotalPathSize);
     }
