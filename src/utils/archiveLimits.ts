@@ -80,49 +80,6 @@ export const resolveArchiveLimits = (
   ...overrides,
 }))
 
-/**
- * One-shot override used after the user explicitly chooses “坚持解析”.
- * Structural limits stay in place; only byte and compression-ratio budgets
- * are relaxed so malformed paths and excessively large directory tables are
- * still rejected.
- */
-export const INSIST_ARCHIVE_LIMIT_OVERRIDES: Readonly<Partial<ArchiveLimits>> = Object.freeze({
-  maxCompressedBytes: Number.MAX_SAFE_INTEGER,
-  maxFileBytes: Number.MAX_SAFE_INTEGER,
-  maxImageBytes: Number.MAX_SAFE_INTEGER,
-  maxExtractedBytes: Number.MAX_SAFE_INTEGER,
-  maxCompressionRatio: Number.MAX_SAFE_INTEGER,
-  compressionRatioMinBytes: Number.MAX_SAFE_INTEGER,
-})
-
-export const INSIST_ARCHIVE_LIMITS: Readonly<ArchiveLimits> = resolveArchiveLimits(
-  INSIST_ARCHIVE_LIMIT_OVERRIDES,
-)
-
-const insistableLimitCodes: ReadonlySet<ArchiveLimitCode> = new Set([
-  'compressed-size',
-  'file-size',
-  'image-size',
-  'extracted-size',
-  'compression-ratio',
-])
-
-export const isInsistableArchiveLimitError = (error: unknown): error is ArchiveLimitError =>
-  error instanceof ArchiveLimitError && insistableLimitCodes.has(error.code)
-
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
-
-export const confirmInsistParsing = (error: unknown): boolean => {
-  const message = getErrorMessage(error)
-  const isTauriLimitError =
-    /Archive (?:compressed-size|file-size|image-size|extracted-size|compression-ratio) exceeds the configured limit/u.test(
-      message,
-    )
-  if (!isInsistableArchiveLimitError(error) && !isTauriLimitError) return false
-  return window.confirm(`${message}\n\n坚持解析可能占用大量内存，甚至导致应用退出。是否坚持解析？`)
-}
-
 const throwLimitError = (
   code: ArchiveLimitCode,
   actual: number,
@@ -176,7 +133,7 @@ export const EMPTY_ARCHIVE_DIRECTORY_BUDGET: Readonly<ArchiveDirectoryBudget> = 
 export const addArchiveDirectoryEntry = (
   current: Readonly<ArchiveDirectoryBudget>,
   entry: ArchiveEntryMetadata,
-  limits: Readonly<ArchiveLimits> = DEFAULT_ARCHIVE_LIMITS,
+  limits: Readonly<ArchiveLimits> | null = DEFAULT_ARCHIVE_LIMITS,
 ): ArchiveDirectoryBudget => {
   assertMetadataInteger(current.totalPathBytes, 'path size')
   if (typeof entry.name !== 'string') {
@@ -185,6 +142,8 @@ export const addArchiveDirectoryEntry = (
   assertMetadataInteger(entry.size, 'compressed entry size')
   assertMetadataInteger(entry.originalSize, 'original entry size')
   assertMetadataInteger(entry.compression, 'compression method')
+
+  if (!limits) return current
 
   const pathBytes = utf8Encoder.encode(entry.name).byteLength
   if (pathBytes > limits.maxPathBytes) {
@@ -201,7 +160,7 @@ export const addArchiveDirectoryEntry = (
 export const addArchiveDirectoryEntries = (
   current: Readonly<ArchiveDirectoryBudget>,
   entries: readonly ArchiveEntryMetadata[],
-  limits: Readonly<ArchiveLimits> = DEFAULT_ARCHIVE_LIMITS,
+  limits: Readonly<ArchiveLimits> | null = DEFAULT_ARCHIVE_LIMITS,
 ): ArchiveDirectoryBudget => {
   let budget = current
   for (const entry of entries) {

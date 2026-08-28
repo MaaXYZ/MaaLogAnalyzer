@@ -41,7 +41,7 @@ const normalizeLoadedPath = (rawPath: string) => {
 
 export const collectTextFilesFromFiles = async (
   files: Iterable<File>,
-  budget = createBrowserInputBudget(),
+  budget = createBrowserInputBudget(null),
 ): Promise<LoadedTextFile[]> => {
   const result: LoadedTextFile[] = []
   const seen = new Set<string>()
@@ -86,7 +86,7 @@ const parseWaitFreezesKey = (fileName: string): string | null => {
 
 export const collectDebugAssetsFromFiles = async (
   files: Iterable<File>,
-  budget = createBrowserInputBudget(),
+  budget = createBrowserInputBudget(null),
 ): Promise<CollectedDebugAssets> => {
   const errorImages = new Map<string, string>()
   const visionImages = new Map<string, string>()

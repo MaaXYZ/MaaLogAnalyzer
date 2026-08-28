@@ -32,7 +32,6 @@ import {
   registerInputResourceEntry,
   type BrowserInputBudget,
 } from '../../../utils/browserInputBudget'
-import { confirmInsistParsing, INSIST_ARCHIVE_LIMITS } from '../../../utils/archiveLimits'
 
 interface UseFlowchartUploadOptions {
   onUploadFile: (file: File | File[]) => void
@@ -62,16 +61,9 @@ export const useFlowchartUpload = ({
 
   const isCurrentUpload = (generation: number) => generation === uploadGeneration
 
-  const withInsistBrowserBudget = async <T>(
+  const withUnmeteredBrowserInput = async <T>(
     load: (budget: BrowserInputBudget) => Promise<T>,
-  ): Promise<T> => {
-    try {
-      return await load(createBrowserInputBudget())
-    } catch (error) {
-      if (!confirmInsistParsing(error)) throw error
-      return load(createBrowserInputBudget(INSIST_ARCHIVE_LIMITS))
-    }
-  }
+  ): Promise<T> => load(createBrowserInputBudget(null))
 
   const revokeUploadImages = (...maps: Array<Map<string, string>>) => {
     for (const map of maps) revokeBlobUrlMap(map)
@@ -219,21 +211,10 @@ export const useFlowchartUpload = ({
             wait_freezes_images: Record<string, string>
             resource_token?: string | null
           }
-          let result: ArchiveResult
-          try {
-            result = await invoke<ArchiveResult>('extract_zip_log', {
-              path,
-              paths: selectedPaths,
-              insist: false,
-            })
-          } catch (error) {
-            if (!confirmInsistParsing(error)) throw error
-            result = await invoke<ArchiveResult>('extract_zip_log', {
-              path,
-              paths: selectedPaths,
-              insist: true,
-            })
-          }
+          const result = await invoke<ArchiveResult>('extract_zip_log', {
+            path,
+            paths: selectedPaths,
+          })
           await emitUploadContent(
             result.content,
             toImageMap(result.error_images),
@@ -246,16 +227,9 @@ export const useFlowchartUpload = ({
           )
         } else {
           const { readFile } = await import('@tauri-apps/plugin-fs')
-          try {
-            const budget = createInputResourceBudget()
-            registerInputResourceEntry(budget, path, 0)
-            await chargeTauriRegularFile(path, budget)
-          } catch (error) {
-            if (!confirmInsistParsing(error)) throw error
-            const budget = createInputResourceBudget(INSIST_ARCHIVE_LIMITS)
-            registerInputResourceEntry(budget, path, 0)
-            await chargeTauriRegularFile(path, budget)
-          }
+          const budget = createInputResourceBudget(null)
+          registerInputResourceEntry(budget, path, 0)
+          await chargeTauriRegularFile(path, budget)
           const fileName = path.split(/[/\\]/).pop() || 'loaded.log'
           await emitUploadContent(
             '',
@@ -309,7 +283,7 @@ export const useFlowchartUpload = ({
     const generation = beginUpload()
 
     try {
-      await withInsistBrowserBudget(async (budget) => {
+      await withUnmeteredBrowserInput(async (budget) => {
         const { scopedFiles, primaryLogFiles } = await resolveSelectedLogContentFromFiles(
           files,
           budget,

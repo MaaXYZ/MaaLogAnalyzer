@@ -35,7 +35,7 @@ describe('VS Code Webview byte transfer', () => {
     // retains the entire backing store. Exercise that real runtime shape.
     const bytes = Buffer.alloc(WEBVIEW_BYTE_TRANSFER_CHUNK_BYTES + 17)
 
-    await sender.start({ insist: false })
+    await sender.start({ fileName: 'maa.log' })
     await sender.sendFile({ kind: 'primary', path: 'maa.log', name: 'maa.log', bytes })
     await sender.complete()
 

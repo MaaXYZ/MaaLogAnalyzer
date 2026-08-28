@@ -39,7 +39,7 @@ export type { ExtractedTextFile } from './archiveShared'
 
 export interface ExtractZipContentOptions {
   includeAuxiliaryFiles?: boolean
-  archiveLimits?: Partial<ArchiveLimits>
+  archiveLimits?: Partial<ArchiveLimits> | null
 }
 
 function toMap(record: Record<string, Uint8Array>): Map<string, Uint8Array> {
@@ -75,7 +75,7 @@ interface BufferedZipArchive {
 function inspectZipArchive(
   data: Uint8Array,
   currentBudget: Readonly<ArchiveDirectoryBudget>,
-  limits: Readonly<ArchiveLimits>,
+  limits: Readonly<ArchiveLimits> | null,
 ): BufferedZipArchive & { directoryBudget: ArchiveDirectoryBudget } {
   const entries: ArchiveEntryMetadata[] = []
   let directoryBudget = currentBudget
@@ -215,19 +215,23 @@ export async function extractZipContents(
   primaryLogFiles: PrimaryLogFile[]
 } | null> {
   const includeAuxiliaryFiles = options.includeAuxiliaryFiles !== false
-  const limits = resolveArchiveLimits(options.archiveLimits)
+  const limits = options.archiveLimits == null
+    ? null
+    : resolveArchiveLimits(options.archiveLimits)
 
-  // File metadata is available without allocating archive buffers. Reject an
-  // oversized multi-volume selection before calling arrayBuffer on any file.
-  assertArchiveInputsWithinLimits(archiveFiles, limits)
+  // Explicit callers can still opt into resource budgets; normal user loads
+  // skip them and proceed directly to reading the selected archives.
+  if (limits) assertArchiveInputsWithinLimits(archiveFiles, limits)
 
   const archives: BufferedZipArchive[] = []
-  const actualArchiveInputs: Array<{ size: number }> = []
+  const actualArchiveInputs: Array<{ size: number }> | null = limits ? [] : null
   let directoryBudget = EMPTY_ARCHIVE_DIRECTORY_BUDGET
   for (const file of archiveFiles) {
     const data = new Uint8Array(await file.arrayBuffer())
-    actualArchiveInputs.push({ size: data.byteLength })
-    assertArchiveInputsWithinLimits(actualArchiveInputs, limits)
+    if (actualArchiveInputs && limits) {
+      actualArchiveInputs.push({ size: data.byteLength })
+      assertArchiveInputsWithinLimits(actualArchiveInputs, limits)
+    }
 
     const inspected = inspectZipArchive(data, directoryBudget, limits)
     directoryBudget = inspected.directoryBudget
@@ -254,12 +258,11 @@ export async function extractZipContents(
   }
   const selectedPaths = new Set(selectedOptions.map(option => option.path))
 
-  // Validate every entry that the fflate filter will accept before starting
-  // asynchronous decompression, including duplicate paths across ZIP volumes.
+  // Apply selected-entry budgets only when an explicit caller supplied them.
   const selectedEntries = archives.flatMap(archive => archive.entries.filter(
     entry => shouldExtractEntry(entry.name, includeAuxiliaryFiles, selectedPaths),
   ))
-  assertSelectedArchiveEntriesWithinLimits(selectedEntries, limits)
+  if (limits) assertSelectedArchiveEntriesWithinLimits(selectedEntries, limits)
 
   const files = Object.create(null) as Unzipped
   for (const archive of archives) {

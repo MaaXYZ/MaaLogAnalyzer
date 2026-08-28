@@ -2,7 +2,7 @@ import { h, onUnmounted, ref } from 'vue'
 import { FileOutlined, FolderOutlined } from '@vicons/antd'
 import type { UseProcessFileLoaderOptions } from './fileLoader/types'
 import { useWebFileInputs } from './fileLoader/useWebFileInputs'
-import { useVSCodeBridge } from './fileLoader/useVSCodeBridge'
+import { useVSCodeOpenCommands } from './fileLoader/useVSCodeBridge'
 import { useTauriBridge } from './fileLoader/useTauriBridge'
 import { createTauriArchiveResourceOwner } from '../../../utils/tauriArchiveResources'
 import { createFileLoadOperationGate } from './fileLoader/operationGate'
@@ -46,7 +46,7 @@ export const useProcessFileLoader = (options: UseProcessFileLoaderOptions) => {
   const {
     handleVSCodeOpen,
     handleVSCodeOpenFolder,
-  } = useVSCodeBridge(lifecycleOptions, () => options.isInVSCode.value)
+  } = useVSCodeOpenCommands()
 
   const {
     handleTauriOpen,

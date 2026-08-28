@@ -6,7 +6,6 @@ import {
   assertSelectedArchiveEntriesWithinLimits,
   DEFAULT_ARCHIVE_LIMITS,
   EMPTY_ARCHIVE_DIRECTORY_BUDGET,
-  INSIST_ARCHIVE_LIMITS,
   resolveArchiveLimits,
   type ArchiveEntryMetadata,
   type ArchiveLimitCode,
@@ -45,19 +44,6 @@ describe('archive limits', () => {
       maxExtractedBytes: 512 * 1024 * 1024,
       maxCompressionRatio: 500,
       compressionRatioMinBytes: 1024 * 1024,
-    })
-  })
-
-  it('relaxes byte budgets while retaining structural limits for insist parsing', () => {
-    expect(INSIST_ARCHIVE_LIMITS).toMatchObject({
-      maxVolumes: DEFAULT_ARCHIVE_LIMITS.maxVolumes,
-      maxPathBytes: DEFAULT_ARCHIVE_LIMITS.maxPathBytes,
-      maxTotalPathBytes: DEFAULT_ARCHIVE_LIMITS.maxTotalPathBytes,
-      maxCompressedBytes: Number.MAX_SAFE_INTEGER,
-      maxFileBytes: Number.MAX_SAFE_INTEGER,
-      maxImageBytes: Number.MAX_SAFE_INTEGER,
-      maxExtractedBytes: Number.MAX_SAFE_INTEGER,
-      compressionRatioMinBytes: Number.MAX_SAFE_INTEGER,
     })
   })
 

@@ -239,15 +239,6 @@ const validateLimits = (limits: ArchiveLimits): Readonly<ArchiveLimits> => {
 
 export const DEFAULT_ARCHIVE_LIMITS = validateLimits({ ...configuredArchiveLimits })
 
-export const INSIST_ARCHIVE_LIMIT_OVERRIDES: Readonly<Partial<ArchiveLimits>> = Object.freeze({
-  maxCompressedBytes: Number.MAX_SAFE_INTEGER,
-  maxFileBytes: Number.MAX_SAFE_INTEGER,
-  maxImageBytes: Number.MAX_SAFE_INTEGER,
-  maxExtractedBytes: Number.MAX_SAFE_INTEGER,
-  maxCompressionRatio: Number.MAX_SAFE_INTEGER,
-  compressionRatioMinBytes: Number.MAX_SAFE_INTEGER,
-})
-
 export const resolveArchiveLimits = (
   overrides: Partial<ArchiveLimits> = {},
 ): Readonly<ArchiveLimits> => validateLimits({
@@ -311,7 +302,7 @@ const copyEntryMetadata = (entry: UnzipFileInfo): ArchiveEntryMetadata => ({
 const addDirectoryEntry = (
   current: Readonly<ArchiveDirectoryBudget>,
   entry: ArchiveEntryMetadata,
-  limits: Readonly<ArchiveLimits>,
+  limits: Readonly<ArchiveLimits> | null,
 ): ArchiveDirectoryBudget => {
   if (typeof entry.name !== 'string') {
     throw new Error('Invalid archive metadata: entry name must be a string')
@@ -319,6 +310,8 @@ const addDirectoryEntry = (
   assertMetadataInteger(entry.size, 'compressed entry size')
   assertMetadataInteger(entry.originalSize, 'original entry size')
   assertMetadataInteger(entry.compression, 'compression method')
+
+  if (!limits) return current
 
   const pathBytes = utf8Encoder.encode(entry.name).byteLength
   if (pathBytes > limits.maxPathBytes) {
@@ -335,7 +328,7 @@ const addDirectoryEntry = (
 export const inspectZipDirectory = (
   data: Uint8Array,
   currentBudget: Readonly<ArchiveDirectoryBudget> = EMPTY_ARCHIVE_DIRECTORY_BUDGET,
-  limits: Readonly<ArchiveLimits> = DEFAULT_ARCHIVE_LIMITS,
+  limits: Readonly<ArchiveLimits> | null = DEFAULT_ARCHIVE_LIMITS,
   checkActive: ArchiveActivityCheck = noArchiveActivityCheck,
 ): { entries: ArchiveEntryMetadata[]; directoryBudget: ArchiveDirectoryBudget } => {
   checkActive()
@@ -509,18 +502,18 @@ export const createStoredEntryMetadata = (
 export const inspectArchiveVolumes = async <T>(
   inputs: readonly ArchiveVolumeInput<T>[],
   readVolume: (input: ArchiveVolumeInput<T>) => PromiseLike<Uint8Array>,
-  limitOverrides: Partial<ArchiveLimits> = {},
+  limitOverrides: Partial<ArchiveLimits> | null = {},
   checkActive: ArchiveActivityCheck = noArchiveActivityCheck,
 ): Promise<InspectedArchiveVolume<T>[]> => {
   checkActive()
-  const limits = resolveArchiveLimits(limitOverrides)
+  const limits = limitOverrides == null ? null : resolveArchiveLimits(limitOverrides)
 
   // Stat metadata is checked before the first read so oversized selections do
   // not allocate archive buffers at all.
-  assertArchiveInputsWithinLimits(inputs, limits)
+  if (limits) assertArchiveInputsWithinLimits(inputs, limits)
 
   const inspected: InspectedArchiveVolume<T>[] = []
-  const actualInputs: Array<{ size: number }> = []
+  const actualInputs: Array<{ size: number }> | null = limits ? [] : null
   const canonicalPaths = new Map<string, 'directory' | 'file'>()
   let directoryBudget = EMPTY_ARCHIVE_DIRECTORY_BUDGET
 
@@ -528,8 +521,10 @@ export const inspectArchiveVolumes = async <T>(
     checkActive()
     const data = await readVolume(input)
     checkActive()
-    actualInputs.push({ size: data.byteLength })
-    assertArchiveInputsWithinLimits(actualInputs, limits)
+    if (actualInputs && limits) {
+      actualInputs.push({ size: data.byteLength })
+      assertArchiveInputsWithinLimits(actualInputs, limits)
+    }
 
     const directory = inspectZipDirectory(data, directoryBudget, limits, checkActive)
     directoryBudget = directory.directoryBudget
@@ -585,7 +580,7 @@ const unzipSelectedEntries = async (
   data: Uint8Array,
   selectedEntries: readonly ArchiveEntryMetadata[],
   initialExtractedBytes: number,
-  limits: Readonly<ArchiveLimits>,
+  limits: Readonly<ArchiveLimits> | null,
   checkActive: ArchiveActivityCheck,
 ): Promise<StreamedArchiveEntries> => {
   checkActive()
@@ -601,11 +596,13 @@ const unzipSelectedEntries = async (
   const entries = new Map<string, Uint8Array>()
   const startedNames = new Set<string>()
   const startedFiles: Array<{ terminate: () => void }> = []
-  assertMetadataInteger(initialExtractedBytes, 'initial actual extracted size')
-  if (initialExtractedBytes > limits.maxExtractedBytes) {
-    throwBudgetError('extracted-size', initialExtractedBytes, limits.maxExtractedBytes)
+  if (limits) {
+    assertMetadataInteger(initialExtractedBytes, 'initial actual extracted size')
+    if (initialExtractedBytes > limits.maxExtractedBytes) {
+      throwBudgetError('extracted-size', initialExtractedBytes, limits.maxExtractedBytes)
+    }
   }
-  let extractedBytes = initialExtractedBytes
+  let extractedBytes = limits ? initialExtractedBytes : 0
   const archive = new Unzip((file) => {
     checkActive()
     const metadata = metadataByName.get(file.name)
@@ -636,8 +633,10 @@ const unzipSelectedEntries = async (
       if (nextOffset > metadata.originalSize) {
         throw new ArchiveIntegrityError(`Actual size exceeds declared size for archive entry: ${file.name}`)
       }
-      assertActualEntryChunkWithinLimits(metadata, nextOffset, limits)
-      extractedBytes = addExtractedBytes(extractedBytes, dataChunk.byteLength, limits)
+      if (limits) {
+        assertActualEntryChunkWithinLimits(metadata, nextOffset, limits)
+        extractedBytes = addExtractedBytes(extractedBytes, dataChunk.byteLength, limits)
+      }
       output.set(dataChunk, outputOffset)
       outputOffset = nextOffset
 
@@ -697,24 +696,28 @@ export const readSelectedArchiveVolumes = async <T>(
     volume: InspectedArchiveVolume<T>,
     entries: ReadonlyMap<string, Uint8Array>,
   ) => void | Promise<void>,
-  limitOverrides: Partial<ArchiveLimits> = {},
+  limitOverrides: Partial<ArchiveLimits> | null = {},
   checkActive: ArchiveActivityCheck = noArchiveActivityCheck,
 ): Promise<void> => {
   checkActive()
-  const limits = resolveArchiveLimits(limitOverrides)
-  const inputs = inspectedVolumes.map((volume) => volume.input)
-  assertArchiveInputsWithinLimits(inputs, limits)
+  const limits = limitOverrides == null ? null : resolveArchiveLimits(limitOverrides)
+  if (limits) {
+    const inputs = inspectedVolumes.map((volume) => volume.input)
+    assertArchiveInputsWithinLimits(inputs, limits)
+  }
 
   // Validate the complete extraction plan before allocating a second archive
   // buffer. Duplicate paths in independent MXU volumes are counted separately.
-  const plannedEntries = inspectedVolumes.flatMap((volume) =>
-    getNeededArchiveEntries(volume.entries, selection),
-  )
-  assertExtractedEntriesWithinLimits(plannedEntries, limits)
+  if (limits) {
+    const plannedEntries = inspectedVolumes.flatMap((volume) =>
+      getNeededArchiveEntries(volume.entries, selection),
+    )
+    assertExtractedEntriesWithinLimits(plannedEntries, limits)
+  }
   checkActive()
 
-  const actualInputs: Array<{ size: number }> = []
-  const currentSelectedEntries: ArchiveEntryMetadata[] = []
+  const actualInputs: Array<{ size: number }> | null = limits ? [] : null
+  const currentSelectedEntries: ArchiveEntryMetadata[] | null = limits ? [] : null
   let actualExtractedBytes = 0
   const canonicalPaths = new Map<string, 'directory' | 'file'>()
   let directoryBudget = EMPTY_ARCHIVE_DIRECTORY_BUDGET
@@ -723,8 +726,10 @@ export const readSelectedArchiveVolumes = async <T>(
     checkActive()
     const data = await readVolume(inspectedVolume.input)
     checkActive()
-    actualInputs.push({ size: data.byteLength })
-    assertArchiveInputsWithinLimits(actualInputs, limits)
+    if (actualInputs && limits) {
+      actualInputs.push({ size: data.byteLength })
+      assertArchiveInputsWithinLimits(actualInputs, limits)
+    }
 
     // Re-inspect the exact bytes that will be expanded. This closes the gap if
     // a local archive changed while the selection dialog was open.
@@ -732,8 +737,10 @@ export const readSelectedArchiveVolumes = async <T>(
     directoryBudget = currentDirectory.directoryBudget
     assertUniqueCanonicalArchivePaths(currentDirectory.entries, canonicalPaths)
     const neededEntries = getNeededArchiveEntries(currentDirectory.entries, selection)
-    currentSelectedEntries.push(...neededEntries)
-    assertExtractedEntriesWithinLimits(currentSelectedEntries, limits)
+    if (currentSelectedEntries && limits) {
+      currentSelectedEntries.push(...neededEntries)
+      assertExtractedEntriesWithinLimits(currentSelectedEntries, limits)
+    }
 
     if (neededEntries.length === 0) continue
     checkActive()

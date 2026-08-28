@@ -73,6 +73,28 @@ describe('VS Code archive reader budgets', () => {
     expect(readVolume).not.toHaveBeenCalled()
   })
 
+  it('skips archive budgets when local loading explicitly disables them', async () => {
+    const archive = makeZip({ 'debug/maa.log': 'x'.repeat(2 * 1024 * 1024) })
+    const input = { source: archive, name: 'large.zip', size: archive.byteLength }
+    const readVolume = vi.fn(async ({ source }: ArchiveVolumeInput<Uint8Array>) => source)
+    const inspected = await inspectArchiveVolumes([input], readVolume, null)
+    const selection = createArchiveSelection(['debug/maa.log'], 'debug')
+
+    await expect(readSelectedArchiveVolumes(
+      inspected,
+      selection,
+      readVolume,
+      vi.fn(),
+    )).rejects.toMatchObject({ code: 'compression-ratio' })
+    await expect(readSelectedArchiveVolumes(
+      inspected,
+      selection,
+      readVolume,
+      vi.fn(),
+      null,
+    )).resolves.toBeUndefined()
+  })
+
   it('rejects too many volume inputs before reading them', async () => {
     const inputs: Array<ArchiveVolumeInput<string>> = [
       { source: 'part01.zip', name: 'part01.zip', size: 1 },
@@ -239,6 +261,7 @@ describe('VS Code archive reader budgets', () => {
       createArchiveSelection(['debug/maa.log'], 'debug'),
       readVolume,
       consumeEntries,
+      null,
     )).rejects.toBeInstanceOf(ArchiveIntegrityError)
     expect(consumeEntries).not.toHaveBeenCalled()
   })

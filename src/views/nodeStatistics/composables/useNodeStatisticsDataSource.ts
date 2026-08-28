@@ -10,25 +10,16 @@ import {
 } from '../../../utils/logFileDiscovery'
 import { extractZipContent } from '../../../utils/zipExtractor'
 import { materializeInlineParseInput } from '../../../utils/logInputSource'
-import { confirmInsistParsing, INSIST_ARCHIVE_LIMIT_OVERRIDES } from '../../../utils/archiveLimits'
 
 const readUploadedLogContent = async (file: File): Promise<string> => {
   if (!file.name.toLowerCase().endsWith('.zip')) {
     return file.text()
   }
 
-  let extracted
-  try {
-    extracted = await extractZipContent(file, undefined, {
-      includeAuxiliaryFiles: false,
-    })
-  } catch (error) {
-    if (!confirmInsistParsing(error)) throw error
-    extracted = await extractZipContent(file, undefined, {
-      includeAuxiliaryFiles: false,
-      archiveLimits: INSIST_ARCHIVE_LIMIT_OVERRIDES,
-    })
-  }
+  const extracted = await extractZipContent(file, undefined, {
+    includeAuxiliaryFiles: false,
+    archiveLimits: null,
+  })
   if (!extracted) {
     throw new Error('ZIP 中未找到有效的 MAA 日志文件')
   }

@@ -39,67 +39,29 @@ const FILE_SHARE_DELETE: u32 = 0x0000_0004;
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ArchiveLimits {
     pub max_volumes: u64,
-    pub max_compressed_bytes: u64,
     pub max_path_bytes: u64,
     pub max_total_path_bytes: u64,
-    pub max_file_bytes: u64,
-    pub max_image_bytes: u64,
-    pub max_extracted_bytes: u64,
-    pub max_compression_ratio: u64,
-    pub compression_ratio_min_bytes: u64,
 }
 
-// Keep these compile-time values aligned with `config/archive-limits.json`.
-// A unit test guards the Rust and Web extraction paths against configuration drift.
+// Only structural limits remain in the desktop archive path. Resource byte
+// budgets are intentionally not applied to files explicitly selected by users.
 pub(crate) const ARCHIVE_LIMITS: ArchiveLimits = ArchiveLimits {
     max_volumes: 16,
-    max_compressed_bytes: 256 * 1024 * 1024,
     max_path_bytes: 4 * 1024,
     max_total_path_bytes: 8 * 1024 * 1024,
-    max_file_bytes: 256 * 1024 * 1024,
-    max_image_bytes: 32 * 1024 * 1024,
-    max_extracted_bytes: 512 * 1024 * 1024,
-    max_compression_ratio: 500,
-    compression_ratio_min_bytes: 1024 * 1024,
-};
-
-// Used only after the user explicitly chooses “坚持解析”. Structural limits
-// remain unchanged; byte budgets and compression-ratio checks are relaxed.
-pub(crate) const INSIST_ARCHIVE_LIMITS: ArchiveLimits = ArchiveLimits {
-    max_volumes: ARCHIVE_LIMITS.max_volumes,
-    max_compressed_bytes: u64::MAX,
-    max_path_bytes: ARCHIVE_LIMITS.max_path_bytes,
-    max_total_path_bytes: ARCHIVE_LIMITS.max_total_path_bytes,
-    max_file_bytes: u64::MAX,
-    max_image_bytes: u64::MAX,
-    max_extracted_bytes: u64::MAX,
-    max_compression_ratio: u64::MAX,
-    compression_ratio_min_bytes: u64::MAX,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ArchiveLimitKind {
-    VolumeCount,
-    CompressedSize,
     PathSize,
     TotalPathSize,
-    FileSize,
-    ImageSize,
-    ExtractedSize,
-    CompressionRatio,
 }
 
 impl fmt::Display for ArchiveLimitKind {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = match self {
-            Self::VolumeCount => "volume-count",
-            Self::CompressedSize => "compressed-size",
             Self::PathSize => "path-size",
             Self::TotalPathSize => "total-path-size",
-            Self::FileSize => "file-size",
-            Self::ImageSize => "image-size",
-            Self::ExtractedSize => "extracted-size",
-            Self::CompressionRatio => "compression-ratio",
         };
         formatter.write_str(label)
     }
@@ -134,39 +96,6 @@ impl fmt::Display for ArchiveLimitError {
 
 impl std::error::Error for ArchiveLimitError {}
 
-pub(crate) fn validate_archive_inputs(
-    compressed_sizes: &[u64],
-    limits: ArchiveLimits,
-) -> Result<(), ArchiveLimitError> {
-    let volume_count = compressed_sizes.len() as u64;
-    if volume_count > limits.max_volumes {
-        return Err(ArchiveLimitError::new(
-            ArchiveLimitKind::VolumeCount,
-            volume_count,
-            limits.max_volumes,
-        ));
-    }
-
-    let mut total = 0_u64;
-    for size in compressed_sizes {
-        total = total.checked_add(*size).ok_or_else(|| {
-            ArchiveLimitError::new(
-                ArchiveLimitKind::CompressedSize,
-                u64::MAX,
-                limits.max_compressed_bytes,
-            )
-        })?;
-        if total > limits.max_compressed_bytes {
-            return Err(ArchiveLimitError::new(
-                ArchiveLimitKind::CompressedSize,
-                total,
-                limits.max_compressed_bytes,
-            ));
-        }
-    }
-    Ok(())
-}
-
 pub(crate) fn validate_authorized_archive_paths<F>(
     paths: &[PathBuf],
     mut is_allowed: F,
@@ -188,7 +117,6 @@ where
 #[derive(Default)]
 pub(crate) struct ArchivePreflightBudget {
     total_path_bytes: u64,
-    selected_extracted_bytes: u64,
 }
 
 impl ArchivePreflightBudget {
@@ -227,94 +155,19 @@ impl ArchivePreflightBudget {
         Ok(())
     }
 
-    pub(crate) fn add_selected_entry(
-        &mut self,
-        compressed_size: u64,
-        extracted_size: u64,
-        is_image: bool,
-        limits: ArchiveLimits,
-    ) -> Result<(), ArchiveLimitError> {
-        if extracted_size > limits.max_file_bytes {
-            return Err(ArchiveLimitError::new(
-                ArchiveLimitKind::FileSize,
-                extracted_size,
-                limits.max_file_bytes,
-            ));
-        }
-        if is_image && extracted_size > limits.max_image_bytes {
-            return Err(ArchiveLimitError::new(
-                ArchiveLimitKind::ImageSize,
-                extracted_size,
-                limits.max_image_bytes,
-            ));
-        }
-
-        let selected_extracted_bytes = self
-            .selected_extracted_bytes
-            .checked_add(extracted_size)
-            .ok_or_else(|| {
-                ArchiveLimitError::new(
-                    ArchiveLimitKind::ExtractedSize,
-                    u64::MAX,
-                    limits.max_extracted_bytes,
-                )
-            })?;
-        if selected_extracted_bytes > limits.max_extracted_bytes {
-            return Err(ArchiveLimitError::new(
-                ArchiveLimitKind::ExtractedSize,
-                selected_extracted_bytes,
-                limits.max_extracted_bytes,
-            ));
-        }
-
-        if extracted_size >= limits.compression_ratio_min_bytes && extracted_size > 0 {
-            let ratio_exceeded = compressed_size == 0
-                || extracted_size > compressed_size.saturating_mul(limits.max_compression_ratio);
-            if ratio_exceeded {
-                let actual_ratio = if compressed_size == 0 {
-                    u64::MAX
-                } else {
-                    extracted_size / compressed_size
-                        + u64::from(extracted_size % compressed_size != 0)
-                };
-                return Err(ArchiveLimitError::new(
-                    ArchiveLimitKind::CompressionRatio,
-                    actual_ratio,
-                    limits.max_compression_ratio,
-                ));
-            }
-        }
-
-        self.selected_extracted_bytes = selected_extracted_bytes;
-        Ok(())
-    }
 }
 
 #[derive(Default)]
-pub(crate) struct ArchiveRuntimeBudget {
-    extracted_bytes: u64,
-}
+pub(crate) struct ArchiveEntryReader;
 
-impl ArchiveRuntimeBudget {
+impl ArchiveEntryReader {
     pub(crate) fn read_to_end<R: Read>(
         &mut self,
         reader: &mut R,
-        compressed_size: u64,
         expected_size: u64,
-        per_entry_limit: u64,
-        per_entry_kind: ArchiveLimitKind,
-        limits: ArchiveLimits,
     ) -> Result<Vec<u8>, String> {
         let mut bytes = Vec::new();
-        self.copy_to(
-            reader,
-            &mut bytes,
-            compressed_size,
-            expected_size,
-            per_entry_limit,
-            per_entry_kind,
-            limits,
-        )?;
+        self.copy_to(reader, &mut bytes, expected_size)?;
         Ok(bytes)
     }
 
@@ -322,11 +175,7 @@ impl ArchiveRuntimeBudget {
         &mut self,
         reader: &mut R,
         writer: &mut W,
-        compressed_size: u64,
         expected_size: u64,
-        per_entry_limit: u64,
-        per_entry_kind: ArchiveLimitKind,
-        limits: ArchiveLimits,
     ) -> Result<u64, String> {
         let mut entry_bytes = 0_u64;
         let mut buffer = [0_u8; 64 * 1024];
@@ -351,55 +200,14 @@ impl ArchiveRuntimeBudget {
                     "ZIP entry output exceeds its directory metadata ({next_entry_bytes} > {expected_size})"
                 ));
             }
-            if next_entry_bytes > per_entry_limit {
-                return Err(ArchiveLimitError::new(
-                    per_entry_kind,
-                    next_entry_bytes,
-                    per_entry_limit,
-                )
-                .to_string());
-            }
-
-            let next_total_bytes = self
-                .extracted_bytes
-                .checked_add(read as u64)
-                .ok_or_else(|| "ZIP extracted-size total overflows".to_string())?;
-            if next_total_bytes > limits.max_extracted_bytes {
-                return Err(ArchiveLimitError::new(
-                    ArchiveLimitKind::ExtractedSize,
-                    next_total_bytes,
-                    limits.max_extracted_bytes,
-                )
-                .to_string());
-            }
-
-            if next_entry_bytes >= limits.compression_ratio_min_bytes && next_entry_bytes > 0 {
-                let ratio_exceeded = compressed_size == 0
-                    || next_entry_bytes
-                        > compressed_size.saturating_mul(limits.max_compression_ratio);
-                if ratio_exceeded {
-                    let actual_ratio = if compressed_size == 0 {
-                        u64::MAX
-                    } else {
-                        next_entry_bytes / compressed_size
-                            + u64::from(next_entry_bytes % compressed_size != 0)
-                    };
-                    return Err(ArchiveLimitError::new(
-                        ArchiveLimitKind::CompressionRatio,
-                        actual_ratio,
-                        limits.max_compression_ratio,
-                    )
-                    .to_string());
-                }
-            }
 
             writer
                 .write_all(&buffer[..read])
                 .map_err(|error| format!("写入 ZIP 条目失败: {error}"))?;
             entry_bytes = next_entry_bytes;
-            self.extracted_bytes = next_total_bytes;
         }
     }
+
 }
 
 pub(crate) fn canonicalize_archive_entry_path(name: &str) -> Result<String, String> {
@@ -728,7 +536,6 @@ fn read_u64(bytes: &[u8], offset: usize) -> Result<u64, String> {
 pub(crate) struct ArchiveSnapshot {
     pub source_path: PathBuf,
     pub file: File,
-    pub size: u64,
 }
 
 pub(crate) struct ArchiveSnapshotWorkspace {
@@ -746,22 +553,13 @@ impl ArchiveSnapshotWorkspace {
         &self,
         source_path: &Path,
         index: usize,
-        max_bytes: u64,
     ) -> Result<ArchiveSnapshot, String> {
         let mut source = open_source_no_follow(source_path)?;
         let before = validate_open_source(&source, source_path)?;
-        if before.len() > max_bytes {
-            return Err(ArchiveLimitError::new(
-                ArchiveLimitKind::CompressedSize,
-                before.len(),
-                max_bytes,
-            )
-            .to_string());
-        }
 
         let snapshot_path = self.path.join(format!("volume-{index:04}.zip"));
         let mut output = create_private_output_file(&snapshot_path)?;
-        let copied = copy_snapshot_bytes(&mut source, &mut output, before.len(), max_bytes)?;
+        let copied = copy_snapshot_bytes(&mut source, &mut output, before.len())?;
         output
             .flush()
             .map_err(|error| format!("无法刷新 ZIP 快照: {error}"))?;
@@ -800,7 +598,6 @@ impl ArchiveSnapshotWorkspace {
         Ok(ArchiveSnapshot {
             source_path: source_path.to_path_buf(),
             file: snapshot,
-            size: copied,
         })
     }
 
@@ -969,25 +766,10 @@ fn copy_snapshot_bytes<R: Read, W: Write>(
     reader: &mut R,
     writer: &mut W,
     expected_size: u64,
-    max_bytes: u64,
 ) -> Result<u64, String> {
-    if expected_size > max_bytes {
-        return Err(ArchiveLimitError::new(
-            ArchiveLimitKind::CompressedSize,
-            expected_size,
-            max_bytes,
-        )
-        .to_string());
-    }
-
     let mut limited = reader.take(expected_size.saturating_add(1));
     let copied = std::io::copy(&mut limited, writer)
         .map_err(|error| format!("无法复制 ZIP 快照: {error}"))?;
-    if copied > max_bytes {
-        return Err(
-            ArchiveLimitError::new(ArchiveLimitKind::CompressedSize, copied, max_bytes).to_string(),
-        );
-    }
     if copied != expected_size {
         return Err(format!(
             "ZIP source size changed while copying ({expected_size} -> {copied})"
@@ -1036,22 +818,15 @@ mod tests {
         canonicalize_archive_entry_path, copy_snapshot_bytes,
         create_private_child_directory, create_private_temp_directory,
         has_windows_reparse_attribute, inspect_zip_directory, validate_archive_entry_path,
-        validate_archive_inputs, validate_authorized_archive_paths, ArchiveLimitKind,
-        ArchiveLimits, ArchivePreflightBudget, ArchiveRuntimeBudget, ArchiveSnapshotWorkspace,
-        ARCHIVE_LIMITS,
+        validate_authorized_archive_paths, ArchiveEntryReader, ArchiveLimitKind, ArchiveLimits,
+        ArchivePreflightBudget, ArchiveSnapshotWorkspace, ARCHIVE_LIMITS,
     };
 
     fn test_limits() -> ArchiveLimits {
         ArchiveLimits {
             max_volumes: 2,
-            max_compressed_bytes: 10,
             max_path_bytes: 5,
             max_total_path_bytes: 8,
-            max_file_bytes: 8,
-            max_image_bytes: 4,
-            max_extracted_bytes: 10,
-            max_compression_ratio: 3,
-            compression_ratio_min_bytes: 4,
         }
     }
 
@@ -1159,53 +934,13 @@ mod tests {
             serde_json::from_str(include_str!("../../config/archive-limits.json")).unwrap();
         let expected = [
             ("maxVolumes", ARCHIVE_LIMITS.max_volumes),
-            ("maxCompressedBytes", ARCHIVE_LIMITS.max_compressed_bytes),
             ("maxPathBytes", ARCHIVE_LIMITS.max_path_bytes),
             ("maxTotalPathBytes", ARCHIVE_LIMITS.max_total_path_bytes),
-            ("maxFileBytes", ARCHIVE_LIMITS.max_file_bytes),
-            ("maxImageBytes", ARCHIVE_LIMITS.max_image_bytes),
-            ("maxExtractedBytes", ARCHIVE_LIMITS.max_extracted_bytes),
-            ("maxCompressionRatio", ARCHIVE_LIMITS.max_compression_ratio),
-            (
-                "compressionRatioMinBytes",
-                ARCHIVE_LIMITS.compression_ratio_min_bytes,
-            ),
         ];
 
         for (key, value) in expected {
             assert_eq!(configured[key].as_u64(), Some(value), "{key}");
         }
-    }
-
-    #[test]
-    fn insist_limits_relax_bytes_but_keep_structural_budgets() {
-        assert_eq!(
-            super::INSIST_ARCHIVE_LIMITS.max_volumes,
-            ARCHIVE_LIMITS.max_volumes
-        );
-        assert_eq!(
-            super::INSIST_ARCHIVE_LIMITS.max_path_bytes,
-            ARCHIVE_LIMITS.max_path_bytes
-        );
-        assert_eq!(
-            super::INSIST_ARCHIVE_LIMITS.max_total_path_bytes,
-            ARCHIVE_LIMITS.max_total_path_bytes
-        );
-        assert_eq!(super::INSIST_ARCHIVE_LIMITS.max_file_bytes, u64::MAX);
-        assert_eq!(super::INSIST_ARCHIVE_LIMITS.max_extracted_bytes, u64::MAX);
-        assert_eq!(
-            super::INSIST_ARCHIVE_LIMITS.compression_ratio_min_bytes,
-            u64::MAX
-        );
-    }
-
-    #[test]
-    fn rejects_excessive_archive_inputs() {
-        let volume_error = validate_archive_inputs(&[1, 1, 1], test_limits()).unwrap_err();
-        assert_eq!(volume_error.kind, ArchiveLimitKind::VolumeCount);
-
-        let compressed_error = validate_archive_inputs(&[6, 5], test_limits()).unwrap_err();
-        assert_eq!(compressed_error.kind, ArchiveLimitKind::CompressedSize);
     }
 
     #[test]
@@ -1261,17 +996,11 @@ mod tests {
     }
 
     #[test]
-    fn bounded_snapshot_copy_rejects_growth_and_limits() {
+    fn snapshot_copy_rejects_source_growth() {
         let mut grown_source = Cursor::new(vec![1_u8; 5]);
         let mut output = Vec::new();
-        let growth_error = copy_snapshot_bytes(&mut grown_source, &mut output, 4, 10).unwrap_err();
+        let growth_error = copy_snapshot_bytes(&mut grown_source, &mut output, 4).unwrap_err();
         assert!(growth_error.contains("changed"));
-
-        let mut oversized_source = Cursor::new(vec![1_u8; 6]);
-        let mut output = Vec::new();
-        let limit_error =
-            copy_snapshot_bytes(&mut oversized_source, &mut output, 6, 5).unwrap_err();
-        assert!(limit_error.contains("compressed-size"));
     }
 
     #[test]
@@ -1282,9 +1011,7 @@ mod tests {
         std::fs::write(&source_path, &source_bytes).unwrap();
 
         let workspace = ArchiveSnapshotWorkspace::create("snapshot-test.zip").unwrap();
-        let mut snapshot = workspace
-            .snapshot_source(&source_path, 0, ARCHIVE_LIMITS.max_compressed_bytes)
-            .unwrap();
+        let mut snapshot = workspace.snapshot_source(&source_path, 0).unwrap();
         let info = inspect_zip_directory(&mut snapshot.file).unwrap();
         assert_eq!(info.entries, 1);
 
@@ -1335,111 +1062,17 @@ mod tests {
     }
 
     #[test]
-    fn enforces_selected_entry_size_total_and_ratio_budgets() {
-        let limits = test_limits();
-
-        let mut image_budget = ArchivePreflightBudget::default();
-        let image_error = image_budget
-            .add_selected_entry(5, 5, true, limits)
-            .unwrap_err();
-        assert_eq!(image_error.kind, ArchiveLimitKind::ImageSize);
-
-        let mut file_budget = ArchivePreflightBudget::default();
-        let file_error = file_budget
-            .add_selected_entry(9, 9, false, limits)
-            .unwrap_err();
-        assert_eq!(file_error.kind, ArchiveLimitKind::FileSize);
-
-        let mut ratio_budget = ArchivePreflightBudget::default();
-        let ratio_error = ratio_budget
-            .add_selected_entry(1, 4, false, limits)
-            .unwrap_err();
-        assert_eq!(ratio_error.kind, ArchiveLimitKind::CompressionRatio);
-
-        let mut total_budget = ArchivePreflightBudget::default();
-        total_budget
-            .add_selected_entry(3, 6, false, limits)
-            .unwrap();
-        let total_error = total_budget
-            .add_selected_entry(3, 5, false, limits)
-            .unwrap_err();
-        assert_eq!(total_error.kind, ArchiveLimitKind::ExtractedSize);
-    }
-
-    #[test]
-    fn runtime_budget_rejects_streams_larger_than_metadata_budget() {
-        let limits = test_limits();
-        let mut budget = ArchiveRuntimeBudget::default();
-        let error = budget
-            .read_to_end(
-                &mut Cursor::new(vec![0_u8; 5]),
-                5,
-                5,
-                limits.max_image_bytes,
-                ArchiveLimitKind::ImageSize,
-                limits,
-            )
-            .unwrap_err();
-        assert!(error.contains("image-size"));
-    }
-
-    #[test]
-    fn runtime_budget_stops_forged_uncompressed_output_before_write() {
-        let mut limits = test_limits();
-        limits.max_file_bytes = 100;
-        limits.max_extracted_bytes = 100;
-        limits.compression_ratio_min_bytes = 4;
-        limits.max_compression_ratio = 3;
-        let mut budget = ArchiveRuntimeBudget::default();
-        let mut output = Vec::new();
-        let error = budget
-            .copy_to(
-                &mut Cursor::new(vec![0_u8; 10]),
-                &mut output,
-                1,
-                10,
-                limits.max_file_bytes,
-                ArchiveLimitKind::FileSize,
-                limits,
-            )
-            .unwrap_err();
-
-        assert!(error.contains("compression-ratio"));
-        assert!(output.is_empty());
-    }
-
-    #[test]
-    fn runtime_budget_rejects_output_that_differs_from_directory_metadata() {
-        let mut limits = test_limits();
-        limits.max_file_bytes = 100;
-        limits.max_extracted_bytes = 100;
-        limits.compression_ratio_min_bytes = 100;
-
-        let mut short_budget = ArchiveRuntimeBudget::default();
-        let short_error = short_budget
-            .read_to_end(
-                &mut Cursor::new(vec![0_u8; 3]),
-                3,
-                4,
-                limits.max_file_bytes,
-                ArchiveLimitKind::FileSize,
-                limits,
-            )
+    fn entry_reader_rejects_output_that_differs_from_directory_metadata() {
+        let mut short_reader = ArchiveEntryReader;
+        let short_error = short_reader
+            .read_to_end(&mut Cursor::new(vec![0_u8; 3]), 4)
             .unwrap_err();
         assert!(short_error.contains("differs"));
 
-        let mut long_budget = ArchiveRuntimeBudget::default();
+        let mut long_reader = ArchiveEntryReader;
         let mut output = Vec::new();
-        let long_error = long_budget
-            .copy_to(
-                &mut Cursor::new(vec![0_u8; 5]),
-                &mut output,
-                5,
-                4,
-                limits.max_file_bytes,
-                ArchiveLimitKind::FileSize,
-                limits,
-            )
+        let long_error = long_reader
+            .copy_to(&mut Cursor::new(vec![0_u8; 5]), &mut output, 4)
             .unwrap_err();
         assert!(long_error.contains("exceeds"));
         assert!(output.is_empty());
@@ -1492,7 +1125,7 @@ mod tests {
         let symlink_path = workspace.path().join("source-link.zip");
         std::os::unix::fs::symlink(&target_path, &symlink_path).unwrap();
         assert!(workspace
-            .snapshot_source(&symlink_path, 0, ARCHIVE_LIMITS.max_compressed_bytes)
+            .snapshot_source(&symlink_path, 0)
             .is_err());
     }
 }

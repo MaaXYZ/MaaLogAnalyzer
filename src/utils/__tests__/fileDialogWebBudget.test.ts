@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveArchiveLimits } from '../archiveLimits'
 import { openFolderDialog } from '../fileDialog'
 
 type MockEntry = FileSystemFileHandle | FileSystemDirectoryHandle
@@ -51,16 +50,17 @@ describe('Web file picker resource budgets', () => {
     vi.unstubAllGlobals()
   })
 
-  it('rejects an oversized primary log before reading its text', async () => {
+  it('accepts an oversized primary log without preloading its text', async () => {
     const arrayBuffer = vi.fn(async () => new ArrayBuffer(0))
     const file = {
       name: 'maa.log',
-      size: resolveArchiveLimits().maxFileBytes + 1,
+      size: Number.MAX_SAFE_INTEGER,
       arrayBuffer,
     } as unknown as File
     stubPicker(directoryHandle('debug', [fileHandle(file)]))
 
-    await expect(openFolderDialog()).resolves.toBeNull()
+    const result = await openFolderDialog()
+    expect(result?.primaryLogFiles).toHaveLength(1)
     expect(arrayBuffer).not.toHaveBeenCalled()
   })
 

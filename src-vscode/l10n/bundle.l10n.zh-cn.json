@@ -21,8 +21,6 @@
   "Path: {0}\n\nContinue only if you initiated or trust this request.": "路径：{0}\n\n仅当该请求由你发起或来源可信时继续。",
   "MAA Log Analyzer": "MAA 日志分析器",
   "The analyzer panel is not available": "分析器面板不可用",
-  "Insist on parsing": "坚持解析",
-  "Insisting may use a large amount of memory or terminate the extension host.": "坚持解析可能占用大量内存，甚至导致扩展宿主退出。",
   "Log Files": "日志文件",
   "Select Log File": "选择日志文件",
   "Select Log Folder": "选择日志文件夹",

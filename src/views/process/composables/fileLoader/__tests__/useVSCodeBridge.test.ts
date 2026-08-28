@@ -121,7 +121,7 @@ describe('VS Code loadFile bridge', () => {
       type: 'loadBytesStart',
       transferId: 'transfer-1',
       sequence: 0,
-      payload: { insist: false },
+      payload: {},
     })).toBe(true)
     receiver.handleMessage({
       type: 'loadBytesFileStart',

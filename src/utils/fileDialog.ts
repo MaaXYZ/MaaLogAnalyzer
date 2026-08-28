@@ -11,7 +11,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { joinNativePath } from './nativePath'
 import { replaceBlobUrl } from './blobUrlMap'
 import { releaseTauriArchiveResource } from './tauriArchiveResources'
-import { ArchiveLimitError, confirmInsistParsing, INSIST_ARCHIVE_LIMITS } from './archiveLimits'
+import { ArchiveLimitError } from './archiveLimits'
 import {
   InputResourceLimitError,
   chargeInputResourceBytes,
@@ -74,27 +74,13 @@ const toPosixPath = (value: string) => value.replace(/\\/g, '/')
 const isInputResourceLimitError = (error: unknown) =>
   error instanceof ArchiveLimitError || error instanceof InputResourceLimitError
 
-const withInsistInputBudget = async <T>(
+const withUnmeteredInput = async <T>(
   load: (budget: InputResourceBudget) => Promise<T>,
-): Promise<T> => {
-  try {
-    return await load(createInputResourceBudget())
-  } catch (error) {
-    if (!confirmInsistParsing(error)) throw error
-    return load(createInputResourceBudget(INSIST_ARCHIVE_LIMITS))
-  }
-}
+): Promise<T> => load(createInputResourceBudget(null))
 
-const withInsistBrowserBudget = async <T>(
+const withUnmeteredBrowserInput = async <T>(
   load: (budget: BrowserInputBudget) => Promise<T>,
-): Promise<T> => {
-  try {
-    return await load(createBrowserInputBudget())
-  } catch (error) {
-    if (!confirmInsistParsing(error)) throw error
-    return load(createBrowserInputBudget(INSIST_ARCHIVE_LIMITS))
-  }
-}
+): Promise<T> => load(createBrowserInputBudget(null))
 
 export const chargeTauriRegularFile = async (
   path: string,
@@ -199,7 +185,7 @@ async function openLogFileWithTauri(): Promise<string | null> {
       if (lower.endsWith('.zip') || lower.endsWith('.7z') || lower.endsWith('.rar')) {
         return await openArchiveFileWithTauri(anchor, selectedPaths)
       }
-      await withInsistInputBudget(async (budget) => {
+      await withUnmeteredInput(async (budget) => {
         registerInputResourceEntry(budget, anchor, 0)
         await chargeTauriRegularFile(anchor, budget)
       })
@@ -220,13 +206,7 @@ async function openArchiveFileWithTauri(path: string, paths: string[]): Promise<
     primary_log_files: LoadedPrimaryLogFile[]
     resource_token?: string | null
   }
-  let result: ArchiveResult
-  try {
-    result = await invoke<ArchiveResult>('extract_zip_log', { path, paths, insist: false })
-  } catch (error) {
-    if (!confirmInsistParsing(error)) throw error
-    result = await invoke<ArchiveResult>('extract_zip_log', { path, paths, insist: true })
-  }
+  const result = await invoke<ArchiveResult>('extract_zip_log', { path, paths })
   try {
     // Rust extract_zip_log returns empty content; real logs live in primary_log_files
     const primaryLogFiles = result.primary_log_files ?? []
@@ -252,7 +232,7 @@ async function openLogFileWithWeb(): Promise<string | null> {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (file) {
         try {
-          const budget = createBrowserInputBudget()
+          const budget = createBrowserInputBudget(null)
           registerInputResourceEntry(budget, file.name, 0)
           chargeWebRegularFile(file, file.name, budget)
           const content = await file.text()
@@ -698,7 +678,7 @@ async function openFolderDialogTauri(options: OpenFolderDialogOptions): Promise<
       return null
     }
 
-    return await withInsistInputBudget(async (budget) => {
+    return await withUnmeteredInput(async (budget) => {
       registerInputResourceEntry(budget, selected, 0)
       await assertTauriDirectory(selected)
       let debugPath = selected
@@ -950,7 +930,7 @@ async function openFolderDialogWeb(
     }
 
     const dirHandle = (await (window as any).showDirectoryPicker()) as FileSystemDirectoryHandle
-    return await withInsistBrowserBudget(async (budget) => {
+    return await withUnmeteredBrowserInput(async (budget) => {
       const rootLocation: WebDirectoryLocation = {
         handle: dirHandle,
         path: dirHandle.name || 'selected-folder',

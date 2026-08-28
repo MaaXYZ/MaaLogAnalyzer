@@ -5,24 +5,12 @@ import type {
   LoadedPrimaryLogFile,
 } from '../../../../utils/logFileDiscovery'
 import type { UseProcessFileLoaderOptions } from './types'
-import {
-  assertArchiveInputsWithinLimits,
-  DEFAULT_ARCHIVE_LIMITS,
-  INSIST_ARCHIVE_LIMITS,
-} from '../../../../utils/archiveLimits'
-import {
-  InputResourceLimitError,
-  chargeInputResourceBytes,
-  createInputResourceBudget,
-  registerInputResourceEntry,
-  type InputResourceBudget,
-} from '../../../../utils/browserInputBudget'
+import { InputResourceLimitError } from '../../../../utils/browserInputBudget'
 import { replaceBlobUrl, revokeBlobUrlMap } from '../../../../utils/blobUrlMap'
 import { decodeFileContent } from '../../../../utils/textEncoding'
 
 export interface VSCodeBridgePayload {
   type: string
-  insist?: boolean
   content?: string
   archives?: Array<{ name: string; base64: string }>
   selectedPaths?: string[]
@@ -38,8 +26,16 @@ type VSCodeLoadFileOptions = Pick<
   'onUploadContent' | 'onFileLoadingStart' | 'onFileLoadingEnd'
 >
 
+export type HostFileMessageReceiverOptions = Pick<
+  UseProcessFileLoaderOptions,
+  | 'onUploadFile'
+  | 'onUploadContent'
+  | 'onFileLoadingStart'
+  | 'onFileLoadingEnd'
+  | 'selectPrimaryLogs'
+>
+
 type UnknownRecord = Record<string, unknown>
-const utf8Encoder = new TextEncoder()
 
 const asRecord = (value: unknown, label: string): UnknownRecord => {
   if (typeof value !== 'object' || value == null || Array.isArray(value)) {
@@ -53,36 +49,15 @@ const asString = (value: unknown, label: string): string => {
   return value
 }
 
-const chargeBridgeText = (
-  value: string,
-  path: string,
-  budget: InputResourceBudget,
-) => {
-  if (value.length > DEFAULT_ARCHIVE_LIMITS.maxFileBytes) {
-    chargeInputResourceBytes(budget, value.length)
-  }
-  registerInputResourceEntry(budget, path, 2)
-  chargeInputResourceBytes(budget, utf8Encoder.encode(value).byteLength)
-}
-
-const estimateBase64Size = (value: string, budget: InputResourceBudget): number => {
-  const encodedLimit = Math.ceil(budget.limits.maxFileBytes / 3) * 4 + 4
-  if (value.length > encodedLimit) {
-    throw new InputResourceLimitError('VS Code 消息中的 Base64 数据超过限制')
-  }
+const estimateBase64Size = (value: string): number => {
   const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
   return Math.floor(value.length * 3 / 4) - padding
 }
 
 const decodeBase64Bytes = (
   value: string,
-  path: string,
-  budget: InputResourceBudget,
-  options: { image?: boolean } = {},
 ): Uint8Array<ArrayBuffer> => {
-  registerInputResourceEntry(budget, path, 2)
-  const expectedSize = estimateBase64Size(value, budget)
-  chargeInputResourceBytes(budget, expectedSize, options)
+  const expectedSize = estimateBase64Size(value)
   const binary = atob(value)
   if (binary.length !== expectedSize) {
     throw new InputResourceLimitError('VS Code 消息中的 Base64 数据格式无效')
@@ -98,7 +73,6 @@ const decodeImageEntries = (
   value: unknown,
   mimeType: string,
   label: string,
-  budget: InputResourceBudget,
 ): Map<string, string> => {
   const images = new Map<string, string>()
   if (value == null) return images
@@ -118,7 +92,7 @@ const decodeImageEntries = (
         continue
       }
       const base64 = asString(entry.base64, `${label}[${index}].base64`)
-      const bytes = decodeBase64Bytes(base64, `${label}/${index}/${key}`, budget, { image: true })
+      const bytes = decodeBase64Bytes(base64)
       replaceBlobUrl(images, key, new Blob([bytes], { type: mimeType }))
     }
     return images
@@ -131,7 +105,6 @@ const decodeImageEntries = (
 const decodeLoadedTextEntries = <T extends LoadedTextFile>(
   value: unknown,
   label: string,
-  budget: InputResourceBudget,
 ): T[] | undefined => {
   if (value == null) return undefined
   if (!Array.isArray(value)) throw new InputResourceLimitError(`${label} 格式无效`)
@@ -140,12 +113,11 @@ const decodeLoadedTextEntries = <T extends LoadedTextFile>(
     const path = asString(entry.path, `${label}[${index}].path`)
     const name = asString(entry.name, `${label}[${index}].name`)
     const content = asString(entry.content, `${label}[${index}].content`)
-    chargeBridgeText(content, `${label}/${index}/${path}`, budget)
     return { path, name, content } as T
   })
 }
 
-const decodeArchiveEntries = (value: unknown, budget: InputResourceBudget): File[] => {
+const decodeArchiveEntries = (value: unknown): File[] => {
   if (!Array.isArray(value) || value.length === 0) {
     throw new InputResourceLimitError('VS Code 压缩包消息格式无效')
   }
@@ -153,23 +125,21 @@ const decodeArchiveEntries = (value: unknown, budget: InputResourceBudget): File
     const entry = asRecord(candidate, `archives[${index}]`)
     const name = asString(entry.name, `archives[${index}].name`)
     const base64 = asString(entry.base64, `archives[${index}].base64`)
-    return { name, base64, size: estimateBase64Size(base64, budget) }
+    return { name, base64 }
   })
-  assertArchiveInputsWithinLimits(entries, budget.limits)
 
-  return entries.map((entry, index) => {
-    const bytes = decodeBase64Bytes(entry.base64, `archives/${index}/${entry.name}`, budget)
+  return entries.map((entry) => {
+    const bytes = decodeBase64Bytes(entry.base64)
     return new File([bytes], entry.name, { type: 'application/zip' })
   })
 }
 
-const decodeSelectedPaths = (value: unknown, budget: InputResourceBudget): Set<string> => {
+const decodeSelectedPaths = (value: unknown): Set<string> => {
   if (value == null) return new Set()
   if (!Array.isArray(value)) throw new InputResourceLimitError('selectedPaths 格式无效')
   const result = new Set<string>()
   for (let index = 0; index < value.length; index += 1) {
     const path = asString(value[index], `selectedPaths[${index}]`)
-    registerInputResourceEntry(budget, `selectedPaths/${index}/${path}`, 2)
     result.add(path)
   }
   return result
@@ -192,25 +162,19 @@ export const handleVSCodeLoadFilePayload = (
   const createdImageMaps: Array<Map<string, string>> = []
   let adopted = false
   try {
-    const budget = createInputResourceBudget(
-      message.insist === true ? INSIST_ARCHIVE_LIMITS : DEFAULT_ARCHIVE_LIMITS,
-    )
-    if (content) chargeBridgeText(content, 'content', budget)
     const primaryLogFiles = decodeLoadedTextEntries<LoadedPrimaryLogFile>(
       message.primaryLogFiles,
       'primaryLogFiles',
-      budget,
     )
-    const textFiles = decodeLoadedTextEntries<LoadedTextFile>(message.textFiles, 'textFiles', budget)
-    const errorImages = decodeImageEntries(message.errorImages, 'image/png', 'errorImages', budget)
+    const textFiles = decodeLoadedTextEntries<LoadedTextFile>(message.textFiles, 'textFiles')
+    const errorImages = decodeImageEntries(message.errorImages, 'image/png', 'errorImages')
     createdImageMaps.push(errorImages)
-    const visionImages = decodeImageEntries(message.visionImages, 'image/jpeg', 'visionImages', budget)
+    const visionImages = decodeImageEntries(message.visionImages, 'image/jpeg', 'visionImages')
     createdImageMaps.push(visionImages)
     const waitFreezesImages = decodeImageEntries(
       message.waitFreezesImages,
       'image/jpeg',
       'waitFreezesImages',
-      budget,
     )
     createdImageMaps.push(waitFreezesImages)
     options.onUploadContent(
@@ -252,7 +216,6 @@ interface IncomingByteFile {
 }
 
 interface IncomingByteTransfer {
-  budget: InputResourceBudget
   currentFile?: IncomingByteFile
   primaryLogFiles: FilePrimaryLogFile[]
   textFiles: LoadedTextFile[]
@@ -291,11 +254,11 @@ const applyTransferPayloadImages = (
   const payload = asRecord(value, 'payload')
   mergeImageEntries(
     transfer.errorImages,
-    decodeImageEntries(payload.errorImages, 'image/png', 'errorImages', transfer.budget),
+    decodeImageEntries(payload.errorImages, 'image/png', 'errorImages'),
   )
   mergeImageEntries(
     transfer.visionImages,
-    decodeImageEntries(payload.visionImages, 'image/jpeg', 'visionImages', transfer.budget),
+    decodeImageEntries(payload.visionImages, 'image/jpeg', 'visionImages'),
   )
   mergeImageEntries(
     transfer.waitFreezesImages,
@@ -303,7 +266,6 @@ const applyTransferPayloadImages = (
       payload.waitFreezesImages,
       'image/jpeg',
       'waitFreezesImages',
-      transfer.budget,
     ),
   )
 }
@@ -366,12 +328,8 @@ export const createVSCodeByteTransferHandler = (
       if (type === 'loadBytesStart') {
         for (const existingId of Array.from(transfers.keys())) finishTransfer(existingId, false)
         const payload = asRecord(message.payload, 'payload')
-        const budget = createInputResourceBudget(
-          payload.insist === true ? INSIST_ARCHIVE_LIMITS : DEFAULT_ARCHIVE_LIMITS,
-        )
         options.onFileLoadingStart()
         const transfer: IncomingByteTransfer = {
-          budget,
           primaryLogFiles: [],
           textFiles: [],
           errorImages: new Map(),
@@ -396,9 +354,6 @@ export const createVSCodeByteTransferHandler = (
         const path = asString(message.path, 'path')
         const name = asString(message.name, 'name')
         const size = asSafeInteger(message.size, 'size')
-        const depth = Math.max(0, path.replace(/\\/g, '/').split('/').filter(Boolean).length - 1)
-        registerInputResourceEntry(transfer.budget, `${kind}/${path}`, depth)
-        chargeInputResourceBytes(transfer.budget, size, { image: kind === 'image' })
         transfer.currentFile = {
           kind,
           path,
@@ -504,29 +459,13 @@ export const createVSCodeByteTransferHandler = (
   return { handleMessage, dispose }
 }
 
-export const useVSCodeBridge = (
-  options: UseProcessFileLoaderOptions,
+export const useHostFileMessageReceiver = (
+  options: HostFileMessageReceiverOptions,
   isInVSCode: () => boolean,
-) => {
+): void => {
   const byteTransfer = createVSCodeByteTransferHandler(options, message => {
     window.vscodeApi?.postMessage(message)
   })
-
-  const handleVSCodeOpen = () => {
-    if (window.vscodeApi) {
-      window.vscodeApi.postMessage({ type: 'openFile' })
-    } else {
-      console.error('[VS Code] vscodeApi not available')
-    }
-  }
-
-  const handleVSCodeOpenFolder = () => {
-    if (window.vscodeApi) {
-      window.vscodeApi.postMessage({ type: 'openFolder' })
-    } else {
-      console.error('[VS Code] vscodeApi not available')
-    }
-  }
 
   const handleVSCodeMessage = (event: MessageEvent) => {
     if (typeof event.data !== 'object' || event.data == null || Array.isArray(event.data)) return
@@ -535,11 +474,8 @@ export const useVSCodeBridge = (
       if (byteTransfer.handleMessage(message)) return
 
       if (message.type === 'loadArchive') {
-        const budget = createInputResourceBudget(
-          message.insist === true ? INSIST_ARCHIVE_LIMITS : DEFAULT_ARCHIVE_LIMITS,
-        )
-        const archives = decodeArchiveEntries(message.archives, budget)
-        const selectedPaths = decodeSelectedPaths(message.selectedPaths, budget)
+        const archives = decodeArchiveEntries(message.archives)
+        const selectedPaths = decodeSelectedPaths(message.selectedPaths)
         options.onUploadFile(
           archives.length === 1 ? archives[0] : archives,
           selectedPaths.size > 0
@@ -572,6 +508,24 @@ export const useVSCodeBridge = (
       window.removeEventListener('message', handleVSCodeMessage)
     }
   })
+}
+
+export const useVSCodeOpenCommands = () => {
+  const handleVSCodeOpen = () => {
+    if (window.vscodeApi) {
+      window.vscodeApi.postMessage({ type: 'openFile' })
+    } else {
+      console.error('[VS Code] vscodeApi not available')
+    }
+  }
+
+  const handleVSCodeOpenFolder = () => {
+    if (window.vscodeApi) {
+      window.vscodeApi.postMessage({ type: 'openFolder' })
+    } else {
+      console.error('[VS Code] vscodeApi not available')
+    }
+  }
 
   return {
     handleVSCodeOpen,

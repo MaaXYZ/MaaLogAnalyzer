@@ -39,7 +39,7 @@ export interface ArchiveExtractResult {
 }
 
 export interface ExtractArchiveOptions {
-  archiveLimits?: Partial<ArchiveLimits>
+  archiveLimits?: Partial<ArchiveLimits> | null
 }
 
 export type ArchiveFormat = 'zip' | '7z' | 'rar' | 'unknown'

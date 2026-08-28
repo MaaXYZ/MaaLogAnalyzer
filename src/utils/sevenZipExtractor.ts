@@ -10,6 +10,7 @@ import {
   ArchiveLimitError,
   assertArchiveInputsWithinLimits,
   assertSelectedArchiveEntriesWithinLimits,
+  DEFAULT_ARCHIVE_LIMITS,
   EMPTY_ARCHIVE_DIRECTORY_BUDGET,
   isArchiveImageEntry,
   resolveArchiveLimits,
@@ -26,7 +27,7 @@ export interface SevenZipArchiveEntry {
 }
 
 export interface ExtractSevenZipOptions {
-  archiveLimits?: Partial<ArchiveLimits>
+  archiveLimits?: Partial<ArchiveLimits> | null
   onProgress?: (message: string) => void
 }
 
@@ -463,8 +464,9 @@ const installOutputGuard = (
   outputDir: string,
   allowedEntries: ReadonlyMap<string, ListedSevenZipEntry>,
   compressionBasis: number,
-  limits: Readonly<ArchiveLimits>,
+  limits: Readonly<ArchiveLimits> | null,
 ): (() => void) => {
+  const structureLimits = limits ?? DEFAULT_ARCHIVE_LIMITS
   const outputPrefix = `${outputDir}/`
   const allowedDirectories = new Set<string>()
   for (const identity of allowedEntries.keys()) {
@@ -503,7 +505,7 @@ const installOutputGuard = (
         size: 0,
         originalSize: 0,
         compression: 0,
-      }, limits)
+      }, structureLimits)
       observedKinds.set(canonical.identity, kind)
     }
     return { ...canonical, expected }
@@ -515,6 +517,10 @@ const installOutputGuard = (
     }
     const { identity, expected } = recordEntry(path, 'file')
     if (!expected) throw new SevenZipArchiveError(`解压器产生了未选择的文件: ${path}`)
+    if (!limits) {
+      fileSizes.set(identity, size)
+      return
+    }
     if (size > limits.maxFileBytes) {
       throw new ArchiveLimitError('file-size', size, limits.maxFileBytes)
     }
@@ -711,8 +717,11 @@ export const extractSevenZipEntries = async (
   ) => Promise<readonly string[] | null>,
   options: ExtractSevenZipOptions = {},
 ): Promise<Map<string, Uint8Array> | null> => {
-  const limits = resolveArchiveLimits(options.archiveLimits)
-  assertArchiveInputsWithinLimits([file], limits)
+  const limits = options.archiveLimits == null
+    ? null
+    : resolveArchiveLimits(options.archiveLimits)
+  const structureLimits = limits ?? DEFAULT_ARCHIVE_LIMITS
+  if (limits) assertArchiveInputsWithinLimits([file], limits)
 
   return withSevenZipOperation(async () => {
     options.onProgress?.('正在加载解压模块...')
@@ -720,7 +729,7 @@ export const extractSevenZipEntries = async (
     if (!module) throw new Error('7z 模块未加载')
 
     const archiveData = new Uint8Array(await file.arrayBuffer())
-    assertArchiveInputsWithinLimits([{ size: archiveData.byteLength }], limits)
+    if (limits) assertArchiveInputsWithinLimits([{ size: archiveData.byteLength }], limits)
 
     const workspaceId = ++workspaceSequence
     const workDir = `/tmp/maa-log-archive-${workspaceId}`
@@ -735,10 +744,10 @@ export const extractSevenZipEntries = async (
         module,
         ['l', '-slt', '-sccUTF-8', '-p-', archivePath],
         '读取压缩包目录',
-        limits,
+        structureLimits,
         true,
       )
-      const entries = parseSevenZipListing(listing, limits)
+      const entries = parseSevenZipListing(listing, structureLimits)
       const publicEntries = entries.map(({ sourcePath: _sourcePath, identity: _identity, ...entry }) => (
         Object.freeze(entry)
       ))
@@ -759,12 +768,14 @@ export const extractSevenZipEntries = async (
         allowedEntries.set(identity, entry)
       }
 
-      const compressionBasis = assertSelectedEntriesWithinLimits(
-        entries,
-        selectedIdentities,
-        archiveData.byteLength,
-        limits,
-      )
+      const compressionBasis = limits
+        ? assertSelectedEntriesWithinLimits(
+            entries,
+            selectedIdentities,
+            archiveData.byteLength,
+            limits,
+          )
+        : 0
 
       const selectionListPath = `${workDir}/selection.list`
       const selectionList = `${Array.from(
@@ -792,7 +803,7 @@ export const extractSevenZipEntries = async (
           '-spd',
           '-scsUTF-8',
           `-i@${selectionListPath}`,
-        ], '解压文件', limits)
+        ], '解压文件', structureLimits)
       } finally {
         restoreGuard()
       }

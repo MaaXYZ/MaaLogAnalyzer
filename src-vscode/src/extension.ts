@@ -4,21 +4,13 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { copyFile, mkdir, rm } from 'fs/promises'
 import {
-  assertExtractedEntriesWithinLimits,
   canonicalizeArchivePath,
   classifyNeededArchiveEntry,
   createArchiveSelection,
-  createStoredEntryMetadata,
-  getArchiveBudgetCode,
   inspectArchiveVolumes,
-  INSIST_ARCHIVE_LIMIT_OVERRIDES,
   isLoadOperationCancelled,
   LoadOperationCoordinator,
   readSelectedArchiveVolumes,
-  resolveArchiveLimits,
-  DEFAULT_ARCHIVE_LIMITS,
-  type ArchiveLimits,
-  type ArchiveEntryMetadata,
   type ArchiveVolumeInput,
   type LoadOperation,
 } from './archiveReader'
@@ -60,35 +52,12 @@ const createByteTransfer = (operation: LoadOperation): WebviewByteTransferSender
   return new WebviewByteTransferSender(webview, operation, byteTransferAcknowledgements)
 }
 
-const INSIST_ACTION = t('Insist on parsing')
-const insistableBudgetCodes = new Set([
-  'compressed-size',
-  'file-size',
-  'image-size',
-  'extracted-size',
-  'compression-ratio',
-])
-const INSIST_ARCHIVE_LIMITS = resolveArchiveLimits(INSIST_ARCHIVE_LIMIT_OVERRIDES)
-
-const showLoadError = async (
+const showLoadError = (
   prefix: string,
   error: unknown,
   operation: LoadOperation,
-  insist: boolean,
-  retry: () => Promise<void>,
-): Promise<void> => {
+): void => {
   if (operation.cancelled || isLoadOperationCancelled(error)) return
-  const budgetCode = getArchiveBudgetCode(error)
-  if (!insist && budgetCode && insistableBudgetCodes.has(budgetCode)) {
-    const action = await vscode.window.showErrorMessage(
-      `${prefix}: ${error}\n\n${t('Insisting may use a large amount of memory or terminate the extension host.')}`,
-      INSIST_ACTION,
-    )
-    if (action === INSIST_ACTION && !operation.cancelled) {
-      await retry()
-    }
-    return
-  }
   vscode.window.showErrorMessage(`${prefix}: ${error}`)
 }
 
@@ -541,39 +510,26 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
 async function analyzeFileUri(
   uri: vscode.Uri,
   operation: LoadOperation = beginLoadOperation(),
-  insist: boolean = false,
 ): Promise<void> {
   let transfer: WebviewByteTransferSender | undefined
   try {
     operation.throwIfCancelled()
     if (uri.fsPath.toLowerCase().endsWith('.zip')) {
-      await handleZipFile(uri, operation, insist)
+      await handleZipFile(uri, operation)
       return
     }
 
-    const limits = insist ? INSIST_ARCHIVE_LIMITS : DEFAULT_ARCHIVE_LIMITS
-
     const fileName = path.basename(uri.fsPath)
-    const stat = await vscode.workspace.fs.stat(uri)
-    operation.throwIfCancelled()
-    const plannedEntry = createStoredEntryMetadata(uri.fsPath, stat.size)
-    assertExtractedEntriesWithinLimits([plannedEntry], limits)
-
     const fileContent = await vscode.workspace.fs.readFile(uri)
     operation.throwIfCancelled()
-    const actualEntry = createStoredEntryMetadata(uri.fsPath, fileContent.byteLength)
-    assertExtractedEntriesWithinLimits([actualEntry], limits)
     const debugAssets = await collectDebugAssetsForBaseDirectory(
       vscode.Uri.file(path.dirname(uri.fsPath)),
-      [actualEntry],
       operation,
-      limits,
     )
     operation.throwIfCancelled()
 
     transfer = createByteTransfer(operation)
     await transfer.start({
-      insist,
       fileName,
       errorImages: debugAssets.errorImages,
       visionImages: debugAssets.visionImages,
@@ -588,9 +544,7 @@ async function analyzeFileUri(
     await transfer.complete()
   } catch (error) {
     await transfer?.abort(error instanceof Error ? error.message : String(error))
-    await showLoadError(t('Unable to read file'), error, operation, insist, () =>
-      analyzeFileUri(uri, operation, true),
-    )
+    showLoadError(t('Unable to read file'), error, operation)
   }
 }
 
@@ -671,12 +625,10 @@ async function analyzeUri(
 async function analyzeFolderUri(
   folderUri: vscode.Uri,
   operation: LoadOperation = beginLoadOperation(),
-  insist: boolean = false,
 ): Promise<void> {
   let transfer: WebviewByteTransferSender | undefined
   try {
     operation.throwIfCancelled()
-    const limits = insist ? INSIST_ARCHIVE_LIMITS : DEFAULT_ARCHIVE_LIMITS
     const candidatePatterns = [
       '**/maa.log',
       '**/maafw.log',
@@ -704,7 +656,7 @@ async function analyzeFolderUri(
       const splitZipUri = await findFirstMxuZipVolumeUri(folderUri, operation)
       operation.throwIfCancelled()
       if (splitZipUri) {
-        await handleZipFile(splitZipUri, operation, insist)
+        await handleZipFile(splitZipUri, operation)
         return
       }
       vscode.window.showErrorMessage(
@@ -732,13 +684,6 @@ async function analyzeFolderUri(
     if (!selectedPaths) return
 
     const selectedLogEntries = selectedLogs.filter(({ item }) => selectedPaths.has(item.path))
-    const selectionEntryByPath = new Map(selectionEntries.map((entry) => [entry.path, entry]))
-    const plannedLogEntries = selectedLogEntries.map(({ item }) => {
-      const selectionEntry = selectionEntryByPath.get(item.path)
-      if (!selectionEntry) throw new Error(t('Missing log file metadata: {0}', item.path))
-      return createStoredEntryMetadata(item.path, selectionEntry.size)
-    })
-    assertExtractedEntriesWithinLimits(plannedLogEntries, limits)
 
     const targetMain = selectedLogEntries.find(({ candidate }) => candidate.kind === 'main')?.item.uri
     const selectedBaseDir = selectedLogEntries[0]
@@ -752,15 +697,12 @@ async function analyzeFolderUri(
       : selectedBaseDir
 
     transfer = createByteTransfer(operation)
-    await transfer.start({ insist, fileName: sourceName })
+    await transfer.start({ fileName: sourceName })
 
-    const actualLogEntries: ArchiveEntryMetadata[] = []
     for (const { item } of selectedLogEntries) {
       operation.throwIfCancelled()
       const bytes = await vscode.workspace.fs.readFile(item.uri)
       operation.throwIfCancelled()
-      actualLogEntries.push(createStoredEntryMetadata(item.path, bytes.byteLength))
-      assertExtractedEntriesWithinLimits(actualLogEntries, limits)
       await transfer.sendFile({
         kind: 'primary',
         path: item.path,
@@ -771,9 +713,7 @@ async function analyzeFolderUri(
 
     const debugAssets = await collectDebugAssetsForBaseDirectory(
       contentBaseDir,
-      actualLogEntries,
       operation,
-      limits,
     )
     operation.throwIfCancelled()
 
@@ -784,9 +724,7 @@ async function analyzeFolderUri(
     })
   } catch (error) {
     await transfer?.abort(error instanceof Error ? error.message : String(error))
-    await showLoadError(t('Unable to read folder'), error, operation, insist, () =>
-      analyzeFolderUri(folderUri, operation, true),
-    )
+    showLoadError(t('Unable to read folder'), error, operation)
   }
 }
 
@@ -808,7 +746,6 @@ interface DebugImageCandidate {
   name: string
   key: string
   kind: DebugImageKind
-  size: number
 }
 
 interface DebugImageResource {
@@ -847,18 +784,14 @@ async function listImageDirectoryEntries(
     const classified = classify(name)
     if (!classified) continue
     const uri = vscode.Uri.joinPath(dirUri, name)
-    const stat = await vscode.workspace.fs.stat(uri)
-    operation.throwIfCancelled()
-    candidates.push({ uri, name, size: stat.size, ...classified })
+    candidates.push({ uri, name, ...classified })
   }
   return candidates
 }
 
 async function collectDebugAssetsForBaseDirectory(
   baseDirUri: vscode.Uri,
-  initialEntries: readonly ArchiveEntryMetadata[],
   operation: LoadOperation,
-  limits: Readonly<ArchiveLimits> = DEFAULT_ARCHIVE_LIMITS,
 ): Promise<{
   errorImages: DebugImageResource[]
   visionImages: DebugImageResource[]
@@ -911,23 +844,12 @@ async function collectDebugAssetsForBaseDirectory(
   )
   operation.throwIfCancelled()
 
-  const plannedEntries = [
-    ...initialEntries,
-    ...candidates.map((candidate) => createStoredEntryMetadata(candidate.uri.path, candidate.size)),
-  ]
-  assertExtractedEntriesWithinLimits(plannedEntries, limits)
-
   const webview = configureWebviewImageRoot(debugDirUri)
   const errorImages: DebugImageResource[] = []
   const visionImages: DebugImageResource[] = []
   const waitFreezesImages: DebugImageResource[] = []
-  const actualEntries = [...initialEntries]
   for (const candidate of candidates) {
     operation.throwIfCancelled()
-    const stat = await vscode.workspace.fs.stat(candidate.uri)
-    operation.throwIfCancelled()
-    actualEntries.push(createStoredEntryMetadata(candidate.uri.path, stat.size))
-    assertExtractedEntriesWithinLimits(actualEntries, limits)
     const entry = {
       key: candidate.key,
       url: webview.asWebviewUri(candidate.uri).toString(),
@@ -1159,13 +1081,11 @@ async function findFirstMxuZipVolumeUri(
 async function handleZipFile(
   uri: vscode.Uri,
   operation: LoadOperation,
-  insist: boolean = false,
 ): Promise<void> {
   let transfer: WebviewByteTransferSender | undefined
   try {
     operation.throwIfCancelled()
     const checkActive = () => operation.throwIfCancelled()
-    const limitOverrides = insist ? INSIST_ARCHIVE_LIMIT_OVERRIDES : {}
     const volumeUris = await collectMxuZipVolumeUris(uri, operation)
     operation.throwIfCancelled()
     const readVolume = (input: ArchiveVolumeInput<vscode.Uri>) =>
@@ -1190,7 +1110,7 @@ async function handleZipFile(
       const inspectedVolumes = await inspectArchiveVolumes(
         volumeInputs,
         readVolume,
-        limitOverrides,
+        null,
         checkActive,
       )
       operation.throwIfCancelled()
@@ -1227,7 +1147,6 @@ async function handleZipFile(
 
     transfer = createByteTransfer(operation)
     await transfer.start({
-      insist,
       fileName: path.posix.basename(uri.path),
     })
     let primaryLogCount = 0
@@ -1305,7 +1224,7 @@ async function handleZipFile(
             }
           }
         },
-        limitOverrides,
+        null,
         checkActive,
       )
       operation.throwIfCancelled()
@@ -1319,9 +1238,7 @@ async function handleZipFile(
     await transfer.complete()
   } catch (error) {
     await transfer?.abort(error instanceof Error ? error.message : String(error))
-    await showLoadError(t('Failed to read ZIP archive'), error, operation, insist, () =>
-      handleZipFile(uri, operation, true),
-    )
+    showLoadError(t('Failed to read ZIP archive'), error, operation)
   }
 }
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {

@@ -64,4 +64,19 @@ describe('ZIP extraction resource budgets', () => {
     )).rejects.toMatchObject({ code: 'compression-ratio' })
     expect(unzipCall).not.toHaveBeenCalled()
   })
+
+  it('does not apply byte or compression-ratio budgets by default', async () => {
+    const zipData = zipSync({
+      'maa.log': [strToU8('x'.repeat(2_048)), { level: 9 }],
+    })
+
+    const result = await extractZipContent(
+      new File([toArrayBuffer(zipData)], 'high-ratio.zip'),
+      undefined,
+      { includeAuxiliaryFiles: false },
+    )
+
+    expect(result?.primaryLogFiles).toHaveLength(1)
+    expect(unzipCall).toHaveBeenCalled()
+  })
 })

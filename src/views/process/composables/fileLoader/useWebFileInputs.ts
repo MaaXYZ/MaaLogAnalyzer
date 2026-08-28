@@ -25,7 +25,6 @@ import {
 } from '../../../../utils/browserInputBudget'
 import { revokeBlobUrlMap } from '../../../../utils/blobUrlMap'
 import type { FileLoadOperationGate } from './operationGate'
-import { confirmInsistParsing, INSIST_ARCHIVE_LIMITS } from '../../../../utils/archiveLimits'
 
 const getFileRelativePath = (file: File): string => {
   return (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
@@ -45,16 +44,9 @@ const getMxuZipUpload = (files: File[], anchor: File): File | File[] => {
   return volumes.length > 1 ? volumes : anchor
 }
 
-const withInsistBrowserBudget = async <T>(
+const withUnmeteredBrowserInput = async <T>(
   load: (budget: BrowserInputBudget) => Promise<T>,
-): Promise<T> => {
-  try {
-    return await load(createBrowserInputBudget())
-  } catch (error) {
-    if (!confirmInsistParsing(error)) throw error
-    return load(createBrowserInputBudget(INSIST_ARCHIVE_LIMITS))
-  }
-}
+): Promise<T> => load(createBrowserInputBudget(null))
 
 const resolveSelectedLogContent = async (
   files: Iterable<File>,
@@ -141,7 +133,7 @@ export const useWebFileInputs = (
     try {
       if (!operationGate.startLoading(generation)) return
 
-      await withInsistBrowserBudget(async (budget) => {
+      await withUnmeteredBrowserInput(async (budget) => {
         const files = await readDirectoryFiles(dirEntry, '')
         if (!operationGate.isCurrent(generation)) return
         const { scopedFiles, primaryLogFiles, cancelled } = await resolveSelectedLogContent(
@@ -226,7 +218,7 @@ export const useWebFileInputs = (
     try {
       if (!operationGate.startLoading(generation)) return
 
-      await withInsistBrowserBudget(async (budget) => {
+      await withUnmeteredBrowserInput(async (budget) => {
         const { scopedFiles, primaryLogFiles, cancelled } = await resolveSelectedLogContent(
           files,
           options.selectPrimaryLogs,

@@ -14,7 +14,7 @@ export class InputResourceLimitError extends Error {
 export { InputResourceLimitError as BrowserInputLimitError }
 
 export interface InputResourceBudget {
-  readonly limits: Readonly<ArchiveLimits>
+  readonly limits: Readonly<ArchiveLimits> | null
   totalPathBytes: number
   selectedBytes: number
   readonly registeredPaths: Set<string>
@@ -27,7 +27,7 @@ export interface BrowserInputBudget extends InputResourceBudget {
 }
 
 export const createInputResourceBudget = (
-  limits: Readonly<ArchiveLimits> = DEFAULT_ARCHIVE_LIMITS,
+  limits: Readonly<ArchiveLimits> | null = DEFAULT_ARCHIVE_LIMITS,
 ): InputResourceBudget => ({
   limits,
   totalPathBytes: 0,
@@ -37,7 +37,7 @@ export const createInputResourceBudget = (
 })
 
 export const createBrowserInputBudget = (
-  limits: Readonly<ArchiveLimits> = DEFAULT_ARCHIVE_LIMITS,
+  limits: Readonly<ArchiveLimits> | null = DEFAULT_ARCHIVE_LIMITS,
 ): BrowserInputBudget => ({
   ...createInputResourceBudget(limits),
   registeredFiles: new WeakSet<File>(),
@@ -61,6 +61,11 @@ export const registerInputResourceEntry = (
 
   const normalizedPath = path.replace(/\\/g, '/')
   if (budget.registeredPaths.has(normalizedPath)) return
+
+  if (!budget.limits) {
+    budget.registeredPaths.add(normalizedPath)
+    return
+  }
 
   const pathBytes = utf8Encoder.encode(normalizedPath).byteLength
   if (pathBytes > budget.limits.maxPathBytes) {
@@ -93,6 +98,7 @@ export const chargeInputResourceBytes = (
   if (!Number.isSafeInteger(size) || size < 0) {
     throw new InputResourceLimitError('文件系统返回了无效的文件大小')
   }
+  if (!budget.limits) return
   if (size > budget.limits.maxFileBytes) {
     throw new ArchiveLimitError('file-size', size, budget.limits.maxFileBytes)
   }

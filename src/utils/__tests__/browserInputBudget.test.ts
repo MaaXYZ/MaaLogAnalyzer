@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { INSIST_ARCHIVE_LIMITS, resolveArchiveLimits } from '../archiveLimits'
+import { resolveArchiveLimits } from '../archiveLimits'
 import {
   BrowserInputLimitError,
   chargeBrowserInputFile,
@@ -55,14 +55,18 @@ describe('browser input resource budgets', () => {
     )
   })
 
-  it('uses the supplied limits for an explicit insist retry', () => {
+  it('skips path and byte accounting for an explicitly unmetered local input', () => {
     const limits = resolveArchiveLimits()
     const oversized = { size: limits.maxFileBytes + 1 } as File
+    const budget = createBrowserInputBudget(null)
 
     expect(() => chargeBrowserInputFile(createBrowserInputBudget(), oversized)).toThrow(/file-size/)
-    expect(() =>
-      chargeBrowserInputFile(createBrowserInputBudget(INSIST_ARCHIVE_LIMITS), oversized),
-    ).not.toThrow()
+    expect(() => {
+      registerBrowserInputFile(budget, oversized, 'debug/maa.log')
+      chargeBrowserInputFile(budget, oversized)
+    }).not.toThrow()
+    expect(budget.selectedBytes).toBe(0)
+    expect(budget.totalPathBytes).toBe(0)
   })
 
   it('does not preload primary logs a second time as auxiliary text files', async () => {

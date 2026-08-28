@@ -7,6 +7,8 @@ import { TOUR_STEPS, TOUR_STORAGE_KEY, TOUR_VERSION } from '../../../tutorial/st
 import type { NodeInfo, TaskInfo } from '../../../types'
 import { LogParser } from '@windsland52/maa-log-parser'
 import { BRIDGE_THEME_UPDATED_EVENT } from '../../../utils/bridgeEvents'
+import { isVSCode } from '../../../utils/platform'
+import { useHostFileMessageReceiver } from '../../process/composables/fileLoader/useVSCodeBridge'
 import { useTextSearchTargets } from './useTextSearchTargets'
 import { useAppViewState } from './useAppViewState'
 import { useAppSelectionAndFilters } from './useAppSelectionAndFilters'
@@ -215,6 +217,17 @@ export const useAppRootViewModel = ({
     tutorialVersion: TOUR_VERSION,
     tutorialAutoStartEnabled,
   })
+
+  useHostFileMessageReceiver({
+    onUploadFile: (file, selectPrimaryLogs) => {
+      void handleFileUpload(file, selectPrimaryLogs)
+    },
+    onUploadContent: (...args) => {
+      void handleContentUpload(...args)
+    },
+    onFileLoadingStart: handleFileLoadingStart,
+    onFileLoadingEnd: handleFileLoadingEnd,
+  }, isVSCode)
 
   const isDark = computed(() => propsIsDark.value)
 
