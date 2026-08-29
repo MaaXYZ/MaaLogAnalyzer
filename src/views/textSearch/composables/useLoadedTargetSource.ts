@@ -60,6 +60,16 @@ export const useLoadedTargetSource = (options: UseLoadedTargetSourceOptions) => 
     prepareLoadedTarget,
   }))
 
+  // 有已解析的日志目标时默认进入“已加载目标”模式。
+  // 目标内容仍走 ensureLoadedTargets 按需加载（见 setupLoadedTargetModeSync），
+  // 不会在进入搜索界面前把文件内容常驻内存。
+  if (
+    (options.hasDeferredLoadedTargets?.value ?? false)
+    && (options.loadedTargets.value?.length ?? 0) === 0
+  ) {
+    sourceMode.value = 'loaded'
+  }
+
   return {
     sourceMode,
     selectedLoadedTargetId,
