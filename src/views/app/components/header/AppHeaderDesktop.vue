@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NFlex, NButton, NIcon, NDropdown, NText } from 'naive-ui'
+import { computed, type Component } from 'vue'
+import { NFlex, NButton, NIcon, NTabs, NTab, NText } from 'naive-ui'
 import {
   BarChartOutlined,
   FileSearchOutlined,
@@ -13,7 +14,13 @@ import {
 } from '@vicons/antd'
 import { isVSCode } from '../../../../utils/platform'
 
-defineProps<{
+interface ViewModeOption {
+  label: string
+  key: string
+  icon: () => unknown
+}
+
+const props = defineProps<{
   currentViewLabel: string
   viewMode: string
   viewModeOptions: Array<Record<string, unknown>>
@@ -32,6 +39,18 @@ const handleViewModeSelect = (key: string | number) => {
   emit('select-view-mode', String(key))
 }
 
+const typedViewModeOptions = computed(
+  () => props.viewModeOptions as unknown as ViewModeOption[],
+)
+
+const viewModeIcons: Record<string, Component> = {
+  analysis: BarChartOutlined,
+  search: FileSearchOutlined,
+  statistics: DashboardOutlined,
+  flowchart: ApartmentOutlined,
+  split: ColumnHeightOutlined,
+}
+
 const isNativeVSCodeHost = isVSCode()
 </script>
 
@@ -40,25 +59,30 @@ const isNativeVSCodeHost = isVSCode()
     <n-flex align="center" style="gap: 12px">
       <n-text strong style="font-size: 16px">MAA 日志工具</n-text>
 
-      <div data-tour="header-view-switch">
-        <n-dropdown
-          :options="viewModeOptions"
-          @select="handleViewModeSelect"
-          trigger="click"
+      <div
+        data-tour="header-view-switch"
+        class="header-view-switch"
+        :class="{ 'header-view-switch--dark': isDark }"
+      >
+        <n-tabs
+          type="segment"
+          size="small"
+          :value="viewMode"
+          @update:value="handleViewModeSelect"
         >
-          <n-button size="small">
-            <template #icon>
-              <n-icon>
-                <bar-chart-outlined v-if="viewMode === 'analysis'" />
-                <file-search-outlined v-else-if="viewMode === 'search'" />
-                <dashboard-outlined v-else-if="viewMode === 'statistics'" />
-                <apartment-outlined v-else-if="viewMode === 'flowchart'" />
-                <column-height-outlined v-else />
+          <n-tab
+            v-for="option in typedViewModeOptions"
+            :key="option.key"
+            :name="option.key"
+          >
+            <span class="view-tab-content">
+              <n-icon :size="14">
+                <component :is="viewModeIcons[option.key] ?? BarChartOutlined" />
               </n-icon>
-            </template>
-            {{ currentViewLabel }}
-          </n-button>
-        </n-dropdown>
+              {{ option.label }}
+            </span>
+          </n-tab>
+        </n-tabs>
       </div>
     </n-flex>
 
@@ -99,3 +123,38 @@ const isNativeVSCodeHost = isVSCode()
     </n-flex>
   </n-flex>
 </template>
+
+<style scoped>
+.header-view-switch {
+  min-width: 0;
+}
+
+/* 暗色主题下 segment 默认底色与头部卡片背景相同，会完全隐形，这里补一层对比底色 */
+.header-view-switch :deep(.n-tabs-rail) {
+  border-radius: 5px;
+}
+
+.header-view-switch--dark :deep(.n-tabs-rail) {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.header-view-switch--dark :deep(.n-tabs-capsule) {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.header-view-switch:not(.header-view-switch--dark) :deep(.n-tabs-rail) {
+  background-color: rgba(0, 0, 0, 0.045);
+}
+
+.header-view-switch:not(.header-view-switch--dark) :deep(.n-tabs-capsule) {
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.view-tab-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+</style>
