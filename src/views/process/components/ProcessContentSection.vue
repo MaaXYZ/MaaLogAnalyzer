@@ -67,6 +67,7 @@ const props = defineProps<{
   onToggleNodeNav: () => void
   onExpandDetail: () => void
   onSelectTaskIndex: (index: number) => void
+  onLocateTaskFailure: (index: number, nodeId: number) => void
   onToggleFollow: () => void
   onUpdateNodeNavSearchText: (text: string) => void
   onUpdateNodeNavMode: (mode: NodeNavMode) => void
@@ -154,6 +155,7 @@ const props = defineProps<{
         @toggle-node-nav="props.onToggleNodeNav"
         @expand-detail="props.onExpandDetail"
         @select-task-index="props.onSelectTaskIndex"
+        @locate-failure="(index, nodeId) => props.onLocateTaskFailure(index, nodeId)"
         @toggle-follow="props.onToggleFollow"
         @reload-select="props.onReloadSelect"
         @update:node-nav-search-text="props.onUpdateNodeNavSearchText"

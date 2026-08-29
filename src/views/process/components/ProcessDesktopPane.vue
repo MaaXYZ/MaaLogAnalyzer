@@ -59,6 +59,7 @@ const emit = defineEmits<{
   'toggle-node-nav': []
   'expand-detail': []
   'select-task-index': [index: number]
+  'locate-failure': [index: number, nodeId: number]
   'toggle-follow': []
   'reload-select': [key: string]
   'update:node-nav-search-text': [value: string]
@@ -103,6 +104,7 @@ const handleSelectNodeNavItem = (item: NodeNavViewItem) => {
         :tasks="tasks"
         :active-task-index="activeTaskIndex"
         @select-task="emit('select-task-index', $event)"
+        @locate-failure="(index, nodeId) => emit('locate-failure', index, nodeId)"
         @manual-scroll-up="emit('manual-scroll-up')"
       />
     </template>

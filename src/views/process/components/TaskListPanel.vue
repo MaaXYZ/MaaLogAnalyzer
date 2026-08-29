@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { NCard, NFlex, NText, NButton, NIcon, NScrollbar, NList, NListItem, NTag } from 'naive-ui'
 import { VerticalAlignTopOutlined, VerticalAlignBottomOutlined } from '@vicons/antd'
 import type { TaskInfo } from '../../../types'
@@ -14,7 +14,36 @@ const props = defineProps<{
 const emit = defineEmits<{
   'select-task': [index: number]
   'manual-scroll-up': []
+  'locate-failure': [index: number, nodeId: number]
 }>()
+
+interface FailureJump {
+  nodeId: number
+  label: string
+}
+
+// 失败任务的跳转目标：任务内最后一个失败节点；无失败节点时回退最后一个节点
+const buildFailureJump = (task: TaskInfo): FailureJump | null => {
+  if (task.status !== 'failed') return null
+  const failedNodes = (task.nodes || []).filter(node => node.status === 'failed')
+  const target = failedNodes[failedNodes.length - 1] ?? task.nodes[task.nodes.length - 1]
+  if (!target) return null
+  return {
+    nodeId: target.node_id,
+    label: failedNodes.length > 1 ? `${target.name} 等 ${failedNodes.length} 处` : target.name,
+  }
+}
+
+const failureJumpByIndex = computed(() => {
+  const map = new Map<number, FailureJump>()
+  props.tasks.forEach((task, index) => {
+    const jump = buildFailureJump(task)
+    if (jump) map.set(index, jump)
+  })
+  return map
+})
+
+const getFailureJump = (index: number): FailureJump | undefined => failureJumpByIndex.value.get(index)
 
 const taskListScrollbar = ref<InstanceType<typeof NScrollbar> | null>(null)
 
@@ -88,6 +117,19 @@ defineExpose({
                 <n-text :type="task.status === 'succeeded' ? 'success' : task.status === 'failed' ? 'error' : 'warning'">
                   {{ task.status === 'succeeded' ? '成功' : task.status === 'failed' ? '失败' : '运行中' }}
                 </n-text>
+                <template v-if="getFailureJump(index)">
+                  <n-text depth="3"> · 失败于 </n-text>
+                  <n-tag
+                    size="small"
+                    type="error"
+                    :bordered="false"
+                    style="cursor: pointer"
+                    title="点击定位到失败节点"
+                    @click.stop="emit('locate-failure', index, getFailureJump(index)?.nodeId ?? -1)"
+                  >
+                    {{ getFailureJump(index)?.label }}
+                  </n-tag>
+                </template>
               </n-text>
               <n-text depth="3" style="font-size: 12px">
                 节点: {{ task.nodes.length }} 个

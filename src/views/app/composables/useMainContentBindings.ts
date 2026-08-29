@@ -93,6 +93,16 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
 
   const processViewEventHandlers: ProcessViewEventHandlers = {
     'select-task': options.handleSelectTask,
+    // 失败任务卡上的“失败于 X”徽章：选中任务 → 选中失败节点 → 时间线滚动到该节点
+    'locate-failure': (index, nodeId) => {
+      const task = options.filteredTasks.value[index]
+      if (!task) return
+      options.handleSelectTask(task)
+      const node = (task.nodes || []).find(item => item.node_id === nodeId)
+      if (!node) return
+      options.handleSelectNode(node)
+      options.pendingScrollNodeId.value = nodeId
+    },
     'upload-file': options.handleFileUpload,
     'upload-content': options.handleContentUpload,
     'select-node': options.handleSelectNode,

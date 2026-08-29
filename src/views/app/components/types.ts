@@ -46,6 +46,7 @@ export interface ProcessViewForwardProps {
 
 export interface ProcessViewEventHandlers {
   'select-task': (task: TaskInfo) => void
+  'locate-failure': (index: number, nodeId: number) => void
   'upload-file': UploadFileHandler
   'upload-content': UploadContentHandler
   'select-node': (node: NodeInfo) => void

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import {
   NCard, NEmpty,
 } from 'naive-ui'
@@ -125,6 +125,29 @@ const handleWheel = (event: WheelEvent) => {
   }
 }
 
+// 选中节点变化时让导航列表跟随：仅当目标行不在可视区域内才滚动，避免视口无谓跳动
+watch(
+  () => [props.selectedNodeId, props.items] as const,
+  async ([nodeId]) => {
+    if (nodeId == null) return
+    await nextTick()
+    const index = props.items.findIndex(item => item.node.node_id === nodeId)
+    if (index < 0) return
+
+    const scrollerEl = getScrollerElement()
+    if (scrollerEl) {
+      const row = scrollerEl.querySelector<HTMLElement>(`.node-nav-row[data-node-id="${nodeId}"]`)
+      if (row) {
+        const rowRect = row.getBoundingClientRect()
+        const scrollerRect = scrollerEl.getBoundingClientRect()
+        if (rowRect.top >= scrollerRect.top && rowRect.bottom <= scrollerRect.bottom) return
+      }
+    }
+    void safeScrollToItem(index)
+  },
+  { flush: 'post' },
+)
+
 defineExpose({
   scrollToTop,
   scrollToBottom,
@@ -180,6 +203,7 @@ defineExpose({
                 'node-nav-row-detailed': props.displayMode === 'detailed',
                 'node-nav-row-active': props.selectedNodeId != null && item.node.node_id === props.selectedNodeId,
               }"
+              :data-node-id="item.node.node_id"
               @click="emit('select-item', item)"
             >
               <node-nav-item

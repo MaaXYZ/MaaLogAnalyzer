@@ -36,6 +36,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'select-task': [task: TaskInfo]
+  'locate-failure': [index: number, nodeId: number]
   'upload-file': [file: File | File[], selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>]
   'upload-content': [content: string, errorImages?: Map<string, string>, visionImages?: Map<string, string>, waitFreezesImages?: Map<string, string>, textFiles?: LoadedTextFile[], primaryLogFiles?: PrimaryLogFile[]]
   'select-node': [node: NodeInfo]
@@ -243,6 +244,7 @@ void fileInputRef
       :on-toggle-node-nav="toggleNodeNav"
       :on-expand-detail="() => onExpandDetailView?.()"
       :on-select-task-index="handleTabChange"
+      :on-locate-task-failure="(index, nodeId) => emit('locate-failure', index, nodeId)"
       :on-toggle-follow="toggleFollowLast"
       :on-update-node-nav-search-text="(value) => nodeNavSearchText = value"
       :on-update-node-nav-mode="(value: NodeNavMode) => setNodeNavMode(value)"
