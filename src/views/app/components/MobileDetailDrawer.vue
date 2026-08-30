@@ -44,6 +44,7 @@ const handleUpdateShow = (value: boolean) => {
     @update:show="handleUpdateShow"
   >
     <n-drawer-content title="详细信息">
+      <div class="drawer-handle" aria-hidden="true" />
       <detail-view
         :selected-node="selectedNode"
         :selected-flow-item-id="selectedFlowItemId"
@@ -62,3 +63,13 @@ const handleUpdateShow = (value: boolean) => {
     </n-drawer-content>
   </n-drawer>
 </template>
+
+<style scoped>
+.drawer-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(128, 128, 128, 0.5);
+  margin: 0 auto 8px auto;
+}
+</style>
