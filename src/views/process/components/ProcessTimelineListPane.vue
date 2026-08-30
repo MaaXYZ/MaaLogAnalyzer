@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import NodeTimelineList from './NodeTimelineList.vue'
 import type { NodeInfo } from '../../../types'
-import type { DynamicScroller } from 'vue-virtual-scroller'
+import type { DynamicScrollerInstance } from '../../../types/virtualScroller'
 
 type NodeTimelineItem = NodeInfo & { _uniqueKey: string }
 
@@ -34,7 +34,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  'scroller-mounted': [scroller: InstanceType<typeof DynamicScroller> | null]
+  'scroller-mounted': [scroller: DynamicScrollerInstance | null]
   'manual-scroll-up': []
   'select-node': [node: NodeInfo]
   'select-action': [node: NodeInfo]

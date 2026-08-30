@@ -1,8 +1,8 @@
 import { nextTick, type Ref } from 'vue'
-import type { DynamicScroller } from 'vue-virtual-scroller'
+import type { DynamicScrollerInstance } from '../../../../types/virtualScroller'
 
 interface RealtimeFollowScrollingOptions {
-  virtualScroller: Ref<InstanceType<typeof DynamicScroller> | null>
+  virtualScroller: Ref<DynamicScrollerInstance | null>
   currentNodeCount: Ref<number>
   isRealtimeStreaming: Ref<boolean>
   followLast: Ref<boolean>

@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import type { DynamicScroller } from 'vue-virtual-scroller'
+import type { DynamicScrollerInstance } from '../../../../types/virtualScroller'
 import { useProcessFileLoader } from '../useProcessFileLoader'
 import { useProcessSelectionHandlers } from '../useProcessSelectionHandlers'
 import type { ProcessViewControllerEmitters } from './types'
@@ -9,7 +9,7 @@ interface UseProcessFileSelectionOptions {
   emitters: ProcessViewControllerEmitters
   isInTauri: Ref<boolean>
   isInVSCode: Ref<boolean>
-  virtualScroller: Ref<InstanceType<typeof DynamicScroller> | null>
+  virtualScroller: Ref<DynamicScrollerInstance | null>
   selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>
 }
 

@@ -1,5 +1,5 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
-import type { DynamicScroller } from 'vue-virtual-scroller'
+import type { DynamicScrollerInstance } from '../../../types/virtualScroller'
 import { createRealtimeFollowScrolling } from './realtimeFollow/scrolling'
 import { createFollowScheduler } from './realtimeFollow/scheduler'
 import { setupRealtimeFollowWatchers } from './realtimeFollow/watchers'
@@ -20,7 +20,7 @@ export const useRealtimeFollow = (options: UseRealtimeFollowOptions) => {
 
   const taskListPanelRef = ref<ScrollablePanelRef | null>(null)
   const nodeNavPanelRef = ref<ScrollablePanelRef | null>(null)
-  const virtualScroller = ref<InstanceType<typeof DynamicScroller> | null>(null)
+  const virtualScroller = ref<DynamicScrollerInstance | null>(null)
 
   // 当前任务的节点列表（添加唯一 key 供虚拟滚动使用）
   const currentNodes = computed(() => {

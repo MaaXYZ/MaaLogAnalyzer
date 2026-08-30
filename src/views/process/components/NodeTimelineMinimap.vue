@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { shallowRef, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import type { DynamicScroller } from 'vue-virtual-scroller'
+import type { DynamicScrollerInstance } from '../../../types/virtualScroller'
 import type { NodeInfo } from '../../../types'
 import { MINIMAP_CONFIG } from '../utils/minimapColors'
 import { createMinimapInteraction } from '../composables/useMinimapInteraction'
@@ -9,7 +9,7 @@ type NodeTimelineItem = NodeInfo & { _uniqueKey: string }
 
 const props = defineProps<{
   nodes: NodeTimelineItem[]
-  scrollerRef: InstanceType<typeof DynamicScroller> | null
+  scrollerRef: DynamicScrollerInstance | null
   selectedNodeId: number | null
   safeScrollToItem: (index: number) => Promise<boolean>
 }>()
@@ -20,7 +20,7 @@ const emit = defineEmits<{
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const containerRef = ref<HTMLDivElement | null>(null)
-const scrollerRefLocal = ref<InstanceType<typeof DynamicScroller> | null>(null)
+const scrollerRefLocal = ref<DynamicScrollerInstance | null>(null)
 const nodesRef = shallowRef<NodeTimelineItem[]>([])
 const selectedNodeIdRef = ref<number | null>(null)
 

@@ -4,6 +4,7 @@ import {
   NCard, NEmpty,
 } from 'naive-ui'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
+import type { DynamicScrollerInstance } from '../../../types/virtualScroller'
 import type {
   NodeNavMode,
   NodeNavViewItem,
@@ -38,7 +39,7 @@ const emit = defineEmits<{
   'manual-scroll-up': []
 }>()
 
-const nodeNavScroller = ref<InstanceType<typeof DynamicScroller> | null>(null)
+const nodeNavScroller = ref<DynamicScrollerInstance | null>(null)
 
 const navMinItemSize = computed(() => {
   if (props.displayMode === 'detailed') {
@@ -191,11 +192,6 @@ defineExpose({
           <dynamic-scroller-item
             :item="item"
             :active="active"
-            :size-dependencies="[
-              props.displayMode,
-              props.normalizedSearchText ? item.matchHint : '',
-              props.normalizedSearchText ? item.matchPreview : '',
-            ]"
           >
             <div
               :title="item.node.name"

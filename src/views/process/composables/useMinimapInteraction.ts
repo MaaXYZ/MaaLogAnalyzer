@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue'
-import type { DynamicScroller } from 'vue-virtual-scroller'
+import type { DynamicScrollerInstance } from '../../../types/virtualScroller'
 import type { NodeInfo } from '../../../types'
 import { MINIMAP_CONFIG, getMinimapColor, getMinimapPriority, resolveNodeEffectiveStatus } from '../utils/minimapColors'
 
@@ -7,7 +7,7 @@ type NodeTimelineItem = NodeInfo & { _uniqueKey: string }
 
 interface MinimapInteractionOptions {
   canvasRef: Ref<HTMLCanvasElement | null>
-  scrollerRef: Ref<InstanceType<typeof DynamicScroller> | null>
+  scrollerRef: Ref<DynamicScrollerInstance | null>
   nodes: Ref<NodeTimelineItem[]>
   selectedNodeId: Ref<number | null>
   safeScrollToItem: (index: number) => Promise<boolean>
@@ -19,7 +19,7 @@ const isHtmlElement = (value: unknown): value is HTMLElement => {
   return typeof HTMLElement !== 'undefined' && value instanceof HTMLElement
 }
 
-const getScrollerElement = (scrollerRef: InstanceType<typeof DynamicScroller> | null): HTMLElement | null => {
+const getScrollerElement = (scrollerRef: DynamicScrollerInstance | null): HTMLElement | null => {
   if (!scrollerRef) return null
   const rootCandidate = (scrollerRef as unknown as { $el?: unknown }).$el ?? scrollerRef
   if (!isHtmlElement(rootCandidate)) return null

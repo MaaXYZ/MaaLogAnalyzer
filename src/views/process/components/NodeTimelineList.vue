@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { NEmpty } from 'naive-ui'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
+import type { DynamicScrollerInstance } from '../../../types/virtualScroller'
 import type { NodeInfo } from '../../../types'
 import NodeCard from '../../../components/NodeCard.vue'
 import NodeTimelineMinimap from './NodeTimelineMinimap.vue'
@@ -46,10 +47,10 @@ const emit = defineEmits<{
   'select-recognition': [node: NodeInfo, attemptIndex: number]
   'select-flow-item': [node: NodeInfo, flowItemId: string]
   'manual-scroll-up': []
-  'scroller-mounted': [scroller: InstanceType<typeof DynamicScroller> | null]
+  'scroller-mounted': [scroller: DynamicScrollerInstance | null]
 }>()
 
-const localScrollerRef = ref<InstanceType<typeof DynamicScroller> | null>(null)
+const localScrollerRef = ref<DynamicScrollerInstance | null>(null)
 
 const getScrollerElement = (): HTMLElement | null => {
   const scroller = localScrollerRef.value as unknown
@@ -77,8 +78,8 @@ const handleWheel = (event: WheelEvent) => {
 }
 
 const setLocalScrollerRef = (value: Element | object | null) => {
-  localScrollerRef.value = value as InstanceType<typeof DynamicScroller> | null
-  emit('scroller-mounted', value as InstanceType<typeof DynamicScroller> | null)
+  localScrollerRef.value = value as DynamicScrollerInstance | null
+  emit('scroller-mounted', value as DynamicScrollerInstance | null)
 }
 </script>
 
@@ -107,12 +108,6 @@ const setLocalScrollerRef = (value: Element | object | null) => {
           :item="item"
           :active="active"
           :data-index="index"
-          :size-dependencies="[
-            item.node_flow?.length,
-            item.next_list?.length,
-            item.action_details,
-            displayMode,
-          ]"
         >
           <div :style="{ padding: itemPadding }">
             <node-card

@@ -1,9 +1,9 @@
 import type { Ref } from 'vue'
-import type { DynamicScroller } from 'vue-virtual-scroller'
+import type { DynamicScrollerInstance } from '../../../types/virtualScroller'
 import type { NodeInfo } from '../../../types'
 
 interface UseProcessSelectionHandlersOptions {
-  virtualScroller: Ref<InstanceType<typeof DynamicScroller> | null>
+  virtualScroller: Ref<DynamicScrollerInstance | null>
   onSelectNode: (node: NodeInfo) => void
   onSelectAction: (node: NodeInfo) => void
   onSelectRecognition: (node: NodeInfo, attemptIndex: number) => void
@@ -28,7 +28,7 @@ export const useProcessSelectionHandlers = (options: UseProcessSelectionHandlers
   }
 
   const handleVirtualScrollerMounted = (scroller: object | null) => {
-    options.virtualScroller.value = scroller as InstanceType<typeof DynamicScroller> | null
+    options.virtualScroller.value = scroller as DynamicScrollerInstance | null
   }
 
   return {
