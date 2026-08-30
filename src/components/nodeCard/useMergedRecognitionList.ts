@@ -24,6 +24,11 @@ type RoundAttempt = {
   matchName: string
 }
 
+type MergedRecognitionBuildResult = {
+  items: MergedRecognitionItem[]
+  fullyUnrecognizedRoundIndexes: Set<number>
+}
+
 const appendAttemptItem = (
   result: MergedRecognitionItem[],
   attempt: RecognitionAttempt,
@@ -117,7 +122,7 @@ const appendRoundItems = (
   nextEntries: NextEntry[],
   nextIndexMap: ReadonlyMap<string, number>,
   nextDisplayMap: ReadonlyMap<string, string>,
-) => {
+): boolean => {
   if (useRoundSeparator) {
     result.push({
       name: `—— 第 ${roundIdx + 1} 轮 ——`,
@@ -129,6 +134,9 @@ const appendRoundItems = (
 
   const roundBuckets = new Map<string, RoundAttempt[]>()
   const outOfNextList: RoundAttempt[] = []
+  const hasSuccessfulOrRunningAttempt = roundAttempts.some(
+    ({ attempt }) => attempt.status === 'success' || attempt.status === 'running',
+  )
 
   for (const roundAttempt of roundAttempts) {
     const matchName = roundAttempt.matchName
@@ -181,10 +189,13 @@ const appendRoundItems = (
     const name = nextDisplayMap.get(roundAttempt.matchName) ?? roundAttempt.attempt.name
     appendAttemptItem(result, roundAttempt.attempt, roundAttempt.index, name)
   }
+
+  return !hasSuccessfulOrRunningAttempt
 }
 
-const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] => {
+const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionBuildResult => {
   const result: MergedRecognitionItem[] = []
+  const fullyUnrecognizedRoundIndexes = new Set<number>()
 
   const attempts = buildNodeRecognitionAttempts(node)
   const nextList: NextListItem[] = node.next_list ?? []
@@ -198,7 +209,7 @@ const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] =>
         })
       }
     }
-    return result
+    return { items: result, fullyUnrecognizedRoundIndexes }
   }
 
   const recognitionTargetByNextName = buildRecognitionTargetByNextName(attempts, nextList)
@@ -265,7 +276,7 @@ const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] =>
 
   if (splitNextIndexMap.size === 0) {
     appendAttemptsInOriginalOrder(result, attempts)
-    return result
+    return { items: result, fullyUnrecognizedRoundIndexes }
   }
 
   const rounds = splitAttemptsIntoRounds(attempts, splitNextListNames, splitNextIndexMap)
@@ -273,11 +284,11 @@ const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] =>
 
   if (!useRoundSeparator && nextEntries.length === 0) {
     appendAttemptsInOriginalOrder(result, attempts)
-    return result
+    return { items: result, fullyUnrecognizedRoundIndexes }
   }
 
   for (let roundIdx = 0; roundIdx < rounds.length; roundIdx += 1) {
-    appendRoundItems(
+    const roundFullyUnrecognized = appendRoundItems(
       result,
       rounds[roundIdx],
       roundIdx,
@@ -286,9 +297,12 @@ const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] =>
       splitNextIndexMap,
       splitNextDisplayMap,
     )
+    if (useRoundSeparator && nextEntries.length > 0 && roundFullyUnrecognized) {
+      fullyUnrecognizedRoundIndexes.add(roundIdx + 1)
+    }
   }
 
-  return result
+  return { items: result, fullyUnrecognizedRoundIndexes }
 }
 
 const buildVisibleRecognitionItems = (
@@ -329,8 +343,12 @@ const buildVisibleRecognitionItems = (
 }
 
 export const useMergedRecognitionList = (params: UseMergedRecognitionListParams) => {
-  const mergedRecognitionList = computed<MergedRecognitionItem[]>(() =>
-    buildMergedRecognitionItems(params.node.value),
+  const mergedRecognitionBuild = computed(() => buildMergedRecognitionItems(params.node.value))
+  const mergedRecognitionList = computed<MergedRecognitionItem[]>(
+    () => mergedRecognitionBuild.value.items,
+  )
+  const fullyUnrecognizedRoundIndexes = computed<Set<number>>(
+    () => mergedRecognitionBuild.value.fullyUnrecognizedRoundIndexes,
   )
 
   const visibleRecognitionList = computed<MergedRecognitionItem[]>(() =>
@@ -340,5 +358,6 @@ export const useMergedRecognitionList = (params: UseMergedRecognitionListParams)
   return {
     mergedRecognitionList,
     visibleRecognitionList,
+    fullyUnrecognizedRoundIndexes,
   }
 }

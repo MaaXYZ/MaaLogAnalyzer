@@ -16,6 +16,7 @@ const emit = defineEmits<{
   'toggle-recognition': []
   'toggle-action': []
   'toggle-nested': [attemptIndex: number]
+  'toggle-unrecognized-round': [roundIndex: number]
 }>()
 
 const props = defineProps<{
@@ -27,6 +28,8 @@ const props = defineProps<{
   defaultCollapseNestedActionNodes?: boolean
   isExpanded: (attemptIndex: number) => boolean
   forceExpandRelatedWhileRunning?: boolean
+  fullyUnrecognizedRoundIndexes?: ReadonlySet<number>
+  isUnrecognizedRoundExpanded?: (roundIndex: number) => boolean
   isVscodeLaunchEmbed?: boolean
   bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
 }>()
@@ -79,13 +82,21 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
         :key="buildRecognitionItemKey(item, idx)"
         class="recognition-item-fragment"
       >
-        <n-text
+        <div
           v-if="item.isRoundSeparator && recognitionExpanded"
-          depth="3"
-          class="round-separator"
+          class="round-separator round-separator-row"
         >
-          {{ item.name }}
-        </n-text>
+          <n-text depth="3">{{ item.name }}</n-text>
+          <n-button
+            v-if="item.roundIndex != null && fullyUnrecognizedRoundIndexes?.has(item.roundIndex)"
+            size="small"
+            class="fixed-toggle-button round-separator-toggle"
+            @click="emit('toggle-unrecognized-round', item.roundIndex)"
+            @mousedown.prevent
+          >
+            {{ isUnrecognizedRoundExpanded?.(item.roundIndex!) ? 'Hide' : 'Show' }}
+          </n-button>
+        </div>
 
         <n-button
           v-else-if="recognitionExpanded && item.status === 'not-recognized'"
@@ -274,6 +285,17 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
   text-align: center;
   font-size: 12px;
   letter-spacing: 0.5px;
+}
+
+.round-separator-row {
+  position: relative;
+}
+
+.round-separator-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .fixed-toggle-button {

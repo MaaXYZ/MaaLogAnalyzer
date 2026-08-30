@@ -18,6 +18,8 @@ const props = defineProps<{
   defaultCollapseNestedActionNodes?: boolean
   isExpanded?: (attemptIndex: number) => boolean
   forceExpandRelatedWhileRunning?: boolean
+  fullyUnrecognizedRoundIndexes?: ReadonlySet<number>
+  isUnrecognizedRoundExpanded?: (roundIndex: number) => boolean
   isVscodeLaunchEmbed?: boolean
   bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
 }>()
@@ -29,6 +31,7 @@ const emit = defineEmits<{
   'toggle-recognition': []
   'toggle-action': []
   'toggle-nested': [attemptIndex: number]
+  'toggle-unrecognized-round': [roundIndex: number]
 }>()
 
 const TREE_INDENT_PX = 12
@@ -87,9 +90,31 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
         :key="`tree-rec-${buildRecognitionItemKey(item, index)}`"
       >
         <li class="tree-item">
-          <n-text v-if="item.isRoundSeparator" depth="3" class="tree-round-separator-text">
+          <n-text
+            v-if="
+              item.isRoundSeparator &&
+              !(item.roundIndex != null && fullyUnrecognizedRoundIndexes?.has(item.roundIndex))
+            "
+            depth="3"
+            class="tree-round-separator-text"
+          >
             {{ item.name }}
           </n-text>
+          <div v-else-if="item.isRoundSeparator" class="tree-round-separator-row">
+            <span
+              class="tree-round-separator-toggle-holder"
+              @click.stop="emit('toggle-unrecognized-round', item.roundIndex!)"
+              @mousedown.prevent
+            >
+              <span
+                class="tree-toggle"
+                :class="{
+                  'tree-toggle-collapsed': !isUnrecognizedRoundExpanded?.(item.roundIndex!),
+                }"
+              />
+            </span>
+            <n-text depth="3" class="tree-round-separator-text">{{ item.name }}</n-text>
+          </div>
           <template v-else>
             <n-flex class="tree-row-line" align="center" style="gap: 4px">
               <span
@@ -372,6 +397,28 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
   top: 12px;
   width: calc(12px + var(--tree-item-offset, 0px));
   border-bottom: 1px solid var(--n-border-color, rgba(255, 255, 255, 0.12));
+}
+
+.tree-round-separator-row {
+  position: relative;
+}
+
+.tree-round-separator-toggle-holder {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.tree-round-separator-row .tree-round-separator-text {
+  pointer-events: none;
 }
 
 .tree-round-separator-text {

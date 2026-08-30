@@ -72,7 +72,7 @@ describe('useMergedRecognitionList', () => {
     )
     const showNotRecognizedNodes = ref(true)
 
-    const { visibleRecognitionList } = useMergedRecognitionList({
+    const { visibleRecognitionList, fullyUnrecognizedRoundIndexes } = useMergedRecognitionList({
       node: nodeRef,
       showNotRecognizedNodes,
     })
@@ -85,6 +85,7 @@ describe('useMergedRecognitionList', () => {
       { name: 'A', status: 'failed', attemptIndex: 2 },
       { name: 'B', status: 'not-recognized' },
     ])
+    expect(fullyUnrecognizedRoundIndexes.value).toEqual(new Set([2]))
 
     showNotRecognizedNodes.value = false
 
@@ -169,7 +170,7 @@ describe('useMergedRecognitionList', () => {
     )
     const showNotRecognizedNodes = ref(true)
 
-    const { visibleRecognitionList } = useMergedRecognitionList({
+    const { visibleRecognitionList, fullyUnrecognizedRoundIndexes } = useMergedRecognitionList({
       node: nodeRef,
       showNotRecognizedNodes,
     })
@@ -182,6 +183,7 @@ describe('useMergedRecognitionList', () => {
       { name: 'A', status: 'failed', attemptIndex: 2 },
       { name: 'B', status: 'failed', attemptIndex: 3 },
     ])
+    expect(fullyUnrecognizedRoundIndexes.value).toEqual(new Set([1, 2]))
   })
 
   it('splits rounds when next_list is non-empty but attempt names do not match next names', () => {
@@ -202,7 +204,7 @@ describe('useMergedRecognitionList', () => {
     )
     const showNotRecognizedNodes = ref(false)
 
-    const { visibleRecognitionList } = useMergedRecognitionList({
+    const { visibleRecognitionList, fullyUnrecognizedRoundIndexes } = useMergedRecognitionList({
       node: nodeRef,
       showNotRecognizedNodes,
     })
@@ -215,5 +217,6 @@ describe('useMergedRecognitionList', () => {
       { name: 'RecoA', status: 'failed', attemptIndex: 2 },
       { name: 'RecoB', status: 'failed', attemptIndex: 3 },
     ])
+    expect(fullyUnrecognizedRoundIndexes.value).toEqual(new Set([1, 2]))
   })
 })

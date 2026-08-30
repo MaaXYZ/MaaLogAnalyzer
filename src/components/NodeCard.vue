@@ -6,6 +6,7 @@ import { getSettings } from '../utils/settings'
 import { extractTime } from '../utils/formatDuration'
 import { useNodeCardTaskDoc } from './nodeCard/useNodeCardTaskDoc'
 import { useMergedRecognitionList } from './nodeCard/useMergedRecognitionList'
+import { filterCollapsedUnrecognizedRounds } from './nodeCard/recognitionRoundState'
 import NodeCardDetailed from './NodeCardDetailed.vue'
 import NodeCardCompact from './NodeCardCompact.vue'
 import NodeCardTree from './NodeCardTree.vue'
@@ -29,6 +30,9 @@ const emit = defineEmits<{
 
 // 跟踪哪些识别尝试的嵌套节点是展开的
 const expandedAttempts = ref<Map<number, boolean>>(new Map())
+
+// 跟踪用户手动展开的“完全未识别”轮次
+const expandedUnrecognizedRounds = ref<Set<number>>(new Set())
 
 // 跟踪 Recognition 部分是否展开
 const recognitionExpanded = ref(!settings.defaultCollapseRecognition)
@@ -54,6 +58,7 @@ watch(
   () => props.node?.node_id,
   () => {
     expandedAttempts.value.clear()
+    expandedUnrecognizedRounds.value.clear()
     syncSectionExpandStateFromSettings()
   },
   { flush: 'sync' },
@@ -102,10 +107,33 @@ const isExpanded = (attemptIndex: number) => {
   return value !== undefined ? value : !settings.defaultCollapseNestedRecognition
 }
 
-const { visibleRecognitionList } = useMergedRecognitionList({
+const { visibleRecognitionList, fullyUnrecognizedRoundIndexes } = useMergedRecognitionList({
   node: toRef(props, 'node'),
   showNotRecognizedNodes: computed(() => settings.showNotRecognizedNodes),
 })
+
+const isUnrecognizedRoundExpanded = (roundIndex: number): boolean => {
+  if (forceExpandRelatedWhileRunning.value) return true
+  return expandedUnrecognizedRounds.value.has(roundIndex)
+}
+
+const toggleUnrecognizedRound = (roundIndex: number) => {
+  const next = new Set(expandedUnrecognizedRounds.value)
+  if (next.has(roundIndex)) {
+    next.delete(roundIndex)
+  } else {
+    next.add(roundIndex)
+  }
+  expandedUnrecognizedRounds.value = next
+}
+
+const displayedRecognitionList = computed(() =>
+  filterCollapsedUnrecognizedRounds(
+    visibleRecognitionList.value,
+    fullyUnrecognizedRoundIndexes.value,
+    isUnrecognizedRoundExpanded,
+  ),
+)
 
 const sharedNodeCardBaseProps = computed(() => ({
   node: props.node,
@@ -116,12 +144,15 @@ const sharedNodeCardBaseProps = computed(() => ({
 
 const sharedExpandableViewProps = computed(() => ({
   ...sharedNodeCardBaseProps.value,
+  mergedRecognitionList: displayedRecognitionList.value,
   recognitionExpanded: effectiveRecognitionExpanded.value,
   actionExpanded: effectiveActionExpanded.value,
   defaultCollapseNestedRecognition: settings.defaultCollapseNestedRecognition,
   defaultCollapseNestedActionNodes: settings.defaultCollapseNestedActionNodes,
   isExpanded,
   forceExpandRelatedWhileRunning: forceExpandRelatedWhileRunning.value,
+  fullyUnrecognizedRoundIndexes: fullyUnrecognizedRoundIndexes.value,
+  isUnrecognizedRoundExpanded,
 }))
 
 const handleSelectAction = (node: NodeInfo) => {
@@ -200,6 +231,7 @@ const toggleActionSection = () => {
           @toggle-recognition="toggleRecognitionSection"
           @toggle-action="toggleActionSection"
           @toggle-nested="toggleNestedNodes"
+          @toggle-unrecognized-round="toggleUnrecognizedRound"
         />
         <node-card-compact
           v-else-if="settings.displayMode === 'compact'"
@@ -217,6 +249,7 @@ const toggleActionSection = () => {
           @toggle-recognition="toggleRecognitionSection"
           @toggle-action="toggleActionSection"
           @toggle-nested="toggleNestedNodes"
+          @toggle-unrecognized-round="toggleUnrecognizedRound"
         />
       </div>
     </n-card>
