@@ -33,20 +33,28 @@ export const useFlowchartPopover = (options: UseFlowchartPopoverOptions) => {
     const nodeRect = nodeEl.getBoundingClientRect()
     const canvasRect = canvasEl.getBoundingClientRect()
 
-    let x = nodeRect.right - canvasRect.left + 10
+    const POPOVER_WIDTH = 280
+    const POPOVER_MAX_HEIGHT = 360
+    const GAP = 10
+    const MARGIN = 4
+
+    let x = nodeRect.right - canvasRect.left + GAP
     let y = nodeRect.top - canvasRect.top
 
-    // If popover would overflow right edge, show on left side.
-    if (x + 280 > canvasRect.width) {
-      x = nodeRect.left - canvasRect.left - 290
+    // Prefer right side, then left side, otherwise clamp into canvas.
+    const xRight = nodeRect.right - canvasRect.left + GAP
+    const xLeft = nodeRect.left - canvasRect.left - POPOVER_WIDTH - GAP
+    if (xRight + POPOVER_WIDTH + MARGIN > canvasRect.width) {
+      x = xLeft >= MARGIN ? xLeft : Math.min(xRight, canvasRect.width - POPOVER_WIDTH - MARGIN)
     }
+    if (x < MARGIN) x = MARGIN
 
-    // Clamp vertical: use actual popover height if available.
+    // Clamp vertical: use actual popover height when available.
     const popoverEl = document.querySelector('.node-popover') as HTMLElement | null
-    const popoverHeight = popoverEl?.offsetHeight || 360
-    if (y < 4) y = 4
+    const popoverHeight = popoverEl?.offsetHeight || POPOVER_MAX_HEIGHT
+    if (y < MARGIN) y = MARGIN
     if (y + popoverHeight > canvasRect.height) {
-      y = Math.max(4, canvasRect.height - popoverHeight - 4)
+      y = Math.max(MARGIN, canvasRect.height - popoverHeight - MARGIN)
     }
 
     popoverPos.value = { x, y }
