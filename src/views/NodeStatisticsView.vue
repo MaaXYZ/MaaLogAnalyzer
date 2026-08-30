@@ -2,6 +2,7 @@
 import {
   ref,
   computed,
+  watch,
 } from 'vue'
 import {
   NCard, NTag, useMessage,
@@ -49,8 +50,26 @@ const {
 
 const statMode = ref<StatMode>('node')
 
-// 搜索关键词
+// 搜索关键词与任务筛选
 const searchKeyword = ref('')
+const selectedTaskId = ref<string | number>('all')
+
+const taskOptions = computed(() => [
+  { label: '全部任务', value: 'all' },
+  ...effectiveTasks.value.map(task => ({
+    label: `${task.task_id} · ${task.entry}`,
+    value: task.task_id,
+  })),
+])
+
+watch(effectiveTasks, (tasks) => {
+  if (selectedTaskId.value === 'all') return
+  const selected = Number(selectedTaskId.value)
+  if (!tasks.some(task => task.task_id === selected)) {
+    selectedTaskId.value = 'all'
+  }
+})
+
 const {
   statistics,
   nodeSummary,
@@ -58,6 +77,7 @@ const {
   waitFreezeSummary,
 } = useNodeStatisticsMetrics({
   effectiveTasks,
+  selectedTaskId,
   searchKeyword,
   statMode,
 })
@@ -110,6 +130,8 @@ const hasSummaryContent = computed(() => {
           <node-statistics-header-controls
             :is-mobile="isMobile"
             :stat-mode="statMode"
+            :task-filter="selectedTaskId"
+            :task-options="taskOptions"
             :search-keyword="searchKeyword"
             :is-in-tauri="isInTauri"
             :is-vscode-launch-embed="props.isVscodeLaunchEmbed === true"
@@ -117,6 +139,7 @@ const hasSummaryContent = computed(() => {
             :upload-key="uploadKey"
             :handle-naive-upload="handleNaiveUpload"
             @update:stat-mode="statMode = $event"
+            @update:task-filter="selectedTaskId = $event"
             @update:search-keyword="searchKeyword = $event"
             @tauri-upload-click="handleTauriFileSelect"
           />

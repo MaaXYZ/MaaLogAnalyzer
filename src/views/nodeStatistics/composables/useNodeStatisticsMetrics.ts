@@ -37,15 +37,25 @@ export interface WaitFreezeStatisticsSummary {
 
 interface UseNodeStatisticsMetricsOptions {
   effectiveTasks: Ref<TaskInfo[]>
+  selectedTaskId: Ref<string | number>
   searchKeyword: Ref<string>
   statMode: Ref<StatMode>
 }
 
 export const useNodeStatisticsMetrics = (options: UseNodeStatisticsMetricsOptions) => {
-  const nodeStatistics = computed<NodeStatistics[]>(() => {
-    if (options.effectiveTasks.value.length === 0) return []
+  const scopedTasks = computed(() => {
+    if (options.selectedTaskId.value === 'all') {
+      return options.effectiveTasks.value
+    }
+    const taskId = Number(options.selectedTaskId.value)
+    if (!Number.isFinite(taskId)) return []
+    return options.effectiveTasks.value.filter(task => task.task_id === taskId)
+  })
 
-    let stats = NodeStatisticsAnalyzer.analyze(options.effectiveTasks.value)
+  const nodeStatistics = computed<NodeStatistics[]>(() => {
+    if (scopedTasks.value.length === 0) return []
+
+    let stats = NodeStatisticsAnalyzer.analyze(scopedTasks.value)
     if (options.searchKeyword.value.trim()) {
       const keyword = options.searchKeyword.value.toLowerCase()
       stats = stats.filter((item) => item.name.toLowerCase().includes(keyword))
@@ -54,9 +64,9 @@ export const useNodeStatisticsMetrics = (options: UseNodeStatisticsMetricsOption
   })
 
   const recognitionActionStatistics = computed<RecognitionActionStatistics[]>(() => {
-    if (options.effectiveTasks.value.length === 0) return []
+    if (scopedTasks.value.length === 0) return []
 
-    let stats = NodeStatisticsAnalyzer.analyzeRecognitionAction(options.effectiveTasks.value)
+    let stats = NodeStatisticsAnalyzer.analyzeRecognitionAction(scopedTasks.value)
     if (options.searchKeyword.value.trim()) {
       const keyword = options.searchKeyword.value.toLowerCase()
       stats = stats.filter((item) => item.name.toLowerCase().includes(keyword))
@@ -65,9 +75,9 @@ export const useNodeStatisticsMetrics = (options: UseNodeStatisticsMetricsOption
   })
 
   const waitFreezeStatistics = computed<WaitFreezeStatistics[]>(() => {
-    if (options.effectiveTasks.value.length === 0) return []
+    if (scopedTasks.value.length === 0) return []
 
-    let stats = NodeStatisticsAnalyzer.analyzeWaitFreezes(options.effectiveTasks.value)
+    let stats = NodeStatisticsAnalyzer.analyzeWaitFreezes(scopedTasks.value)
     if (options.searchKeyword.value.trim()) {
       const keyword = options.searchKeyword.value.toLowerCase()
       stats = stats.filter((item) => item.name.toLowerCase().includes(keyword))

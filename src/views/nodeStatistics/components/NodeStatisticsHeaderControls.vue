@@ -7,6 +7,7 @@ import {
   NInput,
   NRadioButton,
   NRadioGroup,
+  NSelect,
   NUpload,
 } from 'naive-ui'
 import { CloudUploadOutlined, FolderOpenOutlined } from '@vicons/antd'
@@ -15,6 +16,8 @@ import type { StatMode } from '../composables/useNodeStatisticsMetrics'
 const props = defineProps<{
   isMobile: boolean
   statMode: StatMode
+  taskFilter: string | number
+  taskOptions: Array<{ label: string; value: string | number }>
   searchKeyword: string
   isInTauri: boolean
   isVscodeLaunchEmbed: boolean
@@ -25,6 +28,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:statMode': [value: StatMode]
+  'update:taskFilter': [value: string | number]
   'update:searchKeyword': [value: string]
   tauriUploadClick: []
 }>()
@@ -37,6 +41,14 @@ const emit = defineEmits<{
       <n-radio-button value="recognition-action">识别/动作</n-radio-button>
       <n-radio-button value="wait-freezes">Wait Freezes</n-radio-button>
     </n-radio-group>
+
+    <n-select
+      :value="props.taskFilter"
+      :options="props.taskOptions"
+      size="small"
+      :style="props.isMobile ? 'width: 120px' : 'width: 160px'"
+      @update:value="emit('update:taskFilter', $event)"
+    />
 
     <n-input
       v-if="!props.isMobile"
