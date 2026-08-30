@@ -5,6 +5,7 @@ import { formatDuration } from '../../../utils/formatDuration'
 import type {
   NodeStatisticsSummary,
   RecognitionActionStatisticsSummary,
+  WaitFreezeStatisticsSummary,
   StatMode,
 } from '../composables/useNodeStatisticsMetrics'
 
@@ -14,6 +15,7 @@ const props = defineProps<{
   searchKeyword: string
   nodeSummary: NodeStatisticsSummary | null
   recognitionActionSummary: RecognitionActionStatisticsSummary | null
+  waitFreezeSummary: WaitFreezeStatisticsSummary | null
 }>()
 
 const emit = defineEmits<{
@@ -27,6 +29,7 @@ const updateSearchKeyword = (value: string) => {
 const hasSummaryCard = computed(() => (
   (props.statMode === 'node' && props.nodeSummary !== null)
   || (props.statMode === 'recognition-action' && props.recognitionActionSummary !== null)
+  || (props.statMode === 'wait-freezes' && props.waitFreezeSummary !== null)
 ))
 </script>
 
@@ -225,6 +228,103 @@ const hasSummaryCard = computed(() => (
               <div class="focus-metric-label">成功率</div>
               <div class="focus-metric-value">
                 {{ props.recognitionActionSummary.slowestActionNode.successRate.toFixed(1) }}%
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </n-card>
+
+    <n-card
+      v-else-if="props.statMode === 'wait-freezes' && props.waitFreezeSummary"
+      class="summary-section-card"
+      size="small"
+      :bordered="false"
+    >
+      <div class="summary-layout" :class="{ mobile: props.isMobile }">
+        <div class="summary-left-combo">
+          <div class="summary-panel summary-lead-card">
+            <div class="summary-lead-top">
+              <div class="summary-title-group">
+                <div class="summary-title">Wait Freezes 总览</div>
+                <div class="summary-caption">重复等待 + 冻结耗时</div>
+              </div>
+              <n-tag
+                v-if="props.searchKeyword.trim()"
+                size="small"
+                type="primary"
+                round
+              >
+                筛选中
+              </n-tag>
+            </div>
+
+            <div class="summary-description">
+              查看等待画面静止的发生频率、重复等待次数和冻结耗时，定位最常反复等待的节点。
+            </div>
+
+            <div v-if="props.isMobile" class="summary-mobile-search">
+              <n-input
+                :value="props.searchKeyword"
+                placeholder="筛选节点名称"
+                clearable
+                size="small"
+                @update:value="updateSearchKeyword"
+              />
+            </div>
+          </div>
+
+          <div class="summary-metrics-row">
+            <div class="summary-panel metric-tile tone-cyan">
+              <div class="metric-label">节点类型</div>
+              <div class="metric-value">{{ props.waitFreezeSummary.uniqueNodes }}</div>
+              <div class="metric-note">出现 Wait Freezes 的唯一节点数</div>
+            </div>
+
+            <div class="summary-panel metric-tile tone-emerald">
+              <div class="metric-label">总等待次数</div>
+              <div class="metric-value">{{ props.waitFreezeSummary.totalCount }}</div>
+              <div class="metric-note">全部 Wait Freezes 记录</div>
+            </div>
+
+            <div class="summary-panel metric-tile tone-amber">
+              <div class="metric-label">平均冻结耗时</div>
+              <div class="metric-value">{{ formatDuration(props.waitFreezeSummary.avgElapsed) }}</div>
+              <div class="metric-note">单次等待画面静止平均耗时</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-panel summary-focus-card">
+          <div class="hero-metric">
+            <div class="metric-label">总重复等待</div>
+            <div class="hero-value">{{ props.waitFreezeSummary.totalRepeatCount }}</div>
+            <div class="metric-note">repeat 阶段累计次数</div>
+          </div>
+
+          <div class="focus-divider" />
+
+          <div class="focus-badge">焦点节点</div>
+          <div class="focus-title">重复等待热点</div>
+          <div class="focus-name">
+            {{ props.waitFreezeSummary.focusNode.name }}
+          </div>
+
+          <div class="focus-metrics">
+            <div class="focus-metric">
+              <div class="focus-metric-label">重复等待</div>
+              <div class="focus-metric-value">{{ props.waitFreezeSummary.focusNode.repeatCount }}</div>
+            </div>
+            <div class="focus-metric">
+              <div class="focus-metric-label">平均冻结耗时</div>
+              <div class="focus-metric-value">
+                {{ formatDuration(props.waitFreezeSummary.focusNode.avgElapsed) }}
+              </div>
+            </div>
+            <div class="focus-metric">
+              <div class="focus-metric-label">成功率</div>
+              <div class="focus-metric-value">
+                {{ props.waitFreezeSummary.focusNode.successRate.toFixed(1) }}%
               </div>
             </div>
           </div>

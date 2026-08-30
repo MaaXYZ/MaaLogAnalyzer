@@ -16,6 +16,7 @@ import type { StatMode } from '../composables/useNodeStatisticsMetrics'
 import type {
   NodeChartDimension,
   RecognitionActionChartDimension,
+  WaitFreezeChartDimension,
 } from '../composables/useNodeStatisticsChartOptions'
 
 const props = defineProps<{
@@ -23,8 +24,10 @@ const props = defineProps<{
   statMode: StatMode
   nodeChartDimension: NodeChartDimension
   recognitionActionChartDimension: RecognitionActionChartDimension
+  waitFreezeChartDimension: WaitFreezeChartDimension
   nodeChartDimensionOptions: SelectMixedOption[]
   recognitionActionChartDimensionOptions: SelectMixedOption[]
+  waitFreezeChartDimensionOptions: SelectMixedOption[]
   searchKeyword: string
   isInTauri: boolean
   isVscodeLaunchEmbed: boolean
@@ -37,6 +40,7 @@ const emit = defineEmits<{
   'update:statMode': [value: StatMode]
   'update:nodeChartDimension': [value: NodeChartDimension]
   'update:recognitionActionChartDimension': [value: RecognitionActionChartDimension]
+  'update:waitFreezeChartDimension': [value: WaitFreezeChartDimension]
   'update:searchKeyword': [value: string]
   tauriUploadClick: []
 }>()
@@ -47,6 +51,7 @@ const emit = defineEmits<{
     <n-radio-group :value="props.statMode" size="small" @update:value="emit('update:statMode', $event)">
       <n-radio-button value="node">节点统计</n-radio-button>
       <n-radio-button value="recognition-action">识别/动作</n-radio-button>
+      <n-radio-button value="wait-freezes">Wait Freezes</n-radio-button>
     </n-radio-group>
 
     <n-select
@@ -65,6 +70,15 @@ const emit = defineEmits<{
       size="small"
       :style="props.isMobile ? 'width: 120px' : 'width: 140px'"
       @update:value="emit('update:recognitionActionChartDimension', $event)"
+    />
+
+    <n-select
+      v-if="props.statMode === 'wait-freezes'"
+      :value="props.waitFreezeChartDimension"
+      :options="props.waitFreezeChartDimensionOptions"
+      size="small"
+      :style="props.isMobile ? 'width: 120px' : 'width: 140px'"
+      @update:value="emit('update:waitFreezeChartDimension', $event)"
     />
 
     <n-input

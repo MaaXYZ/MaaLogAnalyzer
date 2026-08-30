@@ -1,6 +1,6 @@
 import type { TaskInfo } from '../shared/types'
 import { toTimestampMs } from '../shared/timestamp'
-import { buildNodeRecognitionAttempts } from './flow'
+import { buildNodeRecognitionAttempts, buildNodeWaitFreezesFlowItems } from './flow'
 
 export interface NodeStatistics {
   name: string
@@ -33,6 +33,27 @@ export interface RecognitionActionStatistics {
   successCount: number
   failCount: number
   successRate: number
+}
+
+export interface WaitFreezeStatistics {
+  name: string
+  count: number
+  successCount: number
+  failCount: number
+  successRate: number
+  totalElapsed: number
+  avgElapsed: number
+  minElapsed: number
+  maxElapsed: number
+  elapsedValues: number[]
+  preCount: number
+  contextCount: number
+  repeatCount: number
+  postCount: number
+  otherCount: number
+  totalRecoIds: number
+  avgRecoIds: number
+  imageCount: number
 }
 
 export const summarizeDurations = (durations: number[]) => {
@@ -257,6 +278,90 @@ export class NodeStatisticsAnalyzer {
     }
 
     result.sort((a, b) => b.avgActionDuration - a.avgActionDuration)
+    return result
+  }
+
+  static analyzeWaitFreezes(tasks: TaskInfo[]): WaitFreezeStatistics[] {
+    const statsMap = new Map<string, {
+      elapsedValues: number[]
+      successCount: number
+      failCount: number
+      phaseCounts: Record<string, number>
+      totalRecoIds: number
+      imageCount: number
+    }>()
+
+    for (const task of tasks) {
+      for (const node of task.nodes) {
+        const items = buildNodeWaitFreezesFlowItems(node)
+        for (const item of items) {
+          if (item.status === 'running') continue
+
+          const wf = item.wait_freezes_details
+          const phase = wf?.phase || 'other'
+          const elapsed = wf?.elapsed
+          const recoIds = wf?.reco_ids?.length ?? 0
+          const images = wf?.images?.length ?? 0
+
+          if (!statsMap.has(item.name)) {
+            statsMap.set(item.name, {
+              elapsedValues: [],
+              successCount: 0,
+              failCount: 0,
+              phaseCounts: {},
+              totalRecoIds: 0,
+              imageCount: 0,
+            })
+          }
+
+          const stats = statsMap.get(item.name)!
+          if (typeof elapsed === 'number' && Number.isFinite(elapsed)) {
+            stats.elapsedValues.push(elapsed)
+          }
+          if (item.status === 'success') {
+            stats.successCount++
+          } else if (item.status === 'failed') {
+            stats.failCount++
+          }
+          stats.phaseCounts[phase] = (stats.phaseCounts[phase] ?? 0) + 1
+          stats.totalRecoIds += recoIds
+          stats.imageCount += images
+        }
+      }
+    }
+
+    const result: WaitFreezeStatistics[] = []
+
+    for (const [name, stats] of statsMap.entries()) {
+      const count = stats.successCount + stats.failCount
+      if (count === 0) continue
+
+      const elapsedSummary = summarizeDurations(stats.elapsedValues)
+      const successRate = (stats.successCount / count) * 100
+
+      result.push({
+        name,
+        count,
+        successCount: stats.successCount,
+        failCount: stats.failCount,
+        successRate,
+        totalElapsed: elapsedSummary.total,
+        avgElapsed: elapsedSummary.average,
+        minElapsed: elapsedSummary.min,
+        maxElapsed: elapsedSummary.max,
+        elapsedValues: stats.elapsedValues,
+        preCount: stats.phaseCounts.pre ?? 0,
+        contextCount: stats.phaseCounts.context ?? 0,
+        repeatCount: stats.phaseCounts.repeat ?? 0,
+        postCount: stats.phaseCounts.post ?? 0,
+        otherCount: stats.phaseCounts.other ?? 0,
+        totalRecoIds: stats.totalRecoIds,
+        avgRecoIds: count > 0 ? stats.totalRecoIds / count : 0,
+        imageCount: stats.imageCount,
+      })
+    }
+
+    result.sort((a, b) => b.avgElapsed - a.avgElapsed)
     return result
   }
 }

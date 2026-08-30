@@ -5,6 +5,12 @@ export type RecognitionActionChartDimension =
   | 'avgActionDuration'
   | 'maxActionDuration'
   | 'avgRecognitionAttempts'
+export type WaitFreezeChartDimension =
+  | 'count'
+  | 'repeatCount'
+  | 'avgElapsed'
+  | 'maxElapsed'
+  | 'successRate'
 
 export const nodeChartDimensionOptions = [
   { label: '执行次数', value: 'count' },
@@ -19,4 +25,12 @@ export const recognitionActionChartDimensionOptions = [
   { label: '平均动作耗时', value: 'avgActionDuration' },
   { label: '最大动作耗时', value: 'maxActionDuration' },
   { label: '平均识别尝试', value: 'avgRecognitionAttempts' },
+]
+
+export const waitFreezeChartDimensionOptions = [
+  { label: '等待次数', value: 'count' },
+  { label: '重复等待', value: 'repeatCount' },
+  { label: '平均等待耗时', value: 'avgElapsed' },
+  { label: '最大等待耗时', value: 'maxElapsed' },
+  { label: '成功率', value: 'successRate' },
 ]

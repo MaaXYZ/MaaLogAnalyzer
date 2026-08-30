@@ -11,7 +11,10 @@ import {
 import type { TaskInfo } from '../types'
 import { useIsMobile } from '../composables/useIsMobile'
 import { useNodeStatisticsDataSource } from './nodeStatistics/composables/useNodeStatisticsDataSource'
-import { useNodeStatisticsMetrics, type StatMode } from './nodeStatistics/composables/useNodeStatisticsMetrics'
+import {
+  useNodeStatisticsMetrics,
+  type StatMode,
+} from './nodeStatistics/composables/useNodeStatisticsMetrics'
 import {
   useNodeStatisticsTableColumns,
 } from './nodeStatistics/composables/useNodeStatisticsTableColumns'
@@ -19,8 +22,10 @@ import {
   useNodeStatisticsChartOptions,
   type NodeChartDimension,
   type RecognitionActionChartDimension,
+  type WaitFreezeChartDimension,
   nodeChartDimensionOptions,
   recognitionActionChartDimensionOptions,
+  waitFreezeChartDimensionOptions,
 } from './nodeStatistics/composables/useNodeStatisticsChartOptions'
 import NodeStatisticsHeaderControls from './nodeStatistics/components/NodeStatisticsHeaderControls.vue'
 import NodeStatisticsSummarySection from './nodeStatistics/components/NodeStatisticsSummarySection.vue'
@@ -59,15 +64,18 @@ const statMode = ref<StatMode>('node')
 // 饼图维度选择
 const nodeChartDimension = ref<NodeChartDimension>('count')
 const recognitionActionChartDimension = ref<RecognitionActionChartDimension>('avgActionDuration')
+const waitFreezeChartDimension = ref<WaitFreezeChartDimension>('repeatCount')
 
 // 搜索关键词
 const searchKeyword = ref('')
 const {
   nodeStatistics,
   recognitionActionStatistics,
+  waitFreezeStatistics,
   statistics,
   nodeSummary,
   recognitionActionSummary,
+  waitFreezeSummary,
 } = useNodeStatisticsMetrics({
   effectiveTasks,
   searchKeyword,
@@ -80,29 +88,34 @@ const { columns } = useNodeStatisticsTableColumns({
 const {
   mobileNodeChartOption,
   mobileRecognitionActionChartOption,
+  mobileWaitFreezeChartOption,
 } = useNodeStatisticsChartOptions({
   isMobile,
   nodeStatistics,
   recognitionActionStatistics,
+  waitFreezeStatistics,
   nodeChartDimension,
   recognitionActionChartDimension,
+  waitFreezeChartDimension,
 })
 
-const statisticsPanelTitle = computed(() => (
-  statMode.value === 'node' ? '节点明细' : '识别 / 动作明细'
-))
+const statisticsPanelTitle = computed(() => {
+  if (statMode.value === 'node') return '节点明细'
+  if (statMode.value === 'recognition-action') return '识别 / 动作明细'
+  return 'Wait Freezes 明细'
+})
 
-const activeChartOption = computed(() => (
-  statMode.value === 'node'
-    ? mobileNodeChartOption.value
-    : mobileRecognitionActionChartOption.value
-))
+const activeChartOption = computed(() => {
+  if (statMode.value === 'node') return mobileNodeChartOption.value
+  if (statMode.value === 'recognition-action') return mobileRecognitionActionChartOption.value
+  return mobileWaitFreezeChartOption.value
+})
 
-const hasSummaryContent = computed(() => (
-  statMode.value === 'node'
-    ? nodeSummary.value !== null
-    : recognitionActionSummary.value !== null
-))
+const hasSummaryContent = computed(() => {
+  if (statMode.value === 'node') return nodeSummary.value !== null
+  if (statMode.value === 'recognition-action') return recognitionActionSummary.value !== null
+  return waitFreezeSummary.value !== null
+})
 
 const hasChartContent = computed(() => activeChartOption.value !== null)
 
@@ -165,14 +178,16 @@ onBeforeUnmount(() => {
         <div class="statistics-title-block">
           <div class="statistics-title-row">
             <div class="statistics-title">节点性能统计</div>
-            <n-tag size="small" round :type="statMode === 'node' ? 'info' : 'warning'">
-              {{ statMode === 'node' ? '节点统计' : '识别 / 动作' }}
+            <n-tag size="small" round :type="statMode === 'node' ? 'info' : statMode === 'recognition-action' ? 'warning' : 'success'">
+              {{ statMode === 'node' ? '节点统计' : statMode === 'recognition-action' ? '识别 / 动作' : 'Wait Freezes' }}
             </n-tag>
           </div>
           <div class="statistics-subtitle">
             {{ statMode === 'node'
               ? '聚合查看频次、耗时和稳定性，适合先找最慢热点。'
-              : '拆分识别与动作阶段，适合判断瓶颈更偏向哪一段。' }}
+              : statMode === 'recognition-action'
+                ? '拆分识别与动作阶段，适合判断瓶颈更偏向哪一段。'
+                : '统计等待画面静止的次数、重复等待和冻结耗时，定位反复等待热点。' }}
           </div>
         </div>
 
@@ -182,8 +197,10 @@ onBeforeUnmount(() => {
             :stat-mode="statMode"
             :node-chart-dimension="nodeChartDimension"
             :recognition-action-chart-dimension="recognitionActionChartDimension"
+            :wait-freeze-chart-dimension="waitFreezeChartDimension"
             :node-chart-dimension-options="nodeChartDimensionOptions"
             :recognition-action-chart-dimension-options="recognitionActionChartDimensionOptions"
+            :wait-freeze-chart-dimension-options="waitFreezeChartDimensionOptions"
             :search-keyword="searchKeyword"
             :is-in-tauri="isInTauri"
             :is-vscode-launch-embed="props.isVscodeLaunchEmbed === true"
@@ -193,6 +210,7 @@ onBeforeUnmount(() => {
             @update:stat-mode="statMode = $event"
             @update:node-chart-dimension="nodeChartDimension = $event"
             @update:recognition-action-chart-dimension="recognitionActionChartDimension = $event"
+            @update:wait-freeze-chart-dimension="waitFreezeChartDimension = $event"
             @update:search-keyword="searchKeyword = $event"
             @tauri-upload-click="handleTauriFileSelect"
           />
@@ -210,6 +228,7 @@ onBeforeUnmount(() => {
           :search-keyword="searchKeyword"
           :node-summary="nodeSummary"
           :recognition-action-summary="recognitionActionSummary"
+          :wait-freeze-summary="waitFreezeSummary"
           @update:search-keyword="searchKeyword = $event"
         />
 
@@ -229,6 +248,11 @@ onBeforeUnmount(() => {
             <node-statistics-chart-card
               :visible="statMode === 'recognition-action'"
               :option="mobileRecognitionActionChartOption"
+              :is-mobile="isMobile"
+            />
+            <node-statistics-chart-card
+              :visible="statMode === 'wait-freezes'"
+              :option="mobileWaitFreezeChartOption"
               :is-mobile="isMobile"
             />
           </div>

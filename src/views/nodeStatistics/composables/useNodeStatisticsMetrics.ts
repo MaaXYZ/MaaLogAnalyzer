@@ -4,9 +4,10 @@ import {
   NodeStatisticsAnalyzer,
   type NodeStatistics,
   type RecognitionActionStatistics,
+  type WaitFreezeStatistics,
 } from '@windsland52/maa-log-parser/node-statistics'
 
-export type StatMode = 'node' | 'recognition-action'
+export type StatMode = 'node' | 'recognition-action' | 'wait-freezes'
 
 export interface NodeStatisticsSummary {
   totalNodes: number
@@ -22,6 +23,15 @@ export interface RecognitionActionStatisticsSummary {
   avgActionDuration: number
   avgRecognitionAttempts: number
   slowestActionNode: RecognitionActionStatistics
+  uniqueNodes: number
+}
+
+export interface WaitFreezeStatisticsSummary {
+  totalCount: number
+  totalRepeatCount: number
+  totalElapsed: number
+  avgElapsed: number
+  focusNode: WaitFreezeStatistics
   uniqueNodes: number
 }
 
@@ -54,8 +64,21 @@ export const useNodeStatisticsMetrics = (options: UseNodeStatisticsMetricsOption
     return stats
   })
 
+  const waitFreezeStatistics = computed<WaitFreezeStatistics[]>(() => {
+    if (options.effectiveTasks.value.length === 0) return []
+
+    let stats = NodeStatisticsAnalyzer.analyzeWaitFreezes(options.effectiveTasks.value)
+    if (options.searchKeyword.value.trim()) {
+      const keyword = options.searchKeyword.value.toLowerCase()
+      stats = stats.filter((item) => item.name.toLowerCase().includes(keyword))
+    }
+    return stats
+  })
+
   const statistics = computed(() => {
-    return options.statMode.value === 'node' ? nodeStatistics.value : recognitionActionStatistics.value
+    if (options.statMode.value === 'node') return nodeStatistics.value
+    if (options.statMode.value === 'recognition-action') return recognitionActionStatistics.value
+    return waitFreezeStatistics.value
   })
 
   const nodeSummary = computed<NodeStatisticsSummary | null>(() => {
@@ -97,11 +120,33 @@ export const useNodeStatisticsMetrics = (options: UseNodeStatisticsMetricsOption
     }
   })
 
+  const waitFreezeSummary = computed<WaitFreezeStatisticsSummary | null>(() => {
+    if (waitFreezeStatistics.value.length === 0) return null
+
+    const totalCount = waitFreezeStatistics.value.reduce((sum, item) => sum + item.count, 0)
+    const totalRepeatCount = waitFreezeStatistics.value.reduce((sum, item) => sum + item.repeatCount, 0)
+    const totalElapsed = waitFreezeStatistics.value.reduce((sum, item) => sum + item.totalElapsed, 0)
+    const avgElapsed = totalCount > 0 ? totalElapsed / totalCount : 0
+    const focusNode = [...waitFreezeStatistics.value]
+      .sort((a, b) => b.repeatCount - a.repeatCount || b.avgElapsed - a.avgElapsed)[0]
+
+    return {
+      totalCount,
+      totalRepeatCount,
+      totalElapsed,
+      avgElapsed,
+      focusNode,
+      uniqueNodes: waitFreezeStatistics.value.length,
+    }
+  })
+
   return {
     nodeStatistics,
     recognitionActionStatistics,
+    waitFreezeStatistics,
     statistics,
     nodeSummary,
     recognitionActionSummary,
+    waitFreezeSummary,
   }
 }
