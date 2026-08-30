@@ -312,7 +312,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
   white-space: nowrap;
 }
 
-.tree-flow-item-wrap {
+.tree-row-line :deep(.task-doc-hover-trigger) {
   display: inline-flex;
   min-width: 0;
   flex: 1 1 auto;
