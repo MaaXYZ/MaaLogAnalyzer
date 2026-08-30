@@ -113,6 +113,7 @@ const setLocalScrollerRef = (value: Element | object | null) => {
               :is-vscode-launch-embed="isVscodeLaunchEmbed"
               :bridge-request-task-doc="bridgeRequestTaskDoc"
               :bridge-reveal-task="bridgeRevealTask"
+              :show-tree-collapse-hint="index === 0 && displayMode === 'tree'"
               @select-node="(node) => emit('select-node', node)"
               @select-action="(node) => emit('select-action', node)"
               @select-recognition="

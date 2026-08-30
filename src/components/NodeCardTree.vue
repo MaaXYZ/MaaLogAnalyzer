@@ -20,6 +20,7 @@ const props = defineProps<{
   forceExpandRelatedWhileRunning?: boolean
   fullyUnrecognizedRoundIndexes?: ReadonlySet<number>
   isUnrecognizedRoundExpanded?: (roundIndex: number) => boolean
+  showTreeCollapseHint?: boolean
   isVscodeLaunchEmbed?: boolean
   bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
 }>()
@@ -82,6 +83,9 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
         @mousedown.prevent
         >Recognition</n-text
       >
+      <n-text v-if="showTreeCollapseHint" depth="3" style="font-size: 11px; opacity: 0.75">
+        展开/收起
+      </n-text>
     </n-flex>
 
     <ul v-if="isRecognitionExpanded && mergedRecognitionList.length > 0" class="tree-list">
@@ -239,6 +243,13 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
           @click="hasActionNestedChildren ? emit('toggle-action') : undefined"
         >
           Action
+        </n-text>
+        <n-text
+          v-if="showTreeCollapseHint && hasActionNestedChildren"
+          depth="3"
+          style="font-size: 11px; opacity: 0.75"
+        >
+          展开/收起
         </n-text>
       </n-flex>
     </div>

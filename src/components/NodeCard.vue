@@ -19,6 +19,7 @@ const props = defineProps<{
   isVscodeLaunchEmbed?: boolean
   bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
   bridgeRevealTask?: ((task: string) => Promise<void>) | null
+  showTreeCollapseHint?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -243,6 +244,7 @@ const toggleActionSection = () => {
         <node-card-tree
           v-else
           v-bind="sharedExpandableViewProps"
+          :show-tree-collapse-hint="showTreeCollapseHint"
           @select-action="handleSelectAction"
           @select-recognition="handleSelectRecognition"
           @select-flow-item="handleSelectFlowItem"
