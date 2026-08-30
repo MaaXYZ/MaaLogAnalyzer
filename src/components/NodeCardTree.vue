@@ -84,7 +84,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
             {{ item.name }}
           </n-text>
           <template v-else>
-            <n-flex align="center" style="gap: 4px">
+            <n-flex class="tree-row-line" align="center" style="gap: 4px">
               <span
                 v-if="item.attemptIndex != null && hasRecognitionNestedRows(item.attemptIndex)"
                 class="tree-toggle"
@@ -107,6 +107,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
               </n-button>
               <task-doc-hover-popover
                 v-else
+                class="tree-flow-item-wrap"
                 :enabled="isVscodeLaunchEmbed === true"
                 :request-task-doc="bridgeRequestTaskDoc"
                 :task-name="item.attempt?.name ?? item.name"
@@ -133,7 +134,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
           class="tree-item"
           :style="{ '--tree-item-offset': toTreeOffset(nested.depth) }"
         >
-          <n-flex align="center" style="gap: 4px">
+          <n-flex class="tree-row-line" align="center" style="gap: 4px">
             <span
               v-if="nested.hasChildren"
               class="tree-toggle"
@@ -147,6 +148,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
               :style="{ marginLeft: toTreeOffset(nested.depth) }"
             />
             <task-doc-hover-popover
+              class="tree-flow-item-wrap"
               :enabled="isVscodeLaunchEmbed === true"
               :request-task-doc="bridgeRequestTaskDoc"
               :task-name="nested.item.name"
@@ -203,7 +205,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
         class="tree-item"
         :style="{ '--tree-item-offset': toTreeOffset(row.depth) }"
       >
-        <n-flex align="center" style="gap: 4px">
+        <n-flex class="tree-row-line" align="center" style="gap: 4px">
           <span
             v-if="row.hasChildren"
             class="tree-toggle"
@@ -217,6 +219,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
             :style="{ marginLeft: toTreeOffset(row.depth) }"
           />
           <task-doc-hover-popover
+            class="tree-flow-item-wrap"
             :enabled="isVscodeLaunchEmbed === true"
             :request-task-doc="bridgeRequestTaskDoc"
             :task-name="row.item.name"
@@ -280,6 +283,28 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
   width: 8px;
   height: 10px;
   flex-shrink: 0;
+}
+
+.tree-row-line {
+  width: 100%;
+  min-width: 0;
+}
+
+.tree-row-line > .tree-toggle,
+.tree-row-line > .tree-toggle-placeholder {
+  flex-shrink: 0;
+}
+
+.tree-row-line :deep(.n-button) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tree-flow-item-wrap {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .tree-list {
