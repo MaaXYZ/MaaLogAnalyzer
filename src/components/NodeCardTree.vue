@@ -299,6 +299,17 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
 .tree-row-line :deep(.n-button) {
   min-width: 0;
   max-width: 100%;
+  flex-shrink: 1 !important;
+  overflow: hidden;
+}
+
+.tree-row-line :deep(.n-button__content) {
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tree-flow-item-wrap {
