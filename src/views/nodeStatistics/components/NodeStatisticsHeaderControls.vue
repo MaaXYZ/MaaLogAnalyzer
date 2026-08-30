@@ -45,8 +45,9 @@ const emit = defineEmits<{
     <n-select
       :value="props.taskFilter"
       :options="props.taskOptions"
+      :consistent-menu-width="false"
       size="small"
-      :style="props.isMobile ? 'width: 120px' : 'width: 160px'"
+      :style="props.isMobile ? 'width: 150px' : 'width: 240px'"
       @update:value="emit('update:taskFilter', $event)"
     />
 
