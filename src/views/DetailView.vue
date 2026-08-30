@@ -31,6 +31,7 @@ const props = defineProps<{
   bridgeNodeDefinitionLoading?: boolean
   bridgeNodeDefinitionError?: string | null
   bridgeOpenCrop?: ((request: BridgeOpenCropRequest) => Promise<void>) | null
+  onSearchInSource?: (keyword: string, locate?: string) => void
 }>()
 
 const {
@@ -125,6 +126,7 @@ watch(
           :format-json="formatJson"
           :copy-to-clipboard="copyToClipboard"
           :open-recognition-in-crop="openRecognitionInCrop"
+          :on-search-in-source="props.onSearchInSource"
         />
 
         <action-detail-card
@@ -142,6 +144,7 @@ watch(
           :copy-to-clipboard="copyToClipboard"
           :show-open-crop-button="showOpenCropButton"
           :open-error-image-in-crop="openCurrentActionErrorInCrop"
+          :on-search-in-source="props.onSearchInSource"
         />
 
         <flow-fallback-card
@@ -184,6 +187,7 @@ watch(
           :copy-to-clipboard="copyToClipboard"
           :show-open-crop-button="showOpenCropButton"
           :open-error-image-in-crop="openSelectedNodeErrorInCrop"
+          :on-search-in-source="props.onSearchInSource"
         />
 
         </template>

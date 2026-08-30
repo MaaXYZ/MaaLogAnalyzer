@@ -6,4 +6,6 @@ export interface UseTextSearchViewModelOptions {
   loadedDefaultTargetId: Ref<string | undefined>
   hasDeferredLoadedTargets: Ref<boolean | undefined>
   ensureLoadedTargets: Ref<(() => Promise<void>) | undefined>
+  ensureTargetContentLoaded?: (targetId: string) => Promise<void>
+  findTargetContainingLocate?: (locate: string) => Promise<string | null>
 }

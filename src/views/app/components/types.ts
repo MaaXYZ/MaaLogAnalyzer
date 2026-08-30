@@ -78,6 +78,12 @@ export interface DetailViewForwardProps {
   bridgeNodeDefinitionLoading: boolean
   bridgeNodeDefinitionError: string | null
   bridgeOpenCrop: ((request: BridgeOpenCropRequest) => Promise<void>) | null
+  onSearchInSource?: (keyword: string, locate?: string) => void
+}
+
+export interface PendingTextSearchRequest {
+  keyword: string
+  locate?: string
 }
 
 export interface TextSearchViewForwardProps {
@@ -86,4 +92,8 @@ export interface TextSearchViewForwardProps {
   loadedDefaultTargetId: string
   hasDeferredLoadedTargets: boolean
   ensureLoadedTargets: (() => Promise<void>) | undefined
+  ensureTargetContentLoaded?: (targetId: string) => Promise<void>
+  findTargetContainingLocate?: (locate: string) => Promise<string | null>
+  pendingSearchRequest?: PendingTextSearchRequest | null
+  onConsumePendingSearch?: () => void
 }

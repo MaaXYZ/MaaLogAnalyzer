@@ -31,6 +31,7 @@ const props = defineProps<{
   copyToClipboard: (text: string) => void
   showOpenCropButton: boolean
   openErrorImageInCrop: () => void | Promise<void>
+  onSearchInSource?: (keyword: string, locate?: string) => void
 }>()
 
 const expandedNames = ref<string[]>([...props.rawJsonDefaultExpanded])
@@ -47,7 +48,17 @@ const nodeDefinitionExpanded = computed(() => expandedNames.value.includes('node
 <template>
   <n-card v-if="props.selectedNode">
     <template #header>
-      📍 节点详情
+      <n-flex align="center" justify="space-between" style="flex-wrap: nowrap">
+        <span>📍 节点详情</span>
+        <n-button
+          v-if="props.onSearchInSource"
+          size="tiny"
+          title="跳转到文本搜索，查看该节点的原始日志上下文"
+          @click.stop="props.onSearchInSource?.(props.selectedNode.name, props.selectedNode.ts)"
+        >
+          在原文中查看
+        </n-button>
+      </n-flex>
     </template>
     <n-descriptions :column="props.descriptionColumns" size="small" label-placement="left" bordered>
       <n-descriptions-item label="节点名称" :span="props.descriptionColumns">

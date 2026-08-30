@@ -7,6 +7,8 @@ export interface LoadedSourceStateOptions {
   loadedDefaultTargetId: Ref<string | undefined>
   hasDeferredLoadedTargets: Ref<boolean | undefined>
   ensureLoadedTargets: Ref<(() => Promise<void>) | undefined>
+  /** 懒加载策略下，切换到内容尚未加载的目标前调用，加载该目标内容 */
+  ensureTargetContentLoaded?: (targetId: string) => Promise<void>
   fileName: Ref<string>
   fileContent: Ref<string>
   fileHandle: Ref<File | null>
@@ -32,6 +34,7 @@ export interface LoadedSourceSyncOptions {
   loadedDefaultTargetId: Ref<string | undefined>
   hasDeferredLoadedTargets: Ref<boolean | undefined>
   ensureLoadedTargets: Ref<(() => Promise<void>) | undefined>
+  ensureTargetContentLoaded?: (targetId: string) => Promise<void>
   fileName: Ref<string>
   sourceLoadGeneration: Ref<number>
   sourceMode: Ref<SourceMode>

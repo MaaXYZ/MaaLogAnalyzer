@@ -10,6 +10,8 @@ import { BRIDGE_THEME_UPDATED_EVENT } from '../../../utils/bridgeEvents'
 import { isVSCode } from '../../../utils/platform'
 import { useHostFileMessageReceiver } from '../../process/composables/fileLoader/useVSCodeBridge'
 import { useTextSearchTargets } from './useTextSearchTargets'
+import { useTextSearchBridge } from './useTextSearchBridge'
+import { provideTextSearchSharedViewModel } from '../../textSearch/composables/viewModel/sharedModel'
 import { useAppViewState } from './useAppViewState'
 import { useAppSelectionAndFilters } from './useAppSelectionAndFilters'
 import { useParserDebugAssets } from './useParserDebugAssets'
@@ -77,10 +79,27 @@ export const useAppRootViewModel = ({
     pickPreferredLogTargetId,
     clearDeferredTextSearchTargets,
     ensureTextSearchTargetsHydrated,
+    ensureDeferredTargetContent,
+    findDeferredTargetWithContent,
     setDeferredTextSearchTargets,
   } = useTextSearchTargets()
 
   const shouldMaintainRealtimeTextTargets = showTextSearchView
+
+  // 文本搜索 view model 在根部创建唯一一份并 provide：
+  // 独立页与分屏共用同一状态（查询/结果/目标同步），懒加载策略也只在这一处生效
+  provideTextSearchSharedViewModel({
+    loadedTargets: textSearchLoadedTargets as unknown as Ref<
+      { id: string; label: string; fileName: string; content: string }[] | undefined
+    >,
+    loadedDefaultTargetId: textSearchLoadedDefaultTargetId as unknown as Ref<string | undefined>,
+    hasDeferredLoadedTargets: hasDeferredTextSearchTargets as unknown as Ref<boolean | undefined>,
+    ensureLoadedTargets: ensureTextSearchTargetsHydrated as unknown as Ref<
+      (() => Promise<void>) | undefined
+    >,
+    ensureTargetContentLoaded: ensureDeferredTargetContent,
+    findTargetContainingLocate: findDeferredTargetWithContent,
+  })
 
   const syncRealtimeLoadedTarget = (session: RealtimeSessionState) => {
     if (!shouldMaintainRealtimeTextTargets) return
@@ -231,6 +250,18 @@ export const useAppRootViewModel = ({
 
   const isDark = computed(() => propsIsDark.value)
 
+  // 详情面板 → 文本搜索的原文定位桥
+  const {
+    pendingTextSearchRequest,
+    requestTextSearch,
+    consumeTextSearchRequest,
+  } = useTextSearchBridge()
+
+  const handleSearchNodeInSource = (keyword: string, locate?: string) => {
+    requestTextSearch(keyword, locate)
+    handleViewModeSelect('search')
+  }
+
   const {
     processViewMobileProps,
     processViewDesktopProps,
@@ -269,6 +300,11 @@ export const useAppRootViewModel = ({
     hasDeferredTextSearchTargets,
     ensureTextSearchTargetsHydrated,
     handleSelectTask,
+    handleSearchNodeInSource,
+    pendingTextSearchRequest,
+    consumeTextSearchRequest,
+    ensureDeferredTargetContent,
+    findDeferredTargetWithContent,
     handleFileUpload,
     handleContentUpload,
     handleSelectNode,

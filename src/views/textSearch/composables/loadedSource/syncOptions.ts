@@ -20,6 +20,7 @@ export const createLoadedSourceSyncOptions = (
     loadedDefaultTargetId: input.options.loadedDefaultTargetId,
     hasDeferredLoadedTargets: input.options.hasDeferredLoadedTargets,
     ensureLoadedTargets: input.options.ensureLoadedTargets,
+    ensureTargetContentLoaded: input.options.ensureTargetContentLoaded,
     fileName: input.options.fileName,
     sourceLoadGeneration: input.options.sourceLoadGeneration,
     sourceMode: input.sourceMode,

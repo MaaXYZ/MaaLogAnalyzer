@@ -10,6 +10,7 @@ export const buildLoadedTargetSourceOptions = (
   loadedDefaultTargetId: options.loadedDefaultTargetId,
   hasDeferredLoadedTargets: options.hasDeferredLoadedTargets,
   ensureLoadedTargets: options.ensureLoadedTargets,
+  ensureTargetContentLoaded: options.ensureTargetContentLoaded,
   fileName: state.fileName,
   fileContent: state.fileContent,
   fileHandle: state.fileHandle,

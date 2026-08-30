@@ -6,6 +6,7 @@ import type { TextFileSource } from '../../../utils/textFileSource'
 import type { BridgeOpenCropRequest } from './useBridgeTaskActions'
 import type {
   LoadedSearchTarget,
+  PendingTextSearchRequest,
   ProcessViewEventHandlers,
 } from '../components/types'
 
@@ -41,6 +42,11 @@ interface UseMainContentBindingsOptions {
   hasDeferredTextSearchTargets: Ref<boolean>
   ensureTextSearchTargetsHydrated: (() => Promise<void>) | undefined
   handleSelectTask: (task: TaskInfo) => void
+  handleSearchNodeInSource: (keyword: string, locate?: string) => void
+  pendingTextSearchRequest: Ref<PendingTextSearchRequest | null>
+  consumeTextSearchRequest: () => void
+  ensureDeferredTargetContent: (targetId: string) => Promise<void>
+  findDeferredTargetWithContent: (locate: string) => Promise<string | null>
   handleFileUpload: (
     file: File | File[],
     selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
@@ -128,6 +134,8 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
     bridgeNodeDefinitionLoading: options.bridgeNodeDefinitionLoading.value,
     bridgeNodeDefinitionError: options.bridgeNodeDefinitionError.value,
     bridgeOpenCrop: options.bridgeOpenCrop,
+    // 实时模式下日志持续增长，原文定位意义有限，隐藏“在原文中查看”
+    onSearchInSource: options.realtimeStreaming.value ? undefined : options.handleSearchNodeInSource,
   }))
 
   const textSearchViewProps = computed(() => ({
@@ -136,6 +144,10 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
     loadedDefaultTargetId: options.textSearchLoadedDefaultTargetId.value,
     hasDeferredLoadedTargets: options.hasDeferredTextSearchTargets.value,
     ensureLoadedTargets: options.ensureTextSearchTargetsHydrated,
+    ensureTargetContentLoaded: options.ensureDeferredTargetContent,
+    findTargetContainingLocate: options.findDeferredTargetWithContent,
+    pendingSearchRequest: options.pendingTextSearchRequest.value,
+    onConsumePendingSearch: options.consumeTextSearchRequest,
   }))
 
   return {

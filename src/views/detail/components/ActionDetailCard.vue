@@ -23,6 +23,7 @@ const props = defineProps<{
   copyToClipboard: (text: string) => void
   showOpenCropButton: boolean
   openErrorImageInCrop: () => void | Promise<void>
+  onSearchInSource?: (keyword: string, locate?: string) => void
 }>()
 
 const expandedNames = ref<string[]>([...props.rawJsonDefaultExpanded])
@@ -34,12 +35,30 @@ watch(
 )
 
 const actionDetailRows = computed(() => buildActionDetailRows(props.currentActionDetails, props.descriptionColumns))
+
+// 动作原文定位：用节点名检索更可靠（动作类型如 click 太泛），时间戳优先用动作自身的
+const handleSearchInSource = () => {
+  const keyword = props.currentActionDetails?.name || props.selectedNode?.name
+  if (!keyword) return
+  const locate = props.currentActionDetails?.ts || props.selectedNode?.ts
+  props.onSearchInSource?.(keyword, locate)
+}
 </script>
 
 <template>
   <n-card>
     <template #header>
-      ⚡ 动作详情
+      <n-flex align="center" justify="space-between" style="flex-wrap: nowrap">
+        <span>⚡ 动作详情</span>
+        <n-button
+          v-if="props.onSearchInSource"
+          size="tiny"
+          title="跳转到文本搜索，查看该动作的原始日志上下文"
+          @click.stop="handleSearchInSource"
+        >
+          在原文中查看
+        </n-button>
+      </n-flex>
     </template>
     <n-descriptions :column="props.descriptionColumns" size="small" label-placement="left" bordered>
       <n-descriptions-item label="动作 ID">

@@ -23,6 +23,7 @@ defineProps<{
   bridgeNodeDefinitionLoading: boolean
   bridgeNodeDefinitionError: string | null
   bridgeOpenCrop: ((request: BridgeOpenCropRequest) => Promise<void>) | null
+  onSearchInSource?: (keyword: string, locate?: string) => void
 }>()
 
 const emit = defineEmits<{
@@ -55,6 +56,7 @@ const handleUpdateShow = (value: boolean) => {
         :bridge-node-definition-loading="bridgeNodeDefinitionLoading"
         :bridge-node-definition-error="bridgeNodeDefinitionError"
         :bridge-open-crop="bridgeOpenCrop"
+        :on-search-in-source="onSearchInSource"
         style="height: 100%"
       />
     </n-drawer-content>

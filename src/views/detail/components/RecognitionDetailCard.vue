@@ -31,6 +31,7 @@ const props = defineProps<{
   formatJson: (obj: any) => string
   copyToClipboard: (text: string) => void
   openRecognitionInCrop: () => void | Promise<void>
+  onSearchInSource?: (keyword: string, locate?: string) => void
 }>()
 
 const expandedNames = ref<string[]>([...props.rawJsonDefaultExpanded])
@@ -44,6 +45,12 @@ watch(
 const recognitionDetailRows = computed(() => buildRecognitionDetailRows(props.currentRecognition, props.descriptionColumns))
 
 const getRecognitionHitTagType = (value: unknown) => value === '命中' ? 'success' : 'error'
+
+const handleSearchInSource = () => {
+  const keyword = props.currentAttempt?.name || props.currentRecognition?.name
+  if (!keyword) return
+  props.onSearchInSource?.(keyword, props.currentAttempt?.ts)
+}
 </script>
 
 <template>
@@ -52,8 +59,17 @@ const getRecognitionHitTagType = (value: unknown) => value === '命中' ? 'succe
       🔍 识别详情
     </template>
     <template #header-extra>
-      <n-flex v-if="props.showOpenCropButton" align="center" style="gap: 6px">
+      <n-flex align="center" style="gap: 6px">
         <n-button
+          v-if="props.onSearchInSource"
+          size="tiny"
+          title="跳转到文本搜索，查看该识别项的原始日志上下文"
+          @click.stop="handleSearchInSource"
+        >
+          在原文中查看
+        </n-button>
+        <n-button
+          v-if="props.showOpenCropButton"
           size="tiny"
           :disabled="!props.openCropImageAvailable"
           @click.stop="props.openRecognitionInCrop"
