@@ -58,6 +58,7 @@ describe('useMainContentBindings realtime status', () => {
 
     expect(bindings.processViewMobileProps.value.isRealtimeStreaming).toBe(false)
     expect(bindings.processViewMobileProps.value.realtimeParseFailed).toBe(false)
+    expect(bindings.detailViewProps.value.onSearchInSource).toBeUndefined()
 
     realtimeStreaming.value = true
     realtimeParseFailed.value = true

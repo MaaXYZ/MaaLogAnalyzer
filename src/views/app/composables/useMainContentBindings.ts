@@ -142,10 +142,12 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
     bridgeNodeDefinitionLoading: options.bridgeNodeDefinitionLoading.value,
     bridgeNodeDefinitionError: options.bridgeNodeDefinitionError.value,
     bridgeOpenCrop: options.bridgeOpenCrop,
-    // 实时模式下日志持续增长，原文定位意义有限，隐藏“在原文中查看”
-    onSearchInSource: options.realtimeStreaming.value
-      ? undefined
-      : options.handleSearchNodeInSource,
+    // 实时模式下日志持续增长，原文定位意义有限；
+    // VS Code iframe 嵌入不提供文本搜索视图，因此也隐藏“在原文中查看”
+    onSearchInSource:
+      options.isVscodeLaunchEmbed || options.realtimeStreaming.value
+        ? undefined
+        : options.handleSearchNodeInSource,
   }))
 
   const textSearchViewProps = computed(() => ({
