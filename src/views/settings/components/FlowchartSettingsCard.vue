@@ -18,7 +18,10 @@ const props = defineProps<{
 
 <template>
   <n-card size="small" :bordered="true" style="margin-bottom: 12px">
-    <n-text strong style="font-size: 16px; display: block; margin-bottom: 16px">流程图</n-text>
+    <n-text strong style="font-size: 16px; display: block; margin-bottom: 4px">流程图</n-text>
+    <n-text depth="3" style="font-size: 12px; display: block; margin-bottom: 12px">
+      修改后需点击下方“保存设置”才会应用并持久化；画布工具栏的“忽略未经过节点”开关独立于此处，即时生效
+    </n-text>
 
     <table class="settings-grid" role="presentation">
       <tbody>
