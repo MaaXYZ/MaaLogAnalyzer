@@ -6,10 +6,14 @@ import type { TaskInfo } from '../../../types'
 import { formatDuration } from '../../../utils/formatDuration'
 import { buildTaskIdentity } from '@windsland52/maa-log-tools/task-identity'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   tasks: TaskInfo[]
   activeTaskIndex: number
-}>()
+  // 实时跟随时未结束任务是真正的“运行中”；静态文件里则应表述为“未完成”
+  isRealtimeStreaming?: boolean
+}>(), {
+  isRealtimeStreaming: false,
+})
 
 const emit = defineEmits<{
   'select-task': [index: number]
@@ -44,6 +48,14 @@ const failureJumpByIndex = computed(() => {
 })
 
 const getFailureJump = (index: number): FailureJump | undefined => failureJumpByIndex.value.get(index)
+
+const statusMeta = (task: TaskInfo): { label: string; type: 'success' | 'error' | 'warning' | 'default' } => {
+  if (task.status === 'succeeded') return { label: '成功', type: 'success' }
+  if (task.status === 'failed') return { label: '失败', type: 'error' }
+  return props.isRealtimeStreaming
+    ? { label: '运行中', type: 'warning' }
+    : { label: '未完成', type: 'default' }
+}
 
 const taskListScrollbar = ref<InstanceType<typeof NScrollbar> | null>(null)
 
@@ -106,7 +118,7 @@ defineExpose({
           <n-flex vertical style="gap: 8px">
             <n-flex align="center" justify="space-between">
               <n-text strong style="font-size: 15px">{{ task.entry }}</n-text>
-              <n-tag size="small" :type="task.status === 'succeeded' ? 'success' : task.status === 'failed' ? 'error' : 'warning'">
+              <n-tag size="small" :type="statusMeta(task).type">
                 #{{ index + 1 }}
               </n-tag>
             </n-flex>
@@ -114,8 +126,8 @@ defineExpose({
             <n-flex vertical style="gap: 4px">
               <n-text depth="3" style="font-size: 12px">
                 状态:
-                <n-text :type="task.status === 'succeeded' ? 'success' : task.status === 'failed' ? 'error' : 'warning'">
-                  {{ task.status === 'succeeded' ? '成功' : task.status === 'failed' ? '失败' : '运行中' }}
+                <n-text :type="statusMeta(task).type">
+                  {{ statusMeta(task).label }}
                 </n-text>
                 <template v-if="getFailureJump(index)">
                   <n-text depth="3"> · 失败于 </n-text>

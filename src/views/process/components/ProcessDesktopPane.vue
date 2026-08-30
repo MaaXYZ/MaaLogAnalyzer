@@ -103,6 +103,7 @@ const handleSelectNodeNavItem = (item: NodeNavViewItem) => {
         :ref="props.setTaskListPanelRef"
         :tasks="tasks"
         :active-task-index="activeTaskIndex"
+        :is-realtime-streaming="isRealtimeStreaming"
         @select-task="emit('select-task-index', $event)"
         @locate-failure="(index, nodeId) => emit('locate-failure', index, nodeId)"
         @manual-scroll-up="emit('manual-scroll-up')"
