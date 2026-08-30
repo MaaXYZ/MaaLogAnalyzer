@@ -11,8 +11,8 @@ describe('VS Code analyze-file command', () => {
     expect(extensionSource).toMatch(
       /'maaLogAnalyzer\.analyzeFile',\s*async \(uri\?: vscode\.Uri\) =>/,
     )
-    expect(extensionSource).toContain(
-      'const targetUri = uri ?? getActiveFileUri() ?? await pickFileUriForAnalysis()',
+    expect(extensionSource).toMatch(
+      /const targetUri = uri \?\? getActiveFileUri\(\) \?\?\s*\(?await\s*pickFileUriForAnalysis\(\)/,
     )
     expect(extensionSource).toContain("return uri?.scheme === 'file' ? uri : undefined")
   })
