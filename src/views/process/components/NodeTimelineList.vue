@@ -141,6 +141,7 @@ const setLocalScrollerRef = (value: Element | object | null) => {
       :scroller-ref="localScrollerRef"
       :selected-node-id="selectedNodeId ?? null"
       :safe-scroll-to-item="safeScrollToItem"
+      @select-node="(node) => emit('select-node', node)"
     />
   </div>
 </template>

@@ -14,6 +14,10 @@ const props = defineProps<{
   safeScrollToItem: (index: number) => Promise<boolean>
 }>()
 
+const emit = defineEmits<{
+  'select-node': [node: NodeInfo]
+}>()
+
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const containerRef = ref<HTMLDivElement | null>(null)
 const scrollerRefLocal = ref<InstanceType<typeof DynamicScroller> | null>(null)
@@ -36,6 +40,10 @@ const {
   nodes: nodesRef,
   selectedNodeId: selectedNodeIdRef,
   safeScrollToItem: (index: number) => props.safeScrollToItem(index),
+  onNodeClick: (index: number) => {
+    const node = props.nodes[index]
+    if (node) emit('select-node', node)
+  },
 })
 
 let resizeObserver: ResizeObserver | null = null

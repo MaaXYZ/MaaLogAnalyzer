@@ -11,6 +11,8 @@ interface MinimapInteractionOptions {
   nodes: Ref<NodeTimelineItem[]>
   selectedNodeId: Ref<number | null>
   safeScrollToItem: (index: number) => Promise<boolean>
+  /** 点击（非拖动）定位到某节点后回调，用于同步选中该节点 */
+  onNodeClick?: (index: number) => void
 }
 
 const isHtmlElement = (value: unknown): value is HTMLElement => {
@@ -180,6 +182,7 @@ export const createMinimapInteraction = (options: MinimapInteractionOptions) => 
     const index = indexFromY(e.clientY)
     if (index < 0) return
     await scrollToIndex(index)
+    options.onNodeClick?.(index)
   }
 
   const handleMouseDown = (e: MouseEvent) => {
