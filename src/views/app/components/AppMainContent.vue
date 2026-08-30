@@ -95,16 +95,14 @@ const emit = defineEmits<{
         @select-mobile-task="onMobileTaskSelect"
         @toggle-detail="onToggleDetailView"
       />
+      <search-mode-pane
+        v-else-if="viewMode === 'search'"
+        :active="true"
+        :text-search-view-props="textSearchViewProps"
+      />
     </keep-alive>
-
-    <search-mode-pane
-      v-if="viewMode === 'search'"
-      :active="true"
-      :text-search-view-props="textSearchViewProps"
-    />
-
     <statistics-mode-pane
-      v-else-if="viewMode === 'statistics'"
+      v-if="viewMode === 'statistics'"
       :active="true"
       :tasks="tasks"
       :is-vscode-launch-embed="isVscodeLaunchEmbed"
