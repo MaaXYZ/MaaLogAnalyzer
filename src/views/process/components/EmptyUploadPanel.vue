@@ -27,8 +27,8 @@ const handleReloadSelect = (key: string | number) => {
 </script>
 
 <template>
-  <div>
-    <div v-if="props.isInTauri" style="text-align: center; padding: 40px 20px">
+  <div class="empty-panel-root">
+    <div v-if="props.isInTauri" class="empty-panel-card">
       <n-icon size="48" :depth="3" style="margin-bottom: 16px">
         <folder-open-outlined />
       </n-icon>
@@ -57,7 +57,7 @@ const handleReloadSelect = (key: string | number) => {
       </n-flex>
     </div>
 
-    <div v-else-if="props.isInVscode" style="text-align: center; padding: 40px 20px">
+    <div v-else-if="props.isInVscode" class="empty-panel-card">
       <n-icon size="48" :depth="3" style="margin-bottom: 16px">
         <folder-open-outlined />
       </n-icon>
@@ -86,7 +86,7 @@ const handleReloadSelect = (key: string | number) => {
       </n-flex>
     </div>
 
-    <div v-else-if="props.isVscodeLaunchEmbed" style="text-align: center; padding: 40px 20px">
+    <div v-else-if="props.isVscodeLaunchEmbed" class="empty-panel-card">
       <n-icon size="48" :depth="3" style="margin-bottom: 16px">
         <folder-open-outlined />
       </n-icon>
@@ -103,7 +103,7 @@ const handleReloadSelect = (key: string | number) => {
 
     <div
       v-else
-      class="drop-zone"
+      class="drop-zone empty-panel-card"
       data-tour="analysis-upload-zone"
       @drop="emit('drop', $event)"
       @dragover="emit('drag-over', $event)"
@@ -133,9 +133,22 @@ const handleReloadSelect = (key: string | number) => {
 </template>
 
 <style scoped>
+.empty-panel-root {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-panel-card {
+  width: min(680px, 100%);
+  text-align: center;
+  padding: 48px 32px;
+}
+
 .drop-zone {
   border: 2px dashed var(--n-border-color);
-  border-radius: 8px;
+  border-radius: 12px;
   transition: all 0.2s ease;
   cursor: pointer;
 }

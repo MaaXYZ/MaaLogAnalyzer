@@ -14,6 +14,7 @@ defineProps<{
   processViewProps: ProcessViewForwardProps
   processViewEventHandlers: ProcessViewEventHandlers
   detailViewProps: DetailViewForwardProps
+  showDetailPanel?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -31,7 +32,15 @@ const handleToggleDetail = () => {
 </script>
 
 <template>
+  <!-- 无任务（未加载日志）时隐藏详情栏，让空状态占满整行 -->
+  <process-view
+    v-if="showDetailPanel === false"
+    v-bind="processViewProps"
+    v-on="processViewEventHandlers"
+    style="height: 100%"
+  />
   <n-split
+    v-else
     :size="splitSize"
     @update:size="handleSplitSizeUpdate"
     :max="1"

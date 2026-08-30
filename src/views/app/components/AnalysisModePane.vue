@@ -77,6 +77,7 @@ const handleToggleDetail = () => {
     :process-view-props="processViewDesktopProps"
     :process-view-event-handlers="processViewEventHandlers"
     :detail-view-props="detailViewProps"
+    :show-detail-panel="tasks.length > 0"
     @update:split-size="handleSplitSizeUpdate"
     @toggle-detail="handleToggleDetail"
   />
