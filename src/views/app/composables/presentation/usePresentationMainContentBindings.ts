@@ -27,7 +27,9 @@ interface UsePresentationMainContentBindingsOptions {
   onToggleDetailView: UseAppPresentationBindingsOptions['onToggleDetailView']
 }
 
-export const usePresentationMainContentBindings = (options: UsePresentationMainContentBindingsOptions) => {
+export const usePresentationMainContentBindings = (
+  options: UsePresentationMainContentBindingsOptions,
+) => {
   const handleNavigateToNode = (
     task: NonNullable<UseAppPresentationBindingsOptions['selectedTask']['value']>,
     node: NonNullable<UseAppPresentationBindingsOptions['selectedNode']['value']>,
@@ -69,10 +71,18 @@ export const usePresentationMainContentBindings = (options: UsePresentationMainC
   }))
 
   const mainContentEventHandlers = {
-    'update:split-size': (value: number) => { options.splitSize.value = value },
-    'update:split-vertical-size': (value: number) => { options.splitVerticalSize.value = value },
-    'update:show-task-drawer': (value: boolean) => { options.showTaskDrawer.value = value },
-    'update:show-detail-drawer': (value: boolean) => { options.showDetailDrawer.value = value },
+    'update:split-size': (value: number) => {
+      options.splitSize.value = value
+    },
+    'update:split-vertical-size': (value: number) => {
+      options.splitVerticalSize.value = value
+    },
+    'update:show-task-drawer': (value: boolean) => {
+      options.showTaskDrawer.value = value
+    },
+    'update:show-detail-drawer': (value: boolean) => {
+      options.showDetailDrawer.value = value
+    },
   }
 
   return {

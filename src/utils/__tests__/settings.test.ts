@@ -15,16 +15,19 @@ describe('settings persistence validation', () => {
   })
 
   it('accepts valid fields and falls back for invalid persisted values', async () => {
-    values.set(SETTINGS_KEY, JSON.stringify({
-      showNotRecognizedNodes: false,
-      defaultCollapseRecognition: 'false',
-      displayMode: 'grid',
-      flowchartEdgeStyle: 'curved',
-      flowchartEdgeFlowEnabled: false,
-      flowchartPlaybackIntervalMs: -1,
-      flowchartFocusZoom: 100,
-      unknownField: 'ignored',
-    }))
+    values.set(
+      SETTINGS_KEY,
+      JSON.stringify({
+        showNotRecognizedNodes: false,
+        defaultCollapseRecognition: 'false',
+        displayMode: 'grid',
+        flowchartEdgeStyle: 'curved',
+        flowchartEdgeFlowEnabled: false,
+        flowchartPlaybackIntervalMs: -1,
+        flowchartFocusZoom: 100,
+        unknownField: 'ignored',
+      }),
+    )
 
     const { getSettings } = await import('../settings')
 

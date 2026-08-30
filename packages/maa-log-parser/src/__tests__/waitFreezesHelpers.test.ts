@@ -18,9 +18,7 @@ describe('WaitFreezesHelpers', () => {
   it('upserts runtime state and keeps first ts/order for same wf_id', () => {
     const runtimeStates = new Map<number, any>()
     const resolveEventFocus = (details: Record<string, any>, fallback?: any) => {
-      return Object.prototype.hasOwnProperty.call(details, 'focus')
-        ? details.focus
-        : fallback
+      return Object.prototype.hasOwnProperty.call(details, 'focus') ? details.focus : fallback
     }
     const findWaitFreezesImages = (_ts: string, actionName: string) => {
       return actionName === 'NodeA' ? ['imgA.png'] : undefined

@@ -1,9 +1,4 @@
-import type {
-  FileSystem,
-  FSNode,
-  FSStream,
-  SevenZipModule,
-} from '7z-wasm'
+import type { FileSystem, FSNode, FSStream, SevenZipModule } from '7z-wasm'
 
 import {
   addArchiveDirectoryEntry,
@@ -35,7 +30,7 @@ export class SevenZipArchiveError extends Error {
   readonly name = 'SevenZipArchiveError'
 }
 
-type SevenZipModuleResult = Awaited<ReturnType<typeof import('7z-wasm')['default']>> | null
+type SevenZipModuleResult = Awaited<ReturnType<(typeof import('7z-wasm'))['default']>> | null
 
 interface ListedSevenZipEntry extends SevenZipArchiveEntry {
   sourcePath: string
@@ -79,11 +74,8 @@ const MAX_COMMAND_CAPTURE_LINES = 400_000
 // bounded by maxTotalPathBytes plus these fixed capture ceilings.
 const LISTING_CAPTURE_ENTRY_RESERVE = 20_000
 
-const boundedCaptureLimit = (
-  fixed: number,
-  variable: number,
-  ceiling: number,
-): number => Math.min(ceiling, fixed + Math.min(variable, ceiling - fixed))
+const boundedCaptureLimit = (fixed: number, variable: number, ceiling: number): number =>
+  Math.min(ceiling, fixed + Math.min(variable, ceiling - fixed))
 
 const createCommandCapture = (
   limits: Readonly<ArchiveLimits>,
@@ -110,20 +102,16 @@ const createCommandCapture = (
   limitError: null,
 })
 
-const captureCommandLine = (
-  capture: CommandCapture,
-  destination: string[],
-  line: string,
-): void => {
+const captureCommandLine = (capture: CommandCapture, destination: string[], line: string): void => {
   if (capture.limitError) return
 
   const lineBytes = captureEncoder.encode(line).byteLength + 1
   capture.capturedBytes += lineBytes
   capture.capturedLines += 1
   if (
-    !Number.isSafeInteger(capture.capturedBytes)
-    || capture.capturedBytes > capture.maxCaptureBytes
-    || capture.capturedLines > capture.maxCaptureLines
+    !Number.isSafeInteger(capture.capturedBytes) ||
+    capture.capturedBytes > capture.maxCaptureBytes ||
+    capture.capturedLines > capture.maxCaptureLines
   ) {
     capture.limitError = new SevenZipArchiveError('压缩包命令输出超出安全捕获范围')
     return
@@ -144,8 +132,8 @@ const captureCommandLine = (
       }
       capture.totalPathBytes += pathBytes
       if (
-        !Number.isSafeInteger(capture.totalPathBytes)
-        || capture.totalPathBytes > capture.limits.maxTotalPathBytes
+        !Number.isSafeInteger(capture.totalPathBytes) ||
+        capture.totalPathBytes > capture.limits.maxTotalPathBytes
       ) {
         capture.limitError = new ArchiveLimitError(
           'total-path-size',
@@ -182,7 +170,9 @@ export async function ensureSevenZipModule(): Promise<SevenZipModuleResult> {
       return sevenZipInstance
     } catch (error) {
       throw Object.assign(
-        new Error(`加载 7z 解压模块失败: ${error instanceof Error ? error.message : String(error)}`),
+        new Error(
+          `加载 7z 解压模块失败: ${error instanceof Error ? error.message : String(error)}`,
+        ),
         { cause: error },
       )
     } finally {
@@ -242,32 +232,29 @@ const parseNonNegativeInteger = (value: string, label: string): number => {
   return parsed
 }
 
-const canonicalizeArchivePath = (sourcePath: string): { path: string, identity: string } => {
+const canonicalizeArchivePath = (sourcePath: string): { path: string; identity: string } => {
   if (/[\u0000-\u001f\u007f]/.test(sourcePath)) {
     throw new SevenZipArchiveError('压缩包包含控制字符文件名')
   }
 
   const normalized = sourcePath.replace(/\\/g, '/').normalize('NFC')
-  if (
-    normalized.length === 0
-    || normalized.startsWith('/')
-    || /^[a-z]:/i.test(normalized)
-  ) {
+  if (normalized.length === 0 || normalized.startsWith('/') || /^[a-z]:/i.test(normalized)) {
     throw new SevenZipArchiveError(`压缩包包含绝对或空路径: ${sourcePath}`)
   }
 
   const path = normalized.endsWith('/') ? normalized.slice(0, -1) : normalized
   const segments = path.split('/')
   if (
-    path.length === 0
-    || segments.some(segment => (
-      segment.length === 0
-      || segment === '.'
-      || segment === '..'
-      || segment.endsWith('.')
-      || segment.endsWith(' ')
-      || segment.includes(':')
-    ))
+    path.length === 0 ||
+    segments.some(
+      (segment) =>
+        segment.length === 0 ||
+        segment === '.' ||
+        segment === '..' ||
+        segment.endsWith('.') ||
+        segment.endsWith(' ') ||
+        segment.includes(':'),
+    )
   ) {
     throw new SevenZipArchiveError(`压缩包包含非规范路径: ${sourcePath}`)
   }
@@ -276,7 +263,7 @@ const canonicalizeArchivePath = (sourcePath: string): { path: string, identity: 
 }
 
 const parseListingRecords = (lines: readonly string[]): Map<string, string>[] => {
-  const separatorIndex = lines.findIndex(line => line.trim() === '----------')
+  const separatorIndex = lines.findIndex((line) => line.trim() === '----------')
   if (separatorIndex < 0) {
     throw new SevenZipArchiveError('无法读取压缩包目录')
   }
@@ -333,13 +320,19 @@ export const parseSevenZipListing = (
 
     const isDirectory = record.get('Folder') === '+' || /^D/.test(record.get('Attributes') ?? '')
     const rawSize = record.get('Size')
-    const size = rawSize == null || rawSize === ''
-      ? (isDirectory ? 0 : (() => { throw new SevenZipArchiveError(`压缩包目录缺少文件大小: ${sourcePath}`) })())
-      : parseNonNegativeInteger(rawSize, `${sourcePath} 的解压大小`)
+    const size =
+      rawSize == null || rawSize === ''
+        ? isDirectory
+          ? 0
+          : (() => {
+              throw new SevenZipArchiveError(`压缩包目录缺少文件大小: ${sourcePath}`)
+            })()
+        : parseNonNegativeInteger(rawSize, `${sourcePath} 的解压大小`)
     const rawPackedSize = record.get('Packed Size')
-    const packedSize = rawPackedSize == null || rawPackedSize === ''
-      ? null
-      : parseNonNegativeInteger(rawPackedSize, `${sourcePath} 的压缩大小`)
+    const packedSize =
+      rawPackedSize == null || rawPackedSize === ''
+        ? null
+        : parseNonNegativeInteger(rawPackedSize, `${sourcePath} 的压缩大小`)
     const { path, identity } = canonicalizeArchivePath(sourcePath)
     const kind = isDirectory ? 'directory' : 'file'
 
@@ -359,12 +352,16 @@ export const parseSevenZipListing = (
     }
     pathKinds.set(identity, kind)
 
-    directoryBudget = addArchiveDirectoryEntry(directoryBudget, {
-      name: isDirectory ? `${path}/` : path,
-      size: packedSize ?? 0,
-      originalSize: size,
-      compression: 0,
-    }, limits)
+    directoryBudget = addArchiveDirectoryEntry(
+      directoryBudget,
+      {
+        name: isDirectory ? `${path}/` : path,
+        size: packedSize ?? 0,
+        originalSize: size,
+        compression: 0,
+      },
+      limits,
+    )
 
     entries.push({
       path,
@@ -400,23 +397,28 @@ const assertSelectedEntriesWithinLimits = (
 ): number => {
   const selectedBlocks = new Set(
     entries
-      .filter(entry => selectedIdentities.has(entry.identity) && entry.block != null)
-      .map(entry => entry.block as string),
+      .filter((entry) => selectedIdentities.has(entry.identity) && entry.block != null)
+      .map((entry) => entry.block as string),
   )
-  const chargedEntries = entries.filter(entry => (
-    !entry.isDirectory
-    && (selectedIdentities.has(entry.identity) || (entry.block != null && selectedBlocks.has(entry.block)))
-  ))
+  const chargedEntries = entries.filter(
+    (entry) =>
+      !entry.isDirectory &&
+      (selectedIdentities.has(entry.identity) ||
+        (entry.block != null && selectedBlocks.has(entry.block))),
+  )
 
-  assertSelectedArchiveEntriesWithinLimits(chargedEntries.map(entry => ({
-    name: entry.path,
-    size: entry.size,
-    originalSize: entry.size,
-    compression: 0,
-  })), {
-    ...limits,
-    maxCompressionRatio: Number.MAX_VALUE,
-  })
+  assertSelectedArchiveEntriesWithinLimits(
+    chargedEntries.map((entry) => ({
+      name: entry.path,
+      size: entry.size,
+      originalSize: entry.size,
+      compression: 0,
+    })),
+    {
+      ...limits,
+      maxCompressionRatio: Number.MAX_VALUE,
+    },
+  )
 
   const groups = new Map<string, ListedSevenZipEntry[]>()
   for (const entry of chargedEntries) {
@@ -431,11 +433,12 @@ const assertSelectedEntriesWithinLimits = (
   for (const group of groups.values()) {
     const originalSize = group.reduce((total, entry) => total + entry.size, 0)
     const knownPackedSizes = group
-      .map(entry => entry.packedSize)
+      .map((entry) => entry.packedSize)
       .filter((size): size is number => size != null)
-    const compressedSize = knownPackedSizes.length > 0
-      ? knownPackedSizes.reduce((total, size) => total + size, 0)
-      : archiveSize
+    const compressedSize =
+      knownPackedSizes.length > 0
+        ? knownPackedSizes.reduce((total, size) => total + size, 0)
+        : archiveSize
     assertCompressionRatio(originalSize, compressedSize, limits)
     if (knownPackedSizes.length > 0) runtimeCompressionBasis += compressedSize
     else needsArchiveFallback = true
@@ -481,7 +484,7 @@ const installOutputGuard = (
   const fileSizes = new Map<string, number>()
   let extractedBytes = 0
 
-  const toOutputEntry = (path: string): { path: string, identity: string } => {
+  const toOutputEntry = (path: string): { path: string; identity: string } => {
     const absolute = normalizeVirtualPath(path, fileSystem.cwd())
     if (!absolute.startsWith(outputPrefix)) {
       throw new SevenZipArchiveError(`解压器尝试写出隔离目录: ${absolute}`)
@@ -500,12 +503,16 @@ const installOutputGuard = (
       throw new SevenZipArchiveError(`解压结果包含文件/目录冲突: ${canonical.path}`)
     }
     if (previousKind == null) {
-      directoryBudget = addArchiveDirectoryEntry(directoryBudget, {
-        name: kind === 'directory' ? `${canonical.path}/` : canonical.path,
-        size: 0,
-        originalSize: 0,
-        compression: 0,
-      }, structureLimits)
+      directoryBudget = addArchiveDirectoryEntry(
+        directoryBudget,
+        {
+          name: kind === 'directory' ? `${canonical.path}/` : canonical.path,
+          size: 0,
+          originalSize: 0,
+          compression: 0,
+        },
+        structureLimits,
+      )
       observedKinds.set(canonical.identity, kind)
     }
     return { ...canonical, expected }
@@ -554,15 +561,12 @@ const installOutputGuard = (
   const originalOpen = fileSystem.open.bind(fileSystem)
   const originalMkdir = fileSystem.mkdir.bind(fileSystem)
   const originalWrite = fileSystem.write.bind(fileSystem)
-  const originalAllocate = typeof fileSystem.allocate === 'function'
-    ? fileSystem.allocate.bind(fileSystem)
-    : null
-  const originalTruncate = typeof fileSystem.truncate === 'function'
-    ? fileSystem.truncate.bind(fileSystem)
-    : null
-  const originalFtruncate = typeof fileSystem.ftruncate === 'function'
-    ? fileSystem.ftruncate.bind(fileSystem)
-    : null
+  const originalAllocate =
+    typeof fileSystem.allocate === 'function' ? fileSystem.allocate.bind(fileSystem) : null
+  const originalTruncate =
+    typeof fileSystem.truncate === 'function' ? fileSystem.truncate.bind(fileSystem) : null
+  const originalFtruncate =
+    typeof fileSystem.ftruncate === 'function' ? fileSystem.ftruncate.bind(fileSystem) : null
   const originalRename = fileSystem.rename.bind(fileSystem)
   const originalSymlink = fileSystem.symlink.bind(fileSystem)
 
@@ -587,24 +591,33 @@ const installOutputGuard = (
     const runtimeStream = stream as RuntimeStream
     if (!isCharacterStream(runtimeStream)) {
       const start = position ?? runtimeStream.position ?? 0
-      recordFileSize(streamPath(runtimeStream), Math.max(fileSizes.get(
-        toOutputEntry(streamPath(runtimeStream)).identity,
-      ) ?? 0, start + length))
+      recordFileSize(
+        streamPath(runtimeStream),
+        Math.max(
+          fileSizes.get(toOutputEntry(streamPath(runtimeStream)).identity) ?? 0,
+          start + length,
+        ),
+      )
     }
     return originalWrite(stream, buffer, offset, length, position, canOwn)
   }) as FileSystem['write']
   if (originalAllocate) {
     fileSystem.allocate = ((stream, offset, length) => {
       const runtimeStream = stream as RuntimeStream
-      recordFileSize(streamPath(runtimeStream), Math.max(fileSizes.get(
-        toOutputEntry(streamPath(runtimeStream)).identity,
-      ) ?? 0, offset + length))
+      recordFileSize(
+        streamPath(runtimeStream),
+        Math.max(
+          fileSizes.get(toOutputEntry(streamPath(runtimeStream)).identity) ?? 0,
+          offset + length,
+        ),
+      )
       return originalAllocate(stream, offset, length)
     }) as FileSystem['allocate']
   }
   if (originalTruncate) {
     fileSystem.truncate = ((path, length) => {
-      const pathValue = typeof path === 'string' ? path : fileSystem.getPath(path as unknown as FSNode)
+      const pathValue =
+        typeof path === 'string' ? path : fileSystem.getPath(path as unknown as FSNode)
       recordFileSize(pathValue, length)
       return originalTruncate(path, length)
     }) as FileSystem['truncate']
@@ -712,14 +725,10 @@ const readExtractedFiles = (
 
 export const extractSevenZipEntries = async (
   file: File,
-  selectEntries: (
-    entries: readonly SevenZipArchiveEntry[],
-  ) => Promise<readonly string[] | null>,
+  selectEntries: (entries: readonly SevenZipArchiveEntry[]) => Promise<readonly string[] | null>,
   options: ExtractSevenZipOptions = {},
 ): Promise<Map<string, Uint8Array> | null> => {
-  const limits = options.archiveLimits == null
-    ? null
-    : resolveArchiveLimits(options.archiveLimits)
+  const limits = options.archiveLimits == null ? null : resolveArchiveLimits(options.archiveLimits)
   const structureLimits = limits ?? DEFAULT_ARCHIVE_LIMITS
   if (limits) assertArchiveInputsWithinLimits([file], limits)
 
@@ -748,9 +757,9 @@ export const extractSevenZipEntries = async (
         true,
       )
       const entries = parseSevenZipListing(listing, structureLimits)
-      const publicEntries = entries.map(({ sourcePath: _sourcePath, identity: _identity, ...entry }) => (
-        Object.freeze(entry)
-      ))
+      const publicEntries = entries.map(
+        ({ sourcePath: _sourcePath, identity: _identity, ...entry }) => Object.freeze(entry),
+      )
       const selectedPaths = await selectEntries(Object.freeze(publicEntries))
       if (!selectedPaths || selectedPaths.length === 0) return null
 
@@ -758,7 +767,7 @@ export const extractSevenZipEntries = async (
       for (const path of selectedPaths) {
         selectedIdentities.add(canonicalizeArchivePath(path).identity)
       }
-      const entriesByIdentity = new Map(entries.map(entry => [entry.identity, entry]))
+      const entriesByIdentity = new Map(entries.map((entry) => [entry.identity, entry]))
       const allowedEntries = new Map<string, ListedSevenZipEntry>()
       for (const identity of selectedIdentities) {
         const entry = entriesByIdentity.get(identity)
@@ -780,7 +789,7 @@ export const extractSevenZipEntries = async (
       const selectionListPath = `${workDir}/selection.list`
       const selectionList = `${Array.from(
         allowedEntries.values(),
-        entry => entry.sourcePath,
+        (entry) => entry.sourcePath,
       ).join('\n')}\n`
       module.FS.writeFile(selectionListPath, new TextEncoder().encode(selectionList))
       module.FS.mkdir(outputDir)
@@ -793,17 +802,22 @@ export const extractSevenZipEntries = async (
       )
       try {
         options.onProgress?.('正在解压文件...')
-        callSevenZip(module, [
-          'x',
-          archivePath,
-          `-o${outputDir}`,
-          '-aoa',
-          '-y',
-          '-p-',
-          '-spd',
-          '-scsUTF-8',
-          `-i@${selectionListPath}`,
-        ], '解压文件', structureLimits)
+        callSevenZip(
+          module,
+          [
+            'x',
+            archivePath,
+            `-o${outputDir}`,
+            '-aoa',
+            '-y',
+            '-p-',
+            '-spd',
+            '-scsUTF-8',
+            `-i@${selectionListPath}`,
+          ],
+          '解压文件',
+          structureLimits,
+        )
       } finally {
         restoreGuard()
       }

@@ -8,7 +8,7 @@ const props = defineProps<EdgeProps>()
 function buildPathFromPoints(points: Array<{ x: number; y: number }>): string {
   if (points.length < 2) return ''
   const [first, ...rest] = points
-  return `M ${first.x},${first.y} ${rest.map(p => `L ${p.x},${p.y}`).join(' ')}`
+  return `M ${first.x},${first.y} ${rest.map((p) => `L ${p.x},${p.y}`).join(' ')}`
 }
 
 const adjustedRoutePoints = computed(() => {
@@ -25,14 +25,14 @@ const adjustedRoutePoints = computed(() => {
   const targetY = typeof props.targetY === 'number' ? props.targetY : lastPoint.y
 
   const endpointMoved =
-    Math.abs(firstPoint.x - sourceX) > 0.5
-    || Math.abs(firstPoint.y - sourceY) > 0.5
-    || Math.abs(lastPoint.x - targetX) > 0.5
-    || Math.abs(lastPoint.y - targetY) > 0.5
+    Math.abs(firstPoint.x - sourceX) > 0.5 ||
+    Math.abs(firstPoint.y - sourceY) > 0.5 ||
+    Math.abs(lastPoint.x - targetX) > 0.5 ||
+    Math.abs(lastPoint.y - targetY) > 0.5
 
   if (!endpointMoved) return routePoints
 
-  const nextPoints = routePoints.map(p => ({ x: p.x, y: p.y }))
+  const nextPoints = routePoints.map((p) => ({ x: p.x, y: p.y }))
   nextPoints[0] = { x: sourceX, y: sourceY }
   nextPoints[nextPoints.length - 1] = { x: targetX, y: targetY }
   return nextPoints
@@ -81,7 +81,10 @@ const chevronText = computed(() => {
   // Keep visual density unchanged; only increase total length coverage.
   const approxGlyphAdvancePx = 7
   // Guard against huge SVG text nodes on very long paths (web browsers may render poorly).
-  const count = Math.max(14, Math.min(420, Math.ceil((edgeLength.value + 96) / approxGlyphAdvancePx)))
+  const count = Math.max(
+    14,
+    Math.min(420, Math.ceil((edgeLength.value + 96) / approxGlyphAdvancePx)),
+  )
   return '>'.repeat(count)
 })
 
@@ -120,12 +123,7 @@ const normalizedMarkerEnd = computed(() => {
 <template>
   <g>
     <path :id="flowPathId" :d="path" fill="none" stroke="none" />
-    <BaseEdge
-      :id="id"
-      :path="path"
-      :style="style"
-      :marker-end="normalizedMarkerEnd"
-    />
+    <BaseEdge :id="id" :path="path" :style="style" :marker-end="normalizedMarkerEnd" />
     <text
       v-if="flowMode === 'chevron'"
       class="flow-edge-chevron"

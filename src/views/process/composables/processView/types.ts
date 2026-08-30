@@ -21,7 +21,9 @@ export interface ProcessViewControllerEmitters {
   onSelectTask: (task: TaskInfo) => void
   onUploadFile: (
     file: File | File[],
-    selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+    selectPrimaryLogs?: (
+      options: PrimaryLogSelectionOption[],
+    ) => Promise<PrimaryLogSelectionOption[] | null>,
   ) => void
   onUploadContent: (
     content: string,

@@ -53,7 +53,13 @@ describe('useNodeNavSearch', () => {
         },
       },
       {
-        ...createNode({ nodeId: 2, name: 'NodeRunning', taskId: 100, nextList: ['RecoRunning'], status: 'running' }),
+        ...createNode({
+          nodeId: 2,
+          name: 'NodeRunning',
+          taskId: 100,
+          nextList: ['RecoRunning'],
+          status: 'running',
+        }),
         ts: '2026-04-08 10:00:00.400',
       },
       {
@@ -61,7 +67,13 @@ describe('useNodeNavSearch', () => {
         ts: '2026-04-08 10:00:00.150',
       },
       {
-        ...createNode({ nodeId: 4, name: 'NodeActionFailed', taskId: 100, nextList: ['CCBuyCard'], status: 'failed' }),
+        ...createNode({
+          nodeId: 4,
+          name: 'NodeActionFailed',
+          taskId: 100,
+          nextList: ['CCBuyCard'],
+          status: 'failed',
+        }),
         ts: '2026-04-08 10:00:00.200',
         action_details: {
           action_id: 2,
@@ -73,7 +85,13 @@ describe('useNodeNavSearch', () => {
         },
       },
       {
-        ...createNode({ nodeId: 5, name: 'NodeTimeout', taskId: 100, nextList: ['RecoTimeout'], status: 'failed' }),
+        ...createNode({
+          nodeId: 5,
+          name: 'NodeTimeout',
+          taskId: 100,
+          nextList: ['RecoTimeout'],
+          status: 'failed',
+        }),
         ts: '2026-04-08 10:00:00.300',
       },
     ])
@@ -136,7 +154,13 @@ describe('useNodeNavSearch', () => {
         },
       },
       {
-        ...createNode({ nodeId: 32, name: 'NodeActionFailed', taskId: 100, nextList: ['CCCombatEnd'], status: 'failed' }),
+        ...createNode({
+          nodeId: 32,
+          name: 'NodeActionFailed',
+          taskId: 100,
+          nextList: ['CCCombatEnd'],
+          status: 'failed',
+        }),
         ts: '2026-04-08 10:00:00.200',
         action_details: {
           action_id: 4,
@@ -148,22 +172,30 @@ describe('useNodeNavSearch', () => {
         },
       },
       {
-        ...createNode({ nodeId: 33, name: 'NodeFailed', taskId: 100, nextList: ['RecoTimeout'], status: 'failed' }),
+        ...createNode({
+          nodeId: 33,
+          name: 'NodeFailed',
+          taskId: 100,
+          nextList: ['RecoTimeout'],
+          status: 'failed',
+        }),
         ts: '2026-04-08 10:00:00.300',
       },
       {
-        ...createNode({ nodeId: 34, name: 'NodeRunning', taskId: 100, nextList: ['RecoRunning'], status: 'running' }),
+        ...createNode({
+          nodeId: 34,
+          name: 'NodeRunning',
+          taskId: 100,
+          nextList: ['RecoRunning'],
+          status: 'running',
+        }),
         ts: '2026-04-08 10:00:00.400',
       },
     ])
 
     const rootTaskId = computed(() => 100)
-    const {
-      nodeNavItems,
-      nodeNavFailedOnly,
-      setNodeNavMode,
-      toggleNodeNavFailedOnly,
-    } = useNodeNavSearch(nodes, rootTaskId)
+    const { nodeNavItems, nodeNavFailedOnly, setNodeNavMode, toggleNodeNavFailedOnly } =
+      useNodeNavSearch(nodes, rootTaskId)
 
     expect(nodeNavFailedOnly.value).toBe(false)
     expect(nodeNavItems.value.map((item) => item.node.node_id)).toEqual([31, 32, 33, 34])
@@ -195,7 +227,10 @@ describe('useNodeNavSearch', () => {
     ])
 
     const rootTaskId = computed(() => 100)
-    const { nodeNavItems, nodeNavEmptyDescription, setNodeNavMode } = useNodeNavSearch(nodes, rootTaskId)
+    const { nodeNavItems, nodeNavEmptyDescription, setNodeNavMode } = useNodeNavSearch(
+      nodes,
+      rootTaskId,
+    )
     setNodeNavMode('next-list-hit')
 
     expect(nodeNavItems.value).toHaveLength(0)
@@ -207,14 +242,16 @@ describe('useNodeNavSearch', () => {
       {
         ...createNode({ nodeId: 41, name: 'FocusedNode', taskId: 100 }),
         focus: { display: ['log', 'toast'], content: 'Node {name}' },
-        node_flow: [{
-          id: 'reco.1',
-          type: 'recognition',
-          name: 'FocusedReco',
-          status: 'failed',
-          ts: '2026-04-08 10:00:00.100',
-          focus: 'Reco focus',
-        }],
+        node_flow: [
+          {
+            id: 'reco.1',
+            type: 'recognition',
+            name: 'FocusedReco',
+            status: 'failed',
+            ts: '2026-04-08 10:00:00.100',
+            focus: 'Reco focus',
+          },
+        ],
       },
       {
         ...createNode({ nodeId: 42, name: 'OtherTaskNode', taskId: 200 }),
@@ -223,14 +260,16 @@ describe('useNodeNavSearch', () => {
     ])
 
     const rootTaskId = computed(() => 100)
-    const {
-      nodeNavItems,
-      setNodeNavMode,
-      toggleNodeNavFailedOnly,
-    } = useNodeNavSearch(nodes, rootTaskId)
+    const { nodeNavItems, setNodeNavMode, toggleNodeNavFailedOnly } = useNodeNavSearch(
+      nodes,
+      rootTaskId,
+    )
     setNodeNavMode('focus')
 
-    expect(nodeNavItems.value.map((item) => item.primaryText)).toEqual(['FocusedNode', 'FocusedReco'])
+    expect(nodeNavItems.value.map((item) => item.primaryText)).toEqual([
+      'FocusedNode',
+      'FocusedReco',
+    ])
     expect(nodeNavItems.value.map((item) => item.focusKind)).toEqual(['node', 'recognition'])
     expect(nodeNavItems.value.map((item) => item.focusDisplay)).toEqual(['log/toast', 'log'])
     expect(nodeNavItems.value[1]?.targetFlowItemId).toBe('reco.1')

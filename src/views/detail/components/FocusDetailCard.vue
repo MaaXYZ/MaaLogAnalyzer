@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import {
-  NButton, NCard, NCollapse, NDivider, NFlex,
-  NIcon, NTag, NText,
-} from 'naive-ui'
+import { NButton, NCard, NCollapse, NDivider, NFlex, NIcon, NTag, NText } from 'naive-ui'
 import { CopyOutlined } from '@vicons/antd'
 import type { FocusCardData } from '../composables/types'
 import { renderFocusRichText } from '../composables/focusRichText'
@@ -41,14 +38,11 @@ const phaseTagTypeMap = {
   succeeded: 'success',
   failed: 'error',
 } as const
-
 </script>
 
 <template>
   <n-card>
-    <template #header>
-      🎯 Focus
-    </template>
+    <template #header> 🎯 Focus </template>
     <template #header-extra>
       <n-tag size="small" type="warning">
         {{ sourceLabelMap[props.focusCard.sourceKind] }}
@@ -62,19 +56,12 @@ const phaseTagTypeMap = {
       <n-flex justify="space-between" align="center" style="gap: 12px; margin-bottom: 8px">
         <n-flex align="center" style="gap: 8px">
           <n-text code>{{ entry.message ?? '通用 Focus' }}</n-text>
-          <n-tag
-            v-if="entry.phase"
-            size="small"
-            :type="phaseTagTypeMap[entry.phase]"
-          >
+          <n-tag v-if="entry.phase" size="small" :type="phaseTagTypeMap[entry.phase]">
             {{ phaseLabelMap[entry.phase] }}
           </n-tag>
         </n-flex>
 
-        <n-button
-          size="tiny"
-          @click.stop="props.copyToClipboard(entry.resolvedContent)"
-        >
+        <n-button size="tiny" @click.stop="props.copyToClipboard(entry.resolvedContent)">
           <template #icon>
             <n-icon><copy-outlined /></n-icon>
           </template>
@@ -138,7 +125,14 @@ const phaseTagTypeMap = {
 }
 
 .rich-text-content :deep(code) {
-  font-family: ui-monospace, SFMono-Regular, SF Mono, Consolas, Liberation Mono, Menlo, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    SF Mono,
+    Consolas,
+    Liberation Mono,
+    Menlo,
+    monospace;
   padding: 1px 4px;
   border-radius: 4px;
   background: rgba(15, 23, 42, 0.08);

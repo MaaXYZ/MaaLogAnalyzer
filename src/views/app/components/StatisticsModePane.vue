@@ -13,7 +13,11 @@ defineProps<{
 
 <template>
   <div v-if="active" data-tour="statistics-main" class="statistics-mode-pane">
-    <node-statistics-view :tasks="tasks" :is-vscode-launch-embed="isVscodeLaunchEmbed" style="height: 100%" />
+    <node-statistics-view
+      :tasks="tasks"
+      :is-vscode-launch-embed="isVscodeLaunchEmbed"
+      style="height: 100%"
+    />
   </div>
 </template>
 

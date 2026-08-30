@@ -1,7 +1,15 @@
 export type MaaDomain = 'Resource' | 'Controller' | 'Tasker' | 'Node' | 'Unknown'
 export type MaaPhase = 'Starting' | 'Succeeded' | 'Failed' | 'Unknown'
 export type MaaTaskerKind = 'Task' | 'Unknown'
-export type MaaNodeKind = 'PipelineNode' | 'RecognitionNode' | 'ActionNode' | 'NextList' | 'Recognition' | 'Action' | 'WaitFreezes' | 'Unknown'
+export type MaaNodeKind =
+  | 'PipelineNode'
+  | 'RecognitionNode'
+  | 'ActionNode'
+  | 'NextList'
+  | 'Recognition'
+  | 'Action'
+  | 'WaitFreezes'
+  | 'Unknown'
 export type KnownMaaPhase = Exclude<MaaPhase, 'Unknown'>
 export type TaskTerminalPhase = Exclude<KnownMaaPhase, 'Starting'>
 

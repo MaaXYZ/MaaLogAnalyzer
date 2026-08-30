@@ -26,9 +26,7 @@ interface CreateBridgeRecognitionQueryOptions {
   saveBridgeImageToCache: (key: string, dataUrl: string) => void
 }
 
-export const createBridgeRecognitionQuery = (
-  options: CreateBridgeRecognitionQueryOptions,
-) => {
+export const createBridgeRecognitionQuery = (options: CreateBridgeRecognitionQueryOptions) => {
   const queryBridgeDetail = async (params: QueryDetailParams): Promise<QueryDetailResult> => {
     const bridge = options.getBridge()
     if (!bridge?.enabled) {

@@ -7,10 +7,7 @@
  * Keep this file focused on high-level flow wiring; move detailed domain logic
  * into helper modules under ./logParser/ whenever possible.
  */
-import type {
-  EventNotification,
-  TaskInfo,
-} from '../shared/types'
+import type { EventNotification, TaskInfo } from '../shared/types'
 import { parseEventLine as parseMaaEventLine, type ParsedEventLine } from '../event/line'
 import { createProtocolEvent } from '../protocol/eventFactory'
 import type { ProtocolEvent } from '../protocol/types'
@@ -139,11 +136,14 @@ export class LogParser {
   private completedTaskCache = new Map<string, ProjectedTaskCacheEntry>()
   private rawLines: RawLineStore | null = null
   private eventTokenPool = new Map<string, string>()
-  private lastEventBySignature = new Map<string, {
-    timestampMs: number
-    processId: string
-    threadId: string
-  }>()
+  private lastEventBySignature = new Map<
+    string,
+    {
+      timestampMs: number
+      processId: string
+      threadId: string
+    }
+  >()
   private dedupSignatureTimeline: Array<{ signature: string; timestampMs: number }> = []
   private dedupSignatureTimelineHead = 0
   private syntheticLineNumber = 1
@@ -211,15 +211,17 @@ export class LogParser {
       this.dedupSignatureTimelineHead > 4096 &&
       this.dedupSignatureTimelineHead * 2 >= this.dedupSignatureTimeline.length
     ) {
-      this.dedupSignatureTimeline = this.dedupSignatureTimeline.slice(this.dedupSignatureTimelineHead)
+      this.dedupSignatureTimeline = this.dedupSignatureTimeline.slice(
+        this.dedupSignatureTimelineHead,
+      )
       this.dedupSignatureTimelineHead = 0
     }
   }
 
   private pruneDedupSignatureCapacity(): void {
     while (
-      this.dedupSignatureTimeline.length - this.dedupSignatureTimelineHead
-      > MAX_DEDUP_SIGNATURES
+      this.dedupSignatureTimeline.length - this.dedupSignatureTimelineHead >
+      MAX_DEDUP_SIGNATURES
     ) {
       const item = this.dedupSignatureTimeline[this.dedupSignatureTimelineHead]
       if (item) {
@@ -263,9 +265,10 @@ export class LogParser {
     this.pruneDedupSignatures(event._timestampMs)
     const previous = this.lastEventBySignature.get(event._dedupSignature)
     const eventMs = event._timestampMs
-    const nearInTime = previous && Number.isFinite(previous.timestampMs) && Number.isFinite(eventMs)
-      ? Math.abs(eventMs - previous.timestampMs) <= CROSS_SOURCE_DUPLICATE_WINDOW_MS
-      : false
+    const nearInTime =
+      previous && Number.isFinite(previous.timestampMs) && Number.isFinite(eventMs)
+        ? Math.abs(eventMs - previous.timestampMs) <= CROSS_SOURCE_DUPLICATE_WINDOW_MS
+        : false
     const fromDifferentSource = previous
       ? previous.processId !== event.processId || previous.threadId !== event.threadId
       : false
@@ -361,7 +364,7 @@ export class LogParser {
       sourcePath: input.sourcePath,
       inputIndex: normalizedInputIndex,
     }
-    const rawLines = runtime.storeRawLines ? [] as string[] : null
+    const rawLines = runtime.storeRawLines ? ([] as string[]) : null
     const chunkLineCount = runtime.chunkLineCount
     let cursor = 0
     let lineNum = 0
@@ -378,9 +381,8 @@ export class LogParser {
         runtime.onProgress({
           current,
           total: runtime.totalChars,
-          percentage: runtime.totalChars === 0
-            ? 100
-            : Math.round((current / runtime.totalChars) * 100),
+          percentage:
+            runtime.totalChars === 0 ? 100 : Math.round((current / runtime.totalChars) * 100),
         })
       }
       return 0
@@ -416,13 +418,15 @@ export class LogParser {
       }
 
       if (runtime.onProgress) {
-        const current = Math.min(runtime.progressOffset + Math.min(cursor, totalChars), runtime.totalChars)
+        const current = Math.min(
+          runtime.progressOffset + Math.min(cursor, totalChars),
+          runtime.totalChars,
+        )
         runtime.onProgress({
           current,
           total: runtime.totalChars,
-          percentage: runtime.totalChars === 0
-            ? 100
-            : Math.round((current / runtime.totalChars) * 100),
+          percentage:
+            runtime.totalChars === 0 ? 100 : Math.round((current / runtime.totalChars) * 100),
         })
       }
     }
@@ -459,9 +463,8 @@ export class LogParser {
 
       const normalizedInputs = normalizeParseSourceInputs(inputs)
       const totalChars = normalizedInputs.reduce((sum, input) => sum + input.content.length, 0)
-      const yieldControl = options?.yieldControl === undefined
-        ? defaultParseYieldControl
-        : options.yieldControl
+      const yieldControl =
+        options?.yieldControl === undefined ? defaultParseYieldControl : options.yieldControl
       const storeRawLines = options?.storeRawLines === true
 
       if (normalizedInputs.length === 0) {
@@ -507,24 +510,27 @@ export class LogParser {
   async parseFile(
     content: string,
     onProgress?: (progress: ParseProgress) => void,
-    options?: ParseFileOptions
+    options?: ParseFileOptions,
   ): Promise<void> {
-    await this.parseInputs([{
-      content,
-      sourceKey: options?.sourceKey,
-      sourcePath: options?.sourcePath,
-      inputIndex: options?.inputIndex,
-    }], onProgress, options)
+    await this.parseInputs(
+      [
+        {
+          content,
+          sourceKey: options?.sourceKey,
+          sourcePath: options?.sourcePath,
+          inputIndex: options?.inputIndex,
+        },
+      ],
+      onProgress,
+      options,
+    )
   }
 
   /**
    * 直接从事件行提取所有需要的字段
    * 格式: [timestamp][level][Pxpid][Txthread][...] !!!OnEventNotify!!! [handle=xxx] [msg=EventName] [details={...json...}]
    */
-  private parseEventLine(
-    line: string,
-    lineNum: number
-  ): ParsedEventLine | null {
+  private parseEventLine(line: string, lineNum: number): ParsedEventLine | null {
     return parseMaaEventLine(line, lineNum, {
       internEventToken: (raw) => this.internEventToken(raw),
       forceCopyString,

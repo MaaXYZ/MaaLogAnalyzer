@@ -14,9 +14,7 @@ export interface DeferredTextFileSource {
 
 export type TextFileSource = LoadedTextFileSource | DeferredTextFileSource
 
-export const getTextFileContentLoader = (
-  source: TextFileSource,
-): (() => Promise<string>) => {
+export const getTextFileContentLoader = (source: TextFileSource): (() => Promise<string>) => {
   if ('loadContent' in source && source.loadContent) return source.loadContent
   return async () => source.content
 }

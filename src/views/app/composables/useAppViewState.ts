@@ -45,11 +45,13 @@ export const useAppViewState = () => {
   const embedMode = typeof window !== 'undefined' ? parseEmbedMode(window.location.search) : null
   const embedProfile = resolveEmbedProfile(embedMode)
   const isEmbeddedContext = typeof window !== 'undefined' && window.parent !== window
-  const hasEmbedQueryFlag = typeof window !== 'undefined' && /(?:[?#&])embed=/.test(window.location.href)
+  const hasEmbedQueryFlag =
+    typeof window !== 'undefined' && /(?:[?#&])embed=/.test(window.location.href)
 
   const isVscodeLaunchEmbed = embedProfile.mode === EMBED_MODE_VSCODE_LAUNCH
   const bridgeEnabled = embedProfile.bridgeEnabled
-  const tutorialAutoStartEnabled = embedProfile.ui.autoStartTutorial && !isEmbeddedContext && !hasEmbedQueryFlag
+  const tutorialAutoStartEnabled =
+    embedProfile.ui.autoStartTutorial && !isEmbeddedContext && !hasEmbedQueryFlag
   const showRealtimeStatus = embedProfile.ui.showRealtimeStatus
   const showReloadControls = embedProfile.ui.showReloadControls
   const showTextSearchView = embedProfile.ui.showTextSearchView
@@ -92,10 +94,12 @@ export const useAppViewState = () => {
     return true
   }
 
-  const viewModeOptions = computed(() => allViewModeOptions.filter(option => isViewModeEnabled(option.key)))
+  const viewModeOptions = computed(() =>
+    allViewModeOptions.filter((option) => isViewModeEnabled(option.key)),
+  )
 
   const currentViewLabel = computed(() => {
-    const option = allViewModeOptions.find(opt => opt.key === viewMode.value)
+    const option = allViewModeOptions.find((opt) => opt.key === viewMode.value)
     return option?.label || '视图'
   })
 
@@ -127,19 +131,22 @@ export const useAppViewState = () => {
     }
   }
 
-  watch([splitSize, detailViewCollapsed, splitVerticalSize], ([currentSplitSize, collapsed, currentVerticalSize]) => {
-    const prev = readAppLayoutState()
-    const next: AppLayoutState = {
-      ...prev,
-      splitVerticalSize: clampLayoutValue(currentVerticalSize, 0.2, 0.8, 0.5),
-    }
+  watch(
+    [splitSize, detailViewCollapsed, splitVerticalSize],
+    ([currentSplitSize, collapsed, currentVerticalSize]) => {
+      const prev = readAppLayoutState()
+      const next: AppLayoutState = {
+        ...prev,
+        splitVerticalSize: clampLayoutValue(currentVerticalSize, 0.2, 0.8, 0.5),
+      }
 
-    if (!collapsed) {
-      next.analysisSplitSize = clampLayoutValue(currentSplitSize, 0.4, 1, 0.65)
-    }
+      if (!collapsed) {
+        next.analysisSplitSize = clampLayoutValue(currentSplitSize, 0.4, 1, 0.65)
+      }
 
-    saveAppLayoutState(next)
-  })
+      saveAppLayoutState(next)
+    },
+  )
 
   watch(layoutResetGeneration, () => {
     splitSize.value = 0.65

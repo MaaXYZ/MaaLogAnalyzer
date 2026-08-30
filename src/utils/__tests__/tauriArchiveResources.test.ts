@@ -63,9 +63,11 @@ describe('Tauri archive resource ownership', () => {
     await owner.replace('resource-1')
     await expect(owner.replace('resource-2')).resolves.toBeUndefined()
     await owner.release()
-    expect(invokeMock.mock.calls.filter(([, payload]) => (
-      (payload as { token?: string }).token === 'resource-1'
-    ))).toHaveLength(2)
+    expect(
+      invokeMock.mock.calls.filter(
+        ([, payload]) => (payload as { token?: string }).token === 'resource-1',
+      ),
+    ).toHaveLength(2)
     expect(invokeMock).toHaveBeenLastCalledWith('release_archive_resource', {
       token: 'resource-2',
     })

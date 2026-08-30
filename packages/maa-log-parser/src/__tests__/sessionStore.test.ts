@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AnalyzerSessionStore,
-  createAnalyzerSessionStore,
-} from '../service/sessionStore'
+import { AnalyzerSessionStore, createAnalyzerSessionStore } from '../service/sessionStore'
 import type { AnalyzerSession } from '../service/types'
 
 const createSession = (sessionId: string): AnalyzerSession => ({
@@ -24,7 +21,7 @@ describe('AnalyzerSessionStore', () => {
     }
 
     expect(store.get('session-1')).toBeUndefined()
-    expect(store.values().map(session => session.sessionId)).toEqual([
+    expect(store.values().map((session) => session.sessionId)).toEqual([
       'session-2',
       'session-3',
       'session-4',
@@ -77,7 +74,7 @@ describe('AnalyzerSessionStore', () => {
     now = 100
     store.set(createSession('fresh'))
 
-    expect(store.values().map(session => session.sessionId)).toEqual(['fresh'])
+    expect(store.values().map((session) => session.sessionId)).toEqual(['fresh'])
   })
 
   it('evicts the least recently used session after successful reads touch it', () => {
@@ -94,7 +91,7 @@ describe('AnalyzerSessionStore', () => {
     store.set(createSession('third'))
 
     expect(store.get('second')).toBeUndefined()
-    expect(store.values().map(session => session.sessionId)).toEqual(['first', 'third'])
+    expect(store.values().map((session) => session.sessionId)).toEqual(['first', 'third'])
   })
 
   it('allows Infinity to disable both retention limits', () => {

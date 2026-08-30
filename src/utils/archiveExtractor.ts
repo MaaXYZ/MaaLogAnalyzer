@@ -58,7 +58,9 @@ export function isSupportedArchive(fileName: string): boolean {
 
 export async function extractArchiveContent(
   file: File,
-  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+  selectPrimaryLogs?: (
+    options: PrimaryLogSelectionOption[],
+  ) => Promise<PrimaryLogSelectionOption[] | null>,
   onProgress?: (message: string) => void,
   options: ExtractArchiveOptions = {},
 ): Promise<ArchiveExtractResult | null> {
@@ -67,7 +69,9 @@ export async function extractArchiveContent(
 
 export async function extractArchiveContents(
   archiveFiles: readonly File[],
-  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+  selectPrimaryLogs?: (
+    options: PrimaryLogSelectionOption[],
+  ) => Promise<PrimaryLogSelectionOption[] | null>,
   onProgress?: (message: string) => void,
   options: ExtractArchiveOptions = {},
 ): Promise<ArchiveExtractResult | null> {
@@ -95,7 +99,9 @@ export async function extractArchiveContents(
 
 async function extractSevenZipOrRar(
   file: File,
-  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+  selectPrimaryLogs?: (
+    options: PrimaryLogSelectionOption[],
+  ) => Promise<PrimaryLogSelectionOption[] | null>,
   onProgress?: (message: string) => void,
   options: ExtractArchiveOptions = {},
 ): Promise<ArchiveExtractResult | null> {
@@ -103,32 +109,40 @@ async function extractSevenZipOrRar(
   let selectedLogs: ReturnType<typeof selectPrimaryLogGroup> = []
   let selectedPaths = new Set<string>()
 
-  const neededFiles = await extractSevenZipEntries(file, async (entries) => {
-    neededPaths = entries
-      .filter(entry => !entry.isDirectory && isNeededFile(entry.path))
-      .map(entry => entry.path)
-    if (neededPaths.length === 0) return null
+  const neededFiles = await extractSevenZipEntries(
+    file,
+    async (entries) => {
+      neededPaths = entries
+        .filter((entry) => !entry.isDirectory && isNeededFile(entry.path))
+        .map((entry) => entry.path)
+      if (neededPaths.length === 0) return null
 
-    selectedLogs = selectPrimaryLogGroup(neededPaths.map((path) => ({
-      path,
-      name: path.split('/').pop() || path,
-    })))
-    if (selectedLogs.length === 0) return null
+      selectedLogs = selectPrimaryLogGroup(
+        neededPaths.map((path) => ({
+          path,
+          name: path.split('/').pop() || path,
+        })),
+      )
+      if (selectedLogs.length === 0) return null
 
-    const selectedOptions = selectPrimaryLogs
-      ? await selectPrimaryLogs(createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item)))
-      : createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item))
-    if (!selectedOptions || selectedOptions.length === 0) return null
+      const selectedOptions = selectPrimaryLogs
+        ? await selectPrimaryLogs(
+            createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item)),
+          )
+        : createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item))
+      if (!selectedOptions || selectedOptions.length === 0) return null
 
-    selectedPaths = new Set(selectedOptions.map(option => option.path))
-    return neededPaths.filter((path) => {
-      const name = path.split('/').pop() || path
-      return !isPrimaryLogFileName(name) || selectedPaths.has(path)
-    })
-  }, {
-    archiveLimits: options.archiveLimits,
-    onProgress,
-  })
+      selectedPaths = new Set(selectedOptions.map((option) => option.path))
+      return neededPaths.filter((path) => {
+        const name = path.split('/').pop() || path
+        return !isPrimaryLogFileName(name) || selectedPaths.has(path)
+      })
+    },
+    {
+      archiveLimits: options.archiveLimits,
+      onProgress,
+    },
+  )
 
   if (!neededFiles) return null
 

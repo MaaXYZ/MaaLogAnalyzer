@@ -43,15 +43,13 @@ export const useProcessFileLoader = (options: UseProcessFileLoaderOptions) => {
     triggerFileSelect,
   } = useWebFileInputs(lifecycleOptions, operationGate)
 
-  const {
-    handleVSCodeOpen,
-    handleVSCodeOpenFolder,
-  } = useVSCodeOpenCommands()
+  const { handleVSCodeOpen, handleVSCodeOpenFolder } = useVSCodeOpenCommands()
 
-  const {
-    handleTauriOpen,
-    handleTauriOpenFolder,
-  } = useTauriBridge(lifecycleOptions, operationGate, archiveResourceOwner)
+  const { handleTauriOpen, handleTauriOpenFolder } = useTauriBridge(
+    lifecycleOptions,
+    operationGate,
+    archiveResourceOwner,
+  )
 
   onUnmounted(() => {
     operationGate.begin()

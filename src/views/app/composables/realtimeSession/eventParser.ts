@@ -6,9 +6,7 @@ interface ParseRealtimeEventsOptions {
   toFiniteNumber: (value: unknown, fallback: number) => number
 }
 
-export const parseRealtimeEvents = (
-  options: ParseRealtimeEventsOptions,
-): RealtimeEventItem[] => {
+export const parseRealtimeEvents = (options: ParseRealtimeEventsOptions): RealtimeEventItem[] => {
   const events: RealtimeEventItem[] = []
   for (const rawEvent of options.rawEvents) {
     const eventRecord = options.asRecord(rawEvent)

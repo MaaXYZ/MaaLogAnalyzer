@@ -52,40 +52,35 @@ const ALLOWED_STYLE_PROPERTIES = new Set([
   'width',
 ])
 
-const escapeHtml = (
-  value: string,
-): string => value
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#39;')
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 
-const escapeAttribute = (
-  value: string,
-): string => escapeHtml(value).replace(/`/g, '&#96;')
+const escapeAttribute = (value: string): string => escapeHtml(value).replace(/`/g, '&#96;')
 
-const sanitizeUrl = (
-  value: string,
-): string | null => {
+const sanitizeUrl = (value: string): string | null => {
   const normalized = value.trim()
   if (!normalized) return null
 
   if (
-    normalized.startsWith('#')
-    || normalized.startsWith('/')
-    || normalized.startsWith('./')
-    || normalized.startsWith('../')
+    normalized.startsWith('#') ||
+    normalized.startsWith('/') ||
+    normalized.startsWith('./') ||
+    normalized.startsWith('../')
   ) {
     return normalized
   }
 
   const lower = normalized.toLowerCase()
   if (
-    lower.startsWith('http://')
-    || lower.startsWith('https://')
-    || lower.startsWith('mailto:')
-    || lower.startsWith('tel:')
+    lower.startsWith('http://') ||
+    lower.startsWith('https://') ||
+    lower.startsWith('mailto:') ||
+    lower.startsWith('tel:')
   ) {
     return normalized
   }
@@ -93,35 +88,26 @@ const sanitizeUrl = (
   return null
 }
 
-const sanitizeImageSrc = (
-  value: string,
-): string | null => {
+const sanitizeImageSrc = (value: string): string | null => {
   const normalized = value.trim()
   if (!normalized) return null
 
   const lower = normalized.toLowerCase()
-  if (
-    lower.startsWith('http://')
-    || lower.startsWith('https://')
-  ) {
+  if (lower.startsWith('http://') || lower.startsWith('https://')) {
     return normalized
   }
 
-  if (
-    /^data:image\/(?:png|jpe?g|gif|webp|bmp|avif);base64,[a-z0-9+/=\s]+$/i.test(normalized)
-  ) {
+  if (/^data:image\/(?:png|jpe?g|gif|webp|bmp|avif);base64,[a-z0-9+/=\s]+$/i.test(normalized)) {
     return normalized
   }
 
   return null
 }
 
-const sanitizeStyle = (
-  value: string,
-): string | null => {
+const sanitizeStyle = (value: string): string | null => {
   const safeDeclarations = value
     .split(';')
-    .map(part => part.trim())
+    .map((part) => part.trim())
     .filter(Boolean)
     .flatMap((declaration) => {
       const colonIndex = declaration.indexOf(':')
@@ -134,9 +120,9 @@ const sanitizeStyle = (
 
       const lowerValue = propertyValue.toLowerCase()
       if (
-        lowerValue.includes('expression(')
-        || lowerValue.includes('javascript:')
-        || lowerValue.includes('url(')
+        lowerValue.includes('expression(') ||
+        lowerValue.includes('javascript:') ||
+        lowerValue.includes('url(')
       ) {
         return []
       }
@@ -151,18 +137,14 @@ const sanitizeStyle = (
   return safeDeclarations.length > 0 ? safeDeclarations.join('; ') : null
 }
 
-const sanitizeClass = (
-  value: string,
-): string | null => {
+const sanitizeClass = (value: string): string | null => {
   const normalized = value.trim()
   if (!normalized) return null
   if (!/^[\w -]+$/.test(normalized)) return null
   return normalized
 }
 
-const sanitizeAllowedTag = (
-  tagSource: string,
-): string | null => {
+const sanitizeAllowedTag = (tagSource: string): string | null => {
   const match = tagSource.match(/^<\s*(\/?)\s*([a-zA-Z0-9]+)([^>]*)>$/)
   if (!match) return null
 
@@ -228,18 +210,12 @@ const sanitizeAllowedTag = (
 
   if (tagName === 'hr') return '<hr>'
   if (tagName === 'img') {
-    return attrs.length > 0
-      ? `<img ${attrs.join(' ')}>`
-      : '<img>'
+    return attrs.length > 0 ? `<img ${attrs.join(' ')}>` : '<img>'
   }
-  return attrs.length > 0
-    ? `<${tagName} ${attrs.join(' ')}>`
-    : `<${tagName}>`
+  return attrs.length > 0 ? `<${tagName} ${attrs.join(' ')}>` : `<${tagName}>`
 }
 
-const sanitizeRenderedHtml = (
-  source: string,
-): string => {
+const sanitizeRenderedHtml = (source: string): string => {
   const parts: string[] = []
   const tagPattern = /<\/?[^>]+>/g
   let lastIndex = 0
@@ -265,9 +241,7 @@ const sanitizeRenderedHtml = (
   return parts.length > 0 ? parts.join('') : source
 }
 
-export const renderFocusRichText = (
-  source: string,
-): string => {
+export const renderFocusRichText = (source: string): string => {
   if (!source) return ''
 
   const rendered = marked.parse(source, {
@@ -276,7 +250,5 @@ export const renderFocusRichText = (
     gfm: true,
   })
 
-  return sanitizeRenderedHtml(
-    typeof rendered === 'string' ? rendered.trim() : '',
-  )
+  return sanitizeRenderedHtml(typeof rendered === 'string' ? rendered.trim() : '')
 }

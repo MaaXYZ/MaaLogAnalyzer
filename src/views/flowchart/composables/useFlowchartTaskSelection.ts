@@ -20,7 +20,7 @@ export const useFlowchartTaskSelection = (options: UseFlowchartTaskSelectionOpti
       label: `#${index + 1} ${task.entry}`,
       value: index,
       status: task.status,
-    }))
+    })),
   )
 
   const selectedTaskIndex = computed<number | null>(() => {
@@ -33,19 +33,24 @@ export const useFlowchartTaskSelection = (options: UseFlowchartTaskSelectionOpti
   })
 
   const selectedTask = computed<TaskInfo | null>(() =>
-    selectedTaskIndex.value != null ? options.tasks.value[selectedTaskIndex.value] ?? null : null
+    selectedTaskIndex.value != null ? (options.tasks.value[selectedTaskIndex.value] ?? null) : null,
   )
 
   const renderTaskLabel = (option: FlowchartTaskOption): VNodeChild => {
-    const color = option.status === 'succeeded' ? '#18a058' : option.status === 'failed' ? '#d03050' : '#f0a020'
+    const color =
+      option.status === 'succeeded' ? '#18a058' : option.status === 'failed' ? '#d03050' : '#f0a020'
     const label = typeof option.label === 'string' ? option.label : ''
     return h('span', { style: 'display: flex; align-items: center; gap: 6px' }, [
       h('span', {
         style: `width: 8px; height: 8px; border-radius: 50%; background: ${color}; flex-shrink: 0`,
       }),
-      h('span', {
-        style: 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap',
-      }, label),
+      h(
+        'span',
+        {
+          style: 'overflow: hidden; text-overflow: ellipsis; white-space: nowrap',
+        },
+        label,
+      ),
     ])
   }
 

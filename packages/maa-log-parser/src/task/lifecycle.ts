@@ -9,12 +9,14 @@ import {
   type TaskTerminalPhase,
 } from '../event/meta'
 
-export const resolveEventTaskId = (details: Record<string, any> | undefined): number | undefined => {
+export const resolveEventTaskId = (
+  details: Record<string, any> | undefined,
+): number | undefined => {
   return readNumberField(details, 'task_id')
 }
 
 export const resolveTaskLifecycleEventDetails = (
-  details: Record<string, any> | undefined
+  details: Record<string, any> | undefined,
 ): TaskLifecycleEventDetails => {
   return decodeTaskLifecycleEventDetails(details)
 }
@@ -29,14 +31,14 @@ export interface TaskLifecycleMetaEventContext {
     taskId: number,
     details: Record<string, any>,
     message: string,
-    timestamp: string
+    timestamp: string,
   ) => void
   onSubTaskTerminal: (
     taskId: number,
     details: Record<string, any>,
     message: string,
     timestamp: string,
-    phase: TaskTerminalPhase
+    phase: TaskTerminalPhase,
   ) => void
 }
 
@@ -46,7 +48,7 @@ export const handleTaskLifecycleMetaEvent = (
   eventTaskId: number | undefined,
   details: Record<string, any>,
   message: string,
-  timestamp: string
+  timestamp: string,
 ): void => {
   const phase = resolveTaskLifecyclePhase(messageMeta)
   if (phase == null || eventTaskId == null) return

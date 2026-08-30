@@ -21,7 +21,12 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <n-card size="small" data-tour="flowchart-toolbar" :bordered="false" content-style="padding: 8px 12px">
+  <n-card
+    size="small"
+    data-tour="flowchart-toolbar"
+    :bordered="false"
+    content-style="padding: 8px 12px"
+  >
     <n-flex align="center" style="gap: 12px">
       <n-text strong>任务:</n-text>
       <n-select
@@ -33,18 +38,32 @@ const emit = defineEmits<{
         style="min-width: 125px; flex: 1; max-width: 250px"
         @update:value="emit('update:selected-task-index', $event)"
       />
-      <n-button size="small" secondary :disabled="executionTimelineLength === 0" @click="emit('toggle-playback')">
+      <n-button
+        size="small"
+        secondary
+        :disabled="executionTimelineLength === 0"
+        @click="emit('toggle-playback')"
+      >
         {{ isPlaying ? '\u6682\u505c\u56de\u653e' : '\u987a\u5e8f\u56de\u653e' }}
       </n-button>
       <n-flex align="center" style="gap: 6px">
-        <n-text depth="3" style="font-size: 12px; white-space: nowrap" title="开启后仅保留本次执行过的节点，隐藏流水线中未经过的节点">忽略未经过节点</n-text>
+        <n-text
+          depth="3"
+          style="font-size: 12px; white-space: nowrap"
+          title="开启后仅保留本次执行过的节点，隐藏流水线中未经过的节点"
+          >忽略未经过节点</n-text
+        >
         <n-switch
           size="small"
           :value="ignoreUnexecutedNodes"
           @update:value="emit('update:ignore-unexecuted-nodes', $event)"
         />
       </n-flex>
-      <n-dropdown :options="uploadOptions" @select="emit('upload-select', String($event))" trigger="click">
+      <n-dropdown
+        :options="uploadOptions"
+        @select="emit('upload-select', String($event))"
+        trigger="click"
+      >
         <n-button size="small" secondary>打开</n-button>
       </n-dropdown>
     </n-flex>

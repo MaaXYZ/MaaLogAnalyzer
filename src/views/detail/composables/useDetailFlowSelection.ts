@@ -1,6 +1,9 @@
 import { computed, type Ref } from 'vue'
 import type { NodeInfo, UnifiedFlowItem } from '../../../types'
-import { buildNodeActionTimelineItems, buildNodeFlowItems } from '@windsland52/maa-log-parser/node-flow'
+import {
+  buildNodeActionTimelineItems,
+  buildNodeFlowItems,
+} from '@windsland52/maa-log-parser/node-flow'
 
 interface UseDetailFlowSelectionOptions {
   selectedNode: Ref<NodeInfo | null>
@@ -33,7 +36,7 @@ const pickFirstErrorImage = (items: UnifiedFlowItem[] | undefined): string | nul
 
 const resolveSyntheticFlowItem = (node: NodeInfo, flowItemId: string): UnifiedFlowItem | null => {
   if (/^node\.action\.\d+$/.test(flowItemId)) {
-    return buildNodeActionTimelineItems(node).find(item => item.id === flowItemId) ?? null
+    return buildNodeActionTimelineItems(node).find((item) => item.id === flowItemId) ?? null
   }
 
   return null
@@ -43,7 +46,7 @@ export const useDetailFlowSelection = (options: UseDetailFlowSelectionOptions) =
   const selectedFlowItem = computed<UnifiedFlowItem | null>(() => {
     if (!options.selectedNode.value || !options.selectedFlowItemId.value) return null
     const flattened = flattenFlowItems(buildNodeFlowItems(options.selectedNode.value))
-    const direct = flattened.find(item => item.id === options.selectedFlowItemId.value)
+    const direct = flattened.find((item) => item.id === options.selectedFlowItemId.value)
     if (direct) return direct
     return resolveSyntheticFlowItem(options.selectedNode.value, options.selectedFlowItemId.value)
   })

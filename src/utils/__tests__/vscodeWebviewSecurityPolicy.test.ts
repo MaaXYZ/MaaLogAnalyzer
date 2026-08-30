@@ -24,11 +24,13 @@ describe('VS Code Webview security policy', () => {
       extensionSource.indexOf("case 'showError':"),
     )
 
-    expect(filePicker.indexOf('loadOperationCoordinator.begin()'))
-      .toBeLessThan(filePicker.indexOf('showOpenDialog'))
+    expect(filePicker.indexOf('loadOperationCoordinator.begin()')).toBeLessThan(
+      filePicker.indexOf('showOpenDialog'),
+    )
     expect(filePicker).toContain('analyzeFileUri(fileUri[0], fileOperation)')
-    expect(folderPicker.indexOf('loadOperationCoordinator.begin()'))
-      .toBeLessThan(folderPicker.indexOf('showOpenDialog'))
+    expect(folderPicker.indexOf('loadOperationCoordinator.begin()')).toBeLessThan(
+      folderPicker.indexOf('showOpenDialog'),
+    )
     expect(folderPicker).toContain('analyzeFolderUri(folderUri[0], folderOperation)')
   })
 })

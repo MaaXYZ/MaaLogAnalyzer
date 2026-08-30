@@ -16,9 +16,8 @@ const sampleMatchesEncoding = (sample: Uint8Array, encoding: string): boolean =>
 }
 
 const detectEncoding = (bytes: Uint8Array): string => {
-  const sample = bytes.length > ENCODING_SAMPLE_SIZE
-    ? bytes.subarray(0, ENCODING_SAMPLE_SIZE)
-    : bytes
+  const sample =
+    bytes.length > ENCODING_SAMPLE_SIZE ? bytes.subarray(0, ENCODING_SAMPLE_SIZE) : bytes
   for (const encoding of DECODE_CANDIDATE_ENCODINGS) {
     if (sampleMatchesEncoding(sample, encoding)) return encoding
   }

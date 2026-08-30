@@ -8,7 +8,7 @@ const normalizeOptionalName = (value: unknown): string | undefined => {
 
 export const resolveRecognitionNextListName = (
   attempt: RecognitionAttempt,
-  nextListNames?: ReadonlySet<string>
+  nextListNames?: ReadonlySet<string>,
 ): string => {
   const anchorName = normalizeOptionalName(attempt.anchor_name)
   if (anchorName && (!nextListNames || nextListNames.has(anchorName))) {
@@ -19,9 +19,9 @@ export const resolveRecognitionNextListName = (
 
 export const buildRecognitionTargetByNextName = (
   attempts: RecognitionAttempt[],
-  nextList: NextListItem[]
+  nextList: NextListItem[],
 ): Map<string, string> => {
-  const nextListNames = new Set(nextList.map(item => item.name))
+  const nextListNames = new Set(nextList.map((item) => item.name))
   const result = new Map<string, string>()
 
   attempts.forEach((attempt) => {
@@ -34,10 +34,7 @@ export const buildRecognitionTargetByNextName = (
   return result
 }
 
-const buildNextListCoreName = (
-  item: NextListItem,
-  resolvedTargetName?: string
-): string => {
+const buildNextListCoreName = (item: NextListItem, resolvedTargetName?: string): string => {
   const baseName = item.name || '未命名 Next'
   if (item.anchor && resolvedTargetName) {
     return `${baseName} = ${resolvedTargetName}`
@@ -48,7 +45,7 @@ const buildNextListCoreName = (
 export const buildNextListDisplayName = (
   item: NextListItem,
   resolvedTargetName?: string,
-  prefixSeparator = ' '
+  prefixSeparator = ' ',
 ): string => {
   const prefixes: string[] = []
   if (item.jump_back) prefixes.push('[JumpBack]')

@@ -28,15 +28,22 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
 }
 
 export const useBridgeTaskActions = (options: UseBridgeTaskActionsOptions) => {
-  const queryBridgeTaskDoc = async (sessionId: string, task: string): Promise<QueryTaskDocResult> => {
+  const queryBridgeTaskDoc = async (
+    sessionId: string,
+    task: string,
+  ): Promise<QueryTaskDocResult> => {
     const bridge = options.getBridge()
     if (!bridge?.enabled) {
       throw new Error('Bridge is disabled')
     }
-    const result = await bridge.sendRequest('query.taskDoc', {
-      sessionId,
-      task,
-    }, { timeoutMs: 12000 })
+    const result = await bridge.sendRequest(
+      'query.taskDoc',
+      {
+        sessionId,
+        task,
+      },
+      { timeoutMs: 12000 },
+    )
     const record = asRecord(result)
     if (!record) {
       throw new Error('Invalid query.taskDoc response')
@@ -71,10 +78,14 @@ export const useBridgeTaskActions = (options: UseBridgeTaskActionsOptions) => {
     const normalizedTask = options.toTrimmedNonEmptyString(task)
     if (!sessionId || !normalizedTask || !bridge?.enabled) return
     try {
-      await bridge.sendRequest('command.reveal', {
-        sessionId,
-        task: normalizedTask,
-      }, { timeoutMs: 10000 })
+      await bridge.sendRequest(
+        'command.reveal',
+        {
+          sessionId,
+          task: normalizedTask,
+        },
+        { timeoutMs: 10000 },
+      )
     } catch {
       // reveal 按需求静默失败
     }

@@ -1,4 +1,3 @@
-
 <script setup lang="ts">
 import { nextTick, onActivated, ref, toRef, watch } from 'vue'
 import TextSearchTopToolbar from './textSearch/components/TextSearchTopToolbar.vue'
@@ -13,27 +12,30 @@ import type { LoadedSearchTarget } from './textSearch/composables/types'
 import type { PendingTextSearchRequest } from './app/components/types'
 
 // Props
-const props = withDefaults(defineProps<{
-  isDark?: boolean
-  loadedTargets?: LoadedSearchTarget[]
-  loadedDefaultTargetId?: string
-  hasDeferredLoadedTargets?: boolean
-  ensureLoadedTargets?: (() => Promise<void>) | undefined
-  ensureTargetContentLoaded?: ((targetId: string) => Promise<void>) | undefined
-  findTargetContainingLocate?: ((locate: string) => Promise<string | null>) | undefined
-  pendingSearchRequest?: PendingTextSearchRequest | null
-  onConsumePendingSearch?: () => void
-}>(), {
-  isDark: true,
-  loadedTargets: () => [],
-  loadedDefaultTargetId: '',
-  hasDeferredLoadedTargets: false,
-  ensureLoadedTargets: undefined,
-  ensureTargetContentLoaded: undefined,
-  findTargetContainingLocate: undefined,
-  pendingSearchRequest: null,
-  onConsumePendingSearch: undefined
-})
+const props = withDefaults(
+  defineProps<{
+    isDark?: boolean
+    loadedTargets?: LoadedSearchTarget[]
+    loadedDefaultTargetId?: string
+    hasDeferredLoadedTargets?: boolean
+    ensureLoadedTargets?: (() => Promise<void>) | undefined
+    ensureTargetContentLoaded?: ((targetId: string) => Promise<void>) | undefined
+    findTargetContainingLocate?: ((locate: string) => Promise<string | null>) | undefined
+    pendingSearchRequest?: PendingTextSearchRequest | null
+    onConsumePendingSearch?: () => void
+  }>(),
+  {
+    isDark: true,
+    loadedTargets: () => [],
+    loadedDefaultTargetId: '',
+    hasDeferredLoadedTargets: false,
+    ensureLoadedTargets: undefined,
+    ensureTargetContentLoaded: undefined,
+    findTargetContainingLocate: undefined,
+    pendingSearchRequest: null,
+    onConsumePendingSearch: undefined,
+  },
+)
 
 // 优先注入 app 根部创建的共享模型（独立页与分屏共用同一状态）；
 // 无提供者时（独立使用）退回本地创建
@@ -100,9 +102,13 @@ const {
 
 // 内容面板引用是实例私有的：激活时同步到共享模型，供 jumpToLine 使用
 const contentPaneRef = ref<{ scrollToLine: (lineNumber: number) => void } | null>(null)
-watch(contentPaneRef, (value) => {
-  if (value) sharedContentPaneRef.value = value
-}, { flush: 'post' })
+watch(
+  contentPaneRef,
+  (value) => {
+    if (value) sharedContentPaneRef.value = value
+  },
+  { flush: 'post' },
+)
 onActivated(() => {
   if (contentPaneRef.value) sharedContentPaneRef.value = contentPaneRef.value
 })
@@ -124,13 +130,10 @@ watch(
     // 首次进入视图时，默认目标的延迟加载与应用是异步的，
     // 等源真正就绪再搜索，否则首跳会搜到空源上（第二次点击才成功的根因）
     for (let i = 0; i < 40; i++) {
-      if (
-        (props.loadedTargets?.length ?? 0) > 0
-        && selectedLoadedTargetId.value
-        && fileName.value
-      ) break
+      if ((props.loadedTargets?.length ?? 0) > 0 && selectedLoadedTargetId.value && fileName.value)
+        break
       await nextTick()
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await new Promise((resolve) => setTimeout(resolve, 50))
     }
 
     // 节点所在的目标不一定是默认目标（如旧行在 maa.bak.log 分段里），
@@ -140,11 +143,13 @@ watch(
       if (owningTargetId && owningTargetId !== selectedLoadedTargetId.value) {
         selectLoadedTarget(owningTargetId)
         // 目标内容应用是异步的，等 fileName 就绪再搜索
-        const owningTarget = (props.loadedTargets ?? []).find(target => target.id === owningTargetId)
+        const owningTarget = (props.loadedTargets ?? []).find(
+          (target) => target.id === owningTargetId,
+        )
         for (let i = 0; i < 20; i++) {
           await nextTick()
           if (owningTarget && fileName.value === owningTarget.fileName) break
-          await new Promise(resolve => setTimeout(resolve, 50))
+          await new Promise((resolve) => setTimeout(resolve, 50))
         }
       }
     }
@@ -153,19 +158,22 @@ watch(
     await performSearch()
 
     if (request.locate) {
-      const target = searchResults.value.find(result => result.line.includes(request.locate!))
+      const target = searchResults.value.find((result) => result.line.includes(request.locate!))
       if (target) {
         await jumpToLine(target.lineNumber)
       }
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
-
 </script>
 
 <template>
-  <div style="height: 100%; display: flex; flex-direction: column" data-tour="textsearch-root" :class="{ 'dark-theme': props.isDark }">
+  <div
+    style="height: 100%; display: flex; flex-direction: column"
+    data-tour="textsearch-root"
+    :class="{ 'dark-theme': props.isDark }"
+  >
     <!-- 顶部工具栏 -->
     <text-search-top-toolbar
       ref="topToolbarRef"
@@ -198,7 +206,7 @@ watch(
       @use-history-item="useHistoryItem"
       @remove-history-item="removeFromHistory"
     />
-    
+
     <!-- 主内容区域 -->
     <text-search-main-content
       ref="contentPaneRef"

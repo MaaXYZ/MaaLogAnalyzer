@@ -18,7 +18,7 @@ export interface FlattenedNestedRecognitionRow {
 export const flattenFlowItems = (
   items: UnifiedFlowItem[] | undefined,
   isExpanded: (flowItemId: string) => boolean,
-  depth = 0
+  depth = 0,
 ): FlattenedFlowItemRow[] => {
   if (!items || items.length === 0) return []
 
@@ -39,7 +39,7 @@ export const flattenNestedRecognitionNodes = (
   attempts: RecognitionAttempt[] | undefined,
   parentFlowItemId: string,
   isExpanded: (flowItemId: string) => boolean,
-  depth = 0
+  depth = 0,
 ): FlattenedNestedRecognitionRow[] => {
   if (!attempts || attempts.length === 0) return []
 
@@ -57,7 +57,9 @@ export const flattenNestedRecognitionNodes = (
       expanded,
     })
     if (hasChildren && expanded) {
-      result.push(...flattenNestedRecognitionNodes(attempt.nested_nodes, flowItemId, isExpanded, depth + 1))
+      result.push(
+        ...flattenNestedRecognitionNodes(attempt.nested_nodes, flowItemId, isExpanded, depth + 1),
+      )
     }
   }
 

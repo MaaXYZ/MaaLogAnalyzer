@@ -10,7 +10,7 @@ import {
 const createAttempt = (
   recoId: number,
   status: RecognitionAttempt['status'] = 'success',
-  recoName?: string
+  recoName?: string,
 ): RecognitionAttempt => ({
   reco_id: recoId,
   name: `Reco-${recoId}`,
@@ -19,18 +19,21 @@ const createAttempt = (
   status,
   reco_details: recoName
     ? {
-      reco_id: recoId,
-      algorithm: 'TemplateMatch',
-      box: [0, 0, 10, 10],
-      detail: {},
-      name: recoName,
-    }
+        reco_id: recoId,
+        algorithm: 'TemplateMatch',
+        box: [0, 0, 10, 10],
+        detail: {},
+        name: recoName,
+      }
     : undefined,
 })
 
 describe('RecognitionScopeHelpers', () => {
   it('attaches action-level recognitions to nested actions first, then top-level by action window', () => {
-    const recognitionOrderMeta = new WeakMap<RecognitionAttempt, { startSeq: number; endSeq: number }>()
+    const recognitionOrderMeta = new WeakMap<
+      RecognitionAttempt,
+      { startSeq: number; endSeq: number }
+    >()
     const helpers = createRecognitionAttemptHelpers(recognitionOrderMeta)
 
     const topLevel = createAttempt(100)
@@ -38,19 +41,23 @@ describe('RecognitionScopeHelpers', () => {
     recognitionOrderMeta.set(topLevel, { startSeq: 10, endSeq: 20 })
     recognitionOrderMeta.set(nestedAttempt, { startSeq: 30, endSeq: 40 })
 
-    const nestedGroups: NestedActionGroup[] = [{
-      task_id: 1,
-      name: 'SubTask',
-      ts: '2026-04-08 00:00:00.000',
-      status: 'success',
-      nested_actions: [{
-        node_id: 1,
-        name: 'ActionNode',
+    const nestedGroups: NestedActionGroup[] = [
+      {
+        task_id: 1,
+        name: 'SubTask',
         ts: '2026-04-08 00:00:00.000',
         status: 'success',
-        recognitions: [nestedAttempt],
-      }],
-    }]
+        nested_actions: [
+          {
+            node_id: 1,
+            name: 'ActionNode',
+            ts: '2026-04-08 00:00:00.000',
+            status: 'success',
+            recognitions: [nestedAttempt],
+          },
+        ],
+      },
+    ]
 
     const nodeForNested = createAttempt(201)
     const nodeForTopLevel = createAttempt(101)
@@ -79,7 +86,10 @@ describe('RecognitionScopeHelpers', () => {
   })
 
   it('splits recognitions by action window boundaries', () => {
-    const recognitionOrderMeta = new WeakMap<RecognitionAttempt, { startSeq: number; endSeq: number }>()
+    const recognitionOrderMeta = new WeakMap<
+      RecognitionAttempt,
+      { startSeq: number; endSeq: number }
+    >()
     const before = createAttempt(1)
     const inWindow = createAttempt(2)
     const after = createAttempt(3)
@@ -91,7 +101,7 @@ describe('RecognitionScopeHelpers', () => {
       [before, inWindow, after],
       recognitionOrderMeta,
       15,
-      25
+      25,
     )
     expect(split.topLevel.map((item) => item.reco_id)).toEqual([1, 3])
     expect(split.actionLevel.map((item) => item.reco_id)).toEqual([2])
@@ -103,7 +113,7 @@ describe('RecognitionScopeHelpers', () => {
 
     const explicit = resolveFallbackRecoDetails(
       { reco_details: { reco_id: 99, algorithm: 'A', box: null, detail: {}, name: 'Explicit' } },
-      [first, second]
+      [first, second],
     )
     expect(explicit?.name).toBe('Explicit')
 

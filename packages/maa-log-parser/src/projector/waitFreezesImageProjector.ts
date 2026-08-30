@@ -63,10 +63,7 @@ const readNumber = (
   return typeof snakeValue === 'number' ? snakeValue : undefined
 }
 
-const parseScopeWindow = (
-  scope: ScopeNode,
-  fallbackEndMs: number,
-): TimeWindow | undefined => {
+const parseScopeWindow = (scope: ScopeNode, fallbackEndMs: number): TimeWindow | undefined => {
   const startMs = toTimestampMs(scope.ts)
   const parsedEndMs = toTimestampMs(scope.endTs)
   const endMs = Number.isFinite(parsedEndMs) ? parsedEndMs : fallbackEndMs
@@ -76,27 +73,24 @@ const parseScopeWindow = (
   return { startMs, endMs }
 }
 
-const intersectWindows = (
-  first?: TimeWindow,
-  second?: TimeWindow,
-): TimeWindow | undefined => {
+const intersectWindows = (first?: TimeWindow, second?: TimeWindow): TimeWindow | undefined => {
   if (!first || !second) return undefined
   const startMs = Math.max(first.startMs, second.startMs)
   const endMs = Math.min(first.endMs, second.endMs)
   return endMs >= startMs ? { startMs, endMs } : undefined
 }
 
-const readScopeSourceKey = (
-  payload: Record<string, unknown>,
-): string | undefined => {
+const readScopeSourceKey = (payload: Record<string, unknown>): string | undefined => {
   const source = readRecord(payload.source)
   return source ? readString(source, 'sourceKey', 'source_key') : undefined
 }
 
 const isNodeScope = (scope: ScopeNode): boolean => {
-  return scope.kind === 'pipeline_node'
-    || scope.kind === 'recognition_node'
-    || scope.kind === 'action_node'
+  return (
+    scope.kind === 'pipeline_node' ||
+    scope.kind === 'recognition_node' ||
+    scope.kind === 'action_node'
+  )
 }
 
 const collectWaitFreezesOccurrences = (
@@ -107,9 +101,7 @@ const collectWaitFreezesOccurrences = (
 ): void => {
   const payload = readRecord(scope.payload) ?? {}
   const scopeWindow = parseScopeWindow(scope, fallbackEndMs)
-  const taskId = scope.taskId
-    ?? readNumber(payload, 'taskId', 'task_id')
-    ?? context.taskId
+  const taskId = scope.taskId ?? readNumber(payload, 'taskId', 'task_id') ?? context.taskId
   const sourceKey = readScopeSourceKey(payload) ?? context.sourceKey
 
   let taskWindow = context.taskWindow
@@ -167,10 +159,7 @@ const collectWaitFreezesOccurrences = (
   }
 }
 
-const parseWaitFreezesImage = (
-  key: string,
-  path: string,
-): WaitFreezesImage | undefined => {
+const parseWaitFreezesImage = (key: string, path: string): WaitFreezesImage | undefined => {
   const match = key.match(
     /^(\d{4})\.(\d{2})\.(\d{2})-(\d{2})\.(\d{2})\.(\d{2})\.(\d{1,3})_(.+)_wait_freezes$/,
   )
@@ -190,13 +179,12 @@ const compareText = (left: string, right: string): number => {
   return left < right ? -1 : 1
 }
 
-const compareImages = (
-  left: WaitFreezesImage,
-  right: WaitFreezesImage,
-): number => {
-  return left.timestampMs - right.timestampMs
-    || compareText(left.key, right.key)
-    || compareText(left.path, right.path)
+const compareImages = (left: WaitFreezesImage, right: WaitFreezesImage): number => {
+  return (
+    left.timestampMs - right.timestampMs ||
+    compareText(left.key, right.key) ||
+    compareText(left.path, right.path)
+  )
 }
 
 const compareOccurrenceForImage = (
@@ -208,15 +196,17 @@ const compareOccurrenceForImage = (
   const leftTaskSpecificity = left.taskId == null ? 0 : 1
   const rightTaskSpecificity = right.taskId == null ? 0 : 1
 
-  return right.startMs - left.startMs
-    || rightNodeSpecificity - leftNodeSpecificity
-    || rightTaskSpecificity - leftTaskSpecificity
-    || left.endMs - right.endMs
-    || right.seq - left.seq
-    || compareText(left.sourceKey ?? '', right.sourceKey ?? '')
-    || (left.taskId ?? Number.MAX_SAFE_INTEGER) - (right.taskId ?? Number.MAX_SAFE_INTEGER)
-    || (left.nodeId ?? Number.MAX_SAFE_INTEGER) - (right.nodeId ?? Number.MAX_SAFE_INTEGER)
-    || compareText(left.scopeId, right.scopeId)
+  return (
+    right.startMs - left.startMs ||
+    rightNodeSpecificity - leftNodeSpecificity ||
+    rightTaskSpecificity - leftTaskSpecificity ||
+    left.endMs - right.endMs ||
+    right.seq - left.seq ||
+    compareText(left.sourceKey ?? '', right.sourceKey ?? '') ||
+    (left.taskId ?? Number.MAX_SAFE_INTEGER) - (right.taskId ?? Number.MAX_SAFE_INTEGER) ||
+    (left.nodeId ?? Number.MAX_SAFE_INTEGER) - (right.nodeId ?? Number.MAX_SAFE_INTEGER) ||
+    compareText(left.scopeId, right.scopeId)
+  )
 }
 
 const selectOccurrence = (

@@ -6,8 +6,8 @@ describe('GitHub Actions supply-chain pins', () => {
   it('pins every remote action to an immutable commit', () => {
     const root = resolve(import.meta.dirname, '../../..')
     const files = readdirSync(resolve(root, '.github'), { recursive: true, encoding: 'utf8' })
-      .filter(file => file.endsWith('.yml') || file.endsWith('.yaml'))
-      .map(file => `.github/${file.replace(/\\/g, '/')}`)
+      .filter((file) => file.endsWith('.yml') || file.endsWith('.yaml'))
+      .map((file) => `.github/${file.replace(/\\/g, '/')}`)
     const mutableReferences: string[] = []
 
     for (const file of files) {

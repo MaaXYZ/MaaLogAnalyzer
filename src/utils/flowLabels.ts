@@ -18,15 +18,15 @@ export const getFlowItemShortLabel = (type: UnifiedFlowItem['type']): string => 
 export type FlowItemButtonType = 'success' | 'warning' | 'error' | 'info'
 
 export const getFlowItemButtonType = (
-  item: Pick<UnifiedFlowItem, 'status' | 'type'>
+  item: Pick<UnifiedFlowItem, 'status' | 'type'>,
 ): FlowItemButtonType => {
   if (item.status === 'success') return 'success'
   if (item.status === 'running') return 'info'
   if (
-    item.type === 'recognition'
-    || item.type === 'recognition_node'
-    || item.type === 'wait_freezes'
-    || item.type === 'resource_loading'
+    item.type === 'recognition' ||
+    item.type === 'recognition_node' ||
+    item.type === 'wait_freezes' ||
+    item.type === 'resource_loading'
   ) {
     return 'warning'
   }

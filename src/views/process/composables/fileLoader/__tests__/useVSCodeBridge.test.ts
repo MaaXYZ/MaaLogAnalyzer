@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  createVSCodeByteTransferHandler,
-  handleVSCodeLoadFilePayload,
-} from '../useVSCodeBridge'
+import { createVSCodeByteTransferHandler, handleVSCodeLoadFilePayload } from '../useVSCodeBridge'
 
 describe('VS Code loadFile bridge', () => {
   afterEach(() => {
@@ -41,15 +38,17 @@ describe('VS Code loadFile bridge', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:error-image')
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
 
-    expect(() => handleVSCodeLoadFilePayload(
-      {
-        type: 'loadFile',
-        content: 'log',
-        errorImages: [{ key: 'error', base64: btoa('image') }],
-        visionImages: [{ key: 'vision', base64: 'not-base64' }],
-      },
-      { onUploadContent, onFileLoadingStart, onFileLoadingEnd },
-    )).toThrow()
+    expect(() =>
+      handleVSCodeLoadFilePayload(
+        {
+          type: 'loadFile',
+          content: 'log',
+          errorImages: [{ key: 'error', base64: btoa('image') }],
+          visionImages: [{ key: 'vision', base64: 'not-base64' }],
+        },
+        { onUploadContent, onFileLoadingStart, onFileLoadingEnd },
+      ),
+    ).toThrow()
 
     expect(onUploadContent).not.toHaveBeenCalled()
     expect(onFileLoadingStart).toHaveBeenCalledOnce()
@@ -62,18 +61,20 @@ describe('VS Code loadFile bridge', () => {
     const createObjectURL = vi.spyOn(URL, 'createObjectURL')
     const imageUrl = 'https://file+.vscode-resource.vscode-cdn.net/c%3A/logs/vision/image.jpg'
 
-    expect(handleVSCodeLoadFilePayload(
-      {
-        type: 'loadFile',
-        content: 'log',
-        visionImages: [{ key: 'vision', url: imageUrl }],
-      },
-      {
-        onUploadContent,
-        onFileLoadingStart: vi.fn(),
-        onFileLoadingEnd: vi.fn(),
-      },
-    )).toBe(true)
+    expect(
+      handleVSCodeLoadFilePayload(
+        {
+          type: 'loadFile',
+          content: 'log',
+          visionImages: [{ key: 'vision', url: imageUrl }],
+        },
+        {
+          onUploadContent,
+          onFileLoadingStart: vi.fn(),
+          onFileLoadingEnd: vi.fn(),
+        },
+      ),
+    ).toBe(true)
 
     expect(createObjectURL).not.toHaveBeenCalled()
     expect(onUploadContent).toHaveBeenCalledWith(
@@ -91,14 +92,16 @@ describe('VS Code loadFile bridge', () => {
     const onFileLoadingStart = vi.fn()
     const onFileLoadingEnd = vi.fn()
 
-    expect(() => handleVSCodeLoadFilePayload(
-      {
-        type: 'loadFile',
-        content: 'log',
-        primaryLogFiles: [{ path: 'maa.log', name: 'maa.log', content: 42 }],
-      },
-      { onUploadContent, onFileLoadingStart, onFileLoadingEnd },
-    )).toThrow(/primaryLogFiles/)
+    expect(() =>
+      handleVSCodeLoadFilePayload(
+        {
+          type: 'loadFile',
+          content: 'log',
+          primaryLogFiles: [{ path: 'maa.log', name: 'maa.log', content: 42 }],
+        },
+        { onUploadContent, onFileLoadingStart, onFileLoadingEnd },
+      ),
+    ).toThrow(/primaryLogFiles/)
 
     expect(onUploadContent).not.toHaveBeenCalled()
     expect(onFileLoadingEnd).toHaveBeenCalledOnce()
@@ -117,12 +120,14 @@ describe('VS Code loadFile bridge', () => {
     const first = encoder.encode('hello ').buffer
     const second = encoder.encode('world').buffer
 
-    expect(receiver.handleMessage({
-      type: 'loadBytesStart',
-      transferId: 'transfer-1',
-      sequence: 0,
-      payload: {},
-    })).toBe(true)
+    expect(
+      receiver.handleMessage({
+        type: 'loadBytesStart',
+        transferId: 'transfer-1',
+        sequence: 0,
+        payload: {},
+      }),
+    ).toBe(true)
     receiver.handleMessage({
       type: 'loadBytesFileStart',
       transferId: 'transfer-1',
@@ -202,10 +207,12 @@ describe('VS Code loadFile bridge', () => {
     })
 
     expect(onFileLoadingEnd).toHaveBeenCalledOnce()
-    expect(acknowledgements).toHaveBeenLastCalledWith(expect.objectContaining({
-      transferId: 'transfer-2',
-      sequence: 2,
-      error: expect.stringContaining('偏移不连续'),
-    }))
+    expect(acknowledgements).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        transferId: 'transfer-2',
+        sequence: 2,
+        error: expect.stringContaining('偏移不连续'),
+      }),
+    )
   })
 })

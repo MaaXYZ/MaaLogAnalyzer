@@ -17,19 +17,18 @@ const createDeferred = <T>(): Deferred<T> => {
   return { promise, resolve }
 }
 
-const createLogFile = (
-  content: string,
-  arrayBuffer: () => Promise<ArrayBuffer>,
-): File => ({
-  name: 'maa.log',
-  size: content.length,
-  webkitRelativePath: 'debug/maa.log',
-  arrayBuffer,
-} as unknown as File)
+const createLogFile = (content: string, arrayBuffer: () => Promise<ArrayBuffer>): File =>
+  ({
+    name: 'maa.log',
+    size: content.length,
+    webkitRelativePath: 'debug/maa.log',
+    arrayBuffer,
+  }) as unknown as File
 
-const createInputEvent = (file: File): Event => ({
-  target: { files: [file], value: 'selected' },
-} as unknown as Event)
+const createInputEvent = (file: File): Event =>
+  ({
+    target: { files: [file], value: 'selected' },
+  }) as unknown as Event
 
 describe('Web file input generations', () => {
   it('drops an older folder read that finishes after a newer selection', async () => {

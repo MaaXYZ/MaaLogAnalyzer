@@ -29,7 +29,16 @@ const setSplitSize = (value: number) => {
 </script>
 
 <template>
-  <div style="height: 100%; display: flex; flex-direction: column; gap: 8px; padding: 8px; box-sizing: border-box;">
+  <div
+    style="
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px;
+      box-sizing: border-box;
+    "
+  >
     <n-flex align="center" justify="space-between" style="gap: 8px">
       <n-text depth="3" style="font-size: 12px">分屏比例</n-text>
       <n-flex align="center" style="gap: 6px">
@@ -55,10 +64,7 @@ const setSplitSize = (value: number) => {
         />
       </template>
       <template #2>
-        <text-search-view
-          v-bind="textSearchViewProps"
-          style="height: 100%"
-        />
+        <text-search-view v-bind="textSearchViewProps" style="height: 100%" />
       </template>
     </n-split>
   </div>

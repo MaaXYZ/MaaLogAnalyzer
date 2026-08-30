@@ -72,8 +72,15 @@ const showModel = computed({
       <n-card size="small" :bordered="true">
         <n-flex vertical style="gap: 10px">
           <n-text strong>快速开始</n-text>
-          <n-text depth="3" style="font-size: 13px">首次使用建议先跑一遍新手教程，了解大致功能。</n-text>
-          <n-button data-tour="about-start-tutorial" type="primary" :loading="props.tutorialLoading" @click="emit('start-tutorial')">
+          <n-text depth="3" style="font-size: 13px"
+            >首次使用建议先跑一遍新手教程，了解大致功能。</n-text
+          >
+          <n-button
+            data-tour="about-start-tutorial"
+            type="primary"
+            :loading="props.tutorialLoading"
+            @click="emit('start-tutorial')"
+          >
             开始新手教程
           </n-button>
         </n-flex>

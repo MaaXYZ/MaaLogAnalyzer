@@ -36,7 +36,11 @@ const saveProcessLayoutState = (state: ProcessLayoutState) => {
   }
 }
 
-const getNodeNavDefaultSize = (taskCollapsed: boolean, detailCollapsed: boolean, displayMode: string) => {
+const getNodeNavDefaultSize = (
+  taskCollapsed: boolean,
+  detailCollapsed: boolean,
+  displayMode: string,
+) => {
   if (taskCollapsed && detailCollapsed) {
     return displayMode === 'detailed' ? 0.12 : 0.2
   }
@@ -51,17 +55,15 @@ export const useProcessLayout = (options: {
 
   const taskListCollapsed = ref(isPersistedLayoutCollapsed(processLayoutState.taskListCollapsed))
   const taskListSize = ref(
-    taskListCollapsed.value
-      ? 0
-      : clampLayoutSize(processLayoutState.taskListSize, 0, 0.4, 0.25),
+    taskListCollapsed.value ? 0 : clampLayoutSize(processLayoutState.taskListSize, 0, 0.4, 0.25),
   )
-  const taskListSavedSize = ref(clampLayoutSize(processLayoutState.taskListSavedSize, 0.05, 0.4, 0.25))
+  const taskListSavedSize = ref(
+    clampLayoutSize(processLayoutState.taskListSavedSize, 0.05, 0.4, 0.25),
+  )
 
   const nodeNavCollapsed = ref(isPersistedLayoutCollapsed(processLayoutState.nodeNavCollapsed))
   const nodeNavSize = ref(
-    nodeNavCollapsed.value
-      ? 0
-      : clampLayoutSize(processLayoutState.nodeNavSize, 0, 0.4, 0.2),
+    nodeNavCollapsed.value ? 0 : clampLayoutSize(processLayoutState.nodeNavSize, 0, 0.4, 0.2),
   )
   const nodeNavSavedSize = ref(clampLayoutSize(processLayoutState.nodeNavSavedSize, 0.05, 0.4, 0.2))
 
@@ -99,24 +101,37 @@ export const useProcessLayout = (options: {
     }
   })
 
-  watch([taskListCollapsed, options.detailViewCollapsed, options.displayMode], ([taskCollapsed, detailCollapsed, displayMode]) => {
-    if (!nodeNavCollapsed.value) {
-      const size = getNodeNavDefaultSize(!!taskCollapsed, !!detailCollapsed, displayMode)
-      nodeNavSize.value = size
-      nodeNavSavedSize.value = size
-    }
-  })
+  watch(
+    [taskListCollapsed, options.detailViewCollapsed, options.displayMode],
+    ([taskCollapsed, detailCollapsed, displayMode]) => {
+      if (!nodeNavCollapsed.value) {
+        const size = getNodeNavDefaultSize(!!taskCollapsed, !!detailCollapsed, displayMode)
+        nodeNavSize.value = size
+        nodeNavSavedSize.value = size
+      }
+    },
+  )
 
-  watch([taskListCollapsed, taskListSize, taskListSavedSize, nodeNavCollapsed, nodeNavSize, nodeNavSavedSize], ([taskCollapsed, taskSize, taskSaved, navCollapsed, navSize, navSaved]) => {
-    saveProcessLayoutState({
-      taskListCollapsed: taskCollapsed,
-      taskListSize: clampLayoutSize(taskSize, 0, 0.4, 0.25),
-      taskListSavedSize: clampLayoutSize(taskSaved, 0.05, 0.4, 0.25),
-      nodeNavCollapsed: navCollapsed,
-      nodeNavSize: clampLayoutSize(navSize, 0, 0.4, 0.2),
-      nodeNavSavedSize: clampLayoutSize(navSaved, 0.05, 0.4, 0.2),
-    })
-  })
+  watch(
+    [
+      taskListCollapsed,
+      taskListSize,
+      taskListSavedSize,
+      nodeNavCollapsed,
+      nodeNavSize,
+      nodeNavSavedSize,
+    ],
+    ([taskCollapsed, taskSize, taskSaved, navCollapsed, navSize, navSaved]) => {
+      saveProcessLayoutState({
+        taskListCollapsed: taskCollapsed,
+        taskListSize: clampLayoutSize(taskSize, 0, 0.4, 0.25),
+        taskListSavedSize: clampLayoutSize(taskSaved, 0.05, 0.4, 0.25),
+        nodeNavCollapsed: navCollapsed,
+        nodeNavSize: clampLayoutSize(navSize, 0, 0.4, 0.2),
+        nodeNavSavedSize: clampLayoutSize(navSaved, 0.05, 0.4, 0.2),
+      })
+    },
+  )
 
   watch(layoutResetGeneration, () => {
     const navSize = getNodeNavDefaultSize(false, false, options.displayMode.value)

@@ -19,8 +19,10 @@ export function parseMxuZipVolumeName(fileName: string): MxuZipVolumeInfo | null
 }
 
 const getFileDirectory = (file: File): string => {
-  const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath
-    ?.replace(/\\/g, '/')
+  const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath?.replace(
+    /\\/g,
+    '/',
+  )
   if (!relativePath) return ''
 
   const separator = relativePath.lastIndexOf('/')
@@ -35,16 +37,17 @@ export function collectMxuZipVolumes(files: Iterable<File>, anchor: File): File[
   const anchorDirectory = getFileDirectory(anchor)
   const matches = Array.from(files)
     .map((file) => ({ file, info: parseMxuZipVolumeName(file.name) }))
-    .filter(({ file, info }) => (
-      info != null
-      && info.baseName.toLowerCase() === anchorBaseName
-      && getFileDirectory(file) === anchorDirectory
-    ))
+    .filter(
+      ({ file, info }) =>
+        info != null &&
+        info.baseName.toLowerCase() === anchorBaseName &&
+        getFileDirectory(file) === anchorDirectory,
+    )
 
-  matches.sort((left, right) => (
-    left.info!.index - right.info!.index
-    || left.file.name.localeCompare(right.file.name)
-  ))
+  matches.sort(
+    (left, right) =>
+      left.info!.index - right.info!.index || left.file.name.localeCompare(right.file.name),
+  )
 
   return matches.length > 0 ? matches.map(({ file }) => file) : [anchor]
 }

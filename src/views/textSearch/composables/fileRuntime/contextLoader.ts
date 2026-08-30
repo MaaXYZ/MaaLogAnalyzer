@@ -16,15 +16,16 @@ export const loadContextLinesForRuntime = async (
   const file = options.fileHandle.value
   const fileContent = options.fileContent.value
   const totalLines = options.totalLines.value
-  const isCurrent = () => (
+  const isCurrent = () =>
     options.sourceLoadGeneration.value === sourceGeneration &&
     (dependencies.shouldApply?.() ?? true)
-  )
   const readFromFile = dependencies.readFromFile ?? readContextLinesFromFile
   const readFromContent = dependencies.readFromContent ?? readContextLinesFromContent
-  const reportError = dependencies.reportError ?? ((error: unknown) => {
-    toastError('加载上下文失败: ' + error)
-  })
+  const reportError =
+    dependencies.reportError ??
+    ((error: unknown) => {
+      toastError('加载上下文失败: ' + error)
+    })
 
   try {
     const { lines, startLine } = file

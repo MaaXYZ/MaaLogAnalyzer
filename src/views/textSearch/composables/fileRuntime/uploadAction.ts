@@ -21,27 +21,30 @@ export const handleRuntimeFileUpload = async (
   const loadGeneration = ++options.sourceLoadGeneration.value
   options.resetSearchResultsOnly()
   options.isLoadingFile.value = true
-  const isCurrent = () => (
-    options.sourceLoadGeneration.value === loadGeneration &&
-    options.sourceMode.value === 'manual'
-  )
+  const isCurrent = () =>
+    options.sourceLoadGeneration.value === loadGeneration && options.sourceMode.value === 'manual'
   const readFile = dependencies.readFile ?? readUploadedFile
-  const reportError = dependencies.reportError ?? ((error: unknown) => {
-    toastError('文件读取失败: ' + error)
-  })
+  const reportError =
+    dependencies.reportError ??
+    ((error: unknown) => {
+      toastError('文件读取失败: ' + error)
+    })
 
   try {
     const loadedFile = await readFile(file)
     if (!isCurrent()) return
 
-    applyUploadedFileToState({
-      fileName: options.fileName,
-      fileSizeInMB: options.fileSizeInMB,
-      isLargeFile: options.isLargeFile,
-      fileContent: options.fileContent,
-      fileHandle: options.fileHandle,
-      totalLines: options.totalLines,
-    }, loadedFile)
+    applyUploadedFileToState(
+      {
+        fileName: options.fileName,
+        fileSizeInMB: options.fileSizeInMB,
+        isLargeFile: options.isLargeFile,
+        fileContent: options.fileContent,
+        fileHandle: options.fileHandle,
+        totalLines: options.totalLines,
+      },
+      loadedFile,
+    )
   } catch (error) {
     if (isCurrent()) {
       reportError(error)

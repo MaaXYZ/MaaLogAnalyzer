@@ -29,11 +29,17 @@ export const useHeaderBarBindings = (options: UseHeaderBarBindingsOptions) => {
   }))
 
   const headerBarEventHandlers = {
-    'open-task-drawer': () => { options.showTaskDrawer.value = true },
+    'open-task-drawer': () => {
+      options.showTaskDrawer.value = true
+    },
     'select-mobile-menu': options.handleMobileMenuSelect,
     'select-view-mode': options.handleViewModeSelect,
-    'open-settings': () => { options.showSettingsModal.value = true },
-    'open-about': () => { options.showAboutModal.value = true },
+    'open-settings': () => {
+      options.showSettingsModal.value = true
+    },
+    'open-about': () => {
+      options.showAboutModal.value = true
+    },
     'toggle-theme': options.toggleTheme,
   }
 

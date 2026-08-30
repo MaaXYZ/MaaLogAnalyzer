@@ -9,12 +9,12 @@ interface UseNodeStatisticsTableColumnsOptions {
   statMode: Ref<StatMode>
 }
 
-export const useNodeStatisticsTableColumns = (
-  options: UseNodeStatisticsTableColumnsOptions,
-) => {
+export const useNodeStatisticsTableColumns = (options: UseNodeStatisticsTableColumnsOptions) => {
   const nodeColumns = computed(() => buildNodeColumns(options.isMobile.value))
 
-  const recognitionActionColumns = computed(() => buildRecognitionActionColumns(options.isMobile.value))
+  const recognitionActionColumns = computed(() =>
+    buildRecognitionActionColumns(options.isMobile.value),
+  )
 
   const waitFreezeColumns = computed(() => buildWaitFreezeColumns(options.isMobile.value))
 

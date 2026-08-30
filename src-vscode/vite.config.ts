@@ -21,13 +21,13 @@ export default defineConfig({
         manualChunks: undefined,
         entryFileNames: 'assets/index.js',
         chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name].[ext]'
-      }
+        assetFileNames: 'assets/[name].[ext]',
+      },
     },
-    chunkSizeWarningLimit: 5000
+    chunkSizeWarningLimit: 5000,
   },
   define: {
     // 标记为 VS Code 环境
-    '__VSCODE__': JSON.stringify(true)
-  }
+    __VSCODE__: JSON.stringify(true),
+  },
 })

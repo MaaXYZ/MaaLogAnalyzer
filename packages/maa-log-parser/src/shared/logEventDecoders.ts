@@ -31,7 +31,7 @@ export interface CompactNodeDetails {
 
 export const readNumberField = (
   details: EventDetails | undefined,
-  field: string
+  field: string,
 ): number | undefined => {
   if (!details) return undefined
   const value = details[field]
@@ -40,7 +40,7 @@ export const readNumberField = (
 
 export const readStringField = (
   details: EventDetails | undefined,
-  field: string
+  field: string,
 ): string | undefined => {
   if (!details) return undefined
   const value = details[field]
@@ -48,7 +48,7 @@ export const readStringField = (
 }
 
 export const decodeTaskLifecycleEventDetails = (
-  details: EventDetails | undefined
+  details: EventDetails | undefined,
 ): TaskLifecycleEventDetails => {
   return {
     task_id: readNumberField(details, 'task_id'),
@@ -58,9 +58,7 @@ export const decodeTaskLifecycleEventDetails = (
   }
 }
 
-export const decodeEventIdentityIds = (
-  details: EventDetails | undefined
-): EventIdentityIds => {
+export const decodeEventIdentityIds = (details: EventDetails | undefined): EventIdentityIds => {
   return {
     task_id: readNumberField(details, 'task_id'),
     node_id: readNumberField(details, 'node_id'),
@@ -73,7 +71,7 @@ export const decodeEventIdentityIds = (
 export const parseNumericArray = (value: unknown): number[] | undefined => {
   if (!Array.isArray(value)) return undefined
   const normalized = value
-    .map((item: unknown) => typeof item === 'number' ? item : Number(item))
+    .map((item: unknown) => (typeof item === 'number' ? item : Number(item)))
     .filter((item: number) => Number.isFinite(item))
   return normalized.length > 0 ? normalized : undefined
 }
@@ -84,9 +82,7 @@ export const parseRoi = (value: unknown): [number, number, number, number] | und
   return [normalized[0], normalized[1], normalized[2], normalized[3]]
 }
 
-export const parseWaitFreezesParam = (
-  value: unknown
-): WaitFreezesDetail['param'] | undefined => {
+export const parseWaitFreezesParam = (value: unknown): WaitFreezesDetail['param'] | undefined => {
   if (!value || typeof value !== 'object') return undefined
   const raw = value as Record<string, unknown>
   const param: WaitFreezesDetail['param'] = {}
@@ -98,9 +94,7 @@ export const parseWaitFreezesParam = (
   return Object.keys(param).length > 0 ? param : undefined
 }
 
-export const decodeCompactActionDetails = (
-  value: unknown,
-): CompactActionDetails | undefined => {
+export const decodeCompactActionDetails = (value: unknown): CompactActionDetails | undefined => {
   if (!value || typeof value !== 'object') return undefined
   const raw = value as Record<string, unknown>
   const compact: CompactActionDetails = {}
@@ -115,9 +109,7 @@ export const decodeCompactActionDetails = (
   return Object.keys(compact).length > 0 ? compact : undefined
 }
 
-export const decodeCompactNodeDetails = (
-  value: unknown,
-): CompactNodeDetails | undefined => {
+export const decodeCompactNodeDetails = (value: unknown): CompactNodeDetails | undefined => {
   if (!value || typeof value !== 'object') return undefined
   const raw = value as Record<string, unknown>
   const compact: CompactNodeDetails = {}

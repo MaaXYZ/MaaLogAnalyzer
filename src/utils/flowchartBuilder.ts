@@ -32,7 +32,8 @@ const NODE_HORIZONTAL_PADDING = 20
 const NARROW_CHAR_WIDTH = 7
 const WIDE_CHAR_WIDTH = 13
 
-const WIDE_CHAR_REGEX = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE10-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/u
+const WIDE_CHAR_REGEX =
+  /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE10-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/u
 
 const estimateLabelWidth = (label: string): number => {
   if (!label) return 0
@@ -55,15 +56,16 @@ let elkPromise: Promise<ElkLayoutEngine> | null = null
 const getElk = async (): Promise<ElkLayoutEngine> => {
   if (!elkPromise) {
     elkPromise = import.meta.env.SSR
-      ? import('elkjs/lib/elk.bundled.js').then(({ default: ElkConstructor }) => (
-          new ElkConstructor()
-        ))
+      ? import('elkjs/lib/elk.bundled.js').then(
+          ({ default: ElkConstructor }) => new ElkConstructor(),
+        )
       : Promise.all([
           import('elkjs/lib/elk-api.js'),
           import('elkjs/lib/elk-worker.min.js?worker'),
-        ]).then(([{ default: ElkConstructor }, { default: ElkWorker }]) => (
-          new ElkConstructor({ workerFactory: () => new ElkWorker() })
-        ))
+        ]).then(
+          ([{ default: ElkConstructor }, { default: ElkWorker }]) =>
+            new ElkConstructor({ workerFactory: () => new ElkWorker() }),
+        )
   }
 
   return elkPromise
@@ -101,14 +103,17 @@ const reusePreviousLayout = (
   if (!previousNodes || !previousEdges) return false
   if (nodes.length !== previousNodes.length || edges.length !== previousEdges.length) return false
 
-  const previousNodeById = new Map(previousNodes.map(node => [node.id, node]))
-  if (nodes.some(node => !previousNodeById.has(node.id))) return false
+  const previousNodeById = new Map(previousNodes.map((node) => [node.id, node]))
+  if (nodes.some((node) => !previousNodeById.has(node.id))) return false
 
-  const previousEdgeById = new Map(previousEdges.map(edge => [edge.id, edge]))
-  if (edges.some((edge) => {
-    const previous = previousEdgeById.get(edge.id)
-    return !previous || previous.source !== edge.source || previous.target !== edge.target
-  })) return false
+  const previousEdgeById = new Map(previousEdges.map((edge) => [edge.id, edge]))
+  if (
+    edges.some((edge) => {
+      const previous = previousEdgeById.get(edge.id)
+      return !previous || previous.source !== edge.source || previous.target !== edge.target
+    })
+  )
+    return false
 
   for (const node of nodes) {
     const previous = previousNodeById.get(node.id)
@@ -122,7 +127,7 @@ const reusePreviousLayout = (
     if (!previousRoutePoints) continue
     edge.data = {
       ...(edge.data as FlowEdgeData),
-      routePoints: previousRoutePoints.map(point => ({ ...point })),
+      routePoints: previousRoutePoints.map((point) => ({ ...point })),
     } satisfies FlowEdgeData
     edge.type = previous?.type
   }
@@ -133,13 +138,11 @@ const reusePreviousLayout = (
 const hasFailedAction = (node: NodeInfo): boolean => {
   if (node.action_details && node.action_details.success === false) return true
   return (node.node_flow || []).some(
-    (item) => (item.type === 'action' || item.type === 'action_node') && item.status === 'failed'
+    (item) => (item.type === 'action' || item.type === 'action_node') && item.status === 'failed',
   )
 }
 
-const resolveFlowNodeStatus = (
-  infos: NodeInfo[] | undefined,
-): FlowNodeData['status'] => {
+const resolveFlowNodeStatus = (infos: NodeInfo[] | undefined): FlowNodeData['status'] => {
   if (!infos || infos.length === 0) return 'not-executed'
 
   // Prefer "failed" whenever any execution contains a failed action.
@@ -154,7 +157,10 @@ const resolveFlowNodeStatus = (
   return 'success'
 }
 
-export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchartOptions = {}): Promise<{ nodes: Node[]; edges: Edge[] }> {
+export async function buildFlowchartData(
+  task: TaskInfo,
+  options: BuildFlowchartOptions = {},
+): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const orderedNodes = sortNodesByGlobalExecutionOrder(task.nodes)
   const orderedExecutions = orderedNodes.map((node) => ({
     node,
@@ -179,9 +185,9 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
   // 2. Collect all node names (optionally keep only executed nodes)
   const allNodeNames = new Set<string>(executedNodeMap.keys())
   if (!ignoreUnexecutedNodes) {
-    task.nodes.forEach(node => {
+    task.nodes.forEach((node) => {
       allNodeNames.add(node.name)
-      node.next_list.forEach(next => {
+      node.next_list.forEach((next) => {
         allNodeNames.add(next.name)
       })
     })
@@ -190,7 +196,7 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
   // 3. Build nodes
   const flowNodes: Node[] = []
   const nodeSizeByName = new Map<string, { width: number; height: number }>()
-  allNodeNames.forEach(name => {
+  allNodeNames.forEach((name) => {
     const executed = executedNodeMap.get(name)
     const status = resolveFlowNodeStatus(executed?.infos)
     const nodeWidth = resolveNodeWidth(name)
@@ -222,11 +228,7 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
   const edgeSet = new Set<string>()
 
   const toEdgeStatus = (status: NodeInfo['status']): FlowEdgeData['edgeStatus'] => {
-    return status === 'failed'
-      ? 'failed'
-      : status === 'running'
-        ? 'running'
-        : 'success'
+    return status === 'failed' ? 'failed' : status === 'running' ? 'running' : 'success'
   }
 
   const upsertExecutedEdge = (
@@ -267,8 +269,8 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
   }
 
   // Topology edges from next_list
-  task.nodes.forEach(node => {
-    node.next_list.forEach(next => {
+  task.nodes.forEach((node) => {
+    node.next_list.forEach((next) => {
       if (!allNodeNames.has(node.name) || !allNodeNames.has(next.name)) return
       const edgeId = `${node.name}->${next.name}`
       if (edgeSet.has(edgeId)) return
@@ -301,9 +303,7 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
     const currentParentName = current.node.name
     const currentIsFailed = current.node.status === 'failed'
     const currentIsJumpBackHit =
-      !currentIsFailed &&
-      current.matchedNext?.nextItem.jump_back === true &&
-      !!currentParentName
+      !currentIsFailed && current.matchedNext?.nextItem.jump_back === true && !!currentParentName
 
     if (currentIsJumpBackHit) {
       jumpbackStack.push(currentParentName)
@@ -323,9 +323,8 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
       upsertExecutedEdge(current.executionName, stackTop, toNodeStatus, 'jump-back-return')
 
       // Then parent context continues from its own next-list hit.
-      const reenterTransitionType = nextExecution.matchedNext?.nextItem.jump_back === true
-        ? 'jump-back'
-        : 'next'
+      const reenterTransitionType =
+        nextExecution.matchedNext?.nextItem.jump_back === true ? 'jump-back' : 'next'
       upsertExecutedEdge(stackTop, nextExecution.executionName, toNodeStatus, reenterTransitionType)
 
       jumpbackStack.pop()
@@ -338,15 +337,15 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
         ? 'jump-back'
         : 'next'
 
-    upsertExecutedEdge(current.executionName, nextExecution.executionName, toNodeStatus, transitionType)
+    upsertExecutedEdge(
+      current.executionName,
+      nextExecution.executionName,
+      toNodeStatus,
+      transitionType,
+    )
   }
 
-  if (reusePreviousLayout(
-    flowNodes,
-    flowEdges,
-    options.previousNodes,
-    options.previousEdges,
-  )) {
+  if (reusePreviousLayout(flowNodes, flowEdges, options.previousNodes, options.previousEdges)) {
     return { nodes: flowNodes, edges: flowEdges }
   }
 
@@ -364,12 +363,12 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
       'elk.layered.unnecessaryBendpoints': 'false',
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
     },
-    children: flowNodes.map(node => ({
+    children: flowNodes.map((node) => ({
       id: node.id,
       width: nodeSizeByName.get(node.id)?.width ?? NODE_MIN_WIDTH,
       height: nodeSizeByName.get(node.id)?.height ?? NODE_HEIGHT,
     })),
-    edges: flowEdges.map(edge => ({
+    edges: flowEdges.map((edge) => ({
       id: edge.id,
       sources: [edge.source],
       targets: [edge.target],
@@ -379,8 +378,8 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
   const layouted = await elk.layout(elkGraph)
 
   // Apply positions; fallback keeps previous zero positions if ELK omits a node
-  const positionedMap = new Map((layouted.children ?? []).map(n => [n.id, n]))
-  flowNodes.forEach(node => {
+  const positionedMap = new Map((layouted.children ?? []).map((n) => [n.id, n]))
+  flowNodes.forEach((node) => {
     const positioned = positionedMap.get(node.id)
     if (positioned && typeof positioned.x === 'number' && typeof positioned.y === 'number') {
       node.position = {
@@ -392,13 +391,17 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
 
   // Apply ELK orthogonal edge route points
   const edgeMap = new Map<string, any>((layouted.edges ?? []).map((e: any) => [e.id, e]))
-  flowEdges.forEach(edge => {
+  flowEdges.forEach((edge) => {
     const layoutEdge = edgeMap.get(edge.id)
     const section = layoutEdge?.sections?.[0]
     if (!section) return
 
     const points: Array<{ x: number; y: number }> = []
-    if (section.startPoint && typeof section.startPoint.x === 'number' && typeof section.startPoint.y === 'number') {
+    if (
+      section.startPoint &&
+      typeof section.startPoint.x === 'number' &&
+      typeof section.startPoint.y === 'number'
+    ) {
       points.push({ x: section.startPoint.x, y: section.startPoint.y })
     }
     if (Array.isArray(section.bendPoints)) {
@@ -408,13 +411,19 @@ export async function buildFlowchartData(task: TaskInfo, options: BuildFlowchart
         }
       })
     }
-    if (section.endPoint && typeof section.endPoint.x === 'number' && typeof section.endPoint.y === 'number') {
+    if (
+      section.endPoint &&
+      typeof section.endPoint.x === 'number' &&
+      typeof section.endPoint.y === 'number'
+    ) {
       points.push({ x: section.endPoint.x, y: section.endPoint.y })
     }
 
     if (points.length >= 2) {
       // Remove consecutive duplicate points to avoid zero-length segments.
-      const deduped = points.filter((p, i) => i === 0 || p.x !== points[i - 1].x || p.y !== points[i - 1].y)
+      const deduped = points.filter(
+        (p, i) => i === 0 || p.x !== points[i - 1].x || p.y !== points[i - 1].y,
+      )
       edge.data = {
         ...(edge.data as FlowEdgeData),
         routePoints: deduped,

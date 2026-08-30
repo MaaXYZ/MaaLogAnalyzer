@@ -30,7 +30,7 @@ export const setupLoadedTargetTargetsSync = (options: LoadedSourceSyncOptions) =
       }
 
       if (preferredId) {
-        await options.applyLoadedTarget(safeTargets.find(item => item.id === preferredId))
+        await options.applyLoadedTarget(safeTargets.find((item) => item.id === preferredId))
       }
     },
     { immediate: true, deep: true },

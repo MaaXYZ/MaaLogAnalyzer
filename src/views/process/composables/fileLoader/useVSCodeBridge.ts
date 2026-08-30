@@ -1,9 +1,6 @@
 import { onMounted, onUnmounted } from 'vue'
 import type { LoadedTextFile } from '../../utils/fileLoadingHelpers'
-import type {
-  FilePrimaryLogFile,
-  LoadedPrimaryLogFile,
-} from '../../../../utils/logFileDiscovery'
+import type { FilePrimaryLogFile, LoadedPrimaryLogFile } from '../../../../utils/logFileDiscovery'
 import type { UseProcessFileLoaderOptions } from './types'
 import { InputResourceLimitError } from '../../../../utils/browserInputBudget'
 import { replaceBlobUrl, revokeBlobUrlMap } from '../../../../utils/blobUrlMap'
@@ -51,12 +48,10 @@ const asString = (value: unknown, label: string): string => {
 
 const estimateBase64Size = (value: string): number => {
   const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
-  return Math.floor(value.length * 3 / 4) - padding
+  return Math.floor((value.length * 3) / 4) - padding
 }
 
-const decodeBase64Bytes = (
-  value: string,
-): Uint8Array<ArrayBuffer> => {
+const decodeBase64Bytes = (value: string): Uint8Array<ArrayBuffer> => {
   const expectedSize = estimateBase64Size(value)
   const binary = atob(value)
   if (binary.length !== expectedSize) {
@@ -154,7 +149,10 @@ export const handleVSCodeLoadFilePayload = (
   if (message.type !== 'loadFile') return false
 
   const content = message.content == null ? '' : asString(message.content, 'content')
-  if (!content && (!Array.isArray(message.primaryLogFiles) || message.primaryLogFiles.length === 0)) {
+  if (
+    !content &&
+    (!Array.isArray(message.primaryLogFiles) || message.primaryLogFiles.length === 0)
+  ) {
     return false
   }
 
@@ -239,17 +237,11 @@ const asChunkBuffer = (value: unknown): ArrayBuffer => {
   throw new InputResourceLimitError('VS Code 字节分块格式无效')
 }
 
-const mergeImageEntries = (
-  target: Map<string, string>,
-  entries: Map<string, string>,
-): void => {
+const mergeImageEntries = (target: Map<string, string>, entries: Map<string, string>): void => {
   for (const [key, url] of entries) target.set(key, url)
 }
 
-const applyTransferPayloadImages = (
-  transfer: IncomingByteTransfer,
-  value: unknown,
-): void => {
+const applyTransferPayloadImages = (transfer: IncomingByteTransfer, value: unknown): void => {
   if (value == null) return
   const payload = asRecord(value, 'payload')
   mergeImageEntries(
@@ -262,11 +254,7 @@ const applyTransferPayloadImages = (
   )
   mergeImageEntries(
     transfer.waitFreezesImages,
-    decodeImageEntries(
-      payload.waitFreezesImages,
-      'image/jpeg',
-      'waitFreezesImages',
-    ),
+    decodeImageEntries(payload.waitFreezesImages, 'image/jpeg', 'waitFreezesImages'),
   )
 }
 
@@ -291,11 +279,7 @@ export const createVSCodeByteTransferHandler = (
     options.onFileLoadingEnd()
   }
 
-  const acknowledge = (
-    transferId: string,
-    sequence: number,
-    error?: unknown,
-  ): void => {
+  const acknowledge = (transferId: string, sequence: number, error?: unknown): void => {
     postAcknowledgement({
       type: 'loadBytesAck',
       transferId,
@@ -312,13 +296,15 @@ export const createVSCodeByteTransferHandler = (
       if (typeof message.transferId === 'string') finishTransfer(message.transferId, false)
       return true
     }
-    if (![
-      'loadBytesStart',
-      'loadBytesFileStart',
-      'loadBytesChunk',
-      'loadBytesFileComplete',
-      'loadBytesComplete',
-    ].includes(type as string)) {
+    if (
+      ![
+        'loadBytesStart',
+        'loadBytesFileStart',
+        'loadBytesChunk',
+        'loadBytesFileComplete',
+        'loadBytesComplete',
+      ].includes(type as string)
+    ) {
       return false
     }
 
@@ -346,7 +332,8 @@ export const createVSCodeByteTransferHandler = (
       if (!transfer) throw new InputResourceLimitError('VS Code 字节传输不存在或已结束')
 
       if (type === 'loadBytesFileStart') {
-        if (transfer.currentFile) throw new InputResourceLimitError('上一个 VS Code 字节文件尚未结束')
+        if (transfer.currentFile)
+          throw new InputResourceLimitError('上一个 VS Code 字节文件尚未结束')
         const kind = asString(message.kind, 'kind') as IncomingFileKind
         if (!['primary', 'text', 'image'].includes(kind)) {
           throw new InputResourceLimitError('VS Code 字节文件类型无效')
@@ -392,7 +379,8 @@ export const createVSCodeByteTransferHandler = (
 
       if (type === 'loadBytesChunk') {
         const offset = asSafeInteger(message.offset, 'offset')
-        if (offset !== file.received) throw new InputResourceLimitError('VS Code 字节分块偏移不连续')
+        if (offset !== file.received)
+          throw new InputResourceLimitError('VS Code 字节分块偏移不连续')
         const bytes = asChunkBuffer(message.bytes)
         const nextSize = file.received + bytes.byteLength
         if (!Number.isSafeInteger(nextSize) || nextSize > file.size) {
@@ -432,11 +420,12 @@ export const createVSCodeByteTransferHandler = (
           if (!key || !['error', 'vision', 'wait-freezes'].includes(imageKind)) {
             throw new InputResourceLimitError('VS Code 图片分块键无效')
           }
-          const images = imageKind === 'error'
-            ? transfer.errorImages
-            : imageKind === 'vision'
-              ? transfer.visionImages
-              : transfer.waitFreezesImages
+          const images =
+            imageKind === 'error'
+              ? transfer.errorImages
+              : imageKind === 'vision'
+                ? transfer.visionImages
+                : transfer.waitFreezesImages
           replaceBlobUrl(images, key, blob)
         }
         transfer.currentFile = undefined
@@ -463,7 +452,7 @@ export const useHostFileMessageReceiver = (
   options: HostFileMessageReceiverOptions,
   isInVSCode: () => boolean,
 ): void => {
-  const byteTransfer = createVSCodeByteTransferHandler(options, message => {
+  const byteTransfer = createVSCodeByteTransferHandler(options, (message) => {
     window.vscodeApi?.postMessage(message)
   })
 
@@ -479,7 +468,7 @@ export const useHostFileMessageReceiver = (
         options.onUploadFile(
           archives.length === 1 ? archives[0] : archives,
           selectedPaths.size > 0
-            ? async logOptions => logOptions.filter(option => selectedPaths.has(option.path))
+            ? async (logOptions) => logOptions.filter((option) => selectedPaths.has(option.path))
             : options.selectPrimaryLogs,
         )
         return

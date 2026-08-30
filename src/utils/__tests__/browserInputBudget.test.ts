@@ -28,8 +28,7 @@ describe('browser input resource budgets', () => {
 
   it('rejects excessive directory depth before recursion continues', () => {
     const budget = createBrowserInputBudget()
-    expect(() => registerBrowserInputEntry(budget, 'deep/path', 65))
-      .toThrow(BrowserInputLimitError)
+    expect(() => registerBrowserInputEntry(budget, 'deep/path', 65)).toThrow(BrowserInputLimitError)
   })
 
   it('deduplicates repeated native path scans while sharing byte totals', () => {

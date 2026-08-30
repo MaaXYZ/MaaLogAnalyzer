@@ -49,9 +49,30 @@ const handleToggleCollapse = () => {
       secondary
       strong
       @click="handleToggleCollapse"
-      style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); z-index: 100; height: 86px; min-width: 24px; padding: 6px 4px; border-top-left-radius: 0; border-bottom-left-radius: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.15)"
+      style="
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 100;
+        height: 86px;
+        min-width: 24px;
+        padding: 6px 4px;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      "
     >
-      <span style="writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 1px; font-size: 12px; line-height: 1">详情</span>
+      <span
+        style="
+          writing-mode: vertical-rl;
+          text-orientation: upright;
+          letter-spacing: 1px;
+          font-size: 12px;
+          line-height: 1;
+        "
+        >详情</span
+      >
     </n-button>
     <detail-view
       :selected-node="selectedNode"

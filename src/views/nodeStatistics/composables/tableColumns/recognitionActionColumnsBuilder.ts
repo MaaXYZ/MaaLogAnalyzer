@@ -29,7 +29,8 @@ export const buildRecognitionActionColumns = (
         width: 90,
         align: 'right',
         sorter: (a, b) => a.avgRecognitionDuration - b.avgRecognitionDuration,
-        render: (row) => row.recognitionCount > 0 ? formatDuration(row.avgRecognitionDuration) : '-',
+        render: (row) =>
+          row.recognitionCount > 0 ? formatDuration(row.avgRecognitionDuration) : '-',
       },
       {
         title: '动作耗时',
@@ -38,7 +39,7 @@ export const buildRecognitionActionColumns = (
         align: 'right',
         defaultSortOrder: 'descend',
         sorter: (a, b) => a.avgActionDuration - b.avgActionDuration,
-        render: (row) => row.actionCount > 0 ? formatDuration(row.avgActionDuration) : '-',
+        render: (row) => (row.actionCount > 0 ? formatDuration(row.avgActionDuration) : '-'),
       },
     ]
   }
@@ -73,7 +74,8 @@ export const buildRecognitionActionColumns = (
       width: 120,
       align: 'right',
       sorter: (a, b) => a.avgRecognitionDuration - b.avgRecognitionDuration,
-      render: (row) => row.recognitionCount > 0 ? formatDuration(row.avgRecognitionDuration) : '-',
+      render: (row) =>
+        row.recognitionCount > 0 ? formatDuration(row.avgRecognitionDuration) : '-',
     },
     {
       title: '最大识别耗时',
@@ -81,7 +83,8 @@ export const buildRecognitionActionColumns = (
       width: 120,
       align: 'right',
       sorter: (a, b) => a.maxRecognitionDuration - b.maxRecognitionDuration,
-      render: (row) => row.recognitionCount > 0 ? formatDuration(row.maxRecognitionDuration) : '-',
+      render: (row) =>
+        row.recognitionCount > 0 ? formatDuration(row.maxRecognitionDuration) : '-',
     },
     {
       title: 'P95 识别耗时',
@@ -89,7 +92,8 @@ export const buildRecognitionActionColumns = (
       width: 120,
       align: 'right',
       sorter: (a, b) => a.p95RecognitionDuration - b.p95RecognitionDuration,
-      render: (row) => row.recognitionCount > 0 ? formatDuration(row.p95RecognitionDuration) : '-',
+      render: (row) =>
+        row.recognitionCount > 0 ? formatDuration(row.p95RecognitionDuration) : '-',
     },
     {
       title: '平均动作耗时',
@@ -98,7 +102,7 @@ export const buildRecognitionActionColumns = (
       align: 'right',
       defaultSortOrder: 'descend',
       sorter: (a, b) => a.avgActionDuration - b.avgActionDuration,
-      render: (row) => row.actionCount > 0 ? formatDuration(row.avgActionDuration) : '-',
+      render: (row) => (row.actionCount > 0 ? formatDuration(row.avgActionDuration) : '-'),
     },
     {
       title: '最大动作耗时',
@@ -106,7 +110,7 @@ export const buildRecognitionActionColumns = (
       width: 120,
       align: 'right',
       sorter: (a, b) => a.maxActionDuration - b.maxActionDuration,
-      render: (row) => row.actionCount > 0 ? formatDuration(row.maxActionDuration) : '-',
+      render: (row) => (row.actionCount > 0 ? formatDuration(row.maxActionDuration) : '-'),
     },
     {
       title: 'P95 动作耗时',
@@ -114,7 +118,7 @@ export const buildRecognitionActionColumns = (
       width: 120,
       align: 'right',
       sorter: (a, b) => a.p95ActionDuration - b.p95ActionDuration,
-      render: (row) => row.actionCount > 0 ? formatDuration(row.p95ActionDuration) : '-',
+      render: (row) => (row.actionCount > 0 ? formatDuration(row.p95ActionDuration) : '-'),
     },
     {
       title: '成功率',

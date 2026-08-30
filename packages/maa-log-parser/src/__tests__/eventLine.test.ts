@@ -6,7 +6,8 @@ const identity = (value: string) => value
 
 describe('EventLine', () => {
   it('parses valid OnEventNotify line with normalized timestamp and dedup signature', () => {
-    const line = '[2026-04-08 00:01:02.345][INF][Px1][Tx2][test] !!!OnEventNotify!!! [handle=1] [msg=Tasker.Task.Starting] [details={"task_id":1,"entry":"Main"}]'
+    const line =
+      '[2026-04-08 00:01:02.345][INF][Px1][Tx2][test] !!!OnEventNotify!!! [handle=1] [msg=Tasker.Task.Starting] [details={"task_id":1,"entry":"Main"}]'
     const parsed = parseEventLine(line, 10, {
       internEventToken: identity,
       forceCopyString: identity,
@@ -35,7 +36,7 @@ describe('EventLine', () => {
       {
         internEventToken: identity,
         forceCopyString: identity,
-      }
+      },
     )
     expect(malformed).toBeNull()
   })
@@ -79,16 +80,22 @@ describe('EventLine', () => {
 
 describe('realtime dedup retention', () => {
   const getDedupSize = (parser: LogParser): number => {
-    return (parser as unknown as {
-      lastEventBySignature: Map<string, unknown>
-    }).lastEventBySignature.size
+    return (
+      parser as unknown as {
+        lastEventBySignature: Map<string, unknown>
+      }
+    ).lastEventBySignature.size
   }
 
   it('does not retain signatures that have no finite timestamp', () => {
     const parser = new LogParser()
-    parser.appendRealtimeLines(Array.from({ length: 100 }, (_, index) => (
-      `[not-a-timestamp][INF][Px1][Tx1][test] !!!OnEventNotify!!! [handle=1] [msg=Tasker.Task.Starting] [details={"task_id":${index + 1},"entry":"Task"}]`
-    )))
+    parser.appendRealtimeLines(
+      Array.from(
+        { length: 100 },
+        (_, index) =>
+          `[not-a-timestamp][INF][Px1][Tx1][test] !!!OnEventNotify!!! [handle=1] [msg=Tasker.Task.Starting] [details={"task_id":${index + 1},"entry":"Task"}]`,
+      ),
+    )
 
     expect(parser.getEventsSnapshot()).toHaveLength(100)
     expect(getDedupSize(parser)).toBe(0)
@@ -96,9 +103,13 @@ describe('realtime dedup retention', () => {
 
   it('bounds signatures even when timestamps do not advance', () => {
     const parser = new LogParser()
-    parser.appendRealtimeLines(Array.from({ length: 16_500 }, (_, index) => (
-      `[2026-07-26 12:00:00.000][INF][Px1][Tx1][test] !!!OnEventNotify!!! [handle=1] [msg=Tasker.Task.Starting] [details={"task_id":${index + 1},"entry":"Task"}]`
-    )))
+    parser.appendRealtimeLines(
+      Array.from(
+        { length: 16_500 },
+        (_, index) =>
+          `[2026-07-26 12:00:00.000][INF][Px1][Tx1][test] !!!OnEventNotify!!! [handle=1] [msg=Tasker.Task.Starting] [details={"task_id":${index + 1},"entry":"Task"}]`,
+      ),
+    )
 
     expect(getDedupSize(parser)).toBeLessThanOrEqual(16_384)
   })

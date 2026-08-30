@@ -55,10 +55,7 @@ const readRecord = (value: unknown): EventDetails | undefined => {
   return value as EventDetails
 }
 
-const readUnknownField = (
-  details: EventDetails,
-  field: string,
-): unknown => details[field]
+const readUnknownField = (details: EventDetails, field: string): unknown => details[field]
 
 const readNextList = (value: unknown): ProtocolNextListItem[] | undefined => {
   if (!Array.isArray(value)) return undefined
@@ -78,14 +75,9 @@ const readNextList = (value: unknown): ProtocolNextListItem[] | undefined => {
   return items
 }
 
-const readPositiveSafeIntegerField = (
-  details: EventDetails,
-  field: string,
-): number | undefined => {
+const readPositiveSafeIntegerField = (details: EventDetails, field: string): number | undefined => {
   const value = readNumberField(details, field)
-  return value !== undefined && Number.isSafeInteger(value) && value > 0
-    ? value
-    : undefined
+  return value !== undefined && Number.isSafeInteger(value) && value > 0 ? value : undefined
 }
 
 const buildBase = <TKind extends ProtocolEvent['kind']>(

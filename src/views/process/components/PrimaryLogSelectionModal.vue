@@ -18,18 +18,18 @@ const selectedPaths = ref<string[]>([])
 watch(
   () => props.options,
   (options) => {
-    selectedPaths.value = options
-      .filter(option => option.selected)
-      .map(option => option.path)
+    selectedPaths.value = options.filter((option) => option.selected).map((option) => option.path)
   },
   { immediate: true },
 )
 
 const selectedSet = computed(() => new Set(selectedPaths.value))
-const allSelected = computed(() => props.options.length > 0 && selectedPaths.value.length === props.options.length)
+const allSelected = computed(
+  () => props.options.length > 0 && selectedPaths.value.length === props.options.length,
+)
 
 const toggleAll = () => {
-  selectedPaths.value = allSelected.value ? [] : props.options.map(option => option.path)
+  selectedPaths.value = allSelected.value ? [] : props.options.map((option) => option.path)
 }
 
 const togglePath = (path: string, checked: boolean) => {
@@ -39,16 +39,19 @@ const togglePath = (path: string, checked: boolean) => {
   } else {
     next.delete(path)
   }
-  selectedPaths.value = props.options
-    .map(option => option.path)
-    .filter(path => next.has(path))
+  selectedPaths.value = props.options.map((option) => option.path).filter((path) => next.has(path))
 }
 
 const confirmSelection = () => {
-  emit('confirm', props.options.map(option => ({
-    ...option,
-    selected: selectedSet.value.has(option.path),
-  })).filter(option => option.selected))
+  emit(
+    'confirm',
+    props.options
+      .map((option) => ({
+        ...option,
+        selected: selectedSet.value.has(option.path),
+      }))
+      .filter((option) => option.selected),
+  )
 }
 </script>
 
@@ -76,14 +79,10 @@ const confirmSelection = () => {
 
       <n-scrollbar style="max-height: 360px">
         <n-flex vertical :size="8">
-          <div
-            v-for="option in props.options"
-            :key="option.path"
-            class="primary-log-row"
-          >
+          <div v-for="option in props.options" :key="option.path" class="primary-log-row">
             <n-checkbox
               :checked="selectedSet.has(option.path)"
-              @update:checked="checked => togglePath(option.path, checked)"
+              @update:checked="(checked) => togglePath(option.path, checked)"
             >
               <n-flex vertical :size="4">
                 <n-flex align="center" :size="6">

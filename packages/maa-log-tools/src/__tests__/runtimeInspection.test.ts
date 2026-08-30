@@ -11,16 +11,18 @@ const position = (line: number, timestamp: string) => ({
 })
 
 const framework: FrameworkSessionExtraction = {
-  sessions: [{
-    sessionId: 'framework-session-1',
-    startKind: 'partial_file',
-    status: 'resolved',
-    version: 'v5.11.1',
-    versions: ['v5.11.1'],
-    start: position(1, '2026-07-20 10:00:00.000'),
-    end: position(1000, '2026-07-20 11:00:00.000'),
-    versionEvidence: [{ ...position(1, '2026-07-20 10:00:00.000'), version: 'v5.11.1' }],
-  }],
+  sessions: [
+    {
+      sessionId: 'framework-session-1',
+      startKind: 'partial_file',
+      status: 'resolved',
+      version: 'v5.11.1',
+      versions: ['v5.11.1'],
+      start: position(1, '2026-07-20 10:00:00.000'),
+      end: position(1000, '2026-07-20 11:00:00.000'),
+      versionEvidence: [{ ...position(1, '2026-07-20 10:00:00.000'), version: 'v5.11.1' }],
+    },
+  ],
   summary: { status: 'single', versions: ['v5.11.1'] },
   warnings: ['partial session'],
 }
@@ -72,17 +74,47 @@ describe('runtime inspection', () => {
       status: 'success',
       next_list: [{ name: 'Target', anchor: false, jump_back: false }],
       node_flow: [
-        { id: 'r1', type: 'recognition', name: 'Target', status: 'failed', ts: '2026-07-20 10:01:10.000' },
-        { id: 'r2', type: 'recognition', name: 'Target', status: 'success', ts: '2026-07-20 10:01:11.000' },
+        {
+          id: 'r1',
+          type: 'recognition',
+          name: 'Target',
+          status: 'failed',
+          ts: '2026-07-20 10:01:10.000',
+        },
+        {
+          id: 'r2',
+          type: 'recognition',
+          name: 'Target',
+          status: 'success',
+          ts: '2026-07-20 10:01:11.000',
+        },
       ],
     })
     const secondNextListNode = node(14, 'ChooseNext', '2026-07-20 10:01:15.000', {
       status: 'success',
       next_list: [{ name: 'Target', anchor: false, jump_back: false }],
       node_flow: [
-        { id: 'r4', type: 'recognition', name: 'Target', status: 'failed', ts: '2026-07-20 10:01:15.000' },
-        { id: 'r5', type: 'recognition', name: 'Target', status: 'failed', ts: '2026-07-20 10:01:16.000' },
-        { id: 'r6', type: 'recognition', name: 'Target', status: 'success', ts: '2026-07-20 10:01:17.000' },
+        {
+          id: 'r4',
+          type: 'recognition',
+          name: 'Target',
+          status: 'failed',
+          ts: '2026-07-20 10:01:15.000',
+        },
+        {
+          id: 'r5',
+          type: 'recognition',
+          name: 'Target',
+          status: 'failed',
+          ts: '2026-07-20 10:01:16.000',
+        },
+        {
+          id: 'r6',
+          type: 'recognition',
+          name: 'Target',
+          status: 'success',
+          ts: '2026-07-20 10:01:17.000',
+        },
       ],
     })
     const differentNextListNode = node(15, 'ChooseNext', '2026-07-20 10:01:18.000', {
@@ -92,8 +124,20 @@ describe('runtime inspection', () => {
         { name: 'Target', anchor: true, jump_back: false },
       ],
       node_flow: [
-        { id: 'r7', type: 'recognition', name: 'OtherTarget', status: 'failed', ts: '2026-07-20 10:01:18.000' },
-        { id: 'r8', type: 'recognition', name: 'Target', status: 'success', ts: '2026-07-20 10:01:19.000' },
+        {
+          id: 'r7',
+          type: 'recognition',
+          name: 'OtherTarget',
+          status: 'failed',
+          ts: '2026-07-20 10:01:18.000',
+        },
+        {
+          id: 'r8',
+          type: 'recognition',
+          name: 'Target',
+          status: 'success',
+          ts: '2026-07-20 10:01:19.000',
+        },
       ],
     })
     const actionFailedNode = node(16, 'ActionNode', '2026-07-20 10:01:19.500', {
@@ -108,23 +152,48 @@ describe('runtime inspection', () => {
         success: false,
       },
       node_flow: [
-        { id: 'r9', type: 'recognition', name: 'Target', status: 'success', ts: '2026-07-20 10:01:19.500' },
+        {
+          id: 'r9',
+          type: 'recognition',
+          name: 'Target',
+          status: 'success',
+          ts: '2026-07-20 10:01:19.500',
+        },
       ],
     })
     const timeout = node(12, 'WaitForNext', '2026-07-20 10:01:20.000', {
       status: 'failed',
       next_list: [{ name: 'NeverMatched', anchor: false, jump_back: false }],
       node_flow: [
-        { id: 'r3', type: 'recognition', name: 'NeverMatched', status: 'failed', ts: '2026-07-20 10:01:20.000' },
+        {
+          id: 'r3',
+          type: 'recognition',
+          name: 'NeverMatched',
+          status: 'failed',
+          ts: '2026-07-20 10:01:20.000',
+        },
       ],
     })
     const unattributedFailure = node(13, 'UnknownFailure', '2026-07-20 10:01:30.000', {
       status: 'failed',
     })
     const failedTask = task({
-      nodes: [firstNextListNode, secondNextListNode, differentNextListNode, actionFailedNode, timeout, unattributedFailure],
+      nodes: [
+        firstNextListNode,
+        secondNextListNode,
+        differentNextListNode,
+        actionFailedNode,
+        timeout,
+        unattributedFailure,
+      ],
       events: [
-        { timestamp: actionFailedNode.ts, level: 'DBG', message: 'action', details: {}, _lineNumber: 20 },
+        {
+          timestamp: actionFailedNode.ts,
+          level: 'DBG',
+          message: 'action',
+          details: {},
+          _lineNumber: 20,
+        },
         { timestamp: timeout.ts, level: 'DBG', message: 'timeout', details: {}, _lineNumber: 30 },
       ],
     })
@@ -136,35 +205,46 @@ describe('runtime inspection', () => {
       start_time: '2026-07-20 10:05:00.000',
       end_time: undefined,
       status: 'running',
-      nodes: names.map((name, index) => node(
-        100 + index,
-        name,
-        `2026-07-20 10:05:0${index}.000`,
-        { task_id: 2 },
-      )),
+      nodes: names.map((name, index) =>
+        node(100 + index, name, `2026-07-20 10:05:0${index}.000`, { task_id: 2 }),
+      ),
     })
 
-    const inspection = buildRuntimeInspection(output([failedTask, loopingTask]), framework, sourceSegments)
+    const inspection = buildRuntimeInspection(
+      output([failedTask, loopingTask]),
+      framework,
+      sourceSegments,
+    )
 
     expect(inspection.sessions[0]?.startKind).toBe('partial_file')
     expect(inspection.sessions[0]?.tasks).toHaveLength(2)
     expect(inspection.unscopedTasks).toHaveLength(0)
-    expect(inspection.failures.map(item => item.kind)).toEqual(['action_failed', 'next_list_timeout'])
+    expect(inspection.failures.map((item) => item.kind)).toEqual([
+      'action_failed',
+      'next_list_timeout',
+    ])
     expect(inspection.failures[0]?.evidence.localLine).toBe(20)
     expect(inspection.failures[0]?.evidence.source).toBe('file:test/maa.log')
-    expect(inspection.outcomes.some(item => item.kind === 'task' && item.status === 'failed')).toBe(true)
-    expect(inspection.outcomes.some(item => (
-      item.nodeName === 'UnknownFailure' && item.directFailureIds.length === 0
-    ))).toBe(true)
+    expect(
+      inspection.outcomes.some((item) => item.kind === 'task' && item.status === 'failed'),
+    ).toBe(true)
+    expect(
+      inspection.outcomes.some(
+        (item) => item.nodeName === 'UnknownFailure' && item.directFailureIds.length === 0,
+      ),
+    ).toBe(true)
 
-    const recognitionGroups = inspection.signals.filter(item => item.kind === 'recognition_activity')
+    const recognitionGroups = inspection.signals.filter(
+      (item) => item.kind === 'recognition_activity',
+    )
     expect(recognitionGroups).toHaveLength(4)
-    const sameNextListGroup = recognitionGroups.find(item => (
-      item.kind === 'recognition_activity'
-      && item.pipelineNodeName === 'ChooseNext'
-      && item.nextList.length === 1
-      && item.nextList[0]?.name === 'Target'
-    ))
+    const sameNextListGroup = recognitionGroups.find(
+      (item) =>
+        item.kind === 'recognition_activity' &&
+        item.pipelineNodeName === 'ChooseNext' &&
+        item.nextList.length === 1 &&
+        item.nextList[0]?.name === 'Target',
+    )
     expect(sameNextListGroup).toMatchObject({
       occurrenceCount: 2,
       occurrencesWithMixedResults: 2,
@@ -184,31 +264,34 @@ describe('runtime inspection', () => {
     ])
     expect(sameNextListGroup?.representatives.worst.attemptCount).toBe(3)
 
-    const differentNextListGroup = recognitionGroups.find(item => (
-      item.kind === 'recognition_activity'
-      && item.pipelineNodeName === 'ChooseNext'
-      && item.nextList.length === 2
-    ))
+    const differentNextListGroup = recognitionGroups.find(
+      (item) =>
+        item.kind === 'recognition_activity' &&
+        item.pipelineNodeName === 'ChooseNext' &&
+        item.nextList.length === 2,
+    )
     expect(differentNextListGroup).toMatchObject({
       occurrenceCount: 1,
       terminalMatches: [{ name: 'Target', count: 1 }],
     })
 
-    const timeoutGroup = recognitionGroups.find(item => (
-      item.kind === 'recognition_activity' && item.pipelineNodeName === 'WaitForNext'
-    ))
+    const timeoutGroup = recognitionGroups.find(
+      (item) => item.kind === 'recognition_activity' && item.pipelineNodeName === 'WaitForNext',
+    )
     expect(timeoutGroup).toMatchObject({
       occurrenceCount: 1,
       terminalOutcomes: { matched: 0, timeout: 1, running: 0, unmatched: 0 },
     })
 
     expect(inspection.sessions[0]?.tasks[0]?.statistics.recognitionActivityGroups).toBe(4)
-    expect(inspection.sessions[0]?.tasks[0]?.statistics.nodeExecutionsWithMixedRecognitionResults).toBe(3)
+    expect(
+      inspection.sessions[0]?.tasks[0]?.statistics.nodeExecutionsWithMixedRecognitionResults,
+    ).toBe(3)
     expect(inspection.sessions[0]?.tasks[0]?.signalHighlights.recognitionActivity).toEqual(
       expect.arrayContaining([sameNextListGroup?.signalId]),
     )
 
-    const repetition = inspection.signals.find(item => item.kind === 'repeated_node_cycle')
+    const repetition = inspection.signals.find((item) => item.kind === 'repeated_node_cycle')
     expect(repetition).toMatchObject({
       pattern: ['A', 'B'],
       segmentCount: 1,
@@ -234,7 +317,7 @@ describe('runtime inspection', () => {
 
     const inspection = buildRuntimeInspection(output([first, second]), framework, sourceSegments)
 
-    expect(inspection.sessions[0]?.tasks.map(item => item.executionId)).toEqual([
+    expect(inspection.sessions[0]?.tasks.map((item) => item.executionId)).toEqual([
       'task-execution-0-1',
       'task-execution-0-2',
     ])
@@ -254,25 +337,29 @@ describe('runtime inspection', () => {
         entry: 'WildernessProductTask',
         status: 'failed',
       },
-      children: [{
-        id: 'nested-pipeline',
-        type: 'pipeline_node',
-        name: 'WildernessProductTask',
-        status: 'failed',
-        ts: '2026-07-20 10:01:11.000',
-        end_ts: '2026-07-20 10:01:30.000',
-        task_id: 2,
-        node_id: 201,
-        error_image: 'file:C:/logs/on_error/WildernessProductTask.png',
-        children: [{
-          id: 'nested-recognition',
-          type: 'recognition',
-          name: 'EnterProduct',
+      children: [
+        {
+          id: 'nested-pipeline',
+          type: 'pipeline_node',
+          name: 'WildernessProductTask',
           status: 'failed',
-          ts: '2026-07-20 10:01:29.000',
-          vision_image: 'file:C:/logs/vision/EnterProduct.png',
-        }],
-      }],
+          ts: '2026-07-20 10:01:11.000',
+          end_ts: '2026-07-20 10:01:30.000',
+          task_id: 2,
+          node_id: 201,
+          error_image: 'file:C:/logs/on_error/WildernessProductTask.png',
+          children: [
+            {
+              id: 'nested-recognition',
+              type: 'recognition',
+              name: 'EnterProduct',
+              status: 'failed',
+              ts: '2026-07-20 10:01:29.000',
+              vision_image: 'file:C:/logs/vision/EnterProduct.png',
+            },
+          ],
+        },
+      ],
     }
     const parentNode = node(16, 'FlagInWilderness', '2026-07-20 10:01:09.000', {
       end_ts: '2026-07-20 10:01:31.000',
@@ -286,14 +373,16 @@ describe('runtime inspection', () => {
         name: 'FlagInWilderness',
         success: false,
       },
-      node_flow: [{
-        id: 'parent-action',
-        type: 'action',
-        name: 'FlagInWilderness',
-        status: 'failed',
-        ts: '2026-07-20 10:01:09.000',
-        children: [nestedTask],
-      }],
+      node_flow: [
+        {
+          id: 'parent-action',
+          type: 'action',
+          name: 'FlagInWilderness',
+          status: 'failed',
+          ts: '2026-07-20 10:01:09.000',
+          children: [nestedTask],
+        },
+      ],
     })
     const failedTask = task({
       nodes: [parentNode],
@@ -316,11 +405,11 @@ describe('runtime inspection', () => {
     })
 
     const inspection = buildRuntimeInspection(output([failedTask]), framework, sourceSegments)
-    const nestedFailure = inspection.failures.find(failure => failure.taskId === 2)
-    const parentFailure = inspection.failures.find(failure => failure.taskId === 1)
-    const nestedTaskOutcome = inspection.outcomes.find(outcome => (
-      outcome.kind === 'task' && outcome.taskId === 2
-    ))
+    const nestedFailure = inspection.failures.find((failure) => failure.taskId === 2)
+    const parentFailure = inspection.failures.find((failure) => failure.taskId === 1)
+    const nestedTaskOutcome = inspection.outcomes.find(
+      (outcome) => outcome.kind === 'task' && outcome.taskId === 2,
+    )
     const taskExecution = inspection.sessions[0]?.tasks[0]
 
     expect(nestedFailure).toMatchObject({
@@ -337,25 +426,22 @@ describe('runtime inspection', () => {
     expect(nestedTaskOutcome?.directFailureIds).toEqual([nestedFailure?.failureId])
     expect(taskExecution?.directFailureIds).toEqual([parentFailure?.failureId])
     expect(taskExecution?.directFailureIds).not.toContain(nestedFailure?.failureId)
-    expect(taskExecution?.outcomeIds).toEqual(expect.arrayContaining([nestedTaskOutcome?.outcomeId]))
+    expect(taskExecution?.outcomeIds).toEqual(
+      expect.arrayContaining([nestedTaskOutcome?.outcomeId]),
+    )
   })
 
   it('treats a completed repetition that leaves its pattern as normal telemetry', () => {
-    const repeatedNodes = Array.from({ length: 5 }, (_, index) => node(
-      200 + index,
-      'RetryNode',
-      `2026-07-20 10:10:0${index}.000`,
-    ))
+    const repeatedNodes = Array.from({ length: 5 }, (_, index) =>
+      node(200 + index, 'RetryNode', `2026-07-20 10:10:0${index}.000`),
+    )
     const completedTask = task({
       status: 'succeeded',
-      nodes: [
-        ...repeatedNodes,
-        node(210, 'NextNode', '2026-07-20 10:10:05.000'),
-      ],
+      nodes: [...repeatedNodes, node(210, 'NextNode', '2026-07-20 10:10:05.000')],
     })
 
     const inspection = buildRuntimeInspection(output([completedTask]), framework, sourceSegments)
-    const repetition = inspection.signals.find(item => item.kind === 'repeated_node')
+    const repetition = inspection.signals.find((item) => item.kind === 'repeated_node')
 
     expect(repetition).toMatchObject({
       pattern: ['RetryNode'],
@@ -366,11 +452,9 @@ describe('runtime inspection', () => {
   })
 
   it('does not report an earlier pattern as still repeating when another node is running', () => {
-    const repeatedNodes = Array.from({ length: 5 }, (_, index) => node(
-      300 + index,
-      'RetryNode',
-      `2026-07-20 10:15:0${index}.000`,
-    ))
+    const repeatedNodes = Array.from({ length: 5 }, (_, index) =>
+      node(300 + index, 'RetryNode', `2026-07-20 10:15:0${index}.000`),
+    )
     const runningTask = task({
       status: 'running',
       end_time: undefined,
@@ -381,7 +465,7 @@ describe('runtime inspection', () => {
     })
 
     const inspection = buildRuntimeInspection(output([runningTask]), framework, sourceSegments)
-    const repetition = inspection.signals.find(item => item.kind === 'repeated_node')
+    const repetition = inspection.signals.find((item) => item.kind === 'repeated_node')
 
     expect(repetition).toMatchObject({
       pattern: ['RetryNode'],
@@ -394,13 +478,15 @@ describe('runtime inspection', () => {
       const candidate = `Candidate${index}`
       return node(400 + index, `Pipeline${index}`, `2026-07-20 10:20:0${index}.000`, {
         next_list: [{ name: candidate, anchor: false, jump_back: false }],
-        node_flow: [{
-          id: `recognition-${index}`,
-          type: 'recognition',
-          name: candidate,
-          status: 'success',
-          ts: `2026-07-20 10:20:0${index}.000`,
-        }],
+        node_flow: [
+          {
+            id: `recognition-${index}`,
+            type: 'recognition',
+            name: candidate,
+            status: 'success',
+            ts: `2026-07-20 10:20:0${index}.000`,
+          },
+        ],
       })
     })
     const recognitionTask = task({ status: 'succeeded', nodes: recognitionNodes })
@@ -425,20 +511,38 @@ describe('runtime inspection', () => {
         success: false,
       },
       node_flow: [
-        { id: 'r9', type: 'recognition', name: 'Target', status: 'success', ts: '2026-07-20 10:01:19.500' },
+        {
+          id: 'r9',
+          type: 'recognition',
+          name: 'Target',
+          status: 'success',
+          ts: '2026-07-20 10:01:19.500',
+        },
       ],
     })
     const timeout = node(12, 'WaitForNext', '2026-07-20 10:01:20.000', {
       status: 'failed',
       next_list: [{ name: 'NeverMatched', anchor: false, jump_back: false }],
       node_flow: [
-        { id: 'r3', type: 'recognition', name: 'NeverMatched', status: 'failed', ts: '2026-07-20 10:01:20.000' },
+        {
+          id: 'r3',
+          type: 'recognition',
+          name: 'NeverMatched',
+          status: 'failed',
+          ts: '2026-07-20 10:01:20.000',
+        },
       ],
     })
     const failedTask = task({
       nodes: [actionFailedNode, timeout],
       events: [
-        { timestamp: actionFailedNode.ts, level: 'DBG', message: 'action', details: {}, _lineNumber: 20 },
+        {
+          timestamp: actionFailedNode.ts,
+          level: 'DBG',
+          message: 'action',
+          details: {},
+          _lineNumber: 20,
+        },
         { timestamp: timeout.ts, level: 'DBG', message: 'timeout', details: {}, _lineNumber: 30 },
       ],
     })
@@ -450,12 +554,12 @@ describe('runtime inspection', () => {
 
     const inspection = buildRuntimeInspection(output([failedTask]), framework, sourceSegments)
 
-    const actionFailure = inspection.failures.find(item => item.kind === 'action_failed')
+    const actionFailure = inspection.failures.find((item) => item.kind === 'action_failed')
     expect(actionFailure?.evidence.source).toBe('file:C:/logs/maa.bak.log')
     expect(actionFailure?.evidence.path).toBe('maa.bak.log')
     expect(actionFailure?.evidence.localLine).toBe(20)
 
-    const timeoutFailure = inspection.failures.find(item => item.kind === 'next_list_timeout')
+    const timeoutFailure = inspection.failures.find((item) => item.kind === 'next_list_timeout')
     expect(timeoutFailure?.evidence.source).toBe('file:C:/logs/maa.log')
     expect(timeoutFailure?.evidence.path).toBe('maa.log')
     expect(timeoutFailure?.evidence.localLine).toBe(5)

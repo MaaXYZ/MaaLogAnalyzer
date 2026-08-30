@@ -101,11 +101,8 @@ const buildSession = (
   }
 
   const versions = [...new Set(versionEvidence.map((item) => item.version))]
-  const status: FrameworkSession['status'] = versions.length === 0
-    ? 'missing_version'
-    : versions.length === 1
-      ? 'resolved'
-      : 'conflict'
+  const status: FrameworkSession['status'] =
+    versions.length === 0 ? 'missing_version' : versions.length === 1 ? 'resolved' : 'conflict'
   const start = position(source, lines, startIndex)
   start.timestamp = findTimestamp(lines, startIndex, endIndex, 1)
   const end = position(source, lines, endIndex)
@@ -138,28 +135,30 @@ export const extractFrameworkSessions = (
     }
 
     const firstProcessStart = processStarts[0]
-    const hasPartialPrefix = firstProcessStart != null
-      && firstProcessStart > 0
-      && lines.slice(0, firstProcessStart).some((line) => (
-        VERSION_PATTERN.test(line) || line.includes('!!!OnEventNotify!!!')
-      ))
-    const boundaries = processStarts.length === 0 || hasPartialPrefix
-      ? [0, ...processStarts]
-      : processStarts
+    const hasPartialPrefix =
+      firstProcessStart != null &&
+      firstProcessStart > 0 &&
+      lines
+        .slice(0, firstProcessStart)
+        .some((line) => VERSION_PATTERN.test(line) || line.includes('!!!OnEventNotify!!!'))
+    const boundaries =
+      processStarts.length === 0 || hasPartialPrefix ? [0, ...processStarts] : processStarts
     for (let index = 0; index < boundaries.length; index += 1) {
       const startIndex = boundaries[index]
       if (startIndex == null) continue
       const nextStart = boundaries[index + 1]
       const endIndex = nextStart == null ? lines.length - 1 : nextStart - 1
       const isProcessStart = processStarts.includes(startIndex)
-      sessions.push(buildSession(
-        source,
-        lines,
-        startIndex,
-        endIndex,
-        isProcessStart ? 'process_start' : 'partial_file',
-        sessions.length + 1,
-      ))
+      sessions.push(
+        buildSession(
+          source,
+          lines,
+          startIndex,
+          endIndex,
+          isProcessStart ? 'process_start' : 'partial_file',
+          sessions.length + 1,
+        ),
+      )
     }
   }
 
@@ -183,7 +182,9 @@ export const extractFrameworkSessions = (
     warnings.push('Conflicting MaaFramework version headers found within a runtime session.')
   }
   if (sessions.some((session) => session.startKind === 'partial_file')) {
-    warnings.push('Some core log content starts without a MAA Process Start marker; its session boundary is partial.')
+    warnings.push(
+      'Some core log content starts without a MAA Process Start marker; its session boundary is partial.',
+    )
   }
   if (sessions.some((session) => session.status === 'missing_version')) {
     warnings.push('Some MaaFramework runtime sessions do not contain a Logger version header.')

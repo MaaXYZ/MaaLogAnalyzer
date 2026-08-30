@@ -47,7 +47,9 @@ export interface UseAppPresentationBindingsOptions {
   onSelectTask: (task: TaskInfo) => void
   onUploadFile: (
     file: File | File[],
-    selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+    selectPrimaryLogs?: (
+      options: PrimaryLogSelectionOption[],
+    ) => Promise<PrimaryLogSelectionOption[] | null>,
   ) => void | Promise<void>
   onUploadContent: UploadContentHandler
   onMobileTaskSelect: (task: TaskInfo) => void

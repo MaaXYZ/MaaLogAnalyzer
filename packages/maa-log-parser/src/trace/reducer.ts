@@ -45,19 +45,12 @@ const BUSINESS_SCOPE_KINDS = new Set<ScopeKind>([
 
 const isBusinessScope = (kind: ScopeKind): boolean => BUSINESS_SCOPE_KINDS.has(kind)
 
-const matchesScopeSource = (
-  scope: TraceScopeNode,
-  event: ProtocolEvent,
-): boolean => {
+const matchesScopeSource = (scope: TraceScopeNode, event: ProtocolEvent): boolean => {
   const payload = scope.payload as Record<string, unknown>
   return payload.processId === event.processId && payload.threadId === event.threadId
 }
 
-const pushMapStack = <K, V>(
-  map: Map<K, V[]>,
-  key: K,
-  value: V,
-): void => {
+const pushMapStack = <K, V>(map: Map<K, V[]>, key: K, value: V): void => {
   const current = map.get(key)
   if (current) {
     current.push(value)
@@ -66,20 +59,13 @@ const pushMapStack = <K, V>(
   map.set(key, [value])
 }
 
-const peekMapStack = <K, V>(
-  map: Map<K, V[]>,
-  key: K,
-): V | null => {
+const peekMapStack = <K, V>(map: Map<K, V[]>, key: K): V | null => {
   const current = map.get(key)
   if (!current || current.length === 0) return null
   return current[current.length - 1] ?? null
 }
 
-const removeMapStackValue = <K, V>(
-  map: Map<K, V[]>,
-  key: K,
-  value: V,
-): void => {
+const removeMapStackValue = <K, V>(map: Map<K, V[]>, key: K, value: V): void => {
   const current = map.get(key)
   if (!current || current.length === 0) return
   const index = current.lastIndexOf(value)
@@ -90,19 +76,14 @@ const removeMapStackValue = <K, V>(
   }
 }
 
-const removeOpenScope = (
-  state: ReducerState,
-  scope: TraceScopeNode,
-): void => {
+const removeOpenScope = (state: ReducerState, scope: TraceScopeNode): void => {
   const index = state.openScopes.lastIndexOf(scope)
   if (index >= 0) {
     state.openScopes.splice(index, 1)
   }
 }
 
-const toScopeStatus = (
-  phase: ProtocolEvent['phase'],
-): ScopeStatus => {
+const toScopeStatus = (phase: ProtocolEvent['phase']): ScopeStatus => {
   switch (phase) {
     case 'starting':
       return 'running'
@@ -195,10 +176,7 @@ const buildScopeKey = (event: ProtocolEvent): string | null => {
   }
 }
 
-const attachChild = (
-  parent: TraceRootNode | TraceScopeNode,
-  child: TraceScopeNode,
-): void => {
+const attachChild = (parent: TraceRootNode | TraceScopeNode, child: TraceScopeNode): void => {
   parent.children.push(child)
 }
 
@@ -251,10 +229,10 @@ const resolveWaitFreezesParentScope = (
   const taskId = event.taskId
   const sameSourceScope = findNearestOpenBusinessScope(state, { event })
   if (
-    sameSourceScope
-    && taskId != null
-    && sameSourceScope.taskId != null
-    && sameSourceScope.taskId !== taskId
+    sameSourceScope &&
+    taskId != null &&
+    sameSourceScope.taskId != null &&
+    sameSourceScope.taskId !== taskId
   ) {
     if (sameSourceScope.kind !== 'next_list') {
       return sameSourceScope
@@ -262,18 +240,20 @@ const resolveWaitFreezesParentScope = (
 
     const sameSourceForeignScope = findNearestOpenNonNextListBusinessScopeBySource(state, event)
     if (
-      sameSourceForeignScope
-      && sameSourceForeignScope.taskId != null
-      && sameSourceForeignScope.taskId !== taskId
+      sameSourceForeignScope &&
+      sameSourceForeignScope.taskId != null &&
+      sameSourceForeignScope.taskId !== taskId
     ) {
       return sameSourceForeignScope
     }
   }
 
   if (taskId != null) {
-    return findNearestOpenBusinessScope(state, { taskId })
-      ?? peekMapStack(state.openTaskScopesByTaskId, taskId)
-      ?? state.root
+    return (
+      findNearestOpenBusinessScope(state, { taskId }) ??
+      peekMapStack(state.openTaskScopesByTaskId, taskId) ??
+      state.root
+    )
   }
 
   return state.root
@@ -294,41 +274,39 @@ const resolveParentScope = (
       return findNearestOpenBusinessScope(state, { event }) ?? state.root
     case 'pipeline_node':
       return taskId != null
-        ? peekMapStack(state.openTaskScopesByTaskId, taskId)
-          ?? findNearestOpenBusinessScope(state, { event })
-          ?? state.root
+        ? (peekMapStack(state.openTaskScopesByTaskId, taskId) ??
+            findNearestOpenBusinessScope(state, { event }) ??
+            state.root)
         : state.root
     case 'next_list':
       return taskId != null
-        ? peekMapStack(state.openPipelineScopesByTaskId, taskId)
-          ?? peekMapStack(state.openTaskScopesByTaskId, taskId)
-          ?? findNearestOpenBusinessScope(state, { event })
-          ?? state.root
+        ? (peekMapStack(state.openPipelineScopesByTaskId, taskId) ??
+            peekMapStack(state.openTaskScopesByTaskId, taskId) ??
+            findNearestOpenBusinessScope(state, { event }) ??
+            state.root)
         : state.root
     case 'recognition':
       return taskId != null
-        ? peekMapStack(state.openNextListScopesByTaskId, taskId)
-          ?? findNearestOpenBusinessScope(state, { taskId })
-          ?? peekMapStack(state.openTaskScopesByTaskId, taskId)
-          ?? state.root
+        ? (peekMapStack(state.openNextListScopesByTaskId, taskId) ??
+            findNearestOpenBusinessScope(state, { taskId }) ??
+            peekMapStack(state.openTaskScopesByTaskId, taskId) ??
+            state.root)
         : state.root
     case 'action':
     case 'recognition_node':
     case 'action_node':
       return taskId != null
-        ? findNearestOpenBusinessScope(state, { taskId })
-          ?? peekMapStack(state.openTaskScopesByTaskId, taskId)
-          ?? findNearestOpenBusinessScope(state, { event })
-          ?? state.root
+        ? (findNearestOpenBusinessScope(state, { taskId }) ??
+            peekMapStack(state.openTaskScopesByTaskId, taskId) ??
+            findNearestOpenBusinessScope(state, { event }) ??
+            state.root)
         : state.root
     case 'wait_freezes':
       return resolveWaitFreezesParentScope(state, event)
   }
 }
 
-const createScopeNode = (
-  event: ProtocolEvent,
-): TraceScopeNode => ({
+const createScopeNode = (event: ProtocolEvent): TraceScopeNode => ({
   id: createScopeId(event.kind, event, event.seq, readTaskId(event)),
   kind: event.kind,
   status: toScopeStatus(event.phase),
@@ -341,10 +319,7 @@ const createScopeNode = (
   children: [],
 })
 
-const openScope = (
-  state: ReducerState,
-  event: ProtocolEvent,
-): TraceScopeNode => {
+const openScope = (state: ReducerState, event: ProtocolEvent): TraceScopeNode => {
   const scopeKey = buildScopeKey(event)
   if (scopeKey) {
     const existingScopes = state.openScopeStacksByKey.get(scopeKey)
@@ -432,10 +407,7 @@ const finalizeScope = (
   return scope
 }
 
-const closeScope = (
-  state: ReducerState,
-  event: ProtocolEvent,
-): TraceScopeNode => {
+const closeScope = (state: ReducerState, event: ProtocolEvent): TraceScopeNode => {
   const scopeKey = buildScopeKey(event)
   const scope = scopeKey
     ? peekMapStack(state.openScopeStacksByKey, scopeKey)
@@ -469,10 +441,7 @@ const createReducerState = (events: ProtocolEvent[]): ReducerState => ({
   openNextListScopesByTaskId: new Map(),
 })
 
-const appendEventToReducerState = (
-  state: ReducerState,
-  event: ProtocolEvent,
-): void => {
+const appendEventToReducerState = (state: ReducerState, event: ProtocolEvent): void => {
   if (!state.root.ts) state.root.ts = event.ts
 
   if (event.phase === 'starting') {
@@ -508,9 +477,7 @@ export const createIncrementalTraceReducer = (): IncrementalTraceReducer => {
   }
 }
 
-export const buildTraceTree = (
-  events: ProtocolEvent[],
-): TraceRootNode => {
+export const buildTraceTree = (events: ProtocolEvent[]): TraceRootNode => {
   const state = createReducerState(events)
 
   for (const event of events) {

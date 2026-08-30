@@ -22,11 +22,15 @@ const queryRealtimeSnapshot = async (
   if (!bridge?.enabled) {
     throw new Error('Bridge is disabled')
   }
-  const result = await bridge.sendRequest('realtime.snapshot.request', {
-    sessionId,
-    lastSeq,
-    maxBatchSize: options.snapshotMaxBatchSize,
-  }, { timeoutMs: options.snapshotTimeoutMs })
+  const result = await bridge.sendRequest(
+    'realtime.snapshot.request',
+    {
+      sessionId,
+      lastSeq,
+      maxBatchSize: options.snapshotMaxBatchSize,
+    },
+    { timeoutMs: options.snapshotTimeoutMs },
+  )
   const record = options.asRecord(result)
   if (!record) {
     throw new Error('Invalid realtime.snapshot.request response')
@@ -47,7 +51,8 @@ export const createRealtimeSnapshotRequester = (
     const bridge = options.getBridge()
     if (!bridge?.enabled) return
     if (options.snapshotRequesting.value) return
-    if (options.snapshotRequestedFromSeq.value === lastSeq && options.snapshotReplaying.value) return
+    if (options.snapshotRequestedFromSeq.value === lastSeq && options.snapshotReplaying.value)
+      return
 
     options.snapshotRequesting.value = true
     options.snapshotRequestedFromSeq.value = lastSeq

@@ -1,16 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { parseEventLine } from '../event/line'
-import {
-  createProtocolEvent,
-  createSourceRef,
-} from '../protocol/eventFactory'
+import { createProtocolEvent, createSourceRef } from '../protocol/eventFactory'
 
 const identity = (value: string) => value
 
-const createEvent = (
-  message: string,
-  details: Record<string, unknown>,
-) => {
+const createEvent = (message: string, details: Record<string, unknown>) => {
   const line = `[2026-04-08 00:01:02.345][INF][Px1][Tx2][test] !!!OnEventNotify!!! [handle=1] [msg=${message}] [details=${JSON.stringify(details)}]`
   const parsed = parseEventLine(line, 1, {
     internEventToken: identity,
@@ -64,18 +58,12 @@ const REQUIRED_SCOPE_ID_CASES = [
   },
 ] as const
 
-const INVALID_SCOPE_IDS: unknown[] = [
-  undefined,
-  0,
-  -1,
-  1.5,
-  Number.MAX_SAFE_INTEGER + 1,
-  '1',
-]
+const INVALID_SCOPE_IDS: unknown[] = [undefined, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '1']
 
 describe('ProtocolEventFactory', () => {
   it('creates task protocol event with SourceRef metadata', () => {
-    const line = '[2026-04-08 00:01:02.345][INF][Px1][Tx2][test] !!!OnEventNotify!!! [handle=1] [msg=Tasker.Task.Starting] [details={"task_id":1,"entry":"Main","uuid":"u-1","hash":"h-1"}]'
+    const line =
+      '[2026-04-08 00:01:02.345][INF][Px1][Tx2][test] !!!OnEventNotify!!! [handle=1] [msg=Tasker.Task.Starting] [details={"task_id":1,"entry":"Main","uuid":"u-1","hash":"h-1"}]'
     const parsed = parseEventLine(line, 10, {
       internEventToken: identity,
       forceCopyString: identity,
@@ -118,7 +106,8 @@ describe('ProtocolEventFactory', () => {
   })
 
   it('creates wait_freezes protocol event with parsed details', () => {
-    const line = '[2026-04-08 00:01:04.000][INF][Px1][Tx2][test] !!!OnEventNotify!!! [handle=1] [msg=Node.WaitFreezes.Succeeded] [details={"task_id":1,"wf_id":9,"name":"WF","phase":"post","roi":[1,2,3,4],"param":{"method":1,"timeout":1000},"reco_ids":[5,6],"elapsed":77,"focus":{"x":1}}]'
+    const line =
+      '[2026-04-08 00:01:04.000][INF][Px1][Tx2][test] !!!OnEventNotify!!! [handle=1] [msg=Node.WaitFreezes.Succeeded] [details={"task_id":1,"wf_id":9,"name":"WF","phase":"post","roi":[1,2,3,4],"param":{"method":1,"timeout":1000},"reco_ids":[5,6],"elapsed":77,"focus":{"x":1}}]'
     const parsed = parseEventLine(line, 12, {
       internEventToken: identity,
       forceCopyString: identity,
@@ -153,40 +142,48 @@ describe('ProtocolEventFactory', () => {
 
       for (const field of requiredFields) {
         for (const invalidValue of INVALID_SCOPE_IDS) {
-          expect(createEvent(message, {
-            ...details,
-            [field]: invalidValue,
-          })).toBeNull()
+          expect(
+            createEvent(message, {
+              ...details,
+              [field]: invalidValue,
+            }),
+          ).toBeNull()
         }
       }
     },
   )
 
   it('accepts the largest positive safe integer as a required scope ID', () => {
-    expect(createEvent('Tasker.Task.Starting', {
-      task_id: Number.MAX_SAFE_INTEGER,
-    })).toMatchObject({
+    expect(
+      createEvent('Tasker.Task.Starting', {
+        task_id: Number.MAX_SAFE_INTEGER,
+      }),
+    ).toMatchObject({
       kind: 'task',
       taskId: Number.MAX_SAFE_INTEGER,
     })
   })
 
   it('normalizes invalid optional node operation IDs without changing nested details', () => {
-    expect(createEvent('Node.RecognitionNode.Starting', {
-      task_id: 1,
-      node_id: 2,
-      reco_id: 0,
-    })).toMatchObject({
+    expect(
+      createEvent('Node.RecognitionNode.Starting', {
+        task_id: 1,
+        node_id: 2,
+        reco_id: 0,
+      }),
+    ).toMatchObject({
       kind: 'recognition_node',
       recoId: undefined,
     })
 
-    expect(createEvent('Node.ActionNode.Starting', {
-      task_id: 1,
-      node_id: 2,
-      action_id: 0,
-      node_details: { action_id: 0 },
-    })).toMatchObject({
+    expect(
+      createEvent('Node.ActionNode.Starting', {
+        task_id: 1,
+        node_id: 2,
+        action_id: 0,
+        node_details: { action_id: 0 },
+      }),
+    ).toMatchObject({
       kind: 'action_node',
       actionId: undefined,
       nodeDetails: { action_id: 0 },
@@ -194,7 +191,8 @@ describe('ProtocolEventFactory', () => {
   })
 
   it('returns null for unsupported or unknown message phase', () => {
-    const line = '[2026-04-08 00:01:05.000][INF][Px1][Tx2][test] !!!OnEventNotify!!! [handle=1] [msg=Node.NextList.Custom] [details={"task_id":1}]'
+    const line =
+      '[2026-04-08 00:01:05.000][INF][Px1][Tx2][test] !!!OnEventNotify!!! [handle=1] [msg=Node.NextList.Custom] [details={"task_id":1}]'
     const parsed = parseEventLine(line, 14, {
       internEventToken: identity,
       forceCopyString: identity,

@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  ANALYZER_TOOL_API_VERSION,
-  createAnalyzerToolDispatcher,
-} from '../service/toolProtocol'
+import { ANALYZER_TOOL_API_VERSION, createAnalyzerToolDispatcher } from '../service/toolProtocol'
 
 describe('Analyzer tool protocol dispatcher', () => {
   it('preserves request metadata around a successful tool call', async () => {

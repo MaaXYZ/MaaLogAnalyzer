@@ -12,12 +12,14 @@ describe('TaskLifecycle', () => {
     expect(resolveEventTaskId({ task_id: 123 })).toBe(123)
     expect(resolveEventTaskId({ task_id: '123' })).toBeUndefined()
 
-    expect(resolveTaskLifecycleEventDetails({
-      task_id: 7,
-      entry: 'MainTask',
-      hash: 'h-7',
-      uuid: 'u-7',
-    })).toEqual({
+    expect(
+      resolveTaskLifecycleEventDetails({
+        task_id: 7,
+        entry: 'MainTask',
+        hash: 'h-7',
+        uuid: 'u-7',
+      }),
+    ).toEqual({
       task_id: 7,
       entry: 'MainTask',
       hash: 'h-7',

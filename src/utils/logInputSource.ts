@@ -4,12 +4,13 @@ import { decodeFileContent } from './textEncoding'
 
 type LogParseSourceMetadata = Omit<ParseSourceInput, 'content'>
 
-export type LogParseSourceInput = LogParseSourceMetadata & (
-  | { content: string; bytes?: never; file?: never; loadBytes?: never }
-  | { content?: never; bytes: Uint8Array; file?: never; loadBytes?: never }
-  | { content?: never; bytes?: never; file: File; loadBytes?: never }
-  | { content?: never; bytes?: never; file?: never; loadBytes: () => Promise<Uint8Array> }
-)
+export type LogParseSourceInput = LogParseSourceMetadata &
+  (
+    | { content: string; bytes?: never; file?: never; loadBytes?: never }
+    | { content?: never; bytes: Uint8Array; file?: never; loadBytes?: never }
+    | { content?: never; bytes?: never; file: File; loadBytes?: never }
+    | { content?: never; bytes?: never; file?: never; loadBytes: () => Promise<Uint8Array> }
+  )
 
 const readSourceBytes = async (input: LogParseSourceInput): Promise<Uint8Array> => {
   if ('bytes' in input && input.bytes) return input.bytes
@@ -22,9 +23,9 @@ const readSourceBytes = async (input: LogParseSourceInput): Promise<Uint8Array> 
 
 export const toExactArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   if (
-    bytes.buffer instanceof ArrayBuffer
-    && bytes.byteOffset === 0
-    && bytes.byteLength === bytes.buffer.byteLength
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
   ) {
     return bytes.buffer
   }
@@ -34,9 +35,10 @@ export const toExactArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
 export const materializeInlineParseInput = async (
   input: LogParseSourceInput,
 ): Promise<ParseSourceInput> => ({
-  content: 'content' in input && typeof input.content === 'string'
-    ? input.content
-    : decodeFileContent(await readSourceBytes(input)),
+  content:
+    'content' in input && typeof input.content === 'string'
+      ? input.content
+      : decodeFileContent(await readSourceBytes(input)),
   sourceKey: input.sourceKey,
   sourcePath: input.sourcePath,
   inputIndex: input.inputIndex,

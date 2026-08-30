@@ -48,16 +48,15 @@ export interface AnalyzerToolDefinitionMap {
 
 export type AnalyzerToolName = keyof AnalyzerToolDefinitionMap
 
-export type AnalyzerToolProtocolRequest<
-  TName extends AnalyzerToolName = AnalyzerToolName,
-> = TName extends AnalyzerToolName
-  ? {
-      request_id: string
-      api_version: typeof ANALYZER_TOOL_API_VERSION
-      tool: TName
-      args: AnalyzerToolDefinitionMap[TName]['args']
-    }
-  : never
+export type AnalyzerToolProtocolRequest<TName extends AnalyzerToolName = AnalyzerToolName> =
+  TName extends AnalyzerToolName
+    ? {
+        request_id: string
+        api_version: typeof ANALYZER_TOOL_API_VERSION
+        tool: TName
+        args: AnalyzerToolDefinitionMap[TName]['args']
+      }
+    : never
 
 export type AnalyzerToolResult = AnalyzerToolDefinitionMap[AnalyzerToolName]['result']
 
@@ -104,9 +103,7 @@ const protocolFailure = (
   },
 })
 
-export const createAnalyzerToolDispatcher = (
-  options: AnalyzerToolHandlerOptions = {},
-) => {
+export const createAnalyzerToolDispatcher = (options: AnalyzerToolHandlerOptions = {}) => {
   const handlers = createAnalyzerToolHandlers(options)
 
   return {
@@ -118,11 +115,17 @@ export const createAnalyzerToolDispatcher = (
         return protocolFailure(null, 'INVALID_REQUEST', 'request must be an object', startedAt)
       }
 
-      const requestId = typeof request.request_id === 'string' && request.request_id.length > 0
-        ? request.request_id
-        : null
+      const requestId =
+        typeof request.request_id === 'string' && request.request_id.length > 0
+          ? request.request_id
+          : null
       if (requestId === null) {
-        return protocolFailure(null, 'INVALID_REQUEST', 'request_id must be a non-empty string', startedAt)
+        return protocolFailure(
+          null,
+          'INVALID_REQUEST',
+          'request_id must be a non-empty string',
+          startedAt,
+        )
       }
       if (request.api_version !== ANALYZER_TOOL_API_VERSION) {
         return protocolFailure(
@@ -145,13 +148,19 @@ export const createAnalyzerToolDispatcher = (
           response = await handlers.parse_log_bundle(request.args as unknown as ParseLogBundleArgs)
           break
         case 'get_task_overview':
-          response = await handlers.get_task_overview(request.args as unknown as GetTaskOverviewArgs)
+          response = await handlers.get_task_overview(
+            request.args as unknown as GetTaskOverviewArgs,
+          )
           break
         case 'get_node_timeline':
-          response = await handlers.get_node_timeline(request.args as unknown as GetNodeTimelineArgs)
+          response = await handlers.get_node_timeline(
+            request.args as unknown as GetNodeTimelineArgs,
+          )
           break
         case 'get_next_list_history':
-          response = await handlers.get_next_list_history(request.args as unknown as GetNextListHistoryArgs)
+          response = await handlers.get_next_list_history(
+            request.args as unknown as GetNextListHistoryArgs,
+          )
           break
         case 'get_parent_chain':
           response = await handlers.get_parent_chain(request.args as unknown as GetParentChainArgs)

@@ -2,20 +2,23 @@
 import { computed, ref } from 'vue'
 import { CopyOutlined } from '@vicons/antd'
 
-const props = withDefaults(defineProps<{
-  name?: string
-  value: unknown
-  depth?: number
-  root?: boolean
-  defaultExpandAll?: boolean
-  formatJson: (obj: any) => string
-  copyToClipboard: (text: string) => void
-}>(), {
-  name: '',
-  depth: 0,
-  root: false,
-  defaultExpandAll: false,
-})
+const props = withDefaults(
+  defineProps<{
+    name?: string
+    value: unknown
+    depth?: number
+    root?: boolean
+    defaultExpandAll?: boolean
+    formatJson: (obj: any) => string
+    copyToClipboard: (text: string) => void
+  }>(),
+  {
+    name: '',
+    depth: 0,
+    root: false,
+    defaultExpandAll: false,
+  },
+)
 
 const MAX_VISIBLE_ENTRIES = 200
 
@@ -44,7 +47,8 @@ const valueSummary = computed(() => {
   const value = props.value
   if (Array.isArray(value)) return `Array(${value.length})`
   if (value !== null && typeof value === 'object') return `Object(${Object.keys(value).length})`
-  if (typeof value === 'string') return JSON.stringify(value.length > 180 ? `${value.slice(0, 180)}...` : value)
+  if (typeof value === 'string')
+    return JSON.stringify(value.length > 180 ? `${value.slice(0, 180)}...` : value)
   if (typeof value === 'undefined') return 'undefined'
   return JSON.stringify(value)
 })
@@ -63,12 +67,7 @@ const handleCopy = () => {
 <template>
   <div class="raw-json-tree-node" :class="{ root: props.root }">
     <div class="raw-json-tree-row">
-      <button
-        v-if="isRecordLike"
-        class="raw-json-tree-toggle"
-        type="button"
-        @click="toggle"
-      >
+      <button v-if="isRecordLike" class="raw-json-tree-toggle" type="button" @click="toggle">
         {{ expanded ? '-' : '+' }}
       </button>
       <span v-else class="raw-json-tree-spacer" />
@@ -81,12 +80,7 @@ const handleCopy = () => {
       >
         {{ valueSummary }}
       </span>
-      <button
-        class="raw-json-tree-copy"
-        type="button"
-        title="复制当前值"
-        @click.stop="handleCopy"
-      >
+      <button class="raw-json-tree-copy" type="button" title="复制当前值" @click.stop="handleCopy">
         <copy-outlined />
       </button>
     </div>
@@ -119,7 +113,14 @@ const handleCopy = () => {
   --raw-json-tree-copy-color: rgba(100, 116, 139, 0.9);
   --raw-json-tree-toggle-bg: rgba(148, 163, 184, 0.16);
   --raw-json-tree-guide-color: rgba(148, 163, 184, 0.28);
-  font-family: ui-monospace, SFMono-Regular, SF Mono, Consolas, Liberation Mono, Menlo, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    SF Mono,
+    Consolas,
+    Liberation Mono,
+    Menlo,
+    monospace;
   font-size: 12px;
   line-height: 1.55;
 }
@@ -138,7 +139,8 @@ const handleCopy = () => {
 }
 
 @media (prefers-color-scheme: dark) {
-  :global(body:not(.force-light):not(.vscode-light):not(.vscode-high-contrast-light)) .raw-json-tree-node {
+  :global(body:not(.force-light):not(.vscode-light):not(.vscode-high-contrast-light))
+    .raw-json-tree-node {
     --raw-json-tree-key-color: var(--vscode-symbolIcon-propertyForeground, #9cdcfe);
     --raw-json-tree-object-color: #dcdcaa;
     --raw-json-tree-primitive-color: #b5cea8;

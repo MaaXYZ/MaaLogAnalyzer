@@ -5,8 +5,14 @@ import { compileSearchPattern, findMatchInLine, pushSearchResult } from './match
 const SEARCH_CHUNK_SIZE = 1024 * 1024
 const yieldToMainThread = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
-export const runContentSearch = async (options: NormalSearchOptions): Promise<SearchResult[] | null> => {
-  const searchPattern = compileSearchPattern(options.keyword, options.useRegex, options.caseSensitive)
+export const runContentSearch = async (
+  options: NormalSearchOptions,
+): Promise<SearchResult[] | null> => {
+  const searchPattern = compileSearchPattern(
+    options.keyword,
+    options.useRegex,
+    options.caseSensitive,
+  )
 
   const results: SearchResult[] = []
   let cursor = 0

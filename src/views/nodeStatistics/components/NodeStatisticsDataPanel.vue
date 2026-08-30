@@ -1,12 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { UploadFileInfo, DataTableColumns } from 'naive-ui'
-import {
-  NCard,
-  NDataTable,
-  NEmpty,
-  NText,
-} from 'naive-ui'
+import { NCard, NDataTable, NEmpty, NText } from 'naive-ui'
 import NodeStatisticsEmptyState from './NodeStatisticsEmptyState.vue'
 
 const props = defineProps<{
@@ -46,7 +41,9 @@ const tableScrollX = computed(() => {
       <div class="data-panel-header">
         <div class="data-panel-title">{{ props.panelTitle }}</div>
         <n-text depth="3" class="data-panel-meta">
-          {{ props.statistics.length > 0 ? `共 ${props.statistics.length} 项` : '按当前筛选展示结果' }}
+          {{
+            props.statistics.length > 0 ? `共 ${props.statistics.length} 项` : '按当前筛选展示结果'
+          }}
         </n-text>
       </div>
     </template>
@@ -73,11 +70,7 @@ const tableScrollX = computed(() => {
         @tauri-upload-click="emit('tauriUploadClick')"
       />
 
-      <n-empty
-        v-else
-        description="暂无数据"
-        style="margin-top: 60px"
-      />
+      <n-empty v-else description="暂无数据" style="margin-top: 60px" />
     </div>
   </n-card>
 </template>

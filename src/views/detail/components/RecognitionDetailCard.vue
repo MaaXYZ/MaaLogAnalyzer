@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import {
-  NCard, NFlex, NDescriptions, NDescriptionsItem, NTag,
-  NText, NCollapse, NButton,
-  NTabs, NTabPane // <-- 1. 新增引入 Tabs 相关组件
+  NCard,
+  NFlex,
+  NDescriptions,
+  NDescriptionsItem,
+  NTag,
+  NText,
+  NCollapse,
+  NButton,
+  NTabs,
+  NTabPane, // <-- 1. 新增引入 Tabs 相关组件
 } from 'naive-ui'
 import type { UnifiedFlowItem } from '../../../types'
 import SafePreviewImage from '../../../components/SafePreviewImage.vue'
@@ -42,9 +49,11 @@ watch(
   },
 )
 
-const recognitionDetailRows = computed(() => buildRecognitionDetailRows(props.currentRecognition, props.descriptionColumns))
+const recognitionDetailRows = computed(() =>
+  buildRecognitionDetailRows(props.currentRecognition, props.descriptionColumns),
+)
 
-const getRecognitionHitTagType = (value: unknown) => value === '命中' ? 'success' : 'error'
+const getRecognitionHitTagType = (value: unknown) => (value === '命中' ? 'success' : 'error')
 
 const handleSearchInSource = () => {
   const keyword = props.currentAttempt?.name || props.currentRecognition?.name
@@ -55,9 +64,7 @@ const handleSearchInSource = () => {
 
 <template>
   <n-card>
-    <template #header>
-      🔍 识别详情
-    </template>
+    <template #header> 🔍 识别详情 </template>
     <template #header-extra>
       <n-flex align="center" style="gap: 6px">
         <n-button
@@ -78,7 +85,7 @@ const handleSearchInSource = () => {
         </n-button>
       </n-flex>
     </template>
-    
+
     <n-descriptions :column="props.descriptionColumns" size="small" label-placement="left" bordered>
       <n-descriptions-item label="识别 ID">
         {{ props.currentRecognition?.reco_id }}
@@ -99,9 +106,7 @@ const handleSearchInSource = () => {
       </n-descriptions-item>
 
       <n-descriptions-item label="识别位置" v-if="props.currentRecognition?.box">
-        <n-text code>
-          [{{ props.currentRecognition.box.join(', ') }}]
-        </n-text>
+        <n-text code> [{{ props.currentRecognition.box.join(', ') }}] </n-text>
       </n-descriptions-item>
 
       <n-descriptions-item
@@ -130,18 +135,27 @@ const handleSearchInSource = () => {
       <n-text type="error" style="font-size: 13px">{{ props.bridgeRecognitionError }}</n-text>
     </div>
 
-    <n-tabs 
-      v-if="props.bridgeRecognitionRawImage || props.currentAttempt?.vision_image || props.bridgeRecognitionDrawImages.length > 0 || props.currentAttempt?.error_image"
-      type="line" 
-      size="small" 
-      animated 
+    <n-tabs
+      v-if="
+        props.bridgeRecognitionRawImage ||
+        props.currentAttempt?.vision_image ||
+        props.bridgeRecognitionDrawImages.length > 0 ||
+        props.currentAttempt?.error_image
+      "
+      type="line"
+      size="small"
+      animated
       default-value="draw"
       style="margin-top: 16px"
     >
       <n-tab-pane
         v-if="props.bridgeRecognitionDrawImages.length > 0 || props.currentAttempt?.vision_image"
         name="draw"
-        :tab="props.bridgeRecognitionDrawImages.length > 0 ? `解析图 (Draw - ${props.bridgeRecognitionDrawImages.length})` : '解析图 (Draw)'"
+        :tab="
+          props.bridgeRecognitionDrawImages.length > 0
+            ? `解析图 (Draw - ${props.bridgeRecognitionDrawImages.length})`
+            : '解析图 (Draw)'
+        "
       >
         <n-flex vertical style="gap: 8px">
           <safe-preview-image
@@ -151,7 +165,9 @@ const handleSearchInSource = () => {
             class="detail-preview-image"
           />
           <safe-preview-image
-            v-if="props.bridgeRecognitionDrawImages.length === 0 && props.currentAttempt?.vision_image"
+            v-if="
+              props.bridgeRecognitionDrawImages.length === 0 && props.currentAttempt?.vision_image
+            "
             :src="props.resolveImageSrc(props.currentAttempt.vision_image)"
             class="detail-preview-image"
           />
@@ -163,15 +179,15 @@ const handleSearchInSource = () => {
         name="raw"
         tab="原图 (Raw)"
       >
-        <safe-preview-image 
+        <safe-preview-image
           v-if="props.bridgeRecognitionRawImage"
-          :src="props.resolveImageSrc(props.bridgeRecognitionRawImage)" 
-          class="detail-preview-image" 
+          :src="props.resolveImageSrc(props.bridgeRecognitionRawImage)"
+          class="detail-preview-image"
         />
-        <safe-preview-image 
+        <safe-preview-image
           v-else-if="props.currentAttempt?.error_image"
-          :src="props.resolveImageSrc(props.currentAttempt.error_image)" 
-          class="detail-preview-image" 
+          :src="props.resolveImageSrc(props.currentAttempt.error_image)"
+          class="detail-preview-image"
         />
       </n-tab-pane>
 
@@ -180,9 +196,9 @@ const handleSearchInSource = () => {
         name="error"
         tab="错误截图 (Error)"
       >
-        <safe-preview-image 
-          :src="props.resolveImageSrc(props.currentAttempt.error_image)" 
-          class="detail-preview-image" 
+        <safe-preview-image
+          :src="props.resolveImageSrc(props.currentAttempt.error_image)"
+          class="detail-preview-image"
         />
       </n-tab-pane>
     </n-tabs>

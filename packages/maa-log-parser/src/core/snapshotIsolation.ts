@@ -1,6 +1,5 @@
-const isObject = (value: unknown): value is Record<PropertyKey, unknown> => (
+const isObject = (value: unknown): value is Record<PropertyKey, unknown> =>
   value !== null && typeof value === 'object'
-)
 
 export const cloneSnapshotData = <T>(value: T, seen = new WeakMap<object, unknown>()): T => {
   if (!isObject(value)) return value

@@ -10,12 +10,12 @@ interface UseProcessFileSelectionOptions {
   isInTauri: Ref<boolean>
   isInVSCode: Ref<boolean>
   virtualScroller: Ref<DynamicScrollerInstance | null>
-  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>
+  selectPrimaryLogs?: (
+    options: PrimaryLogSelectionOption[],
+  ) => Promise<PrimaryLogSelectionOption[] | null>
 }
 
-export const useProcessFileSelection = (
-  options: UseProcessFileSelectionOptions,
-) => {
+export const useProcessFileSelection = (options: UseProcessFileSelectionOptions) => {
   const {
     folderInputRef,
     fileInputRef,

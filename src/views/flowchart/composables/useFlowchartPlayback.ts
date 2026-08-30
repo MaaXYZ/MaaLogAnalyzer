@@ -71,7 +71,12 @@ export const useFlowchartPlayback = (options: UseFlowchartPlaybackOptions) => {
 
   const focusTimelineItem = (
     index: number,
-    focusOptions?: { openPopover?: boolean; center?: boolean; closeDrawer?: boolean; focusNodeId?: string },
+    focusOptions?: {
+      openPopover?: boolean
+      center?: boolean
+      closeDrawer?: boolean
+      focusNodeId?: string
+    },
   ) => {
     const item = options.executionTimeline.value[index]
     if (!item) return
@@ -115,9 +120,10 @@ export const useFlowchartPlayback = (options: UseFlowchartPlaybackOptions) => {
     if (timelineLength === 0) return
 
     const selectedIndex = options.selectedTimelineIndex.value
-    const startIndex = selectedIndex == null || selectedIndex < 0 || selectedIndex >= timelineLength - 1
-      ? 0
-      : selectedIndex
+    const startIndex =
+      selectedIndex == null || selectedIndex < 0 || selectedIndex >= timelineLength - 1
+        ? 0
+        : selectedIndex
     focusTimelineItem(startIndex, { openPopover: false, center: true })
 
     isPlaying.value = true

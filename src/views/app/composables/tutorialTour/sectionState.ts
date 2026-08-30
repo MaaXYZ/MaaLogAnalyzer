@@ -37,8 +37,7 @@ export const useTourSectionState = <T extends TourStepLike>(
     if (!current) return 0
     return currentTourSteps.value
       .slice(0, tourStepIndex.value + 1)
-      .filter((step) => step.sectionId === current.sectionId)
-      .length
+      .filter((step) => step.sectionId === current.sectionId).length
   })
 
   return {

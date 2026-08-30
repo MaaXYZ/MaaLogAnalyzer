@@ -2,12 +2,13 @@ import type { UnifiedFlowItem } from '../shared/types'
 
 export const sortFlowItemsByTimestamp = (
   items: UnifiedFlowItem[],
-  toTimestampMs: (value?: string) => number
+  toTimestampMs: (value?: string) => number,
 ): UnifiedFlowItem[] => {
   return items
     .map((item, index) => ({ item, index }))
     .sort((a, b) => {
-      const delta = toTimestampMs(a.item.ts || a.item.end_ts) - toTimestampMs(b.item.ts || b.item.end_ts)
+      const delta =
+        toTimestampMs(a.item.ts || a.item.end_ts) - toTimestampMs(b.item.ts || b.item.end_ts)
       if (delta !== 0) return delta
       return a.index - b.index
     })
@@ -17,7 +18,7 @@ export const sortFlowItemsByTimestamp = (
 const findBestRecognitionParentFlowItem = (
   flowItems: UnifiedFlowItem[],
   target: UnifiedFlowItem,
-  toTimestampMs: (value?: string) => number
+  toTimestampMs: (value?: string) => number,
 ): UnifiedFlowItem | null => {
   const targetTs = toTimestampMs(target.ts || target.end_ts)
   if (!Number.isFinite(targetTs)) return null
@@ -35,11 +36,7 @@ const findBestRecognitionParentFlowItem = (
           targetTs >= startMs &&
           (!Number.isFinite(endMs) || targetTs <= endMs + 1)
         if (inRange) {
-          if (
-            !bestItem ||
-            depth > bestDepth ||
-            (depth === bestDepth && startMs >= bestStartMs)
-          ) {
+          if (!bestItem || depth > bestDepth || (depth === bestDepth && startMs >= bestStartMs)) {
             bestItem = item
             bestDepth = depth
             bestStartMs = startMs
@@ -71,7 +68,7 @@ const normalizeFlowName = (value?: string): string => {
 const findBestStructuralParentFlowItem = (
   flowItems: UnifiedFlowItem[],
   target: UnifiedFlowItem,
-  toTimestampMs: (value?: string) => number
+  toTimestampMs: (value?: string) => number,
 ): UnifiedFlowItem | null => {
   const targetTs = toTimestampMs(target.ts || target.end_ts)
   if (!Number.isFinite(targetTs)) return null
@@ -102,7 +99,10 @@ const findBestStructuralParentFlowItem = (
             nameMatch > bestNameMatch ||
             (nameMatch === bestNameMatch && depth > bestDepth) ||
             (nameMatch === bestNameMatch && depth === bestDepth && typeWeight > bestTypeWeight) ||
-            (nameMatch === bestNameMatch && depth === bestDepth && typeWeight === bestTypeWeight && startMs >= bestStartMs)
+            (nameMatch === bestNameMatch &&
+              depth === bestDepth &&
+              typeWeight === bestTypeWeight &&
+              startMs >= bestStartMs)
 
           if (isBetter) {
             bestItem = item
@@ -132,7 +132,7 @@ interface SplitAndAttachWaitFreezesFlowItemsParams {
 }
 
 export const splitAndAttachWaitFreezesFlowItems = (
-  params: SplitAndAttachWaitFreezesFlowItemsParams
+  params: SplitAndAttachWaitFreezesFlowItemsParams,
 ) => {
   const contextItems: UnifiedFlowItem[] = []
   const nonContextItems: UnifiedFlowItem[] = []
@@ -155,11 +155,8 @@ export const splitAndAttachWaitFreezesFlowItems = (
       continue
     }
     const mergedChildren = sortFlowItemsByTimestamp(
-      [
-        ...(parent.children ?? []),
-        wfItem,
-      ],
-      params.toTimestampMs
+      [...(parent.children ?? []), wfItem],
+      params.toTimestampMs,
     )
     parent.children = mergedChildren
   }
@@ -174,11 +171,8 @@ export const splitAndAttachWaitFreezesFlowItems = (
       continue
     }
     const mergedChildren = sortFlowItemsByTimestamp(
-      [
-        ...(parent.children ?? []),
-        wfItem,
-      ],
-      params.toTimestampMs
+      [...(parent.children ?? []), wfItem],
+      params.toTimestampMs,
     )
     parent.children = mergedChildren
   }
@@ -186,8 +180,14 @@ export const splitAndAttachWaitFreezesFlowItems = (
   return {
     recognitionFlow: params.recognitionFlow,
     actionFlow: params.actionFlow,
-    actionScopeWaitFreezes: sortFlowItemsByTimestamp(unassignedNonContextItems, params.toTimestampMs),
-    unassignedContextWaitFreezes: sortFlowItemsByTimestamp(unassignedContextItems, params.toTimestampMs),
+    actionScopeWaitFreezes: sortFlowItemsByTimestamp(
+      unassignedNonContextItems,
+      params.toTimestampMs,
+    ),
+    unassignedContextWaitFreezes: sortFlowItemsByTimestamp(
+      unassignedContextItems,
+      params.toTimestampMs,
+    ),
   }
 }
 
@@ -196,15 +196,13 @@ export const partitionActionScopeWaitFreezes = (
   toTimestampMs: (value?: string) => number,
   actionStartTs?: string,
   actionEndTs?: string,
-  actionStatus?: UnifiedFlowItem['status']
+  actionStatus?: UnifiedFlowItem['status'],
 ) => {
   const before: UnifiedFlowItem[] = []
   const inside: UnifiedFlowItem[] = []
   const after: UnifiedFlowItem[] = []
   const startMs = toTimestampMs(actionStartTs)
-  const endMs = actionStatus === 'running'
-    ? Number.POSITIVE_INFINITY
-    : toTimestampMs(actionEndTs)
+  const endMs = actionStatus === 'running' ? Number.POSITIVE_INFINITY : toTimestampMs(actionEndTs)
   const hasActionWindow = Number.isFinite(startMs) || Number.isFinite(endMs)
 
   for (const item of waitFreezesItems) {

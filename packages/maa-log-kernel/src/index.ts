@@ -1,18 +1,10 @@
 import packageJson from '../package.json' with { type: 'json' }
-import {
-  MLA_KERNEL_SCHEMA_VERSION,
-  type KernelStatistics,
-  type KernelOutput,
-} from './protocol'
-import type {
-  EventNotification,
-  TaskInfo,
-} from './types'
+import { MLA_KERNEL_SCHEMA_VERSION, type KernelStatistics, type KernelOutput } from './protocol'
+import type { EventNotification, TaskInfo } from './types'
 
 export const KERNEL_PACKAGE_NAME = '@windsland52/maa-log-kernel'
 export const KERNEL_PACKAGE_VERSION = packageJson.version
-export const DEFAULT_KERNEL_PARSER_VERSION =
-  `${KERNEL_PACKAGE_NAME}/${KERNEL_PACKAGE_VERSION}`
+export const DEFAULT_KERNEL_PARSER_VERSION = `${KERNEL_PACKAGE_NAME}/${KERNEL_PACKAGE_VERSION}`
 
 export interface BuildKernelOutputInput<TTask extends TaskInfo = TaskInfo> {
   content: string
@@ -53,11 +45,7 @@ export const buildKernelOutput = <TTask extends TaskInfo = TaskInfo>(
     tasks: input.tasks,
     events: input.events,
     stats: input.stats,
-    warnings: buildKernelWarnings(
-      input.content,
-      input.events.length,
-      input.tasks.length,
-    ),
+    warnings: buildKernelWarnings(input.content, input.events.length, input.tasks.length),
   }
 }
 

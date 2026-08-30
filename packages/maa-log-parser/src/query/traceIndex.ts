@@ -23,11 +23,7 @@ export interface TraceIndex {
   resourceScopes: ScopeNode[]
 }
 
-const pushMapArray = <K, V>(
-  map: Map<K, V[]>,
-  key: K,
-  value: V,
-): void => {
+const pushMapArray = <K, V>(map: Map<K, V[]>, key: K, value: V): void => {
   const current = map.get(key)
   if (current) {
     current.push(value)
@@ -57,10 +53,7 @@ export const createEmptyTraceIndex = (): TraceIndex => ({
   resourceScopes: [],
 })
 
-const indexScopeNode = (
-  node: ScopeNode,
-  index: TraceIndex,
-): void => {
+const indexScopeNode = (node: ScopeNode, index: TraceIndex): void => {
   const identity = readScopeIdentityFields(node.payload)
   const taskId = node.taskId ?? identity.taskId
 
@@ -129,16 +122,15 @@ const indexScopeNode = (
   }
 }
 
-const walkScopeTree = (
-  node: ScopeNode,
-  parentScopeId: string | null,
-  index: TraceIndex,
-): void => {
+const walkScopeTree = (node: ScopeNode, parentScopeId: string | null, index: TraceIndex): void => {
   index.scopeById.set(node.id, node)
   index.parentScopeIdByScopeId.set(node.id, parentScopeId)
 
   const sortedChildren = [...node.children].sort((left, right) => left.seq - right.seq)
-  index.childScopeIdsByScopeId.set(node.id, sortedChildren.map((child) => child.id))
+  index.childScopeIdsByScopeId.set(
+    node.id,
+    sortedChildren.map((child) => child.id),
+  )
   indexScopeNode(node, index)
 
   for (const child of sortedChildren) {
@@ -175,10 +167,7 @@ const finalizeNodeExecutions = (index: TraceIndex): void => {
   }
 }
 
-export const buildTraceIndex = (
-  root: ScopeNode,
-  events: ProtocolEvent[] = [],
-): TraceIndex => {
+export const buildTraceIndex = (root: ScopeNode, events: ProtocolEvent[] = []): TraceIndex => {
   const index = createEmptyTraceIndex()
 
   for (const event of events) {

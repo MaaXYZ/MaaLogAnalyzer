@@ -28,7 +28,7 @@ export const useFlowchartPopover = (options: UseFlowchartPopoverOptions) => {
 
   const popoverNodeData = computed(() => {
     if (!popoverNodeId.value) return null
-    const node = options.flowNodes.value.find(item => item.id === popoverNodeId.value)
+    const node = options.flowNodes.value.find((item) => item.id === popoverNodeId.value)
     return (node?.data as FlowNodeData | undefined) ?? null
   })
 
@@ -38,8 +38,9 @@ export const useFlowchartPopover = (options: UseFlowchartPopoverOptions) => {
     const canvasEl = document.querySelector('.flowchart-canvas')
     if (!canvasEl) return
 
-    const nodeEl = Array.from(canvasEl.querySelectorAll('[data-id]'))
-      .find(element => element.getAttribute('data-id') === popoverNodeId.value)
+    const nodeEl = Array.from(canvasEl.querySelectorAll('[data-id]')).find(
+      (element) => element.getAttribute('data-id') === popoverNodeId.value,
+    )
     if (!nodeEl) return
 
     const nodeRect = nodeEl.getBoundingClientRect()

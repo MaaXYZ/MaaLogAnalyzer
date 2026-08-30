@@ -1,13 +1,7 @@
 import { createProcessLogContent } from './logLoading/contentProcessor'
 import { createLogLoadingUploadHandlers } from './logLoading/uploadHandlers'
-import type {
-  LogLoadingPipelineOptions,
-  ProcessLogContentParams,
-} from './logLoading/types'
-import type {
-  DeferredTextSearchTarget,
-  TextSearchLoadedTarget,
-} from './useTextSearchTargets'
+import type { LogLoadingPipelineOptions, ProcessLogContentParams } from './logLoading/types'
+import type { DeferredTextSearchTarget, TextSearchLoadedTarget } from './useTextSearchTargets'
 
 export const useLogLoadingPipeline = (options: LogLoadingPipelineOptions) => {
   const processLogContentCore = createProcessLogContent(options)

@@ -38,9 +38,7 @@ export { isTauri, isVSCode }
 
 const TEXT_SEARCH_EXTENSIONS = ['.log', '.txt', '.jsonl'] as const
 
-export const normalizeTauriDialogPaths = (
-  selected: string | string[] | null,
-): string[] => {
+export const normalizeTauriDialogPaths = (selected: string | string[] | null): string[] => {
   if (typeof selected === 'string') return [selected]
   if (!Array.isArray(selected)) return []
   return selected.filter((path): path is string => typeof path === 'string' && path.length > 0)
@@ -167,15 +165,18 @@ async function openLogFileWithTauri(): Promise<string | null> {
 
     const selected = await open({
       multiple: true,
-      filters: [{
-        name: 'Log Files',
-        extensions: ['log', 'jsonl', 'txt', 'zip', '7z', 'rar']
-      }, {
-        name: 'Archive Files',
-        extensions: ['zip', '7z', 'rar']
-      }],
+      filters: [
+        {
+          name: 'Log Files',
+          extensions: ['log', 'jsonl', 'txt', 'zip', '7z', 'rar'],
+        },
+        {
+          name: 'Archive Files',
+          extensions: ['zip', '7z', 'rar'],
+        },
+      ],
       directory: false,
-      title: '选择日志文件'
+      title: '选择日志文件',
     })
 
     const selectedPaths = normalizeTauriDialogPaths(selected)
@@ -264,11 +265,13 @@ export async function saveFile(content: string, filename: string): Promise<boole
       const { writeTextFile } = await import('@tauri-apps/plugin-fs')
 
       const filePath = await save({
-        filters: [{
-          name: 'Text Files',
-          extensions: ['txt', 'csv', 'html']
-        }],
-        defaultPath: filename
+        filters: [
+          {
+            name: 'Text Files',
+            extensions: ['txt', 'csv', 'html'],
+          },
+        ],
+        defaultPath: filename,
       })
 
       if (filePath) {
@@ -373,7 +376,9 @@ async function readErrorImages(
       registerInputResourceEntry(budget, fullPath, 2)
       if (entry.isFile && !entry.isSymlink && entry.name.endsWith('.png')) {
         // 解析文件名: 2026.03.08-13.12.30.216_CCUpdate.png (毫秒可能是1-3位)
-        const match = entry.name.match(/^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+)\.png$/)
+        const match = entry.name.match(
+          /^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+)\.png$/,
+        )
         if (match) {
           const [, timestamp, ms, nodeName] = match
           // 将毫秒补齐为3位
@@ -384,7 +389,6 @@ async function readErrorImages(
         }
       }
     }
-
   } catch (error) {
     if (isInputResourceLimitError(error)) throw error
     console.warn('[截图] 读取截图失败:', error)
@@ -445,7 +449,6 @@ async function readVisionImages(
   return imageMap
 }
 
-
 async function collectTextFilesTauri(
   rootPath: string,
   budget: InputResourceBudget,
@@ -498,11 +501,14 @@ async function collectTextFilesWeb(
       const nextRelativePath = relativePrefix ? `${relativePrefix}/${entry.name}` : entry.name
       registerInputResourceEntry(budget, nextPath, location.depth + 1)
       if (entry.kind === 'directory') {
-        await walk({
-          handle: entry as FileSystemDirectoryHandle,
-          path: nextPath,
-          depth: location.depth + 1,
-        }, nextRelativePath)
+        await walk(
+          {
+            handle: entry as FileSystemDirectoryHandle,
+            path: nextPath,
+            depth: location.depth + 1,
+          },
+          nextRelativePath,
+        )
         continue
       }
       if (!isTextSearchFileName(entry.name)) continue
@@ -535,14 +541,20 @@ async function listPrimaryLogFilesTauri(
     registerInputResourceEntry(budget, joinNativePath(dirPath, entry.name), 1)
   }
   return entries
-    .filter(entry => entry.isFile && !entry.isSymlink && !!entry.name && isPrimaryLogFileName(entry.name))
-    .map(entry => ({
+    .filter(
+      (entry) =>
+        entry.isFile && !entry.isSymlink && !!entry.name && isPrimaryLogFileName(entry.name),
+    )
+    .map((entry) => ({
       path: joinNativePath(dirPath, entry.name),
       name: entry.name!,
     }))
 }
 
-async function hasPrimaryLogInTauri(dirPath: string, budget: InputResourceBudget): Promise<boolean> {
+async function hasPrimaryLogInTauri(
+  dirPath: string,
+  budget: InputResourceBudget,
+): Promise<boolean> {
   return (await listPrimaryLogFilesTauri(dirPath, budget)).length > 0
 }
 
@@ -555,11 +567,13 @@ async function readPrimaryLogFilesTauri(
   const selectedLogs = selectPrimaryLogGroup(await listPrimaryLogFilesTauri(dirPath, budget))
   if (selectedLogs.length === 0) return []
   const selectedOptions = selectPrimaryLogs
-    ? await selectPrimaryLogs(createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item)))
+    ? await selectPrimaryLogs(
+        createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item)),
+      )
     : createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item))
   if (!selectedOptions) return null
   if (selectedOptions.length === 0) return []
-  const selectedPaths = new Set(selectedOptions.map(option => option.path))
+  const selectedPaths = new Set(selectedOptions.map((option) => option.path))
 
   const selectedOrder = new Map(selectedOptions.map((option, index) => [option.path, index]))
   const selectedLogItems = selectedLogs
@@ -579,12 +593,14 @@ async function readPrimaryLogFilesTauri(
 async function listPrimaryLogFilesWeb(
   location: WebDirectoryLocation,
   budget: BrowserInputBudget,
-): Promise<Array<{
-  path: string
-  name: string
-  resourcePath: string
-  handle: FileSystemFileHandle
-}>> {
+): Promise<
+  Array<{
+    path: string
+    name: string
+    resourcePath: string
+    handle: FileSystemFileHandle
+  }>
+> {
   const result: Array<{
     path: string
     name: string
@@ -622,17 +638,19 @@ async function readPrimaryLogFilesWeb(
   const selectedLogs = selectPrimaryLogGroup(await listPrimaryLogFilesWeb(location, budget))
   if (selectedLogs.length === 0) return []
   const selectedOptions = selectPrimaryLogs
-    ? await selectPrimaryLogs(createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item)))
+    ? await selectPrimaryLogs(
+        createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item)),
+      )
     : createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item))
   if (!selectedOptions) return null
   if (selectedOptions.length === 0) return []
-  const selectedPaths = new Set(selectedOptions.map(option => option.path))
+  const selectedPaths = new Set(selectedOptions.map((option) => option.path))
 
   const selectedOrder = new Map(selectedOptions.map((option, index) => [option.path, index]))
   const selectedLogItems = selectedLogs
     .filter(({ item }) => selectedPaths.has(item.path))
     .sort((a, b) => (selectedOrder.get(a.item.path) ?? 0) - (selectedOrder.get(b.item.path) ?? 0))
-  const selectedFiles: Array<{ item: typeof selectedLogItems[number]['item']; file: File }> = []
+  const selectedFiles: Array<{ item: (typeof selectedLogItems)[number]['item']; file: File }> = []
   for (const { item } of selectedLogItems) {
     const file = await item.handle.getFile()
     chargeWebRegularFile(file, item.resourcePath, budget)
@@ -649,7 +667,9 @@ async function readPrimaryLogFilesWeb(
 /**
  * 打开文件夹并读取日志
  */
-export async function openFolderDialog(options: OpenFolderDialogOptions = {}): Promise<OpenFolderResult | null> {
+export async function openFolderDialog(
+  options: OpenFolderDialogOptions = {},
+): Promise<OpenFolderResult | null> {
   if (isTauri()) {
     return await openFolderDialogTauri(options)
   } else {
@@ -660,12 +680,12 @@ export async function openFolderDialog(options: OpenFolderDialogOptions = {}): P
 /**
  * Tauri 版本：打开文件夹并读取日志
  */
-async function openFolderDialogTauri(options: OpenFolderDialogOptions): Promise<OpenFolderResult | null> {
-
+async function openFolderDialogTauri(
+  options: OpenFolderDialogOptions,
+): Promise<OpenFolderResult | null> {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog')
     const { exists } = await import('@tauri-apps/plugin-fs')
-
 
     const selected = await open({
       multiple: false,
@@ -815,11 +835,14 @@ async function findDebugFolderWeb(
       const nextPath = `${location.path}/${entry.name}`
       registerInputResourceEntry(budget, nextPath, location.depth + 1)
       if (entry.kind === 'directory') {
-        const found = await findDebugFolderWeb({
-          handle: entry as FileSystemDirectoryHandle,
-          path: nextPath,
-          depth: location.depth + 1,
-        }, budget)
+        const found = await findDebugFolderWeb(
+          {
+            handle: entry as FileSystemDirectoryHandle,
+            path: nextPath,
+            depth: location.depth + 1,
+          },
+          budget,
+        )
         if (found) return found
       }
     }
@@ -866,7 +889,9 @@ async function readErrorImagesWeb(
       const resourcePath = `${onErrorPath}/${entry.name}`
       registerInputResourceEntry(budget, resourcePath, debugLocation.depth + 2)
       if (entry.kind === 'file' && entry.name.endsWith('.png')) {
-        const match = entry.name.match(/^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+)\.png$/)
+        const match = entry.name.match(
+          /^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+)\.png$/,
+        )
         if (match) {
           const [, timestamp, ms, nodeName] = match
           // 将毫秒补齐为3位

@@ -62,8 +62,16 @@ const emit = defineEmits<{
               <template #icon><file-text-outlined /></template>
               选择其它文件
             </n-button>
-            <n-button v-if="props.fileName" size="small" @click="emit('clear-content')" secondary type="warning">
-              <template #icon><n-icon><close-outlined /></n-icon></template>
+            <n-button
+              v-if="props.fileName"
+              size="small"
+              @click="emit('clear-content')"
+              secondary
+              type="warning"
+            >
+              <template #icon
+                ><n-icon><close-outlined /></n-icon
+              ></template>
             </n-button>
           </n-flex>
           <n-select
@@ -82,9 +90,24 @@ const emit = defineEmits<{
             @update:value="emit('update:selectedLoadedTargetId', $event)"
           />
           <n-flex align="center" style="gap: 8px; flex-wrap: wrap">
-            <n-checkbox :checked="props.caseSensitive" size="small" @update:checked="emit('update:caseSensitive', $event)">区分大小写</n-checkbox>
-            <n-checkbox :checked="props.useRegex" size="small" @update:checked="emit('update:useRegex', $event)">正则</n-checkbox>
-            <n-checkbox :checked="props.hideDebugInfo" size="small" @update:checked="emit('update:hideDebugInfo', $event)">隐藏调试</n-checkbox>
+            <n-checkbox
+              :checked="props.caseSensitive"
+              size="small"
+              @update:checked="emit('update:caseSensitive', $event)"
+              >区分大小写</n-checkbox
+            >
+            <n-checkbox
+              :checked="props.useRegex"
+              size="small"
+              @update:checked="emit('update:useRegex', $event)"
+              >正则</n-checkbox
+            >
+            <n-checkbox
+              :checked="props.hideDebugInfo"
+              size="small"
+              @update:checked="emit('update:hideDebugInfo', $event)"
+              >隐藏调试</n-checkbox
+            >
           </n-flex>
           <n-flex wrap style="gap: 6px">
             <n-button
@@ -116,11 +139,24 @@ const emit = defineEmits<{
       </n-collapse-item>
     </n-collapse>
     <n-flex v-if="props.fileName && !props.isLoadingFile" align="center" style="gap: 8px">
-      <n-text depth="3" style="font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1">
+      <n-text
+        depth="3"
+        style="
+          font-size: 12px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          flex: 1;
+        "
+      >
         {{ props.fileName }}
       </n-text>
       <n-tag v-if="props.totalLines > 0" size="small" type="info">{{ props.totalLines }} 行</n-tag>
-      <n-tag v-if="props.fileSizeInMB > 0" size="small" :type="props.isLargeFile ? 'error' : 'warning'">
+      <n-tag
+        v-if="props.fileSizeInMB > 0"
+        size="small"
+        :type="props.isLargeFile ? 'error' : 'warning'"
+      >
         {{ props.fileSizeInMB.toFixed(1) }} MB
       </n-tag>
     </n-flex>

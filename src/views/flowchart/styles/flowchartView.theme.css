@@ -96,7 +96,9 @@ body.force-light {
 
 /* Light theme — system preference when not forced dark */
 @media (prefers-color-scheme: light) {
-  body:not(.force-dark):not(.vscode-light):not(.vscode-high-contrast-light):not(.vscode-dark):not(.vscode-high-contrast) {
+  body:not(.force-dark):not(.vscode-light):not(.vscode-high-contrast-light):not(.vscode-dark):not(
+      .vscode-high-contrast
+    ) {
     --flowchart-success-bg: #e8f5e9;
     --flowchart-success-border: #18a058;
     --flowchart-success-text: #1a3a1a;
@@ -124,7 +126,10 @@ body.force-light {
     --flowchart-chevron-stroke-width: 0;
   }
 
-  body:not(.force-dark):not(.vscode-light):not(.vscode-high-contrast-light):not(.vscode-dark):not(.vscode-high-contrast) .vue-flow {
+  body:not(.force-dark):not(.vscode-light):not(.vscode-high-contrast-light):not(.vscode-dark):not(
+      .vscode-high-contrast
+    )
+    .vue-flow {
     background: var(--vscode-editor-background, var(--vscode-panel-background));
   }
 }

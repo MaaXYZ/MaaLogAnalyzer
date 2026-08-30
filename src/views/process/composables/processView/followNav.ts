@@ -10,9 +10,7 @@ interface UseProcessFollowNavOptions {
   followLast: Ref<boolean>
 }
 
-export const useProcessFollowNav = (
-  options: UseProcessFollowNavOptions,
-) => {
+export const useProcessFollowNav = (options: UseProcessFollowNavOptions) => {
   const {
     activeTaskIndex,
     followLast,

@@ -46,10 +46,12 @@ export const useTauriBridge = (
       const { open } = await import('@tauri-apps/plugin-dialog')
       const selected = await open({
         multiple: true,
-        filters: [{
-          name: 'Log Files',
-          extensions: ['log', 'jsonl', 'txt', 'zip'],
-        }],
+        filters: [
+          {
+            name: 'Log Files',
+            extensions: ['log', 'jsonl', 'txt', 'zip'],
+          },
+        ],
         directory: false,
         title: '选择日志文件',
       })
@@ -81,8 +83,10 @@ export const useTauriBridge = (
               if (!operationGate.isCurrent(generation)) return
               if (!selectedOptions) return
 
-              const selectedLogPaths = new Set(selectedOptions.map(option => option.path))
-              const selectedPrimaryLogFiles = primaryLogFiles.filter(file => selectedLogPaths.has(file.path))
+              const selectedLogPaths = new Set(selectedOptions.map((option) => option.path))
+              const selectedPrimaryLogFiles = primaryLogFiles.filter((file) =>
+                selectedLogPaths.has(file.path),
+              )
               if (selectedPrimaryLogFiles.length === 0) return
 
               options.onUploadContent(
@@ -108,19 +112,14 @@ export const useTauriBridge = (
             if (!operationGate.isCurrent(generation)) return
 
             const fileName = anchor.split(/[/\\]/).pop() || 'loaded.log'
-            options.onUploadContent(
-              '',
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              [{
+            options.onUploadContent('', undefined, undefined, undefined, undefined, [
+              {
                 path: anchor,
                 name: fileName,
                 loadBytes: async () => await readFile(anchor),
                 loadContent: async () => decodeFileContent(await readFile(anchor)),
-              }],
-            )
+              },
+            ])
           }
         } finally {
           operationGate.finish(generation)

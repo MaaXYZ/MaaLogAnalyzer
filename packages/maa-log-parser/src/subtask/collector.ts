@@ -8,7 +8,7 @@ import type {
 import { StringPool } from '../shared/stringPool'
 
 export const summarizeRuntimeStatus = <T extends { status: UnifiedFlowItem['status'] }>(
-  items: readonly T[]
+  items: readonly T[],
 ): UnifiedFlowItem['status'] => {
   if (items.some((item) => item.status === 'failed')) return 'failed'
   if (items.some((item) => item.status === 'running')) return 'running'

@@ -22,14 +22,12 @@ export const useNodeCardFlowSectionState = (params: UseNodeCardFlowSectionStateP
     resetWhen: nodeId,
   })
 
-  const {
-    isExpanded: isActionFlowItemExpanded,
-    toggle: toggleActionFlowItem,
-  } = useFlowItemExpandState({
-    forceExpand: params.forceExpandRelatedWhileRunning,
-    defaultCollapsed: params.defaultCollapseNestedActionNodes,
-    resetWhen: nodeId,
-  })
+  const { isExpanded: isActionFlowItemExpanded, toggle: toggleActionFlowItem } =
+    useFlowItemExpandState({
+      forceExpand: params.forceExpandRelatedWhileRunning,
+      defaultCollapsed: params.defaultCollapseNestedActionNodes,
+      resetWhen: nodeId,
+    })
 
   const flowRows = useNodeCardFlowRows({
     node: params.node,

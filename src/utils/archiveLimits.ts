@@ -75,16 +75,15 @@ export const DEFAULT_ARCHIVE_LIMITS: Readonly<ArchiveLimits> = Object.freeze(
 
 export const resolveArchiveLimits = (
   overrides: Partial<ArchiveLimits> = {},
-): Readonly<ArchiveLimits> => Object.freeze(validateLimits({
-  ...DEFAULT_ARCHIVE_LIMITS,
-  ...overrides,
-}))
+): Readonly<ArchiveLimits> =>
+  Object.freeze(
+    validateLimits({
+      ...DEFAULT_ARCHIVE_LIMITS,
+      ...overrides,
+    }),
+  )
 
-const throwLimitError = (
-  code: ArchiveLimitCode,
-  actual: number,
-  limit: number,
-): never => {
+const throwLimitError = (code: ArchiveLimitCode, actual: number, limit: number): never => {
   throw new ArchiveLimitError(code, actual, limit)
 }
 
@@ -169,9 +168,8 @@ export const addArchiveDirectoryEntries = (
   return budget
 }
 
-export const isArchiveImageEntry = (path: string): boolean => (
+export const isArchiveImageEntry = (path: string): boolean =>
   /\.(?:png|jpe?g)$/i.test(path.replace(/\\/g, '/'))
-)
 
 export const assertSelectedArchiveEntriesWithinLimits = (
   entries: readonly ArchiveEntryMetadata[],
@@ -195,13 +193,9 @@ export const assertSelectedArchiveEntriesWithinLimits = (
       throwLimitError('extracted-size', extractedBytes, limits.maxExtractedBytes)
     }
 
-    if (
-      entry.originalSize >= limits.compressionRatioMinBytes
-      && entry.originalSize > 0
-    ) {
-      const compressionRatio = entry.size === 0
-        ? Number.POSITIVE_INFINITY
-        : entry.originalSize / entry.size
+    if (entry.originalSize >= limits.compressionRatioMinBytes && entry.originalSize > 0) {
+      const compressionRatio =
+        entry.size === 0 ? Number.POSITIVE_INFINITY : entry.originalSize / entry.size
       if (compressionRatio > limits.maxCompressionRatio) {
         throwLimitError('compression-ratio', compressionRatio, limits.maxCompressionRatio)
       }

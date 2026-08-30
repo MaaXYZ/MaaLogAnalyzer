@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  collectMxuZipVolumes,
-  parseMxuZipVolumeName,
-} from '../mxuZipVolumes'
+import { collectMxuZipVolumes, parseMxuZipVolumeName } from '../mxuZipVolumes'
 
 describe('MXU ZIP volume naming', () => {
   it('accepts both two-digit and three-digit volume numbers', () => {
@@ -17,7 +14,7 @@ describe('MXU ZIP volume naming', () => {
     const other = new File([], 'other-logs-20260717-120000-part001.zip')
     const first = new File([], 'project-logs-20260717-120000-part001.zip')
 
-    expect(collectMxuZipVolumes([second, other, first], second).map(file => file.name)).toEqual([
+    expect(collectMxuZipVolumes([second, other, first], second).map((file) => file.name)).toEqual([
       first.name,
       second.name,
     ])

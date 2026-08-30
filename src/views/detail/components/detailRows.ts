@@ -49,7 +49,7 @@ const formatRecognitionResultSummary = (value: unknown) => {
   return parts.length > 0 ? parts.join(' | ') : formatDetailValue(value, 240)
 }
 
-const formatCount = (value: unknown) => Array.isArray(value) ? String(value.length) : '-'
+const formatCount = (value: unknown) => (Array.isArray(value) ? String(value.length) : '-')
 
 const formatChildBestSummary = (value: unknown) => {
   if (!isRecord(value)) return '-'
@@ -86,21 +86,21 @@ export const buildRecognitionDetailRows = (
 ): DetailRow[] => {
   if (!recognition) return []
 
-  const rows: DetailRow[] = [{
-    label: '命中状态',
-    value: recognition.box ? '命中' : '未命中',
-  }]
+  const rows: DetailRow[] = [
+    {
+      label: '命中状态',
+      value: recognition.box ? '命中' : '未命中',
+    },
+  ]
 
   const detail = recognition.detail
   if (Array.isArray(detail)) {
     const childRecognitions = detail.filter(isRecord)
     const hitChildren = childRecognitions.filter((item) => item.box).length
-    rows.push(
-      {
-        label: '整体判定',
-        value: `${recognition.box ? '命中' : '未命中'}（${hitChildren}/${detail.length}）`,
-      },
-    )
+    rows.push({
+      label: '整体判定',
+      value: `${recognition.box ? '命中' : '未命中'}（${hitChildren}/${detail.length}）`,
+    })
 
     childRecognitions
       .sort((left, right) => Number(!!left.box) - Number(!!right.box))
@@ -117,7 +117,8 @@ export const buildRecognitionDetailRows = (
 
   if (isRecord(detail)) {
     if (Array.isArray(detail.all)) rows.push({ label: '全部结果', value: detail.all.length })
-    if (Array.isArray(detail.filtered)) rows.push({ label: '过滤结果', value: detail.filtered.length })
+    if (Array.isArray(detail.filtered))
+      rows.push({ label: '过滤结果', value: detail.filtered.length })
     if (hasDetailValue(detail.best)) {
       rows.push({
         label: '最佳结果',
@@ -136,7 +137,11 @@ const pushPointerRows = (rows: DetailRow[], detail: Record<string, any>) => {
   pushValue(rows, '压力', pickFirst(detail, ['pressure']))
 }
 
-const pushSwipeRows = (rows: DetailRow[], detail: Record<string, any>, descriptionColumns: number) => {
+const pushSwipeRows = (
+  rows: DetailRow[],
+  detail: Record<string, any>,
+  descriptionColumns: number,
+) => {
   pushValue(rows, '起点', pickFirst(detail, ['begin']))
   pushValue(rows, '终点', pickFirst(detail, ['end']), descriptionColumns)
   pushValue(rows, '持续时间', pickFirst(detail, ['duration']))

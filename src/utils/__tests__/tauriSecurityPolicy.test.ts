@@ -1,9 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const readRepositoryFile = (path: string): string => (
+const readRepositoryFile = (path: string): string =>
   readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8')
-)
 
 describe('Tauri security policy', () => {
   it('does not load remote scripts in the privileged app shell', () => {
@@ -40,7 +39,7 @@ describe('Tauri security policy', () => {
     expect(capability.permissions).not.toContain('fs:read-all')
     expect(capability.permissions).not.toContain('fs:write-all')
     expect(capability.permissions).toContain('fs:allow-lstat')
-    expect(capability.permissions.every(permission => typeof permission === 'string')).toBe(true)
+    expect(capability.permissions.every((permission) => typeof permission === 'string')).toBe(true)
     expect(rustEntry).toContain('app.fs_scope().is_allowed')
     expect(rustEntry).toContain('app.asset_protocol_scope()')
     expect(rustEntry).toContain('release_archive_resource')

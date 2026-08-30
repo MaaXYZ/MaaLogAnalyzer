@@ -56,9 +56,10 @@ const openInNewTab = (url: string) => {
 }
 
 const triggerDownload = (url: string, openInNewTab = false) => {
-  const filename = (props.downloadFilename && props.downloadFilename.trim())
-    ? props.downloadFilename.trim()
-    : `maa-image-${Date.now()}.${inferImageExtension(url)}`
+  const filename =
+    props.downloadFilename && props.downloadFilename.trim()
+      ? props.downloadFilename.trim()
+      : `maa-image-${Date.now()}.${inferImageExtension(url)}`
 
   const anchor = document.createElement('a')
   anchor.href = url
@@ -75,8 +76,7 @@ const triggerDownload = (url: string, openInNewTab = false) => {
 const decodeAssetPath = (url: string): string | null => {
   try {
     const parsed = new URL(url, window.location.href)
-    const isAssetHost = parsed.hostname === 'asset.localhost'
-      || parsed.protocol === 'asset:'
+    const isAssetHost = parsed.hostname === 'asset.localhost' || parsed.protocol === 'asset:'
     if (!isAssetHost) return null
 
     const encodedPath = parsed.pathname.replace(/^\/+/, '')
@@ -109,13 +109,12 @@ const saveImageInTauri = async (url: string) => {
   const bytes = await readImageBytesForTauri(url)
   const extension = inferImageExtension(url)
   const normalizedExt = extension === 'jpeg' ? 'jpg' : extension
-  const defaultName = (props.downloadFilename && props.downloadFilename.trim())
-    ? props.downloadFilename.trim()
-    : `maa-image-${Date.now()}.${normalizedExt}`
+  const defaultName =
+    props.downloadFilename && props.downloadFilename.trim()
+      ? props.downloadFilename.trim()
+      : `maa-image-${Date.now()}.${normalizedExt}`
 
-  const dialogExtensions = normalizedExt === 'jpg'
-    ? ['jpg', 'jpeg']
-    : [normalizedExt]
+  const dialogExtensions = normalizedExt === 'jpg' ? ['jpg', 'jpeg'] : [normalizedExt]
 
   const { save } = await import('@tauri-apps/plugin-dialog')
   const { writeFile } = await import('@tauri-apps/plugin-fs')
@@ -137,8 +136,11 @@ const saveImageInTauri = async (url: string) => {
 const stopMouseEvent = (event: MouseEvent) => {
   if (typeof event.preventDefault === 'function') event.preventDefault()
   if (typeof event.stopPropagation === 'function') event.stopPropagation()
-  if (typeof (event as MouseEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation === 'function') {
-    (event as MouseEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.()
+  if (
+    typeof (event as MouseEvent & { stopImmediatePropagation?: () => void })
+      .stopImmediatePropagation === 'function'
+  ) {
+    ;(event as MouseEvent & { stopImmediatePropagation?: () => void }).stopImmediatePropagation?.()
   }
 }
 
@@ -189,7 +191,10 @@ const renderToolbar = ({ nodes }: ImageRenderToolbarProps): VNodeChild => {
     [
       h(
         'span',
-        { style: 'pointer-events: none; display: inline-flex; align-items: center; justify-content: center;' },
+        {
+          style:
+            'pointer-events: none; display: inline-flex; align-items: center; justify-content: center;',
+        },
         [nodes.download],
       ),
     ],
@@ -208,9 +213,5 @@ const renderToolbar = ({ nodes }: ImageRenderToolbarProps): VNodeChild => {
 </script>
 
 <template>
-  <n-image
-    v-bind="attrs"
-    :src="resolvedSrc"
-    :render-toolbar="renderToolbar"
-  />
+  <n-image v-bind="attrs" :src="resolvedSrc" :render-toolbar="renderToolbar" />
 </template>

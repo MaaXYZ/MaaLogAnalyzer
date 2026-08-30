@@ -23,10 +23,7 @@ const createDeferred = <T>(): Deferred<T> => {
   return { promise, resolve }
 }
 
-const createTarget = (
-  id: string,
-  content = `${id} content`,
-): LoadedSearchTarget => ({
+const createTarget = (id: string, content = `${id} content`): LoadedSearchTarget => ({
   id,
   label: `${id} label`,
   fileName: `${id}.log`,
@@ -72,22 +69,23 @@ const createActionOptions = (targets: LoadedSearchTarget[]) => {
   return { options, selection }
 }
 
-const createDeferredApplyTarget = (
-  gates: Map<string, Deferred<void>>,
-) => vi.fn(async (
-  state: Parameters<typeof applyLoadedTargetToState>[0],
-  target: LoadedSearchTarget | undefined,
-) => {
-  if (!target) return
-  state.isLoadingFile.value = true
-  await gates.get(`${target.id}:${target.content}`)?.promise
-  const shouldApply = state.shouldApply?.() ?? true
-  if (shouldApply) {
-    state.fileName.value = target.fileName
-    state.fileContent.value = target.content
-    state.isLoadingFile.value = false
-  }
-})
+const createDeferredApplyTarget = (gates: Map<string, Deferred<void>>) =>
+  vi.fn(
+    async (
+      state: Parameters<typeof applyLoadedTargetToState>[0],
+      target: LoadedSearchTarget | undefined,
+    ) => {
+      if (!target) return
+      state.isLoadingFile.value = true
+      await gates.get(`${target.id}:${target.content}`)?.promise
+      const shouldApply = state.shouldApply?.() ?? true
+      if (shouldApply) {
+        state.fileName.value = target.fileName
+        state.fileContent.value = target.content
+        state.isLoadingFile.value = false
+      }
+    },
+  )
 
 describe('loaded source generations', () => {
   it('does not let loaded target A overwrite target B or clear its loading state', async () => {
@@ -96,10 +94,12 @@ describe('loaded source generations', () => {
     const { options, selection } = createActionOptions([targetA, targetB])
     const gateA = createDeferred<void>()
     const gateB = createDeferred<void>()
-    const applyTarget = createDeferredApplyTarget(new Map([
-      ['a:a content', gateA],
-      ['b:b content', gateB],
-    ]))
+    const applyTarget = createDeferredApplyTarget(
+      new Map([
+        ['a:a content', gateA],
+        ['b:b content', gateB],
+      ]),
+    )
     const applyLoadedTarget = createApplyLoadedTargetAction(options, applyTarget)
 
     const loadA = applyLoadedTarget(targetA)
@@ -126,10 +126,12 @@ describe('loaded source generations', () => {
     const { options } = createActionOptions([oldTarget])
     const oldGate = createDeferred<void>()
     const newGate = createDeferred<void>()
-    const applyTarget = createDeferredApplyTarget(new Map([
-      ['same:old content', oldGate],
-      ['same:new content', newGate],
-    ]))
+    const applyTarget = createDeferredApplyTarget(
+      new Map([
+        ['same:old content', oldGate],
+        ['same:new content', newGate],
+      ]),
+    )
     const applyLoadedTarget = createApplyLoadedTargetAction(options, applyTarget)
 
     const oldLoad = applyLoadedTarget(oldTarget)
@@ -148,9 +150,7 @@ describe('loaded source generations', () => {
     const target = createTarget('same')
     const { options } = createActionOptions([target])
     const gate = createDeferred<void>()
-    const applyTarget = createDeferredApplyTarget(new Map([
-      ['same:same content', gate],
-    ]))
+    const applyTarget = createDeferredApplyTarget(new Map([['same:same content', gate]]))
     const applyLoadedTarget = createApplyLoadedTargetAction(options, applyTarget)
 
     const first = applyLoadedTarget(target)

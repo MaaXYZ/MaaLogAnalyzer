@@ -327,24 +327,27 @@ describe('buildFlowchartData execution order', () => {
       }),
     ])
     const initial = await buildFlowchartData(initialTask)
-    const initialNode = initial.nodes.find(node => node.id === 'StableNode')
+    const initialNode = initial.nodes.find((node) => node.id === 'StableNode')
     expect(initialNode).toBeDefined()
     if (!initialNode) return
     initialNode.position = { x: 777, y: 888 }
 
-    const refreshed = await buildFlowchartData(makeTask([
-      makeNode({
-        nodeId: 71,
-        name: 'StableNode',
-        ts: '2026-04-07 10:00:50.100',
-        status: 'failed',
-      }),
-    ]), {
-      previousNodes: initial.nodes,
-      previousEdges: initial.edges,
-    })
+    const refreshed = await buildFlowchartData(
+      makeTask([
+        makeNode({
+          nodeId: 71,
+          name: 'StableNode',
+          ts: '2026-04-07 10:00:50.100',
+          status: 'failed',
+        }),
+      ]),
+      {
+        previousNodes: initial.nodes,
+        previousEdges: initial.edges,
+      },
+    )
 
-    const refreshedNode = refreshed.nodes.find(node => node.id === 'StableNode')
+    const refreshedNode = refreshed.nodes.find((node) => node.id === 'StableNode')
     expect(refreshedNode?.position).toEqual({ x: 777, y: 888 })
     expect(refreshedNode?.data.status).toBe('failed')
   })

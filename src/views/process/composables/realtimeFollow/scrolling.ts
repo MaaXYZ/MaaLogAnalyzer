@@ -10,9 +10,7 @@ interface RealtimeFollowScrollingOptions {
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
-export const createRealtimeFollowScrolling = (
-  options: RealtimeFollowScrollingOptions,
-) => {
+export const createRealtimeFollowScrolling = (options: RealtimeFollowScrollingOptions) => {
   let lastAlignedLatestIndex = -1
   let lastScrollerElement: HTMLElement | null = null
 
@@ -74,12 +72,17 @@ export const createRealtimeFollowScrolling = (
         const scrollerEl = getScrollerElement()
         if (!scrollerEl) return false
         if (targetIndex < total - 1) return false
-        
+
         let paddingHeight = 0
-        const paddingEl = scrollerEl.querySelector('.virtual-scroller-overscroll-padding') as HTMLElement | null
+        const paddingEl = scrollerEl.querySelector(
+          '.virtual-scroller-overscroll-padding',
+        ) as HTMLElement | null
         if (paddingEl) paddingHeight = paddingEl.offsetHeight
-        
-        const targetScrollTop = Math.max(0, scrollerEl.scrollHeight - paddingHeight - scrollerEl.clientHeight)
+
+        const targetScrollTop = Math.max(
+          0,
+          scrollerEl.scrollHeight - paddingHeight - scrollerEl.clientHeight,
+        )
         scrollerEl.scrollTo({ top: targetScrollTop, behavior: 'auto' })
       }
       return true
@@ -110,14 +113,16 @@ export const createRealtimeFollowScrolling = (
   const scrollNodeTimelineToBottom = () => {
     const scrollerEl = getScrollerElement()
     if (!scrollerEl) return
-    
+
     let paddingHeight = 0
-    const paddingEl = scrollerEl.querySelector('.virtual-scroller-overscroll-padding') as HTMLElement | null
+    const paddingEl = scrollerEl.querySelector(
+      '.virtual-scroller-overscroll-padding',
+    ) as HTMLElement | null
     if (paddingEl) paddingHeight = paddingEl.offsetHeight
-    
+
     let targetScrollTop = scrollerEl.scrollHeight - paddingHeight - scrollerEl.clientHeight
     if (targetScrollTop < 0) targetScrollTop = 0
-    
+
     // 已经贴底时不重复滚动，避免高频触发 overlay scrollbar（mac 下会很明显）
     if (Math.abs(targetScrollTop - scrollerEl.scrollTop) <= 1) return
     if (typeof scrollerEl.scrollTo === 'function') {

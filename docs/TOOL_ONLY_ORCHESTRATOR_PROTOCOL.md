@@ -93,14 +93,14 @@
 
 ### 4.1 Caller -> Analyzer（Request）
 
-| 方法名 | 用途 | 必填参数 |
-| --- | --- | --- |
-| `parse_log_bundle` | 解析日志输入并建立查询会话 | `session_id`, `inputs` |
-| `get_task_overview` | 返回任务级统计与热点摘要 | `session_id` |
-| `get_node_timeline` | 返回节点时序事件 | `session_id`, `task_id`, `node_id` |
+| 方法名                  | 用途                        | 必填参数                           |
+| ----------------------- | --------------------------- | ---------------------------------- |
+| `parse_log_bundle`      | 解析日志输入并建立查询会话  | `session_id`, `inputs`             |
+| `get_task_overview`     | 返回任务级统计与热点摘要    | `session_id`                       |
+| `get_node_timeline`     | 返回节点时序事件            | `session_id`, `task_id`, `node_id` |
 | `get_next_list_history` | 返回 next_list 候选变化轨迹 | `session_id`, `task_id`, `node_id` |
-| `get_parent_chain` | 返回节点父子链路 | `session_id`, `task_id`, `node_id` |
-| `get_raw_lines` | 回捞原始日志行作为事实证据 | `session_id`, `task_id` |
+| `get_parent_chain`      | 返回节点父子链路            | `session_id`, `task_id`, `node_id` |
+| `get_raw_lines`         | 回捞原始日志行作为事实证据  | `session_id`, `task_id`            |
 
 ---
 
@@ -309,7 +309,15 @@ interface GetParentChainArgs {
 interface GetParentChainResult {
   chain: Array<{
     scope_id: string
-    scope_kind: 'task' | 'pipeline_node' | 'recognition_node' | 'action_node' | 'next_list' | 'recognition' | 'action' | 'wait_freezes'
+    scope_kind:
+      | 'task'
+      | 'pipeline_node'
+      | 'recognition_node'
+      | 'action_node'
+      | 'next_list'
+      | 'recognition'
+      | 'action'
+      | 'wait_freezes'
     task_id?: number
     node_id?: number
     name: string
@@ -388,17 +396,17 @@ interface Evidence {
 
 ## 7. 错误码
 
-| code | 含义 | retryable | 调用方建议 |
-| --- | --- | --- | --- |
-| `INVALID_REQUEST` | 请求体格式或字段非法 | false | 修正参数后重试 |
-| `UNSUPPORTED_VERSION` | 不支持的 `api_version` | false | 切换到受支持版本 |
-| `SESSION_NOT_FOUND` | 会话不存在或已过期 | false | 重新调用 `parse_log_bundle` |
-| `TASK_NOT_FOUND` | `task_id` 不存在 | false | 校验任务选择 |
-| `NODE_NOT_FOUND` | `node_id` 不存在 | false | 校验节点选择 |
-| `SCOPE_NOT_FOUND` | `scope_id` 不存在或不属于该 `task_id/node_id` | false | 校验实例定位参数 |
-| `AMBIGUOUS_SCOPE_SELECTOR` | 仅凭当前定位条件命中多个节点实例 | false | 补充 `scope_id` 或 `occurrence_index` |
-| `DATA_NOT_READY` | 数据尚未就绪 | true | 指数退避重试 |
-| `INTERNAL_ERROR` | 内部处理错误 | true | 有限重试并记录日志 |
+| code                       | 含义                                          | retryable | 调用方建议                            |
+| -------------------------- | --------------------------------------------- | --------- | ------------------------------------- |
+| `INVALID_REQUEST`          | 请求体格式或字段非法                          | false     | 修正参数后重试                        |
+| `UNSUPPORTED_VERSION`      | 不支持的 `api_version`                        | false     | 切换到受支持版本                      |
+| `SESSION_NOT_FOUND`        | 会话不存在或已过期                            | false     | 重新调用 `parse_log_bundle`           |
+| `TASK_NOT_FOUND`           | `task_id` 不存在                              | false     | 校验任务选择                          |
+| `NODE_NOT_FOUND`           | `node_id` 不存在                              | false     | 校验节点选择                          |
+| `SCOPE_NOT_FOUND`          | `scope_id` 不存在或不属于该 `task_id/node_id` | false     | 校验实例定位参数                      |
+| `AMBIGUOUS_SCOPE_SELECTOR` | 仅凭当前定位条件命中多个节点实例              | false     | 补充 `scope_id` 或 `occurrence_index` |
+| `DATA_NOT_READY`           | 数据尚未就绪                                  | true      | 指数退避重试                          |
+| `INTERNAL_ERROR`           | 内部处理错误                                  | true      | 有限重试并记录日志                    |
 
 ---
 

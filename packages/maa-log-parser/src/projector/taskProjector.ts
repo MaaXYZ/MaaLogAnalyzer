@@ -58,9 +58,7 @@ interface InternalProjectTasksFromTraceOptions extends ProjectTasksFromTraceOpti
 
 const EMPTY_IMAGE_MAP = new Map<string, string>()
 
-const toTaskStatus = (
-  status: ScopeStatus,
-): TaskInfo['status'] => {
+const toTaskStatus = (status: ScopeStatus): TaskInfo['status'] => {
   switch (status) {
     case 'succeeded':
       return 'succeeded'
@@ -71,9 +69,7 @@ const toTaskStatus = (
   }
 }
 
-const toRuntimeStatus = (
-  status: ScopeStatus,
-): NodeInfo['status'] => {
+const toRuntimeStatus = (status: ScopeStatus): NodeInfo['status'] => {
   switch (status) {
     case 'succeeded':
       return 'success'
@@ -84,9 +80,7 @@ const toRuntimeStatus = (
   }
 }
 
-const sortScopesBySeq = (
-  scopes: ScopeNode[],
-): ScopeNode[] => {
+const sortScopesBySeq = (scopes: ScopeNode[]): ScopeNode[] => {
   for (let index = 1; index < scopes.length; index += 1) {
     if ((scopes[index - 1]?.seq ?? 0) > (scopes[index]?.seq ?? 0)) {
       return [...scopes].sort((left, right) => left.seq - right.seq)
@@ -122,16 +116,12 @@ const mergeProjectedTaskEntries = (
   return merged
 }
 
-const readRecord = (
-  value: unknown,
-): Record<string, unknown> | null => {
+const readRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   return value as Record<string, unknown>
 }
 
-const readScopePayload = (
-  scope: ScopeNode,
-): Record<string, unknown> => {
+const readScopePayload = (scope: ScopeNode): Record<string, unknown> => {
   return readRecord(scope.payload) ?? {}
 }
 
@@ -163,54 +153,38 @@ const readNumberField = (
   return undefined
 }
 
-const readScopeName = (
-  scope: ScopeNode,
-): string => {
+const readScopeName = (scope: ScopeNode): string => {
   const payload = readScopePayload(scope)
-  return readStringField(payload, 'name')
-    ?? readStringField(payload, 'entry')
-    ?? scope.kind
+  return readStringField(payload, 'name') ?? readStringField(payload, 'entry') ?? scope.kind
 }
 
-const readScopeTaskId = (
-  scope: ScopeNode,
-): number | undefined => {
+const readScopeTaskId = (scope: ScopeNode): number | undefined => {
   if (scope.taskId != null) return scope.taskId
   const payload = readScopePayload(scope)
   return readNumberField(payload, 'taskId', 'task_id')
 }
 
-const readScopeNodeId = (
-  scope: ScopeNode,
-): number | undefined => {
+const readScopeNodeId = (scope: ScopeNode): number | undefined => {
   const payload = readScopePayload(scope)
   return readNumberField(payload, 'nodeId', 'node_id')
 }
 
-const readScopeRecoId = (
-  scope: ScopeNode,
-): number | undefined => {
+const readScopeRecoId = (scope: ScopeNode): number | undefined => {
   const payload = readScopePayload(scope)
   return readNumberField(payload, 'recoId', 'reco_id')
 }
 
-const readScopeActionId = (
-  scope: ScopeNode,
-): number | undefined => {
+const readScopeActionId = (scope: ScopeNode): number | undefined => {
   const payload = readScopePayload(scope)
   return readNumberField(payload, 'actionId', 'action_id')
 }
 
-const readScopeWaitFreezesId = (
-  scope: ScopeNode,
-): number | undefined => {
+const readScopeWaitFreezesId = (scope: ScopeNode): number | undefined => {
   const payload = readScopePayload(scope)
   return readNumberField(payload, 'wfId', 'wf_id')
 }
 
-const normalizeNextList = (
-  value: unknown,
-): NextListItem[] => {
+const normalizeNextList = (value: unknown): NextListItem[] => {
   if (!Array.isArray(value)) return []
   return value.map((item) => {
     const record = readRecord(item) ?? {}
@@ -222,9 +196,7 @@ const normalizeNextList = (
   })
 }
 
-const normalizeNodeDetails = (
-  value: unknown,
-): NodeInfo['node_details'] | undefined => {
+const normalizeNodeDetails = (value: unknown): NodeInfo['node_details'] | undefined => {
   const record = readRecord(value)
   if (!record) return undefined
 
@@ -237,15 +209,14 @@ const normalizeNodeDetails = (
   }
 }
 
-const normalizeRecognitionDetail = (
-  value: unknown,
-): RecognitionDetail | undefined => {
+const normalizeRecognitionDetail = (value: unknown): RecognitionDetail | undefined => {
   const record = readRecord(value)
   if (!record) return undefined
 
-  const box = Array.isArray(record.box) && record.box.length === 4
-    ? record.box as [number, number, number, number]
-    : null
+  const box =
+    Array.isArray(record.box) && record.box.length === 4
+      ? (record.box as [number, number, number, number])
+      : null
 
   return {
     reco_id: readNumberField(record, 'recoId', 'reco_id') ?? 0,
@@ -256,15 +227,14 @@ const normalizeRecognitionDetail = (
   }
 }
 
-const normalizeActionDetail = (
-  value: unknown,
-): ActionDetail | undefined => {
+const normalizeActionDetail = (value: unknown): ActionDetail | undefined => {
   const record = readRecord(value)
   if (!record) return undefined
 
-  const box = Array.isArray(record.box) && record.box.length === 4
-    ? record.box as [number, number, number, number]
-    : [0, 0, 0, 0] as [number, number, number, number]
+  const box =
+    Array.isArray(record.box) && record.box.length === 4
+      ? (record.box as [number, number, number, number])
+      : ([0, 0, 0, 0] as [number, number, number, number])
 
   return {
     action_id: readNumberField(record, 'actionId', 'action_id') ?? 0,
@@ -278,9 +248,7 @@ const normalizeActionDetail = (
   }
 }
 
-const normalizeResourceLoadingDetail = (
-  scope: ScopeNode,
-): ResourceLoadingDetail | undefined => {
+const normalizeResourceLoadingDetail = (scope: ScopeNode): ResourceLoadingDetail | undefined => {
   const payload = readScopePayload(scope)
   const resId = readNumberField(payload, 'resId', 'res_id')
   const path = readStringField(payload, 'path')
@@ -297,9 +265,7 @@ const normalizeResourceLoadingDetail = (
   }
 }
 
-const readLastPathSegment = (
-  path?: string,
-): string | undefined => {
+const readLastPathSegment = (path?: string): string | undefined => {
   if (!path) return undefined
   const normalized = path.replace(/[\\/]+$/, '')
   if (!normalized) return undefined
@@ -307,15 +273,15 @@ const readLastPathSegment = (
   return segments[segments.length - 1] ?? normalized
 }
 
-const resolveResourceLoadingName = (
-  scope: ScopeNode,
-): string => {
+const resolveResourceLoadingName = (scope: ScopeNode): string => {
   const payload = readScopePayload(scope)
   const path = readStringField(payload, 'path')
-  return readLastPathSegment(path)
-    ?? readStringField(payload, 'resourceType', 'resource_type')
-    ?? readStringField(payload, 'hash')
-    ?? 'Resource.Loading'
+  return (
+    readLastPathSegment(path) ??
+    readStringField(payload, 'resourceType', 'resource_type') ??
+    readStringField(payload, 'hash') ??
+    'Resource.Loading'
+  )
 }
 
 const normalizeWaitFreezesDetail = (
@@ -323,16 +289,17 @@ const normalizeWaitFreezesDetail = (
   options: ProjectTasksFromTraceOptions,
 ): WaitFreezesDetail => {
   const payload = readScopePayload(scope)
-  const roi = Array.isArray(payload.roi) && payload.roi.length === 4
-    ? payload.roi as [number, number, number, number]
-    : undefined
+  const roi =
+    Array.isArray(payload.roi) && payload.roi.length === 4
+      ? (payload.roi as [number, number, number, number])
+      : undefined
   const recoIds = Array.isArray(payload.recoIds)
     ? payload.recoIds.filter((value): value is number => typeof value === 'number')
     : undefined
 
-  const images = (options as Partial<InternalProjectTasksFromTraceOptions>)
-    .waitFreezesImagesByScopeId
-    ?.get(scope.id)
+  const images = (
+    options as Partial<InternalProjectTasksFromTraceOptions>
+  ).waitFreezesImagesByScopeId?.get(scope.id)
 
   return {
     wf_id: readScopeWaitFreezesId(scope) ?? 0,
@@ -393,26 +360,19 @@ const resolveScopeVisionImage = (
   )
 }
 
-const summarizeFlowItemStatus = (
-  items: UnifiedFlowItem[],
-): UnifiedFlowItem['status'] => {
+const summarizeFlowItemStatus = (items: UnifiedFlowItem[]): UnifiedFlowItem['status'] => {
   if (items.some((item) => item.status === 'failed')) return 'failed'
   if (items.some((item) => item.status === 'running')) return 'running'
   return 'success'
 }
 
-const runtimeStatusToTaskStatus = (
-  status: UnifiedFlowItem['status'],
-): TaskInfo['status'] => {
+const runtimeStatusToTaskStatus = (status: UnifiedFlowItem['status']): TaskInfo['status'] => {
   if (status === 'failed') return 'failed'
   if (status === 'running') return 'running'
   return 'succeeded'
 }
 
-const buildDuration = (
-  startTime: string,
-  endTime?: string,
-): number | undefined => {
+const buildDuration = (startTime: string, endTime?: string): number | undefined => {
   if (!endTime) return undefined
   const startMs = Date.parse(startTime)
   const endMs = Date.parse(endTime)
@@ -455,11 +415,7 @@ const projectSyntheticTaskFlowItem = (
       task_id: taskId,
       entry: name,
       status: toTaskStatus(
-        status === 'running'
-          ? 'running'
-          : status === 'failed'
-            ? 'failed'
-            : 'succeeded'
+        status === 'running' ? 'running' : status === 'failed' ? 'failed' : 'succeeded',
       ),
       ts: firstScope.ts,
       end_ts: lastScope?.endTs,
@@ -468,10 +424,7 @@ const projectSyntheticTaskFlowItem = (
   }
 }
 
-const collectTaskScopes = (
-  scope: ScopeNode,
-  output: ScopeNode[],
-): void => {
+const collectTaskScopes = (scope: ScopeNode, output: ScopeNode[]): void => {
   for (const child of scope.children) {
     if (child.kind === 'task') {
       output.push(child)
@@ -480,9 +433,7 @@ const collectTaskScopes = (
   }
 }
 
-const buildNextTaskOccurrenceSeq = (
-  scopes: ScopeNode[],
-): Map<ScopeNode, number> => {
+const buildNextTaskOccurrenceSeq = (scopes: ScopeNode[]): Map<ScopeNode, number> => {
   const nextSeqByScope = new Map<ScopeNode, number>()
   const nextSeqByTaskAndSource = new Map<string, number>()
 
@@ -502,9 +453,7 @@ const buildNextTaskOccurrenceSeq = (
   return nextSeqByScope
 }
 
-const readTaskEventTaskId = (
-  event: EventNotification,
-): number | undefined => {
+const readTaskEventTaskId = (event: EventNotification): number | undefined => {
   const details = readRecord(event.details)
   if (!details) return undefined
   return readNumberField(details, 'taskId', 'task_id')
@@ -533,10 +482,7 @@ const copyTaskEvent = (event: EventNotification): EventNotification => ({
   _lineNumber: event._lineNumber,
 })
 
-const findFirstSequencedEventIndex = (
-  events: SequencedTaskEvent[],
-  targetSeq: number,
-): number => {
+const findFirstSequencedEventIndex = (events: SequencedTaskEvent[], targetSeq: number): number => {
   let low = 0
   let high = events.length
   while (low < high) {
@@ -557,16 +503,13 @@ const projectTaskEvents = (
   nextOccurrenceSeq?: number,
 ): EventNotification[] => {
   const taskId = readScopeTaskId(scope)
-  const sequencedEvents = taskId == null
-    ? undefined
-    : options.sequencedEventsByTaskId?.get(taskId)
+  const sequencedEvents = taskId == null ? undefined : options.sequencedEventsByTaskId?.get(taskId)
 
   if (taskId != null && sequencedEvents) {
     const sourceKey = readScopeSourceKey(scope)
     const scopeEndSeq = scope.endSeq ?? Number.POSITIVE_INFINITY
-    const occurrenceEndSeq = nextOccurrenceSeq == null
-      ? scopeEndSeq
-      : Math.min(scopeEndSeq, nextOccurrenceSeq - 1)
+    const occurrenceEndSeq =
+      nextOccurrenceSeq == null ? scopeEndSeq : Math.min(scopeEndSeq, nextOccurrenceSeq - 1)
 
     const projectedEvents: EventNotification[] = []
     const firstEventIndex = findFirstSequencedEventIndex(sequencedEvents, scope.seq)
@@ -579,9 +522,8 @@ const projectTaskEvents = (
     return projectedEvents
   }
 
-  const events = taskId == null
-    ? undefined
-    : options.eventsByTaskId?.get(taskId) ?? options.events
+  const events =
+    taskId == null ? undefined : (options.eventsByTaskId?.get(taskId) ?? options.events)
   if (taskId == null || !events || events.length === 0) return []
 
   const startMs = toTimestampMs(scope.ts)
@@ -597,10 +539,7 @@ const projectTaskEvents = (
     .map(copyTaskEvent)
 }
 
-const projectFlowChildren = (
-  scope: ScopeNode,
-  context: ProjectionContext,
-): UnifiedFlowItem[] => {
+const projectFlowChildren = (scope: ScopeNode, context: ProjectionContext): UnifiedFlowItem[] => {
   const items: UnifiedFlowItem[] = []
   const children = sortScopesBySeq(scope.children)
   for (let index = 0; index < children.length; index += 1) {
@@ -628,10 +567,7 @@ const projectFlowChildren = (
   return items
 }
 
-const projectTaskFlowItem = (
-  scope: ScopeNode,
-  context: ProjectionContext,
-): UnifiedFlowItem => {
+const projectTaskFlowItem = (scope: ScopeNode, context: ProjectionContext): UnifiedFlowItem => {
   const payload = readScopePayload(scope)
   const children = projectFlowChildren(scope, {
     currentTaskId: readScopeTaskId(scope),
@@ -776,10 +712,7 @@ const projectRecognitionNodeFlowItem = (
   }
 }
 
-const projectActionFlowItem = (
-  scope: ScopeNode,
-  context: ProjectionContext,
-): UnifiedFlowItem => {
+const projectActionFlowItem = (scope: ScopeNode, context: ProjectionContext): UnifiedFlowItem => {
   const payload = readScopePayload(scope)
   const name = readScopeName(scope)
   const children = projectFlowChildren(scope, context)
@@ -856,10 +789,7 @@ const projectWaitFreezesFlowItem = (
   }
 }
 
-const projectFlowScope = (
-  scope: ScopeNode,
-  context: ProjectionContext,
-): UnifiedFlowItem[] => {
+const projectFlowScope = (scope: ScopeNode, context: ProjectionContext): UnifiedFlowItem[] => {
   switch (scope.kind) {
     case 'task':
       return [projectTaskFlowItem(scope, context)]
@@ -885,9 +815,7 @@ const projectFlowScope = (
   }
 }
 
-const resolveNodeNextList = (
-  scope: ScopeNode,
-): NextListItem[] => {
+const resolveNodeNextList = (scope: ScopeNode): NextListItem[] => {
   let nextList: NextListItem[] = []
   for (const child of sortScopesBySeq(scope.children)) {
     if (child.kind !== 'next_list') continue
@@ -938,8 +866,12 @@ const projectTaskScope = (
   nextOccurrenceSeq?: number,
 ): TaskInfo => {
   const payload = readScopePayload(scope)
-  const pipelineScopes = sortScopesBySeq(scope.children).filter((child) => child.kind === 'pipeline_node')
-  const nodes = pipelineScopes.map((pipelineScope) => projectPipelineNodeScope(pipelineScope, options))
+  const pipelineScopes = sortScopesBySeq(scope.children).filter(
+    (child) => child.kind === 'pipeline_node',
+  )
+  const nodes = pipelineScopes.map((pipelineScope) =>
+    projectPipelineNodeScope(pipelineScope, options),
+  )
 
   return {
     task_id: readScopeTaskId(scope) ?? 0,
@@ -975,9 +907,7 @@ const projectTaskScopeWithCache = (
   return task
 }
 
-const collectRootResourceScopeGroups = (
-  root: ScopeNode,
-): ScopeNode[][] => {
+const collectRootResourceScopeGroups = (root: ScopeNode): ScopeNode[][] => {
   const groups: ScopeNode[][] = []
   let currentGroup: ScopeNode[] = []
 
@@ -1012,11 +942,13 @@ const projectRootResourceTaskEntry = (
   const taskUuid = `synthetic:resource_loading:${groupIndex + 1}:seq${firstScope.seq}`
   const taskId = 0
   const nodeId = 0
-  const nodeFlow = groupedScopes.flatMap((scope) => projectFlowScope(scope, {
-    currentTaskId: taskId,
-    currentNodeId: nodeId,
-    options,
-  }))
+  const nodeFlow = groupedScopes.flatMap((scope) =>
+    projectFlowScope(scope, {
+      currentTaskId: taskId,
+      currentNodeId: nodeId,
+      options,
+    }),
+  )
   const runtimeStatus = summarizeFlowItemStatus(nodeFlow)
   const endTime = lastScope.endTs
   const task: TaskInfo = {
@@ -1028,16 +960,18 @@ const projectRootResourceTaskEntry = (
     start_time: firstScope.ts,
     end_time: endTime,
     status: runtimeStatusToTaskStatus(runtimeStatus),
-    nodes: [{
-      node_id: nodeId,
-      name: 'Resource.Loading',
-      ts: firstScope.ts,
-      end_ts: endTime,
-      status: runtimeStatus,
-      task_id: taskId,
-      next_list: [],
-      node_flow: nodeFlow,
-    }],
+    nodes: [
+      {
+        node_id: nodeId,
+        name: 'Resource.Loading',
+        ts: firstScope.ts,
+        end_ts: endTime,
+        status: runtimeStatus,
+        task_id: taskId,
+        next_list: [],
+        node_flow: nodeFlow,
+      },
+    ],
     events: [],
     duration: buildDuration(firstScope.ts, endTime),
   }
@@ -1064,18 +998,15 @@ export const projectTasksFromTrace = (
   const sortedTaskScopes = sortScopesBySeq(taskScopes)
   const nextOccurrenceSeqByScope = buildNextTaskOccurrenceSeq(sortedTaskScopes)
 
-  const projectedTaskEntries: ProjectedTaskEntry[] = sortedTaskScopes
-    .map((scope) => ({
-      seq: scope.seq,
-      task: projectTaskScopeWithCache(
-        scope,
-        projectionOptions,
-        nextOccurrenceSeqByScope.get(scope),
-      ),
-    }))
+  const projectedTaskEntries: ProjectedTaskEntry[] = sortedTaskScopes.map((scope) => ({
+    seq: scope.seq,
+    task: projectTaskScopeWithCache(scope, projectionOptions, nextOccurrenceSeqByScope.get(scope)),
+  }))
 
   const rootResourceTaskEntries = collectRootResourceScopeGroups(root)
-    .map((groupedScopes, groupIndex) => projectRootResourceTaskEntry(groupedScopes, projectionOptions, groupIndex))
+    .map((groupedScopes, groupIndex) =>
+      projectRootResourceTaskEntry(groupedScopes, projectionOptions, groupIndex),
+    )
     .filter((entry): entry is ProjectedTaskEntry => !!entry)
 
   return mergeProjectedTaskEntries(projectedTaskEntries, rootResourceTaskEntries)

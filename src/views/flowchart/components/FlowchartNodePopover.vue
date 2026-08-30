@@ -16,7 +16,9 @@ const props = defineProps<{
   position: { x: number; y: number }
   popoverData: FlowchartPopoverData | null
   nodeImageMap: Map<number, string>
-  getRuntimeStatusTagType: (status: NodeInfo['status']) => 'default' | 'error' | 'success' | 'warning' | 'info' | 'primary'
+  getRuntimeStatusTagType: (
+    status: NodeInfo['status'],
+  ) => 'default' | 'error' | 'success' | 'warning' | 'info' | 'primary'
   getRuntimeStatusText: (status: NodeInfo['status']) => string
 }>()
 
@@ -35,7 +37,7 @@ const showAbnormalOnly = ref(false)
 const hasFailedAction = (info: NodeInfo): boolean => {
   if (info.action_details && info.action_details.success === false) return true
   return (info.node_flow || []).some(
-    (item) => (item.type === 'action' || item.type === 'action_node') && item.status === 'failed'
+    (item) => (item.type === 'action' || item.type === 'action_node') && item.status === 'failed',
   )
 }
 
@@ -71,7 +73,7 @@ watch(
   () => props.popoverData,
   () => {
     showAbnormalOnly.value = false
-  }
+  },
 )
 
 watch(
@@ -80,7 +82,7 @@ watch(
     if (!visible) {
       showAbnormalOnly.value = false
     }
-  }
+  },
 )
 </script>
 
@@ -99,14 +101,15 @@ watch(
         :disabled="!hasAbnormalEntries"
         @click="toggleAbnormalOnly"
       >
-        <span class="popover-filter-dot" :class="{ 'popover-filter-dot--active': showAbnormalOnly }" />
+        <span
+          class="popover-filter-dot"
+          :class="{ 'popover-filter-dot--active': showAbnormalOnly }"
+        />
       </button>
       <span class="popover-close" @click="emit('close')">&times;</span>
     </div>
     <div class="popover-body">
-      <div v-if="popoverEntries.length === 0" class="popover-empty">
-        暂无异常执行
-      </div>
+      <div v-if="popoverEntries.length === 0" class="popover-empty">暂无异常执行</div>
       <div
         v-for="(entry, idx) in popoverEntries"
         :key="`${entry.executionOrder}-${entry.info.node_id}-${idx}`"
@@ -131,8 +134,24 @@ watch(
         <div v-if="entry.info.action_details" class="popover-row">
           <span class="popover-label">动作</span>
           <span>{{ entry.info.action_details.action }}</span>
-          <n-tag size="tiny" :type="entry.info.status === 'running' ? 'warning' : entry.info.action_details.success ? 'success' : 'error'" style="margin-left: 4px">
-            {{ entry.info.status === 'running' ? getRuntimeStatusText(entry.info.status) : entry.info.action_details.success ? '成功' : '失败' }}
+          <n-tag
+            size="tiny"
+            :type="
+              entry.info.status === 'running'
+                ? 'warning'
+                : entry.info.action_details.success
+                  ? 'success'
+                  : 'error'
+            "
+            style="margin-left: 4px"
+          >
+            {{
+              entry.info.status === 'running'
+                ? getRuntimeStatusText(entry.info.status)
+                : entry.info.action_details.success
+                  ? '成功'
+                  : '失败'
+            }}
           </n-tag>
         </div>
         <safe-preview-image
@@ -140,10 +159,7 @@ watch(
           :src="convertFileSrc(nodeImageMap.get(entry.info.node_id)!)"
           class="popover-img"
         />
-        <div
-          v-if="idx < popoverEntries.length - 1"
-          class="popover-divider"
-        />
+        <div v-if="idx < popoverEntries.length - 1" class="popover-divider" />
       </div>
     </div>
   </div>

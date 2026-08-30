@@ -22,7 +22,10 @@ export interface UseBridgeRuntimeOptions {
   toTrimmedNonEmptyString: (value: unknown) => string | null
   getErrorMessage: (error: unknown) => string
   buildNodeFlowItems: (node: NodeInfo) => UnifiedFlowItem[]
-  flattenFlowItems: (items: UnifiedFlowItem[] | undefined, output?: UnifiedFlowItem[]) => UnifiedFlowItem[]
+  flattenFlowItems: (
+    items: UnifiedFlowItem[] | undefined,
+    output?: UnifiedFlowItem[],
+  ) => UnifiedFlowItem[]
   applyParsedTasks: (tasks: TaskInfo[], preserveSelection: boolean) => void
   syncRealtimeLoadedTarget: (session: RealtimeSessionState) => void
   onSessionReset: () => void

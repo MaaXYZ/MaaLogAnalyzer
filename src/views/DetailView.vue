@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import {
-  NCard, NFlex, NScrollbar, NEmpty,
-} from 'naive-ui'
+import { NCard, NFlex, NScrollbar, NEmpty } from 'naive-ui'
 import type { ScrollbarInst } from 'naive-ui'
 import type { NodeInfo } from '../types'
 import { useDetailViewController } from './detail/composables/useDetailViewController'
@@ -85,7 +83,7 @@ watch(
     nextTick(() => {
       scrollbarRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
     })
-  }
+  },
 )
 </script>
 
@@ -97,99 +95,98 @@ watch(
           <n-empty description="请在时间线或节点导航中选择节点查看详情" />
         </n-card>
 
-      <template v-else>
-        <focus-detail-card
-          v-if="currentFocusCard"
-          :focus-card="currentFocusCard"
-          :raw-json-default-expanded="rawJsonDefaultExpanded"
-          :format-json="formatJson"
-          :copy-to-clipboard="copyToClipboard"
-        />
+        <template v-else>
+          <focus-detail-card
+            v-if="currentFocusCard"
+            :focus-card="currentFocusCard"
+            :raw-json-default-expanded="rawJsonDefaultExpanded"
+            :format-json="formatJson"
+            :copy-to-clipboard="copyToClipboard"
+          />
 
-        <recognition-detail-card
-          v-if="hasRecognition"
-          class="inspector-card"
-          :current-recognition="currentRecognition"
-          :current-attempt="currentAttempt"
-          :description-columns="descriptionColumns"
-          :recognition-execution-time="recognitionExecutionTime"
-          :is-vscode-launch-embed="isVscodeLaunchEmbed"
-          :bridge-recognition-raw-image="bridgeRecognitionRawImage"
-          :bridge-recognition-image-refs="props.bridgeRecognitionImageRefs"
-          :bridge-recognition-loading="bridgeRecognitionLoading"
-          :bridge-recognition-error="bridgeRecognitionError"
-          :bridge-recognition-draw-images="bridgeRecognitionDrawImages"
-          :show-open-crop-button="showOpenCropButton"
-          :open-crop-image-available="openCropImageAvailable"
-          :raw-json-default-expanded="rawJsonDefaultExpanded"
-          :resolve-image-src="resolveImageSrc"
-          :format-json="formatJson"
-          :copy-to-clipboard="copyToClipboard"
-          :open-recognition-in-crop="openRecognitionInCrop"
-          :on-search-in-source="props.onSearchInSource"
-        />
+          <recognition-detail-card
+            v-if="hasRecognition"
+            class="inspector-card"
+            :current-recognition="currentRecognition"
+            :current-attempt="currentAttempt"
+            :description-columns="descriptionColumns"
+            :recognition-execution-time="recognitionExecutionTime"
+            :is-vscode-launch-embed="isVscodeLaunchEmbed"
+            :bridge-recognition-raw-image="bridgeRecognitionRawImage"
+            :bridge-recognition-image-refs="props.bridgeRecognitionImageRefs"
+            :bridge-recognition-loading="bridgeRecognitionLoading"
+            :bridge-recognition-error="bridgeRecognitionError"
+            :bridge-recognition-draw-images="bridgeRecognitionDrawImages"
+            :show-open-crop-button="showOpenCropButton"
+            :open-crop-image-available="openCropImageAvailable"
+            :raw-json-default-expanded="rawJsonDefaultExpanded"
+            :resolve-image-src="resolveImageSrc"
+            :format-json="formatJson"
+            :copy-to-clipboard="copyToClipboard"
+            :open-recognition-in-crop="openRecognitionInCrop"
+            :on-search-in-source="props.onSearchInSource"
+          />
 
-        <action-detail-card
-          v-if="hasAction"
-          class="inspector-card"
-          :current-action-details="currentActionDetails"
-          :current-action-status="currentActionStatus"
-          :action-error-image="currentActionErrorImage"
-          :action-execution-time="actionExecutionTime"
-          :description-columns="descriptionColumns"
-          :selected-node="selectedNode"
-          :raw-json-default-expanded="rawJsonDefaultExpanded"
-          :resolve-image-src="resolveImageSrc"
-          :format-json="formatJson"
-          :copy-to-clipboard="copyToClipboard"
-          :show-open-crop-button="showOpenCropButton"
-          :open-error-image-in-crop="openCurrentActionErrorInCrop"
-          :on-search-in-source="props.onSearchInSource"
-        />
+          <action-detail-card
+            v-if="hasAction"
+            class="inspector-card"
+            :current-action-details="currentActionDetails"
+            :current-action-status="currentActionStatus"
+            :action-error-image="currentActionErrorImage"
+            :action-execution-time="actionExecutionTime"
+            :description-columns="descriptionColumns"
+            :selected-node="selectedNode"
+            :raw-json-default-expanded="rawJsonDefaultExpanded"
+            :resolve-image-src="resolveImageSrc"
+            :format-json="formatJson"
+            :copy-to-clipboard="copyToClipboard"
+            :show-open-crop-button="showOpenCropButton"
+            :open-error-image-in-crop="openCurrentActionErrorInCrop"
+            :on-search-in-source="props.onSearchInSource"
+          />
 
-        <flow-fallback-card
-          v-if="showFlowFallback && selectedFlowItem"
-          class="inspector-card"
-          :selected-flow-item="selectedFlowItem"
-          :selected-flow-execution-time="selectedFlowExecutionTime"
-          :description-columns="descriptionColumns"
-          :selected-flow-error-image="selectedFlowErrorImage"
-          :bridge-recognition-draw-images="bridgeRecognitionDrawImages"
-          :bridge-recognition-loading="props.bridgeRecognitionLoading"
-          :bridge-recognition-error="props.bridgeRecognitionError"
-          :get-flow-type-label="getFlowTypeLabel"
-          :raw-json-default-expanded="rawJsonDefaultExpanded"
-          :resolve-image-src="resolveImageSrc"
-          :format-json="formatJson"
-          :copy-to-clipboard="copyToClipboard"
-          :show-open-crop-button="showOpenCropButton"
-          :open-error-image-in-crop="openSelectedFlowErrorInCrop"
-        />
+          <flow-fallback-card
+            v-if="showFlowFallback && selectedFlowItem"
+            class="inspector-card"
+            :selected-flow-item="selectedFlowItem"
+            :selected-flow-execution-time="selectedFlowExecutionTime"
+            :description-columns="descriptionColumns"
+            :selected-flow-error-image="selectedFlowErrorImage"
+            :bridge-recognition-draw-images="bridgeRecognitionDrawImages"
+            :bridge-recognition-loading="props.bridgeRecognitionLoading"
+            :bridge-recognition-error="props.bridgeRecognitionError"
+            :get-flow-type-label="getFlowTypeLabel"
+            :raw-json-default-expanded="rawJsonDefaultExpanded"
+            :resolve-image-src="resolveImageSrc"
+            :format-json="formatJson"
+            :copy-to-clipboard="copyToClipboard"
+            :show-open-crop-button="showOpenCropButton"
+            :open-error-image-in-crop="openSelectedFlowErrorInCrop"
+          />
 
-        <node-detail-card
-          v-if="!isFlowItemSelected"
-          class="inspector-card"
-          :selected-node="selectedNode"
-          :node-error-image="selectedNodeDisplayErrorImage"
-          :description-columns="descriptionColumns"
-          :status-type="statusType"
-          :status-info="statusInfo"
-          :node-execution-time="nodeExecutionTime"
-          :show-node-completed-row="showNodeCompletedRow"
-          :node-completed-value="nodeCompletedValue"
-          :is-vscode-launch-embed="isVscodeLaunchEmbed"
-          :formatted-bridge-node-definition="formattedBridgeNodeDefinition"
-          :bridge-node-definition-loading="props.bridgeNodeDefinitionLoading"
-          :bridge-node-definition-error="props.bridgeNodeDefinitionError"
-          :raw-json-default-expanded="rawJsonDefaultExpanded"
-          :resolve-image-src="resolveImageSrc"
-          :format-json="formatJson"
-          :copy-to-clipboard="copyToClipboard"
-          :show-open-crop-button="showOpenCropButton"
-          :open-error-image-in-crop="openSelectedNodeErrorInCrop"
-          :on-search-in-source="props.onSearchInSource"
-        />
-
+          <node-detail-card
+            v-if="!isFlowItemSelected"
+            class="inspector-card"
+            :selected-node="selectedNode"
+            :node-error-image="selectedNodeDisplayErrorImage"
+            :description-columns="descriptionColumns"
+            :status-type="statusType"
+            :status-info="statusInfo"
+            :node-execution-time="nodeExecutionTime"
+            :show-node-completed-row="showNodeCompletedRow"
+            :node-completed-value="nodeCompletedValue"
+            :is-vscode-launch-embed="isVscodeLaunchEmbed"
+            :formatted-bridge-node-definition="formattedBridgeNodeDefinition"
+            :bridge-node-definition-loading="props.bridgeNodeDefinitionLoading"
+            :bridge-node-definition-error="props.bridgeNodeDefinitionError"
+            :raw-json-default-expanded="rawJsonDefaultExpanded"
+            :resolve-image-src="resolveImageSrc"
+            :format-json="formatJson"
+            :copy-to-clipboard="copyToClipboard"
+            :show-open-crop-button="showOpenCropButton"
+            :open-error-image-in-crop="openSelectedNodeErrorInCrop"
+            :on-search-in-source="props.onSearchInSource"
+          />
         </template>
       </n-flex>
     </div>

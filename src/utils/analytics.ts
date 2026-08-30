@@ -11,12 +11,11 @@ const getRuntime = (): 'web' | 'web-iframe' | 'tauri-desktop' | 'vscode-webview'
   return 'web'
 }
 
-const normalizeEventSegment = (value: string): string => (
+const normalizeEventSegment = (value: string): string =>
   value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
-)
 
 const buildContextEventName = (runtime: string, embedMode: string): string => {
   const segments = ['client', 'context', normalizeEventSegment(runtime)]

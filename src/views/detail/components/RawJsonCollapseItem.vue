@@ -54,17 +54,14 @@ watch(
   },
 )
 
-watch(
-  isExpanded,
-  (expanded) => {
-    if (expanded) {
-      scheduleTreeLoad()
-    } else if (loadTimer != null) {
-      window.clearTimeout(loadTimer)
-      loadTimer = null
-    }
-  },
-)
+watch(isExpanded, (expanded) => {
+  if (expanded) {
+    scheduleTreeLoad()
+  } else if (loadTimer != null) {
+    window.clearTimeout(loadTimer)
+    loadTimer = null
+  }
+})
 
 onMounted(() => {
   mounted.value = true
@@ -86,10 +83,7 @@ const handleCopy = () => {
 <template>
   <n-collapse-item :title="props.title" :name="props.name">
     <template #header-extra>
-      <n-button
-        size="tiny"
-        @click.stop="handleCopy"
-      >
+      <n-button size="tiny" @click.stop="handleCopy">
         <template #icon>
           <n-icon><copy-outlined /></n-icon>
         </template>

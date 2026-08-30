@@ -36,11 +36,11 @@ const actionRepeatCount = computed(() => buildNodeActionRepeatCount(props.node))
 
 // Recognition 摘要
 const recognitionSummary = computed(() => {
-  const list = props.mergedRecognitionList.filter(i => !i.isRoundSeparator)
+  const list = props.mergedRecognitionList.filter((i) => !i.isRoundSeparator)
   const actionLevelRecoCount = actionLevelRecoItems.value.length
   if (list.length === 0 && actionLevelRecoCount === 0) return null
-  const tried = list.filter(i => i.status !== 'not-recognized').length
-  const matched = list.find(i => i.status === 'success')
+  const tried = list.filter((i) => i.status !== 'not-recognized').length
+  const matched = list.find((i) => i.status === 'success')
   return {
     tried,
     total: list.length,
@@ -59,7 +59,7 @@ const taskSummary = computed(() => {
   let failedNodes = 0
   let runningNodes = 0
   for (const g of groups) {
-    const nestedNodes = (g.children ?? []).filter(item => item.type === 'pipeline_node')
+    const nestedNodes = (g.children ?? []).filter((item) => item.type === 'pipeline_node')
     for (const n of nestedNodes) {
       totalNodes++
       if (n.status === 'success') successNodes++
@@ -117,16 +117,21 @@ const actionSummary = computed<CompactActionSummary | null>(() => {
   return {
     name: formatActionDisplayName(props.node.action_details.name),
     rawName: props.node.action_details.name,
-    status: props.node.status === 'running' ? 'running' : (props.node.action_details.success ? 'success' : 'failed'),
+    status:
+      props.node.status === 'running'
+        ? 'running'
+        : props.node.action_details.success
+          ? 'success'
+          : 'failed',
     flowItemId: null,
     useFlowItem: false,
   }
 })
 
 const auxiliaryFlowItems = computed(() =>
-  buildNodeActionTimelineItems(props.node).filter((item) =>
-    item.type === 'wait_freezes' || item.type === 'resource_loading'
-  )
+  buildNodeActionTimelineItems(props.node).filter(
+    (item) => item.type === 'wait_freezes' || item.type === 'resource_loading',
+  ),
 )
 
 const toTimestampMs = (timestamp?: string): number => {
@@ -137,7 +142,7 @@ const toTimestampMs = (timestamp?: string): number => {
 }
 
 const pickEarliest = (timestamps: Array<string | undefined>): number => {
-  const values = timestamps.map(toTimestampMs).filter(value => Number.isFinite(value))
+  const values = timestamps.map(toTimestampMs).filter((value) => Number.isFinite(value))
   return values.length > 0 ? Math.min(...values) : Number.POSITIVE_INFINITY
 }
 
@@ -146,8 +151,8 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'flow' | 'action'>>
 
   if (recognitionSummary.value) {
     const timestamps = [
-      ...recognitionAttempts.value.map(attempt => attempt.ts),
-      ...actionLevelRecoItems.value.map(item => item.ts),
+      ...recognitionAttempts.value.map((attempt) => attempt.ts),
+      ...actionLevelRecoItems.value.map((item) => item.ts),
     ]
     sections.push({
       type: 'recognition',
@@ -158,14 +163,14 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'flow' | 'action'>>
   if (taskSummary.value) {
     sections.push({
       type: 'task',
-      ts: pickEarliest(taskItems.value.map(group => group.ts)),
+      ts: pickEarliest(taskItems.value.map((group) => group.ts)),
     })
   }
 
   if (auxiliaryFlowItems.value.length > 0) {
     sections.push({
       type: 'flow',
-      ts: pickEarliest(auxiliaryFlowItems.value.map(item => item.ts)),
+      ts: pickEarliest(auxiliaryFlowItems.value.map((item) => item.ts)),
     })
   }
 
@@ -178,22 +183,22 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'flow' | 'action'>>
     ])
     sections.push({
       type: 'action',
-      ts: Number.isFinite(actionTs)
-        ? actionTs
-        : pickEarliest([props.node.end_ts, props.node.ts]),
+      ts: Number.isFinite(actionTs) ? actionTs : pickEarliest([props.node.end_ts, props.node.ts]),
     })
   }
 
-  return sections
-    .sort((a, b) => a.ts - b.ts)
-    .map(section => section.type)
+  return sections.sort((a, b) => a.ts - b.ts).map((section) => section.type)
 })
 </script>
 
 <template>
   <n-flex vertical style="gap: 6px">
     <template v-for="section in sectionOrder" :key="section">
-      <n-flex v-if="section === 'recognition' && recognitionSummary" align="center" style="gap: 6px">
+      <n-flex
+        v-if="section === 'recognition' && recognitionSummary"
+        align="center"
+        style="gap: 6px"
+      >
         <n-text depth="3" style="font-size: 12px">Recognition:</n-text>
         <n-text style="font-size: 12px">
           {{ recognitionSummary.tried }} tried{{ recognitionSummary.matchedName ? ',' : '' }}
@@ -224,30 +229,43 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'flow' | 'action'>>
       <n-flex v-else-if="section === 'task' && taskSummary" align="center" style="gap: 6px">
         <n-text depth="3" style="font-size: 12px">Task:</n-text>
         <n-text style="font-size: 12px">
-          {{ taskSummary.totalNodes }} nodes, {{ taskSummary.allSuccess ? 'all ✓' : taskSummary.failedNodes > 0 ? 'some ✗' : taskSummary.runningNodes > 0 ? 'running…' : 'partial' }}
+          {{ taskSummary.totalNodes }} nodes,
+          {{
+            taskSummary.allSuccess
+              ? 'all ✓'
+              : taskSummary.failedNodes > 0
+                ? 'some ✗'
+                : taskSummary.runningNodes > 0
+                  ? 'running…'
+                  : 'partial'
+          }}
         </n-text>
-          <task-doc-hover-popover
-            v-for="group in taskGroups"
-            :key="`compact-task-${group.groupIdx}-${group.taskId}`"
-            :enabled="isVscodeLaunchEmbed === true"
-            :request-task-doc="bridgeRequestTaskDoc"
-            :task-name="group.name"
+        <task-doc-hover-popover
+          v-for="group in taskGroups"
+          :key="`compact-task-${group.groupIdx}-${group.taskId}`"
+          :enabled="isVscodeLaunchEmbed === true"
+          :request-task-doc="bridgeRequestTaskDoc"
+          :task-name="group.name"
+        >
+          <n-button
+            text
+            size="tiny"
+            :type="resolveResultStatusButtonType(group.status)"
+            @click="emit('select-flow-item', node, group.flowItemId)"
           >
-            <n-button
-              text
-              size="tiny"
-              :type="resolveResultStatusButtonType(group.status)"
-              @click="emit('select-flow-item', node, group.flowItemId)"
-            >
-              <template #icon>
-                <status-icon :status="group.status" />
-              </template>
-              {{ group.name }}
-            </n-button>
-          </task-doc-hover-popover>
+            <template #icon>
+              <status-icon :status="group.status" />
+            </template>
+            {{ group.name }}
+          </n-button>
+        </task-doc-hover-popover>
       </n-flex>
 
-      <n-flex v-else-if="section === 'flow' && auxiliaryFlowItems.length > 0" align="center" style="gap: 6px; flex-wrap: wrap">
+      <n-flex
+        v-else-if="section === 'flow' && auxiliaryFlowItems.length > 0"
+        align="center"
+        style="gap: 6px; flex-wrap: wrap"
+      >
         <n-text depth="3" style="font-size: 12px">Flow:</n-text>
         <n-button
           v-for="item in auxiliaryFlowItems"
@@ -275,7 +293,11 @@ const sectionOrder = computed<Array<'recognition' | 'task' | 'flow' | 'action'>>
             text
             size="tiny"
             :type="resolveResultStatusButtonType(actionSummary.status)"
-            @click="actionSummary.useFlowItem && actionSummary.flowItemId ? emit('select-flow-item', node, actionSummary.flowItemId) : emit('select-action', node)"
+            @click="
+              actionSummary.useFlowItem && actionSummary.flowItemId
+                ? emit('select-flow-item', node, actionSummary.flowItemId)
+                : emit('select-action', node)
+            "
           >
             <template #icon>
               <status-icon :status="actionSummary.status" />

@@ -2,16 +2,19 @@
 import { computed, ref, watch } from 'vue'
 import { NPopover, NText } from 'naive-ui'
 
-const props = withDefaults(defineProps<{
-  taskName: string
-  enabled?: boolean
-  requestTaskDoc?: ((task: string) => Promise<string | null>) | null
-  maxWidth?: string
-}>(), {
-  enabled: false,
-  requestTaskDoc: null,
-  maxWidth: '420px',
-})
+const props = withDefaults(
+  defineProps<{
+    taskName: string
+    enabled?: boolean
+    requestTaskDoc?: ((task: string) => Promise<string | null>) | null
+    maxWidth?: string
+  }>(),
+  {
+    enabled: false,
+    requestTaskDoc: null,
+    maxWidth: '420px',
+  },
+)
 
 const normalizeTaskName = (value: unknown): string => {
   if (typeof value !== 'string') return ''
@@ -19,7 +22,9 @@ const normalizeTaskName = (value: unknown): string => {
 }
 
 const normalizedTaskName = computed(() => normalizeTaskName(props.taskName))
-const canQuery = computed(() => props.enabled && !!props.requestTaskDoc && !!normalizedTaskName.value)
+const canQuery = computed(
+  () => props.enabled && !!props.requestTaskDoc && !!normalizedTaskName.value,
+)
 
 const popoverVisible = ref(false)
 const hoverActive = ref(false)
@@ -28,14 +33,18 @@ const docLoaded = ref(false)
 const docLoading = ref(false)
 let requestToken = 0
 
-watch(normalizedTaskName, () => {
-  popoverVisible.value = false
-  hoverActive.value = false
-  docText.value = ''
-  docLoaded.value = false
-  docLoading.value = false
-  requestToken += 1
-}, { flush: 'sync' })
+watch(
+  normalizedTaskName,
+  () => {
+    popoverVisible.value = false
+    hoverActive.value = false
+    docText.value = ''
+    docLoaded.value = false
+    docLoading.value = false
+    requestToken += 1
+  },
+  { flush: 'sync' },
+)
 
 const handleMouseEnter = () => {
   hoverActive.value = true
@@ -90,7 +99,11 @@ const handleMouseLeave = () => {
     :style="{ maxWidth }"
   >
     <template #trigger>
-      <span class="task-doc-hover-trigger" @mouseenter="handleMouseEnter" @mouseleave="handleMouseLeave">
+      <span
+        class="task-doc-hover-trigger"
+        @mouseenter="handleMouseEnter"
+        @mouseleave="handleMouseLeave"
+      >
         <slot />
       </span>
     </template>

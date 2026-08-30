@@ -1,11 +1,4 @@
-import {
-  nextTick,
-  onActivated,
-  onBeforeUnmount,
-  onDeactivated,
-  onMounted,
-  watch,
-} from 'vue'
+import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, watch } from 'vue'
 
 export interface ScrollPositionSnapshot {
   contextKey: string | null
@@ -45,9 +38,8 @@ export const createScrollPositionMemory = () => {
       snapshot = captureScrollPosition(scroller, contextKey)
       return snapshot
     },
-    restore: (scroller: ScrollPositionElement | null, contextKey: string | null) => (
-      restoreScrollPosition(scroller, snapshot, contextKey)
-    ),
+    restore: (scroller: ScrollPositionElement | null, contextKey: string | null) =>
+      restoreScrollPosition(scroller, snapshot, contextKey),
     clear: () => {
       snapshot = null
     },
@@ -86,9 +78,10 @@ export const useKeepAliveScrollPosition = (options: KeepAliveScrollPositionOptio
   const captureCurrentScrollPosition = (event?: Event) => {
     if (!isActive || isRestoring || !options.shouldPreserve()) return
 
-    const eventTarget = typeof HTMLElement !== 'undefined' && event?.currentTarget instanceof HTMLElement
-      ? event.currentTarget
-      : null
+    const eventTarget =
+      typeof HTMLElement !== 'undefined' && event?.currentTarget instanceof HTMLElement
+        ? event.currentTarget
+        : null
     const scroller = eventTarget ?? options.getScrollerElement()
     if (!scroller?.isConnected) return
 
@@ -136,17 +129,25 @@ export const useKeepAliveScrollPosition = (options: KeepAliveScrollPositionOptio
     })
   }
 
-  watch(options.getContextKey, (contextKey, previousContextKey) => {
-    if (contextKey !== previousContextKey) discardScrollPosition()
-  }, { flush: 'sync' })
+  watch(
+    options.getContextKey,
+    (contextKey, previousContextKey) => {
+      if (contextKey !== previousContextKey) discardScrollPosition()
+    },
+    { flush: 'sync' },
+  )
 
-  watch(options.shouldPreserve, (preserve) => {
-    if (!preserve) {
-      discardScrollPosition()
-      return
-    }
-    void nextTick(() => captureCurrentScrollPosition())
-  }, { flush: 'sync' })
+  watch(
+    options.shouldPreserve,
+    (preserve) => {
+      if (!preserve) {
+        discardScrollPosition()
+        return
+      }
+      void nextTick(() => captureCurrentScrollPosition())
+    },
+    { flush: 'sync' },
+  )
 
   onMounted(() => {
     void nextTick(() => captureCurrentScrollPosition())

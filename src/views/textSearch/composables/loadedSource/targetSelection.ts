@@ -1,7 +1,7 @@
 import type { LoadedSearchTarget } from '../types'
 
 export const mapLoadedTargetOptions = (targets: LoadedSearchTarget[]) => {
-  return targets.map(target => ({
+  return targets.map((target) => ({
     label: target.label,
     value: target.id,
   }))
@@ -12,7 +12,7 @@ export const resolveDefaultLoadedTargetId = (
   defaultId: string | undefined,
 ): string => {
   if (targets.length === 0) return ''
-  if (defaultId && targets.some(item => item.id === defaultId)) {
+  if (defaultId && targets.some((item) => item.id === defaultId)) {
     return defaultId
   }
   return targets[0]?.id ?? ''
@@ -24,7 +24,7 @@ export const resolveActiveLoadedTargetId = (
   defaultId: string | undefined,
 ): string => {
   if (targets.length === 0) return ''
-  if (selectedId && targets.some(item => item.id === selectedId)) {
+  if (selectedId && targets.some((item) => item.id === selectedId)) {
     return selectedId
   }
   return resolveDefaultLoadedTargetId(targets, defaultId)

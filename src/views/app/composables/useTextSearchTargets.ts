@@ -26,7 +26,7 @@ export const useTextSearchTargets = () => {
 
   const setTextSearchLoadedTargets = (targets: TextSearchLoadedTarget[], defaultId?: string) => {
     textSearchLoadedTargets.value = targets
-    textSearchLoadedDefaultTargetId.value = defaultId ?? (targets[0]?.id ?? '')
+    textSearchLoadedDefaultTargetId.value = defaultId ?? targets[0]?.id ?? ''
   }
 
   const pickPreferredLogTargetId = (targets: TextSearchLoadedTarget[]): string => {
@@ -37,24 +37,36 @@ export const useTextSearchTargets = () => {
         target,
         candidate: matchPrimaryLogFile(target.label || target.fileName, target.fileName),
       }))
-      .filter((entry): entry is { target: TextSearchLoadedTarget; candidate: NonNullable<ReturnType<typeof matchPrimaryLogFile>> } => entry.candidate != null)
+      .filter(
+        (
+          entry,
+        ): entry is {
+          target: TextSearchLoadedTarget
+          candidate: NonNullable<ReturnType<typeof matchPrimaryLogFile>>
+        } => entry.candidate != null,
+      )
 
-    const preferredMain = primaryTargets.find(
-      entry => entry.candidate.kind === 'main' && entry.candidate.normalizedName === 'maafw.log',
-    ) ?? primaryTargets.find(
-      entry => entry.candidate.kind === 'main' && entry.candidate.normalizedName === 'maa.log',
-    )
+    const preferredMain =
+      primaryTargets.find(
+        (entry) =>
+          entry.candidate.kind === 'main' && entry.candidate.normalizedName === 'maafw.log',
+      ) ??
+      primaryTargets.find(
+        (entry) => entry.candidate.kind === 'main' && entry.candidate.normalizedName === 'maa.log',
+      )
     if (preferredMain) {
       return preferredMain.target.id
     }
 
     if (primaryTargets.length > 0) {
-      const sortedBakTargets = sortLoadedPrimaryLogSegments(primaryTargets.map((entry) => ({
-        id: entry.target.id,
-        path: entry.target.label || entry.target.fileName,
-        name: entry.target.fileName,
-        content: entry.target.content,
-      })))
+      const sortedBakTargets = sortLoadedPrimaryLogSegments(
+        primaryTargets.map((entry) => ({
+          id: entry.target.id,
+          path: entry.target.label || entry.target.fileName,
+          name: entry.target.fileName,
+          content: entry.target.content,
+        })),
+      )
       return sortedBakTargets[sortedBakTargets.length - 1]?.id ?? primaryTargets[0].target.id
     }
 
@@ -76,7 +88,7 @@ export const useTextSearchTargets = () => {
       return
     }
 
-    const hasMain = deferredTargets.some(target => {
+    const hasMain = deferredTargets.some((target) => {
       const candidate = matchPrimaryLogFile(target.label || target.fileName, target.fileName)
       return candidate?.kind === 'main'
     })
@@ -102,7 +114,7 @@ export const useTextSearchTargets = () => {
       }
       if (token !== hydrateTextSearchTargetsToken) return
       const defaultId = pickPreferredLogTargetId(loaded)
-      const merged = loaded.map(target => ({
+      const merged = loaded.map((target) => ({
         ...target,
         content: target.id === defaultId ? target.content : '',
       }))
@@ -122,12 +134,12 @@ export const useTextSearchTargets = () => {
 
   // 按需加载单个目标的内容（切换目标 / 原文定位时使用），配合懒加载策略控制内存
   const ensureDeferredTargetContent = async (targetId: string): Promise<void> => {
-    const entry = textSearchLoadedTargets.value.find(target => target.id === targetId)
+    const entry = textSearchLoadedTargets.value.find((target) => target.id === targetId)
     if (entry && entry.content) return
-    const deferred = deferredTextSearchTargets.value.find(target => target.id === targetId)
+    const deferred = deferredTextSearchTargets.value.find((target) => target.id === targetId)
     if (!deferred) return
     const content = await deferred.loadContent()
-    const updated = textSearchLoadedTargets.value.map(target =>
+    const updated = textSearchLoadedTargets.value.map((target) =>
       target.id === targetId ? { ...target, content } : target,
     )
     if (!entry) {
@@ -158,25 +170,31 @@ export const useTextSearchTargets = () => {
     return null
   }
 
-  const setDeferredTextSearchTargets = (targets: DeferredTextSearchTarget[], defaultId?: string) => {
+  const setDeferredTextSearchTargets = (
+    targets: DeferredTextSearchTarget[],
+    defaultId?: string,
+  ) => {
     hydrateTextSearchTargetsToken++
     deferredTextSearchTargets.value = targets
     // 默认目标优先按文件名识别主日志（无需加载内容）；
     // 纯 bak 分段时先取第一段，hydrate 时再按内容选最新段
-    const hasMain = targets.some(target => {
+    const hasMain = targets.some((target) => {
       const candidate = matchPrimaryLogFile(target.label || target.fileName, target.fileName)
       return candidate?.kind === 'main'
     })
     let resolvedDefault = defaultId ?? ''
     if (!resolvedDefault && targets.length > 0) {
       if (hasMain) {
-        const preferredMain = targets.find(target => {
-          const candidate = matchPrimaryLogFile(target.label || target.fileName, target.fileName)
-          return candidate?.normalizedName === 'maafw.log'
-        }) ?? targets.find(target => {
-          const candidate = matchPrimaryLogFile(target.label || target.fileName, target.fileName)
-          return candidate?.normalizedName === 'maa.log'
-        }) ?? targets[0]
+        const preferredMain =
+          targets.find((target) => {
+            const candidate = matchPrimaryLogFile(target.label || target.fileName, target.fileName)
+            return candidate?.normalizedName === 'maafw.log'
+          }) ??
+          targets.find((target) => {
+            const candidate = matchPrimaryLogFile(target.label || target.fileName, target.fileName)
+            return candidate?.normalizedName === 'maa.log'
+          }) ??
+          targets[0]
         resolvedDefault = preferredMain.id
       } else {
         resolvedDefault = targets[0].id
@@ -187,7 +205,7 @@ export const useTextSearchTargets = () => {
     // 立即物化元数据（content 留空按需加载）。
     // 不能把 loadedTargets 短暂清成空数组——那会让 watchTargetsSync 误判“无目标”而回退手动模式
     setTextSearchLoadedTargets(
-      targets.map(target => ({
+      targets.map((target) => ({
         id: target.id,
         label: target.label,
         fileName: target.fileName,

@@ -7,19 +7,13 @@ describe('normalizeTauriDialogPaths', () => {
   })
 
   it('preserves every explicitly selected volume in dialog order', () => {
-    expect(normalizeTauriDialogPaths([
-      'C:\\logs\\bundle-part02.zip',
-      'C:\\logs\\bundle-part01.zip',
-    ])).toEqual([
-      'C:\\logs\\bundle-part02.zip',
-      'C:\\logs\\bundle-part01.zip',
-    ])
+    expect(
+      normalizeTauriDialogPaths(['C:\\logs\\bundle-part02.zip', 'C:\\logs\\bundle-part01.zip']),
+    ).toEqual(['C:\\logs\\bundle-part02.zip', 'C:\\logs\\bundle-part01.zip'])
   })
 
   it('drops invalid empty selections', () => {
     expect(normalizeTauriDialogPaths(null)).toEqual([])
-    expect(normalizeTauriDialogPaths(['', 'C:\\logs\\maa.zip'])).toEqual([
-      'C:\\logs\\maa.zip',
-    ])
+    expect(normalizeTauriDialogPaths(['', 'C:\\logs\\maa.zip'])).toEqual(['C:\\logs\\maa.zip'])
   })
 })

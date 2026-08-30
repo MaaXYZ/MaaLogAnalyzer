@@ -75,26 +75,27 @@ describe('nodeFlow nested task node_flow mapping', () => {
     ]
 
     const actionFlow = buildActionFlowItems([], nestedGroups)
-    const subTaskRoot = actionFlow.find(item => item.type === 'task' && item.task_id === 2)
+    const subTaskRoot = actionFlow.find((item) => item.type === 'task' && item.task_id === 2)
     expect(subTaskRoot).toBeTruthy()
 
-    const subPipelineNode = subTaskRoot?.children?.find(item => item.type === 'pipeline_node' && item.node_id === 201)
+    const subPipelineNode = subTaskRoot?.children?.find(
+      (item) => item.type === 'pipeline_node' && item.node_id === 201,
+    )
     expect(subPipelineNode).toBeTruthy()
 
     const mappedWaitFreezes = subPipelineNode?.children?.find(
-      item => item.type === 'wait_freezes' && item.wait_freezes_details?.wf_id === 11
+      (item) => item.type === 'wait_freezes' && item.wait_freezes_details?.wf_id === 11,
     )
     expect(mappedWaitFreezes).toBeTruthy()
 
     const mappedAction = subPipelineNode?.children?.find(
-      item => item.type === 'action' && item.action_id === 301
+      (item) => item.type === 'action' && item.action_id === 301,
     )
     expect(mappedAction).toBeTruthy()
 
     const nestedChildTask = mappedAction?.children?.find(
-      item => item.type === 'task' && item.task_id === 3
+      (item) => item.type === 'task' && item.task_id === 3,
     )
     expect(nestedChildTask).toBeTruthy()
   })
 })
-

@@ -19,9 +19,9 @@ export const ensureSearchSourceReady = async (
   await options.ensureDeferredLoadedTargetsReady()
 
   if (
-    options.sourceMode.value !== 'loaded'
-    && !options.fileName.value
-    && (options.loadedTargets.value?.length ?? 0) > 0
+    options.sourceMode.value !== 'loaded' &&
+    !options.fileName.value &&
+    (options.loadedTargets.value?.length ?? 0) > 0
   ) {
     options.prepareSourceMode('loaded')
   }

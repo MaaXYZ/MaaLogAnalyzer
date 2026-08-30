@@ -1,8 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import {
-  NCard, NDescriptions, NDescriptionsItem, NFlex, NTag, NIcon, NText,
-  NCollapse, NCollapseItem, NButton, NCode, NEmpty,
+  NCard,
+  NDescriptions,
+  NDescriptionsItem,
+  NFlex,
+  NTag,
+  NIcon,
+  NText,
+  NCollapse,
+  NCollapseItem,
+  NButton,
+  NCode,
+  NEmpty,
 } from 'naive-ui'
 import { CopyOutlined } from '@vicons/antd'
 import type { NodeInfo } from '../../../types'
@@ -102,7 +112,6 @@ const nodeDefinitionExpanded = computed(() => expandedNames.value.includes('node
           {{ props.nodeCompletedValue ? '已完成' : '未完成' }}
         </n-tag>
       </n-descriptions-item>
-
     </n-descriptions>
 
     <div v-if="props.nodeErrorImage" style="margin-top: 12px">
@@ -136,8 +145,12 @@ const nodeDefinitionExpanded = computed(() => expandedNames.value.includes('node
             复制
           </n-button>
         </template>
-        <n-text v-if="props.bridgeNodeDefinitionLoading" depth="3" style="font-size: 13px">正在加载节点定义...</n-text>
-        <n-text v-else-if="props.bridgeNodeDefinitionError" type="error" style="font-size: 13px">{{ props.bridgeNodeDefinitionError }}</n-text>
+        <n-text v-if="props.bridgeNodeDefinitionLoading" depth="3" style="font-size: 13px"
+          >正在加载节点定义...</n-text
+        >
+        <n-text v-else-if="props.bridgeNodeDefinitionError" type="error" style="font-size: 13px">{{
+          props.bridgeNodeDefinitionError
+        }}</n-text>
         <n-code
           v-else-if="props.formattedBridgeNodeDefinition && nodeDefinitionExpanded"
           :code="props.formattedBridgeNodeDefinition"

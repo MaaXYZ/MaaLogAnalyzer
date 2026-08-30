@@ -25,10 +25,14 @@ export const useBridgeNodeQuery = (options: UseBridgeNodeQueryOptions) => {
     if (!bridge?.enabled) {
       throw new Error('Bridge is disabled')
     }
-    const result = await bridge.sendRequest('query.node', {
-      sessionId,
-      task,
-    }, { timeoutMs: 12000 })
+    const result = await bridge.sendRequest(
+      'query.node',
+      {
+        sessionId,
+        task,
+      },
+      { timeoutMs: 12000 },
+    )
     const record = options.asRecord(result)
     if (!record) {
       throw new Error('Invalid query.node response')

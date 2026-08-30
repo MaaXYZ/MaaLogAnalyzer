@@ -34,12 +34,16 @@ export const useParsedTaskState = (options: UseParsedTaskStateOptions) => {
     }
 
     if (prevSelectedTask) {
-      const matchedTask = nextTasks.find(task => isSameTask(task, prevSelectedTask))
+      const matchedTask = nextTasks.find((task) => isSameTask(task, prevSelectedTask))
       if (matchedTask) {
         options.selectedTask.value = matchedTask
         if (prevSelectedNodeId != null) {
-          options.selectedNode.value = matchedTask.nodes.find(node => node.node_id === prevSelectedNodeId) || null
-          if (options.selectedNode.value && options.hasFlowItemId(options.selectedNode.value, prevSelectedFlowItemId)) {
+          options.selectedNode.value =
+            matchedTask.nodes.find((node) => node.node_id === prevSelectedNodeId) || null
+          if (
+            options.selectedNode.value &&
+            options.hasFlowItemId(options.selectedNode.value, prevSelectedFlowItemId)
+          ) {
             options.selectedFlowItemId.value = prevSelectedFlowItemId
           } else {
             options.selectedFlowItemId.value = null

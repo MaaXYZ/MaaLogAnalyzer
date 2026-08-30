@@ -191,28 +191,29 @@ export interface AnalyzerToolError {
 
 export type AnalyzerToolResponse<T> =
   | {
-    ok: true
-    data: T
-    meta: {
-      duration_ms: number
-      warnings: string[]
+      ok: true
+      data: T
+      meta: {
+        duration_ms: number
+        warnings: string[]
+      }
+      error: null
     }
-    error: null
-  }
   | {
-    ok: false
-    data: null
-    meta: {
-      duration_ms: number
-      warnings: string[]
+      ok: false
+      data: null
+      meta: {
+        duration_ms: number
+        warnings: string[]
+      }
+      error: AnalyzerToolError
     }
-    error: AnalyzerToolError
-  }
 
 export type AnalyzerInputResolver = (
   input: ParseLogBundleInput,
   context: { input_index: number },
-) => Promise<ResolvedLogSourceInput | ResolvedLogSourceInput[] | null | undefined>
+) =>
+  | Promise<ResolvedLogSourceInput | ResolvedLogSourceInput[] | null | undefined>
   | ResolvedLogSourceInput
   | ResolvedLogSourceInput[]
   | null
@@ -230,7 +231,8 @@ export interface AnalyzerToolHandlerOptions {
         sourcePath?: string
         inputIndex?: number
       }>,
-      onProgress?: ((progress: { current: number; total: number; percentage: number }) => void) | undefined,
+      onProgress?:
+        ((progress: { current: number; total: number; percentage: number }) => void) | undefined,
       options?: ParseFileOptions,
     ) => Promise<void>
     getParseArtifactsSnapshot: () => ParseArtifactsSnapshot

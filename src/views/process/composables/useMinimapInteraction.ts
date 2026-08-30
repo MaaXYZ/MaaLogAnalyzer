@@ -1,7 +1,12 @@
 import { ref, type Ref } from 'vue'
 import type { DynamicScrollerInstance } from '../../../types/virtualScroller'
 import type { NodeInfo } from '../../../types'
-import { MINIMAP_CONFIG, getMinimapColor, getMinimapPriority, resolveNodeEffectiveStatus } from '../utils/minimapColors'
+import {
+  MINIMAP_CONFIG,
+  getMinimapColor,
+  getMinimapPriority,
+  resolveNodeEffectiveStatus,
+} from '../utils/minimapColors'
 
 type NodeTimelineItem = NodeInfo & { _uniqueKey: string }
 
@@ -27,11 +32,15 @@ const getScrollerElement = (scrollerRef: DynamicScrollerInstance | null): HTMLEl
   return nested ?? rootCandidate
 }
 
-const getScrollMetrics = (scrollerEl: HTMLElement | null): { scrollTop: number; scrollHeight: number; clientHeight: number } => {
+const getScrollMetrics = (
+  scrollerEl: HTMLElement | null,
+): { scrollTop: number; scrollHeight: number; clientHeight: number } => {
   if (!scrollerEl) return { scrollTop: 0, scrollHeight: 0, clientHeight: 0 }
 
   let paddingHeight = 0
-  const paddingEl = scrollerEl.querySelector('.virtual-scroller-overscroll-padding') as HTMLElement | null
+  const paddingEl = scrollerEl.querySelector(
+    '.virtual-scroller-overscroll-padding',
+  ) as HTMLElement | null
   if (paddingEl) paddingHeight = paddingEl.offsetHeight
 
   const scrollTop = scrollerEl.scrollTop
@@ -41,7 +50,12 @@ const getScrollMetrics = (scrollerEl: HTMLElement | null): { scrollTop: number; 
   return { scrollTop, scrollHeight: Math.max(0, scrollHeight), clientHeight }
 }
 
-const resolveMinimapNodeColor = (nodes: NodeTimelineItem[], index: number, barHeight: number, totalHeight: number): string => {
+const resolveMinimapNodeColor = (
+  nodes: NodeTimelineItem[],
+  index: number,
+  barHeight: number,
+  totalHeight: number,
+): string => {
   if (barHeight < 1) {
     return MINIMAP_CONFIG.colors.default
   }
@@ -112,7 +126,7 @@ const drawMinimap = (
     }
 
     if (selectedNodeId != null) {
-      const idx = nodes.findIndex(n => n.node_id === selectedNodeId)
+      const idx = nodes.findIndex((n) => n.node_id === selectedNodeId)
       if (idx >= 0) {
         const selY = Math.floor((idx / nodes.length) * height)
         ctx.strokeStyle = MINIMAP_CONFIG.selectedBorderColor
@@ -221,7 +235,15 @@ export const createMinimapInteraction = (options: MinimapInteractionOptions) => 
     const scrollerEl = getScrollerElement(options.scrollerRef.value)
     const { scrollTop, scrollHeight, clientHeight } = getScrollMetrics(scrollerEl)
 
-    drawMinimap(ctx, canvas, options.nodes.value, options.selectedNodeId.value, scrollTop, scrollHeight, clientHeight)
+    drawMinimap(
+      ctx,
+      canvas,
+      options.nodes.value,
+      options.selectedNodeId.value,
+      scrollTop,
+      scrollHeight,
+      clientHeight,
+    )
   }
 
   const updateViewport = () => {

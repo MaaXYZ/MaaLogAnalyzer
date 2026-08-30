@@ -118,6 +118,5 @@ const emit = defineEmits<{
       :on-upload-file="onUploadFile"
       :on-upload-content="onUploadContent"
     />
-
   </div>
 </template>

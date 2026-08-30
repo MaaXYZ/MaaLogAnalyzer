@@ -18,7 +18,7 @@ export const ensureLoadedSourceReady = async (
     options.selectLoadedTarget(targetId)
   }
 
-  const target = targets.find(item => item.id === targetId)
+  const target = targets.find((item) => item.id === targetId)
   if (!target) return false
 
   const expected = {
@@ -28,7 +28,7 @@ export const ensureLoadedSourceReady = async (
     content: target.content,
   }
   const expectedName = expected.fileName || expected.label
-  const isExpectedTargetLoaded = () => (
+  const isExpectedTargetLoaded = () =>
     options.sourceMode.value === 'loaded' &&
     options.selectedLoadedTargetId.value === expected.id &&
     options.fileHandle.value == null &&
@@ -39,20 +39,17 @@ export const ensureLoadedSourceReady = async (
       options.fileContent.value,
       options.fileHandle.value,
     )
-  )
 
   if (!isExpectedTargetLoaded()) {
     await options.applyLoadedTarget(target)
   }
 
-  const currentTarget = (options.loadedTargets.value ?? []).find(
-    item => item.id === expected.id,
-  )
+  const currentTarget = (options.loadedTargets.value ?? []).find((item) => item.id === expected.id)
   return Boolean(
     currentTarget &&
     currentTarget.fileName === expected.fileName &&
     currentTarget.label === expected.label &&
     currentTarget.content === expected.content &&
-    isExpectedTargetLoaded()
+    isExpectedTargetLoaded(),
   )
 }

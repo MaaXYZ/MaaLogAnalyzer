@@ -18,9 +18,11 @@ export const createPerformSearchAction = (
 ) => {
   const ensurePreconditions = dependencies.ensurePreconditions ?? ensureSearchPreconditions
   const executeSearch = dependencies.executeSearch ?? executeSearchByMode
-  const reportError = dependencies.reportError ?? ((error: unknown) => {
-    toastError('搜索失败: ' + error)
-  })
+  const reportError =
+    dependencies.reportError ??
+    ((error: unknown) => {
+      toastError('搜索失败: ' + error)
+    })
   let latestInvocationId = 0
 
   return async () => {
@@ -29,10 +31,8 @@ export const createPerformSearchAction = (
     options.isSearching.value = false
     const sourceIntentGeneration = options.sourceIntentGeneration.value
     const isLatestInvocation = () => invocationId === latestInvocationId
-    const isCurrentIntent = () => (
-      isLatestInvocation() &&
-      options.sourceIntentGeneration.value === sourceIntentGeneration
-    )
+    const isCurrentIntent = () =>
+      isLatestInvocation() && options.sourceIntentGeneration.value === sourceIntentGeneration
     let isCurrent = isCurrentIntent
 
     try {
@@ -41,19 +41,14 @@ export const createPerformSearchAction = (
 
       const requestGeneration = options.searchRequestGeneration.value
       const sourceLoadGeneration = options.sourceLoadGeneration.value
-      isCurrent = () => (
+      isCurrent = () =>
         isCurrentIntent() &&
         options.searchRequestGeneration.value === requestGeneration &&
         options.sourceLoadGeneration.value === sourceLoadGeneration
-      )
       const snapshot = buildSearchExecutionSnapshot(options)
       options.isSearching.value = true
 
-      await executeAndCommitSearch(
-        options,
-        { snapshot, isCurrent },
-        executeSearch,
-      )
+      await executeAndCommitSearch(options, { snapshot, isCurrent }, executeSearch)
     } catch (error) {
       if (isCurrent()) {
         clearSearchResultState({

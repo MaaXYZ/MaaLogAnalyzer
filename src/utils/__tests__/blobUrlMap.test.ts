@@ -32,7 +32,9 @@ describe('replaceBlobUrl', () => {
     const target = new Map<string, string>()
 
     replaceBlobUrl(target, 'same-key', new Blob(['first']))
-    expect(() => replaceBlobUrl(target, 'same-key', new Blob(['second']))).toThrow('allocation failed')
+    expect(() => replaceBlobUrl(target, 'same-key', new Blob(['second']))).toThrow(
+      'allocation failed',
+    )
 
     expect(target.get('same-key')).toBe('blob:first')
     expect(revoke).not.toHaveBeenCalled()

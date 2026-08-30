@@ -13,33 +13,36 @@ type NodeTimelineItem = NodeInfo & {
   _uniqueKey: string
 }
 
-const props = withDefaults(defineProps<{
-  nodes: NodeTimelineItem[]
-  selectedTaskKey?: string | null
-  displayMode: string
-  isVscodeLaunchEmbed?: boolean
-  bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
-  bridgeRevealTask?: ((task: string) => Promise<void>) | null
-  itemPadding?: string
-  scrollerStyle?: string
-  wrapperStyle?: string
-  captureWheelUp?: boolean
-  selectedNodeId?: number | null
-  safeScrollToItem?: (index: number) => Promise<boolean>
-  preserveScrollOnActivate?: boolean
-}>(), {
-  selectedTaskKey: null,
-  isVscodeLaunchEmbed: false,
-  bridgeRequestTaskDoc: null,
-  bridgeRevealTask: null,
-  itemPadding: '12px',
-  scrollerStyle: 'height: 100%',
-  wrapperStyle: 'height: 100%; display: flex; flex-direction: column; position: relative',
-  captureWheelUp: false,
-  selectedNodeId: null,
-  safeScrollToItem: undefined,
-  preserveScrollOnActivate: true,
-})
+const props = withDefaults(
+  defineProps<{
+    nodes: NodeTimelineItem[]
+    selectedTaskKey?: string | null
+    displayMode: string
+    isVscodeLaunchEmbed?: boolean
+    bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
+    bridgeRevealTask?: ((task: string) => Promise<void>) | null
+    itemPadding?: string
+    scrollerStyle?: string
+    wrapperStyle?: string
+    captureWheelUp?: boolean
+    selectedNodeId?: number | null
+    safeScrollToItem?: (index: number) => Promise<boolean>
+    preserveScrollOnActivate?: boolean
+  }>(),
+  {
+    selectedTaskKey: null,
+    isVscodeLaunchEmbed: false,
+    bridgeRequestTaskDoc: null,
+    bridgeRevealTask: null,
+    itemPadding: '12px',
+    scrollerStyle: 'height: 100%',
+    wrapperStyle: 'height: 100%; display: flex; flex-direction: column; position: relative',
+    captureWheelUp: false,
+    selectedNodeId: null,
+    safeScrollToItem: undefined,
+    preserveScrollOnActivate: true,
+  },
+)
 
 const emit = defineEmits<{
   'select-node': [node: NodeInfo]
@@ -57,13 +60,12 @@ const getScrollerElement = (): HTMLElement | null => {
   if (!scroller) return null
   const rootCandidate = (scroller as { $el?: unknown }).$el ?? scroller
   if (typeof HTMLElement === 'undefined' || !(rootCandidate instanceof HTMLElement)) return null
-  return rootCandidate.querySelector('.vue-recycle-scroller') as HTMLElement | null ?? rootCandidate
+  return (
+    (rootCandidate.querySelector('.vue-recycle-scroller') as HTMLElement | null) ?? rootCandidate
+  )
 }
 
-const {
-  captureCurrentScrollPosition,
-  cancelScrollRestore,
-} = useKeepAliveScrollPosition({
+const { captureCurrentScrollPosition, cancelScrollRestore } = useKeepAliveScrollPosition({
   getScrollerElement,
   getContextKey: () => props.selectedTaskKey ?? null,
   shouldPreserve: () => props.preserveScrollOnActivate,
@@ -104,11 +106,7 @@ const setLocalScrollerRef = (value: Element | object | null) => {
       @scroll.passive="captureCurrentScrollPosition"
     >
       <template #default="{ item, index, active }">
-        <DynamicScrollerItem
-          :item="item"
-          :active="active"
-          :data-index="index"
-        >
+        <DynamicScrollerItem :item="item" :active="active" :data-index="index">
           <div :style="{ padding: itemPadding }">
             <node-card
               :node="item"
@@ -117,17 +115,22 @@ const setLocalScrollerRef = (value: Element | object | null) => {
               :bridge-reveal-task="bridgeRevealTask"
               @select-node="(node) => emit('select-node', node)"
               @select-action="(node) => emit('select-action', node)"
-              @select-recognition="(node, attemptIndex) => emit('select-recognition', node, attemptIndex)"
+              @select-recognition="
+                (node, attemptIndex) => emit('select-recognition', node, attemptIndex)
+              "
               @select-flow-item="(node, flowItemId) => emit('select-flow-item', node, flowItemId)"
             />
           </div>
         </DynamicScrollerItem>
       </template>
-      
+
       <!-- 增加底部留白（类似 VS Code 的 scrollBeyondLastLine） -->
       <!-- 这从根本上解决了当列表最后几个巨型节点被收起时，因为整体 scrollHeight 锐减导致浏览器强制把滚动条往上推，进而产生点击位置向下乱跳的问题 -->
       <template #after>
-        <div class="virtual-scroller-overscroll-padding" style="height: 100vh; pointer-events: none; opacity: 0;"></div>
+        <div
+          class="virtual-scroller-overscroll-padding"
+          style="height: 100vh; pointer-events: none; opacity: 0"
+        ></div>
       </template>
     </DynamicScroller>
     <node-timeline-minimap

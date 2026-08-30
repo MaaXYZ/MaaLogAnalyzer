@@ -90,11 +90,9 @@ describe('load operation coordinator', () => {
     const stale = coordinator.begin()
     coordinator.begin()
     const staleTarget = { postMessage: vi.fn(async () => true) }
-    await expect(deliverLoadOperationMessage(
-      stale,
-      () => staleTarget,
-      { type: 'loadFile' },
-    )).rejects.toBeInstanceOf(LoadOperationCancelledError)
+    await expect(
+      deliverLoadOperationMessage(stale, () => staleTarget, { type: 'loadFile' }),
+    ).rejects.toBeInstanceOf(LoadOperationCancelledError)
     expect(staleTarget.postMessage).not.toHaveBeenCalled()
 
     const current = coordinator.begin()
@@ -108,11 +106,9 @@ describe('load operation coordinator', () => {
 
     const latest = coordinator.begin()
     const rejectingTarget = { postMessage: vi.fn(async () => false) }
-    await expect(deliverLoadOperationMessage(
-      latest,
-      () => rejectingTarget,
-      { type: 'loadFile' },
-    )).rejects.toBeInstanceOf(LoadOperationDeliveryError)
+    await expect(
+      deliverLoadOperationMessage(latest, () => rejectingTarget, { type: 'loadFile' }),
+    ).rejects.toBeInstanceOf(LoadOperationDeliveryError)
   })
 
   it('stops archive inspection after an awaited read is superseded', async () => {

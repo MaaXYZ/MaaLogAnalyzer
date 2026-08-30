@@ -51,7 +51,11 @@ const emit = defineEmits<{
           @update:value="emit('update:searchText', $event)"
           @keyup.enter="emit('search')"
           :disabled="props.isSearching"
-          :input-props="props.mobileMode ? { id: 'text-search-input-m', name: 'text-search-input-m' } : { id: 'text-search-input', name: 'text-search-input' }"
+          :input-props="
+            props.mobileMode
+              ? { id: 'text-search-input-m', name: 'text-search-input-m' }
+              : { id: 'text-search-input', name: 'text-search-input' }
+          "
         >
           <template #prefix>
             <search-outlined />
@@ -63,7 +67,7 @@ const emit = defineEmits<{
           :loading="props.isSearching || props.isLoadingFile"
           :disabled="!props.searchText || !props.hasFile || props.isLoadingFile"
         >
-          {{ props.mobileMode ? '搜索' : (props.isLoadingFile ? '加载中...' : '搜索') }}
+          {{ props.mobileMode ? '搜索' : props.isLoadingFile ? '加载中...' : '搜索' }}
         </n-button>
       </n-input-group>
 

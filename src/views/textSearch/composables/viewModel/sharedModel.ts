@@ -8,8 +8,9 @@ export interface TextSearchSharedViewModel {
   actions: ReturnType<typeof useTextSearchViewActions>
 }
 
-const TextSearchSharedViewModelKey: InjectionKey<TextSearchSharedViewModel> =
-  Symbol('TextSearchSharedViewModel')
+const TextSearchSharedViewModelKey: InjectionKey<TextSearchSharedViewModel> = Symbol(
+  'TextSearchSharedViewModel',
+)
 
 /**
  * 在 app 根部创建唯一一份文本搜索 view model 并 provide。

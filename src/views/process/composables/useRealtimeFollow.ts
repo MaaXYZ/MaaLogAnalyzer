@@ -9,10 +9,10 @@ import type { NodeInfo } from '../../../types'
 
 export type NodeTimelineItem = NodeInfo & { _uniqueKey: string }
 
-export const createNodeTimelineItem = (
-  node: NodeInfo,
-  key: string,
-): NodeTimelineItem => ({ ...node, _uniqueKey: key })
+export const createNodeTimelineItem = (node: NodeInfo, key: string): NodeTimelineItem => ({
+  ...node,
+  _uniqueKey: key,
+})
 
 export const useRealtimeFollow = (options: UseRealtimeFollowOptions) => {
   const activeTaskIndex = ref(0)
@@ -27,18 +27,18 @@ export const useRealtimeFollow = (options: UseRealtimeFollowOptions) => {
     const selectedTask = options.selectedTask.value
     if (!selectedTask) return []
     const taskIdentity = buildTaskIdentity(selectedTask)
-    return (selectedTask.nodes || []).map((node, index) => createNodeTimelineItem(
-      node,
-      `${taskIdentity}-${node.node_id}-${node.ts}-${index}`,
-    ))
+    return (selectedTask.nodes || []).map((node, index) =>
+      createNodeTimelineItem(node, `${taskIdentity}-${node.node_id}-${node.ts}-${index}`),
+    )
   })
   const currentNodeCount = computed(() => currentNodes.value.length)
-  const { safeScrollToItem, scrollToNode, scrollToLatestNodeBottom } = createRealtimeFollowScrolling({
-    virtualScroller,
-    currentNodeCount,
-    isRealtimeStreaming: options.isRealtimeStreaming,
-    followLast,
-  })
+  const { safeScrollToItem, scrollToNode, scrollToLatestNodeBottom } =
+    createRealtimeFollowScrolling({
+      virtualScroller,
+      currentNodeCount,
+      isRealtimeStreaming: options.isRealtimeStreaming,
+      followLast,
+    })
   const { scheduleFollowToLatest, clearFollowSchedule } = createFollowScheduler({
     tasks: options.tasks,
     selectedTask: options.selectedTask,
@@ -96,11 +96,15 @@ export const useRealtimeFollow = (options: UseRealtimeFollowOptions) => {
   })
 
   // 切换 desktop/mobile 布局会重建 scroller，跟随开启时需要重新对齐到底部。
-  watch(virtualScroller, (scroller) => {
-    if (!scroller) return
-    if (!options.isRealtimeStreaming.value || !followLast.value) return
-    scheduleFollowToLatest()
-  }, { flush: 'post' })
+  watch(
+    virtualScroller,
+    (scroller) => {
+      if (!scroller) return
+      if (!options.isRealtimeStreaming.value || !followLast.value) return
+      scheduleFollowToLatest()
+    },
+    { flush: 'post' },
+  )
 
   return {
     activeTaskIndex,

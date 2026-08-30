@@ -35,11 +35,19 @@ export const useTutorialRunner = (options: UseTutorialRunnerOptions) => {
   }
 
   const markCurrentTutorialVersionDone = (stepIds: string[]) => {
-    markCurrentTutorialVersionCompleted(options.tutorialStorageKey, options.tutorialVersion, stepIds)
+    markCurrentTutorialVersionCompleted(
+      options.tutorialStorageKey,
+      options.tutorialVersion,
+      stepIds,
+    )
   }
 
   const getPendingStepIndexes = (): number[] => {
-    return getPendingTourStepIndexes(options.tutorialStorageKey, options.tutorialVersion, options.tutorialSteps)
+    return getPendingTourStepIndexes(
+      options.tutorialStorageKey,
+      options.tutorialVersion,
+      options.tutorialSteps,
+    )
   }
 
   const startTour = async (auto = false) => {
@@ -55,9 +63,7 @@ export const useTutorialRunner = (options: UseTutorialRunnerOptions) => {
         return
       }
 
-      const indexes = auto
-        ? getPendingStepIndexes()
-        : options.tutorialSteps.map((_, idx) => idx)
+      const indexes = auto ? getPendingStepIndexes() : options.tutorialSteps.map((_, idx) => idx)
 
       if (indexes.length === 0) {
         return

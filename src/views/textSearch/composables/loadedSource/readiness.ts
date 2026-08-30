@@ -16,8 +16,6 @@ export const ensureLoadedTargetReadyForSource = async (
   return ensureLoadedSourceReady(options)
 }
 
-export const ensureDeferredTargetsReady = async (
-  options: EnsureDeferredTargetsReadyOptions,
-) => {
+export const ensureDeferredTargetsReady = async (options: EnsureDeferredTargetsReadyOptions) => {
   await ensureDeferredTargetsReadyInternal(options)
 }

@@ -11,8 +11,8 @@ export const useAppUiState = (options: UseAppUiStateOptions) => {
   const showSettingsModal = ref(false)
   const showFileLoadingModal = ref(false)
 
-  const modalWidth = computed(() => options.isMobile.value ? '90vw' : '600px')
-  const modalWidthSmall = computed(() => options.isMobile.value ? '90vw' : '500px')
+  const modalWidth = computed(() => (options.isMobile.value ? '90vw' : '600px'))
+  const modalWidthSmall = computed(() => (options.isMobile.value ? '90vw' : '500px'))
 
   const handleFileLoadingStart = () => {
     if (document.activeElement instanceof HTMLElement) {

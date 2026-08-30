@@ -13,9 +13,13 @@ export const useSettingsState = (show?: Ref<boolean>) => {
   }
 
   if (show) {
-    watch(show, (visible) => {
-      if (visible) reloadDraft()
-    }, { flush: 'sync' })
+    watch(
+      show,
+      (visible) => {
+        if (visible) reloadDraft()
+      },
+      { flush: 'sync' },
+    )
   }
 
   const playbackSpeedOptions = [

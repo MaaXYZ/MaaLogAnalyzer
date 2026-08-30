@@ -21,15 +21,10 @@ const emit = defineEmits<{
   'open-about': []
   'toggle-theme': []
 }>()
-
 </script>
 
 <template>
-  <n-card
-    size="small"
-    :bordered="false"
-    content-style="padding: 8px 16px"
-  >
+  <n-card size="small" :bordered="false" content-style="padding: 8px 16px">
     <app-header-mobile
       v-if="isMobile"
       :current-view-label="currentViewLabel"

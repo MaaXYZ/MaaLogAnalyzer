@@ -46,18 +46,18 @@ defineExpose({
 </script>
 
 <template>
-  <div style="flex: 1; height: 100%; overflow: hidden;">
+  <div style="flex: 1; height: 100%; overflow: hidden">
     <n-virtual-list
       ref="virtualListRef"
       :items="props.fileLines"
       :item-size="22"
-      style="height: 100%; max-height: 100%; overflow: auto;"
+      style="height: 100%; max-height: 100%; overflow: auto"
       :class="['log-virtual-list', { 'dark-theme': props.isDark }]"
     >
       <template #default="{ item, index }">
         <div
           class="log-line"
-          :class="{ 'selected-line': (index + 1) === props.selectedLine }"
+          :class="{ 'selected-line': index + 1 === props.selectedLine }"
           :data-line="index + 1"
           @click="emit('update:selectedLine', index + 1)"
         >
@@ -67,7 +67,8 @@ defineExpose({
               v-for="(token, tIdx) in parseLogLine(item.content)"
               :key="tIdx"
               :class="'token-' + token.type"
-            >{{ token.content }}</span>
+              >{{ token.content }}</span
+            >
           </span>
         </div>
       </template>
@@ -118,15 +119,36 @@ defineExpose({
   white-space: nowrap;
 }
 
-.token-timestamp { color: #098658; }
-.token-level-info { color: #0000ff; font-weight: bold; }
-.token-level-warn { color: #795e26; font-weight: bold; }
-.token-level-error { color: #cd3131; font-weight: bold; }
-.token-level-debug { color: #800080; }
-.token-string { color: #a31515; }
-.token-number { color: #098658; }
-.token-key { color: #0451a5; }
-.token-text { color: #333; }
+.token-timestamp {
+  color: #098658;
+}
+.token-level-info {
+  color: #0000ff;
+  font-weight: bold;
+}
+.token-level-warn {
+  color: #795e26;
+  font-weight: bold;
+}
+.token-level-error {
+  color: #cd3131;
+  font-weight: bold;
+}
+.token-level-debug {
+  color: #800080;
+}
+.token-string {
+  color: #a31515;
+}
+.token-number {
+  color: #098658;
+}
+.token-key {
+  color: #0451a5;
+}
+.token-text {
+  color: #333;
+}
 
 .dark-theme .log-line:hover {
   background-color: rgba(255, 255, 255, 0.05);
@@ -138,15 +160,33 @@ defineExpose({
   background-color: #1e1e1e;
 }
 
-.dark-theme .token-timestamp { color: #b5cea8; }
-.dark-theme .token-level-info { color: #569cd6; }
-.dark-theme .token-level-warn { color: #dcdcaa; }
-.dark-theme .token-level-error { color: #f44747; }
-.dark-theme .token-level-debug { color: #d16969; }
-.dark-theme .token-string { color: #ce9178; }
-.dark-theme .token-number { color: #b5cea8; }
-.dark-theme .token-key { color: #9cdcfe; }
-.dark-theme .token-text { color: #ffffffa2; }
+.dark-theme .token-timestamp {
+  color: #b5cea8;
+}
+.dark-theme .token-level-info {
+  color: #569cd6;
+}
+.dark-theme .token-level-warn {
+  color: #dcdcaa;
+}
+.dark-theme .token-level-error {
+  color: #f44747;
+}
+.dark-theme .token-level-debug {
+  color: #d16969;
+}
+.dark-theme .token-string {
+  color: #ce9178;
+}
+.dark-theme .token-number {
+  color: #b5cea8;
+}
+.dark-theme .token-key {
+  color: #9cdcfe;
+}
+.dark-theme .token-text {
+  color: #ffffffa2;
+}
 
 .log-virtual-list :deep(.v-vl) {
   overflow: auto !important;

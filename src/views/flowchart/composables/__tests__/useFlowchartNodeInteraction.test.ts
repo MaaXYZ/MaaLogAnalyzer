@@ -14,7 +14,8 @@ beforeAll(() => {
 })
 
 afterAll(() => {
-  globalThis.requestAnimationFrame = originalRequestAnimationFrame as typeof globalThis.requestAnimationFrame
+  globalThis.requestAnimationFrame =
+    originalRequestAnimationFrame as typeof globalThis.requestAnimationFrame
 })
 
 const makeNodeData = (params: {
@@ -36,11 +37,7 @@ const makeNodeData = (params: {
 
 describe('useFlowchartNodeInteraction', () => {
   it('maps node click to latest execution index for repeated node names', () => {
-    const executionTimeline = ref([
-      { name: 'NodeA' },
-      { name: 'NodeB' },
-      { name: 'NodeA' },
-    ])
+    const executionTimeline = ref([{ name: 'NodeA' }, { name: 'NodeB' }, { name: 'NodeA' }])
     const selectedTimelineIndex = ref<number | null>(null)
     const popoverNodeId = ref<string | null>(null)
     const focusedNodeId = ref<string | null>(null)
@@ -72,11 +69,7 @@ describe('useFlowchartNodeInteraction', () => {
   })
 
   it('falls back to latest name match when execution order is missing/invalid', () => {
-    const executionTimeline = ref([
-      { name: 'NodeA' },
-      { name: 'NodeB' },
-      { name: 'NodeA' },
-    ])
+    const executionTimeline = ref([{ name: 'NodeA' }, { name: 'NodeB' }, { name: 'NodeA' }])
     const selectedTimelineIndex = ref<number | null>(null)
     const popoverNodeId = ref<string | null>(null)
     const focusedNodeId = ref<string | null>(null)
@@ -103,10 +96,7 @@ describe('useFlowchartNodeInteraction', () => {
   })
 
   it('still focuses non-executed nodes without opening popover', () => {
-    const executionTimeline = ref([
-      { name: 'NodeA' },
-      { name: 'NodeB' },
-    ])
+    const executionTimeline = ref([{ name: 'NodeA' }, { name: 'NodeB' }])
     const selectedTimelineIndex = ref<number | null>(1)
     const popoverNodeId = ref<string | null>('NodeB')
     const focusedNodeId = ref<string | null>('NodeB')

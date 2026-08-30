@@ -3,9 +3,7 @@ import { useProcessLayout } from '../useProcessLayout'
 import { useProcessRuntimeContext } from '../useProcessRuntimeContext'
 import type { ProcessViewControllerProps } from './types'
 
-export const useProcessRuntimeLayout = (
-  props: ProcessViewControllerProps,
-) => {
+export const useProcessRuntimeLayout = (props: ProcessViewControllerProps) => {
   const {
     settings,
     isInTauri,

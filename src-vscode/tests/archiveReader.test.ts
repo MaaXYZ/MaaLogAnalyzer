@@ -16,10 +16,11 @@ import {
   type ArchiveVolumeInput,
 } from '../src/archiveReader'
 
-const makeZip = (files: Record<string, string>): Uint8Array => zipSync(
-  Object.fromEntries(Object.entries(files).map(([name, content]) => [name, strToU8(content)])),
-  { level: 9 },
-)
+const makeZip = (files: Record<string, string>): Uint8Array =>
+  zipSync(
+    Object.fromEntries(Object.entries(files).map(([name, content]) => [name, strToU8(content)])),
+    { level: 9 },
+  )
 
 const findSignature = (bytes: Uint8Array, signature: readonly number[]): number => {
   outer: for (let offset = 0; offset <= bytes.byteLength - signature.length; offset += 1) {
@@ -57,9 +58,13 @@ const expectBudgetCode = async (
 
 describe('VS Code archive reader budgets', () => {
   it('recognizes budget errors after their Error prototype identity is lost', () => {
-    expect(getArchiveBudgetCode(
-      new Error('ArchiveBudgetError: Archive extracted-size exceeds the configured limit (600 > 512)'),
-    )).toBe('extracted-size')
+    expect(
+      getArchiveBudgetCode(
+        new Error(
+          'ArchiveBudgetError: Archive extracted-size exceeds the configured limit (600 > 512)',
+        ),
+      ),
+    ).toBe('extracted-size')
   })
 
   it('rejects oversized stat metadata before reading any volume', async () => {
@@ -80,19 +85,12 @@ describe('VS Code archive reader budgets', () => {
     const inspected = await inspectArchiveVolumes([input], readVolume, null)
     const selection = createArchiveSelection(['debug/maa.log'], 'debug')
 
-    await expect(readSelectedArchiveVolumes(
-      inspected,
-      selection,
-      readVolume,
-      vi.fn(),
-    )).rejects.toMatchObject({ code: 'compression-ratio' })
-    await expect(readSelectedArchiveVolumes(
-      inspected,
-      selection,
-      readVolume,
-      vi.fn(),
-      null,
-    )).resolves.toBeUndefined()
+    await expect(
+      readSelectedArchiveVolumes(inspected, selection, readVolume, vi.fn()),
+    ).rejects.toMatchObject({ code: 'compression-ratio' })
+    await expect(
+      readSelectedArchiveVolumes(inspected, selection, readVolume, vi.fn(), null),
+    ).resolves.toBeUndefined()
   })
 
   it('rejects too many volume inputs before reading them', async () => {
@@ -165,7 +163,9 @@ describe('VS Code archive reader budgets', () => {
     },
   ])('rejects selected $name over budget', async ({ entries, overrides, code }) => {
     await expectBudgetCode(
-      Promise.resolve().then(() => assertExtractedEntriesWithinLimits(entries, resolveArchiveLimits(overrides))),
+      Promise.resolve().then(() =>
+        assertExtractedEntriesWithinLimits(entries, resolveArchiveLimits(overrides)),
+      ),
       code,
     )
   })
@@ -223,9 +223,7 @@ describe('VS Code archive reader budgets', () => {
     const original = makeZip({ 'debug/maa.log': 'small' })
     const changed = makeZip({ 'debug/maa.log': 'x'.repeat(256) })
     const input = { source: 'logs.zip', name: 'logs.zip', size: original.byteLength }
-    const readVolume = vi.fn()
-      .mockResolvedValueOnce(original)
-      .mockResolvedValueOnce(changed)
+    const readVolume = vi.fn().mockResolvedValueOnce(original).mockResolvedValueOnce(changed)
     const inspected = await inspectArchiveVolumes([input], readVolume)
     const consumeEntries = vi.fn()
 
@@ -256,13 +254,15 @@ describe('VS Code archive reader budgets', () => {
     const inspected = await inspectArchiveVolumes([input], readVolume)
     const consumeEntries = vi.fn()
 
-    await expect(readSelectedArchiveVolumes(
-      inspected,
-      createArchiveSelection(['debug/maa.log'], 'debug'),
-      readVolume,
-      consumeEntries,
-      null,
-    )).rejects.toBeInstanceOf(ArchiveIntegrityError)
+    await expect(
+      readSelectedArchiveVolumes(
+        inspected,
+        createArchiveSelection(['debug/maa.log'], 'debug'),
+        readVolume,
+        consumeEntries,
+        null,
+      ),
+    ).rejects.toBeInstanceOf(ArchiveIntegrityError)
     expect(consumeEntries).not.toHaveBeenCalled()
   })
 
@@ -278,7 +278,8 @@ describe('VS Code archive reader budgets', () => {
     ]
     const readVolume = vi.fn(async ({ source }: ArchiveVolumeInput<Uint8Array>) => source)
 
-    await expect(inspectArchiveVolumes(inputs, readVolume)).rejects.toBeInstanceOf(ArchiveIntegrityError)
+    await expect(inspectArchiveVolumes(inputs, readVolume)).rejects.toBeInstanceOf(
+      ArchiveIntegrityError,
+    )
   })
-
 })

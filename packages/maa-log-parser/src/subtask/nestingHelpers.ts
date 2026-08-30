@@ -2,7 +2,7 @@ import type { NestedActionGroup, NestedActionNode } from '../shared/types'
 
 const resolveActionEndMsForNesting = (
   node: NestedActionNode,
-  toTimestampMs: (value?: string) => number
+  toTimestampMs: (value?: string) => number,
 ): number => {
   // Running parent actions should keep accepting later child task starts.
   if (node.status === 'running') return Number.POSITIVE_INFINITY
@@ -12,7 +12,7 @@ const resolveActionEndMsForNesting = (
 const pickParentActionNodeForSubTask = (
   parentGroup: NestedActionGroup,
   childGroup: NestedActionGroup,
-  toTimestampMs: (value?: string) => number
+  toTimestampMs: (value?: string) => number,
 ): NestedActionNode | null => {
   const childStartMs = toTimestampMs(childGroup.ts)
   type Candidate = {
@@ -27,15 +27,17 @@ const pickParentActionNodeForSubTask = (
   for (const node of parentGroup.nested_actions ?? []) {
     const startMs = toTimestampMs(node.action_details?.ts || node.ts)
     const endMs = resolveActionEndMsForNesting(node, toTimestampMs)
-    const inRange = Number.isFinite(childStartMs) &&
+    const inRange =
+      Number.isFinite(childStartMs) &&
       Number.isFinite(startMs) &&
       childStartMs >= startMs &&
       (!Number.isFinite(endMs) || childStartMs <= endMs + 1)
     const bucket = inRange ? 0 : 1
     const customPenalty = node.action_details?.action === 'Custom' ? 0 : 1
-    const distance = Number.isFinite(childStartMs) && Number.isFinite(endMs)
-      ? Math.abs(childStartMs - endMs)
-      : Number.POSITIVE_INFINITY
+    const distance =
+      Number.isFinite(childStartMs) && Number.isFinite(endMs)
+        ? Math.abs(childStartMs - endMs)
+        : Number.POSITIVE_INFINITY
     const candidate: Candidate = {
       node,
       bucket,
@@ -72,7 +74,7 @@ const pickParentActionNodeForSubTask = (
 const pickParentActionNodeByTimeline = (
   groups: NestedActionGroup[],
   childGroup: NestedActionGroup,
-  toTimestampMs: (value?: string) => number
+  toTimestampMs: (value?: string) => number,
 ): NestedActionNode | null => {
   const childStartMs = toTimestampMs(childGroup.ts)
   if (!Number.isFinite(childStartMs)) return null
@@ -96,7 +98,9 @@ const pickParentActionNodeByTimeline = (
         const isBetter =
           bucket < bestBucket ||
           (bucket === bestBucket && customPenalty < bestCustomPenalty) ||
-          (bucket === bestBucket && customPenalty === bestCustomPenalty && actionStartMs > bestStartMs)
+          (bucket === bestBucket &&
+            customPenalty === bestCustomPenalty &&
+            actionStartMs > bestStartMs)
         if (isBetter) {
           bestNode = node
           bestBucket = bucket
@@ -123,7 +127,7 @@ const pickParentActionNodeByTimeline = (
 
 const sortNestedTaskGroupTree = (
   group: NestedActionGroup,
-  toTimestampMs: (value?: string) => number
+  toTimestampMs: (value?: string) => number,
 ) => {
   for (const action of group.nested_actions ?? []) {
     if (action.child_tasks && action.child_tasks.length > 0) {
@@ -143,7 +147,9 @@ interface NestSubTaskActionGroupsParams {
   cloneGroup: (group: NestedActionGroup) => NestedActionGroup
 }
 
-export const nestSubTaskActionGroups = (params: NestSubTaskActionGroupsParams): NestedActionGroup[] => {
+export const nestSubTaskActionGroups = (
+  params: NestSubTaskActionGroupsParams,
+): NestedActionGroup[] => {
   if (params.groups.length <= 1) return params.groups
 
   const clonedGroups = params.groups.map(params.cloneGroup)
@@ -153,15 +159,16 @@ export const nestSubTaskActionGroups = (params: NestSubTaskActionGroupsParams): 
   }
 
   const roots: NestedActionGroup[] = []
-  const orderedGroups = [...clonedGroups].sort((a, b) => params.toTimestampMs(a.ts) - params.toTimestampMs(b.ts))
+  const orderedGroups = [...clonedGroups].sort(
+    (a, b) => params.toTimestampMs(a.ts) - params.toTimestampMs(b.ts),
+  )
 
   for (const group of orderedGroups) {
     const parentTaskId = params.subTaskParentByTaskId.get(group.task_id)
-    const parentGroup = (
-      parentTaskId != null &&
-      parentTaskId !== params.rootTaskId &&
-      parentTaskId !== group.task_id
-    ) ? groupByTaskId.get(parentTaskId) : undefined
+    const parentGroup =
+      parentTaskId != null && parentTaskId !== params.rootTaskId && parentTaskId !== group.task_id
+        ? groupByTaskId.get(parentTaskId)
+        : undefined
     const parentActionNode = parentGroup
       ? pickParentActionNodeForSubTask(parentGroup, group, params.toTimestampMs)
       : pickParentActionNodeByTimeline(clonedGroups, group, params.toTimestampMs)

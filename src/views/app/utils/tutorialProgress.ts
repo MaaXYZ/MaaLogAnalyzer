@@ -9,9 +9,8 @@ export interface TutorialStepLike {
   sinceVersion?: number
 }
 
-const isRecord = (value: unknown): value is Record<string, any> => (
+const isRecord = (value: unknown): value is Record<string, any> =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
-)
 
 export function readTutorialProgressState(storageKey: string): TutorialProgressState {
   try {
@@ -73,7 +72,7 @@ export function markCurrentTutorialVersionCompleted(
   try {
     const state = readTutorialProgressState(storageKey)
     const merged = new Set(state.completedStepIds)
-    stepIds.forEach(id => merged.add(id))
+    stepIds.forEach((id) => merged.add(id))
 
     const obj = isRecord(state.rawObject) ? state.rawObject : {}
     obj.completedVersion = Math.max(state.completedVersion, tourVersion)
@@ -81,7 +80,8 @@ export function markCurrentTutorialVersionCompleted(
     obj.activeVersion = tourVersion
     if (!isRecord(obj.versions)) obj.versions = {}
     const verKey = String(tourVersion)
-    const prev = obj.versions[verKey] && typeof obj.versions[verKey] === 'object' ? obj.versions[verKey] : {}
+    const prev =
+      obj.versions[verKey] && typeof obj.versions[verKey] === 'object' ? obj.versions[verKey] : {}
     obj.versions[verKey] = {
       ...prev,
       completed: true,
@@ -112,5 +112,5 @@ export function getPendingTourStepIndexes(
       const doneByVersion = (step.sinceVersion ?? 1) <= state.completedVersion
       return !(doneById || doneByVersion)
     })
-    .map(item => item.idx)
+    .map((item) => item.idx)
 }

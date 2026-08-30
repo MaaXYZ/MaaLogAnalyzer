@@ -48,9 +48,15 @@ describe('useFlowchartTimeline', () => {
       selectedTask: computed(() => selectedTask.value),
     })
 
-    expect(timeline.executionTimeline.value.map(item => item.name)).toEqual(['NodeA', 'NodeB', 'NodeC'])
-    expect(timeline.executionTimeline.value.map(item => item.index)).toEqual([0, 1, 2])
-    expect(timeline.executionTimeline.value.map(item => item.nodeInfo.node_id)).toEqual([3001, 3002, 3003])
+    expect(timeline.executionTimeline.value.map((item) => item.name)).toEqual([
+      'NodeA',
+      'NodeB',
+      'NodeC',
+    ])
+    expect(timeline.executionTimeline.value.map((item) => item.index)).toEqual([0, 1, 2])
+    expect(timeline.executionTimeline.value.map((item) => item.nodeInfo.node_id)).toEqual([
+      3001, 3002, 3003,
+    ])
   })
 
   it('derives timeline labels including timeout and action-failed states', () => {
@@ -183,8 +189,8 @@ describe('useFlowchartTimeline', () => {
       selectedTask: computed(() => selectedTask.value),
     })
 
-    expect(timeline.executionTimeline.value.map(item => item.name)).toEqual(['CCBuyCard'])
-    expect(timeline.timelineNavItems.value.map(item => item.name)).toEqual(['CCBuyCard'])
+    expect(timeline.executionTimeline.value.map((item) => item.name)).toEqual(['CCBuyCard'])
+    expect(timeline.timelineNavItems.value.map((item) => item.name)).toEqual(['CCBuyCard'])
 
     timeline.selectedTimelineIndex.value = 0
     expect(timeline.selectedFlowNodeId.value).toBe('CCBuyCard')

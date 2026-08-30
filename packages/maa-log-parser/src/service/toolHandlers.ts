@@ -45,11 +45,7 @@ const NON_ROOT_SCOPE_KINDS = new Set([
 
 const nowTimestamp = (): number => Date.now()
 
-const ok = <T>(
-  data: T,
-  warnings: string[],
-  startedAt: number,
-): AnalyzerToolResponse<T> => ({
+const ok = <T>(data: T, warnings: string[], startedAt: number): AnalyzerToolResponse<T> => ({
   ok: true,
   data,
   meta: {
@@ -78,9 +74,7 @@ const fail = <T>(
   },
 })
 
-const toToolStatus = (
-  status: ScopeStatus,
-): 'success' | 'failed' | 'running' => {
+const toToolStatus = (status: ScopeStatus): 'success' | 'failed' | 'running' => {
   switch (status) {
     case 'succeeded':
       return 'success'
@@ -91,10 +85,7 @@ const toToolStatus = (
   }
 }
 
-const toDurationMs = (
-  startTs?: string,
-  endTs?: string,
-): number => {
+const toDurationMs = (startTs?: string, endTs?: string): number => {
   if (!startTs || !endTs) return 0
   const startMs = Date.parse(startTs)
   const endMs = Date.parse(endTs)
@@ -102,9 +93,7 @@ const toDurationMs = (
   return Math.max(0, endMs - startMs)
 }
 
-const readScopeName = (
-  scope: ScopeNode,
-): string => {
+const readScopeName = (scope: ScopeNode): string => {
   const payload = scope.payload as Record<string, unknown> | null | undefined
   if (!payload) return ''
   const name = payload.name
@@ -177,10 +166,7 @@ const normalizeResolvedSources = (
     })
 }
 
-const findTaskScopes = (
-  session: AnalyzerSession,
-  taskId: number,
-): ScopeNode[] => {
+const findTaskScopes = (session: AnalyzerSession, taskId: number): ScopeNode[] => {
   return session.artifacts.index.taskScopesByTaskId.get(taskId) ?? []
 }
 
@@ -210,9 +196,10 @@ const resolveTaskExecution = (
   errorMessage?: string
 } => {
   const ordered = [...taskScopes].sort((left, right) => left.seq - right.seq)
-  if (args.occurrence_index != null && (
-    !Number.isSafeInteger(args.occurrence_index) || args.occurrence_index <= 0
-  )) {
+  if (
+    args.occurrence_index != null &&
+    (!Number.isSafeInteger(args.occurrence_index) || args.occurrence_index <= 0)
+  ) {
     return {
       errorCode: 'INVALID_REQUEST',
       errorMessage: 'occurrence_index must be a positive safe integer',
@@ -220,7 +207,7 @@ const resolveTaskExecution = (
   }
 
   if (args.scope_id) {
-    const index = ordered.findIndex(scope => scope.id === args.scope_id)
+    const index = ordered.findIndex((scope) => scope.id === args.scope_id)
     if (index < 0) {
       return {
         errorCode: 'SCOPE_NOT_FOUND',
@@ -271,16 +258,13 @@ const collectPipelineNodeScopesForTask = (
   return scopes
 }
 
-const countRecoFailures = (
-  session: AnalyzerSession,
-  taskId?: number,
-): number => {
+const countRecoFailures = (session: AnalyzerSession, taskId?: number): number => {
   let count = 0
   for (const scope of session.artifacts.index.scopeById.values()) {
     if (taskId != null && scope.taskId !== taskId) continue
     if (
-      (scope.kind === 'recognition' || scope.kind === 'recognition_node')
-      && scope.status === 'failed'
+      (scope.kind === 'recognition' || scope.kind === 'recognition_node') &&
+      scope.status === 'failed'
     ) {
       count += 1
     }
@@ -291,16 +275,13 @@ const countRecoFailures = (
 const countRecoFailuresWithinTaskExecution = (taskScope: ScopeNode): number => {
   return collectScopesWithinTaskExecution(
     taskScope,
-    scope => (
-      (scope.kind === 'recognition' || scope.kind === 'recognition_node')
-      && scope.status === 'failed'
-    ),
+    (scope) =>
+      (scope.kind === 'recognition' || scope.kind === 'recognition_node') &&
+      scope.status === 'failed',
   ).length
 }
 
-const validateLimit = (
-  limit: number | undefined,
-): string | null => {
+const validateLimit = (limit: number | undefined): string | null => {
   if (limit == null) return null
   return Number.isSafeInteger(limit) && limit >= 0
     ? null
@@ -373,9 +354,7 @@ const resolveNodeExecutions = (
 
 const MAX_IMAGE_EVIDENCES = 20
 
-const sortNodeOccurrences = (
-  nodes: NodeInfo[],
-): NodeInfo[] => {
+const sortNodeOccurrences = (nodes: NodeInfo[]): NodeInfo[] => {
   return [...nodes].sort((left, right) => {
     const tsDiff = left.ts.localeCompare(right.ts)
     if (tsDiff !== 0) return tsDiff
@@ -383,10 +362,7 @@ const sortNodeOccurrences = (
   })
 }
 
-const findTaskById = (
-  session: AnalyzerSession,
-  taskId: number,
-): TaskInfo | undefined => {
+const findTaskById = (session: AnalyzerSession, taskId: number): TaskInfo | undefined => {
   return session.tasks.find((task) => task.task_id === taskId)
 }
 
@@ -424,21 +400,23 @@ const collectImageEvidencesFromFlowItems = (
     const dedupeKey = `${imageKind}:${item.type}:${item.name}:${imagePath}`
     if (seen.has(dedupeKey)) return
     seen.add(dedupeKey)
-    evidences.push(buildEvidence({
-      source_tool: 'image_projection',
-      source_range: {
-        session_id: sessionId,
-        task_id: taskId,
-        node_id: nodeId,
-        occurrence_index: occurrenceIndex,
-      },
-      payload: {
-        image_kind: imageKind,
-        image_path: imagePath,
-        scope_kind: item.type,
-        scope_name: item.name,
-      },
-    }))
+    evidences.push(
+      buildEvidence({
+        source_tool: 'image_projection',
+        source_range: {
+          session_id: sessionId,
+          task_id: taskId,
+          node_id: nodeId,
+          occurrence_index: occurrenceIndex,
+        },
+        payload: {
+          image_kind: imageKind,
+          image_path: imagePath,
+          scope_kind: item.type,
+          scope_name: item.name,
+        },
+      }),
+    )
   }
 
   const walk = (currentItems: UnifiedFlowItem[]): void => {
@@ -480,21 +458,23 @@ const buildNodeImageEvidences = (
   }
 
   if (node.error_image) {
-    pushEvidence(buildEvidence({
-      source_tool: 'image_projection',
-      source_range: {
-        session_id: session.sessionId,
-        task_id: taskId,
-        node_id: nodeId,
-        occurrence_index: occurrenceIndex,
-      },
-      payload: {
-        image_kind: 'error',
-        image_path: node.error_image,
-        scope_kind: 'pipeline_node',
-        scope_name: node.name,
-      },
-    }))
+    pushEvidence(
+      buildEvidence({
+        source_tool: 'image_projection',
+        source_range: {
+          session_id: session.sessionId,
+          task_id: taskId,
+          node_id: nodeId,
+          occurrence_index: occurrenceIndex,
+        },
+        payload: {
+          image_kind: 'error',
+          image_path: node.error_image,
+          scope_kind: 'pipeline_node',
+          scope_name: node.name,
+        },
+      }),
+    )
   }
 
   for (const evidence of collectImageEvidencesFromFlowItems(
@@ -515,11 +495,13 @@ const buildTaskImageEvidences = (
   taskId: number,
   taskStartSeq?: number,
 ): ReturnType<typeof buildEvidence>[] => {
-  const task = taskStartSeq == null
-    ? findTaskById(session, taskId)
-    : session.tasks.find(candidate => (
-      candidate.task_id === taskId && candidate._startEventIndex === taskStartSeq
-    ))
+  const task =
+    taskStartSeq == null
+      ? findTaskById(session, taskId)
+      : session.tasks.find(
+          (candidate) =>
+            candidate.task_id === taskId && candidate._startEventIndex === taskStartSeq,
+        )
   if (!task) return []
 
   const evidences: ReturnType<typeof buildEvidence>[] = []
@@ -567,7 +549,7 @@ const buildTimelineEvidences = (
       line: item.line ?? 0,
     }))
   const rawLines = getRawLinesByRefs(session.artifacts.rawLines, refs)
-  const itemByLine = new Map<string, typeof items[number]>()
+  const itemByLine = new Map<string, (typeof items)[number]>()
   for (const item of items) {
     if (!item.sourceKey || item.line == null) continue
     itemByLine.set(`${item.sourceKey}:${item.line}`, item)
@@ -605,20 +587,22 @@ const buildTaskEvidences = (
   })
   if (!rawLine) return []
 
-  return [buildLineEvidence({
-    session_id: session.sessionId,
-    source_tool: 'get_task_overview',
-    source_key: rawLine.sourceKey,
-    line: rawLine.line,
-    text: rawLine.text,
-    task_id: primaryScope.taskId,
-    scope_id: primaryScope.id,
-    payload: {
-      scope_kind: primaryScope.kind,
-      status: primaryScope.status,
-      name: readScopeName(primaryScope),
-    },
-  })]
+  return [
+    buildLineEvidence({
+      session_id: session.sessionId,
+      source_tool: 'get_task_overview',
+      source_key: rawLine.sourceKey,
+      line: rawLine.line,
+      text: rawLine.text,
+      task_id: primaryScope.taskId,
+      scope_id: primaryScope.id,
+      payload: {
+        scope_kind: primaryScope.kind,
+        status: primaryScope.status,
+        name: readScopeName(primaryScope),
+      },
+    }),
+  ]
 }
 
 const collectTaskRawLines = (
@@ -657,19 +641,12 @@ const collectTaskRawLines = (
     return true
   })
 
-  return filter.limit != null && filter.limit >= 0
-    ? filtered.slice(0, filter.limit)
-    : filtered
+  return filter.limit != null && filter.limit >= 0 ? filtered.slice(0, filter.limit) : filtered
 }
 
-const parseTokensByStore = new WeakMap<
-  AnalyzerSessionStoreLike,
-  Map<string, symbol>
->()
+const parseTokensByStore = new WeakMap<AnalyzerSessionStoreLike, Map<string, symbol>>()
 
-const getParseTokens = (
-  store: AnalyzerSessionStoreLike,
-): Map<string, symbol> => {
+const getParseTokens = (store: AnalyzerSessionStoreLike): Map<string, symbol> => {
   let tokens = parseTokensByStore.get(store)
   if (!tokens) {
     tokens = new Map<string, symbol>()
@@ -678,9 +655,7 @@ const getParseTokens = (
   return tokens
 }
 
-export const createAnalyzerToolHandlers = (
-  options: AnalyzerToolHandlerOptions = {},
-) => {
+export const createAnalyzerToolHandlers = (options: AnalyzerToolHandlerOptions = {}) => {
   const store = options.store ?? createAnalyzerSessionStore()
   const parseOptions = options.parse_options
   const parseTokens = getParseTokens(store)
@@ -778,12 +753,16 @@ export const createAnalyzerToolHandlers = (
           createdAt: options.now?.() ?? new Date().toISOString(),
         })
 
-        return ok({
-          session_id: args.session_id,
-          task_count: artifacts.index.taskScopesByTaskId.size,
-          event_count: artifacts.events.length,
+        return ok(
+          {
+            session_id: args.session_id,
+            task_count: artifacts.index.taskScopesByTaskId.size,
+            event_count: artifacts.events.length,
+            warnings,
+          },
           warnings,
-        }, warnings, startedAt)
+          startedAt,
+        )
       } catch (error) {
         if (parseTokens.get(args.session_id) !== parseToken) {
           return fail(
@@ -831,42 +810,50 @@ export const createAnalyzerToolHandlers = (
         const taskScope = resolution.scope
         const pipelineScopes = collectScopesWithinTaskExecution(
           taskScope,
-          scope => scope.kind === 'pipeline_node',
+          (scope) => scope.kind === 'pipeline_node',
         )
         const payload = taskScope.payload as Record<string, unknown>
         const entry = typeof payload.entry === 'string' ? payload.entry : ''
 
-        return ok({
-          task: {
-            task_id: args.task_id,
-            entry,
-            status: toToolStatus(taskScope.status),
-            duration_ms: toDurationMs(taskScope.ts, taskScope.endTs ?? taskScope.ts),
-            scope_id: taskScope.id,
-            occurrence_index: resolution.occurrenceIndex,
+        return ok(
+          {
+            task: {
+              task_id: args.task_id,
+              entry,
+              status: toToolStatus(taskScope.status),
+              duration_ms: toDurationMs(taskScope.ts, taskScope.endTs ?? taskScope.ts),
+              scope_id: taskScope.id,
+              occurrence_index: resolution.occurrenceIndex,
+            },
+            summary: {
+              node_count: pipelineScopes.length,
+              failed_node_count: pipelineScopes.filter((scope) => scope.status === 'failed').length,
+              reco_failed_count: countRecoFailuresWithinTaskExecution(taskScope),
+            },
+            evidences: [
+              ...buildTaskEvidences(session, [taskScope]),
+              ...buildTaskImageEvidences(session, args.task_id, taskScope.seq),
+            ],
           },
-          summary: {
-            node_count: pipelineScopes.length,
-            failed_node_count: pipelineScopes.filter((scope) => scope.status === 'failed').length,
-            reco_failed_count: countRecoFailuresWithinTaskExecution(taskScope),
-          },
-          evidences: [
-            ...buildTaskEvidences(session, [taskScope]),
-            ...buildTaskImageEvidences(session, args.task_id, taskScope.seq),
-          ],
-        }, warnings, startedAt)
+          warnings,
+          startedAt,
+        )
       }
 
       const pipelineScopes = collectPipelineNodeScopesForTask(session)
-      return ok({
-        task: null,
-        summary: {
-          node_count: pipelineScopes.length,
-          failed_node_count: pipelineScopes.filter((scope) => scope.status === 'failed').length,
-          reco_failed_count: countRecoFailures(session),
+      return ok(
+        {
+          task: null,
+          summary: {
+            node_count: pipelineScopes.length,
+            failed_node_count: pipelineScopes.filter((scope) => scope.status === 'failed').length,
+            reco_failed_count: countRecoFailures(session),
+          },
+          evidences: [],
         },
-        evidences: [],
-      }, warnings, startedAt)
+        warnings,
+        startedAt,
+      )
     },
 
     async get_node_timeline(
@@ -901,12 +888,15 @@ export const createAnalyzerToolHandlers = (
       }
 
       const helpers = createQueryHelpers(session.artifacts.index)
-      const timelineResult = helpers.getNodeTimeline({
-        taskId: args.task_id,
-        nodeId: args.node_id,
-        scopeId: args.scope_id,
-        occurrenceIndex: args.occurrence_index,
-      }, args.limit)
+      const timelineResult = helpers.getNodeTimeline(
+        {
+          taskId: args.task_id,
+          nodeId: args.node_id,
+          scopeId: args.scope_id,
+          occurrenceIndex: args.occurrence_index,
+        },
+        args.limit,
+      )
       if (!timelineResult.ok) {
         return fail('NODE_NOT_FOUND', timelineResult.message, warnings, startedAt)
       }
@@ -922,25 +912,33 @@ export const createAnalyzerToolHandlers = (
         line: item.line ?? null,
       }))
 
-      return ok({
-        timeline,
-        evidences: [
-          ...buildTimelineEvidences(session, 'get_node_timeline', timeline.map((item) => ({
-            sourceKey: item.source_key,
-            line: item.line,
-            taskId: args.task_id,
-            nodeId: args.node_id,
-            scopeId: item.scope_id,
-            occurrenceIndex: item.occurrence_index,
-          }))),
-          ...buildNodeImageEvidences(
-            session,
-            args.task_id,
-            args.node_id,
-            resolution.executions[0]?.occurrenceIndex,
-          ),
-        ],
-      }, warnings, startedAt)
+      return ok(
+        {
+          timeline,
+          evidences: [
+            ...buildTimelineEvidences(
+              session,
+              'get_node_timeline',
+              timeline.map((item) => ({
+                sourceKey: item.source_key,
+                line: item.line,
+                taskId: args.task_id,
+                nodeId: args.node_id,
+                scopeId: item.scope_id,
+                occurrenceIndex: item.occurrence_index,
+              })),
+            ),
+            ...buildNodeImageEvidences(
+              session,
+              args.task_id,
+              args.node_id,
+              resolution.executions[0]?.occurrenceIndex,
+            ),
+          ],
+        },
+        warnings,
+        startedAt,
+      )
     },
 
     async get_next_list_history(
@@ -975,12 +973,15 @@ export const createAnalyzerToolHandlers = (
       }
 
       const helpers = createQueryHelpers(session.artifacts.index)
-      const historyResult = helpers.getNextListHistory({
-        taskId: args.task_id,
-        nodeId: args.node_id,
-        scopeId: args.scope_id,
-        occurrenceIndex: args.occurrence_index,
-      }, args.limit)
+      const historyResult = helpers.getNextListHistory(
+        {
+          taskId: args.task_id,
+          nodeId: args.node_id,
+          scopeId: args.scope_id,
+          occurrenceIndex: args.occurrence_index,
+        },
+        args.limit,
+      )
       if (!historyResult.ok) {
         return fail('NODE_NOT_FOUND', historyResult.message, warnings, startedAt)
       }
@@ -998,25 +999,33 @@ export const createAnalyzerToolHandlers = (
         outcome: item.outcome,
       }))
 
-      return ok({
-        history,
-        evidences: [
-          ...buildTimelineEvidences(session, 'get_next_list_history', history.map((item) => ({
-            sourceKey: item.source_key,
-            line: item.line,
-            taskId: args.task_id,
-            nodeId: args.node_id,
-            scopeId: item.scope_id,
-            occurrenceIndex: item.occurrence_index,
-          }))),
-          ...buildNodeImageEvidences(
-            session,
-            args.task_id,
-            args.node_id,
-            resolution.executions[0]?.occurrenceIndex,
-          ),
-        ],
-      }, warnings, startedAt)
+      return ok(
+        {
+          history,
+          evidences: [
+            ...buildTimelineEvidences(
+              session,
+              'get_next_list_history',
+              history.map((item) => ({
+                sourceKey: item.source_key,
+                line: item.line,
+                taskId: args.task_id,
+                nodeId: args.node_id,
+                scopeId: item.scope_id,
+                occurrenceIndex: item.occurrence_index,
+              })),
+            ),
+            ...buildNodeImageEvidences(
+              session,
+              args.task_id,
+              args.node_id,
+              resolution.executions[0]?.occurrenceIndex,
+            ),
+          ],
+        },
+        warnings,
+        startedAt,
+      )
     },
 
     async get_parent_chain(
@@ -1051,7 +1060,11 @@ export const createAnalyzerToolHandlers = (
       const chainResult = helpers.getParentChain(
         args.scope_id
           ? { scopeId: args.scope_id }
-          : { taskId: args.task_id, nodeId: args.node_id, occurrenceIndex: execution.occurrenceIndex },
+          : {
+              taskId: args.task_id,
+              nodeId: args.node_id,
+              occurrenceIndex: execution.occurrenceIndex,
+            },
       )
       if (!chainResult.ok) {
         return fail('SCOPE_NOT_FOUND', chainResult.message, warnings, startedAt)
@@ -1068,42 +1081,45 @@ export const createAnalyzerToolHandlers = (
             node_id: identity.nodeId,
             name: readScopeName(scope),
             occurrence_index: index === 0 ? execution.occurrenceIndex : undefined,
-            relation: (index === 0
-              ? 'self'
-              : index === 1
-                ? 'parent'
-                : 'ancestor') as 'self' | 'parent' | 'ancestor',
+            relation: (index === 0 ? 'self' : index === 1 ? 'parent' : 'ancestor') as
+              'self' | 'parent' | 'ancestor',
           }
         })
 
-      return ok({
-        chain,
-        evidences: [
-          ...buildTimelineEvidences(session, 'get_parent_chain', chain.map((item) => {
-            const scope = session.artifacts.index.scopeById.get(item.scope_id)
-            const startEvent = scope ? readScopeEvent(scope, 'startEvent') : null
-            return {
-              sourceKey: startEvent?.source.sourceKey,
-              line: startEvent?.source.line,
-              taskId: item.task_id,
-              nodeId: item.node_id,
-              scopeId: item.scope_id,
-              occurrenceIndex: item.occurrence_index,
-            }
-          })),
-          ...buildNodeImageEvidences(
-            session,
-            args.task_id,
-            args.node_id,
-            execution.occurrenceIndex,
-          ),
-        ],
-      }, warnings, startedAt)
+      return ok(
+        {
+          chain,
+          evidences: [
+            ...buildTimelineEvidences(
+              session,
+              'get_parent_chain',
+              chain.map((item) => {
+                const scope = session.artifacts.index.scopeById.get(item.scope_id)
+                const startEvent = scope ? readScopeEvent(scope, 'startEvent') : null
+                return {
+                  sourceKey: startEvent?.source.sourceKey,
+                  line: startEvent?.source.line,
+                  taskId: item.task_id,
+                  nodeId: item.node_id,
+                  scopeId: item.scope_id,
+                  occurrenceIndex: item.occurrence_index,
+                }
+              }),
+            ),
+            ...buildNodeImageEvidences(
+              session,
+              args.task_id,
+              args.node_id,
+              execution.occurrenceIndex,
+            ),
+          ],
+        },
+        warnings,
+        startedAt,
+      )
     },
 
-    async get_raw_lines(
-      args: GetRawLinesArgs,
-    ): Promise<AnalyzerToolResponse<GetRawLinesResult>> {
+    async get_raw_lines(args: GetRawLinesArgs): Promise<AnalyzerToolResponse<GetRawLinesResult>> {
       const startedAt = nowTimestamp()
       const invalidLimit = validateLimit(args.limit)
       if (invalidLimit) {
@@ -1121,7 +1137,12 @@ export const createAnalyzerToolHandlers = (
         return fail('TASK_NOT_FOUND', `task_id=${args.task_id} not found`, warnings, startedAt)
       }
       if (!session.artifacts.rawLines) {
-        return fail('DATA_NOT_READY', 'raw lines are not available for this session', warnings, startedAt)
+        return fail(
+          'DATA_NOT_READY',
+          'raw lines are not available for this session',
+          warnings,
+          startedAt,
+        )
       }
 
       const lines = collectTaskRawLines(session, args.task_id, {
@@ -1132,21 +1153,27 @@ export const createAnalyzerToolHandlers = (
         limit: args.limit,
       })
 
-      return ok({
-        lines: lines.map((line) => ({
-          source_key: line.sourceKey,
-          line: line.line,
-          text: line.text,
-        })),
-        evidences: lines.map((line) => buildLineEvidence({
-          session_id: session.sessionId,
-          source_tool: 'get_raw_lines',
-          source_key: line.sourceKey,
-          line: line.line,
-          text: line.text,
-          task_id: args.task_id,
-        })),
-      }, warnings, startedAt)
+      return ok(
+        {
+          lines: lines.map((line) => ({
+            source_key: line.sourceKey,
+            line: line.line,
+            text: line.text,
+          })),
+          evidences: lines.map((line) =>
+            buildLineEvidence({
+              session_id: session.sessionId,
+              source_tool: 'get_raw_lines',
+              source_key: line.sourceKey,
+              line: line.line,
+              text: line.text,
+              task_id: args.task_id,
+            }),
+          ),
+        },
+        warnings,
+        startedAt,
+      )
     },
   }
 }

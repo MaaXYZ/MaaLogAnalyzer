@@ -1,15 +1,7 @@
-import type {
-  KernelOutput,
-} from '@windsland52/maa-log-kernel'
-import {
-  analyzeLogContentWith,
-  DEFAULT_CORE_PARSE_OPTIONS,
-} from '@windsland52/maa-log-runtime'
+import type { KernelOutput } from '@windsland52/maa-log-kernel'
+import { analyzeLogContentWith, DEFAULT_CORE_PARSE_OPTIONS } from '@windsland52/maa-log-runtime'
 import { mlaRuntimeAdapter } from '@windsland52/maa-log-adapter'
-import type {
-  AnalyzeLogContentInput,
-  ParseFileOptions,
-} from '@windsland52/maa-log-runtime'
+import type { AnalyzeLogContentInput, ParseFileOptions } from '@windsland52/maa-log-runtime'
 import {
   extractZipContentFromNodeBuffer,
   extractZipContentFromNodeFile,
@@ -45,9 +37,7 @@ export interface AnalyzeDirectoryInput {
   parserVersion?: string
 }
 
-export const analyzeLogContent = async (
-  input: AnalyzeLogContentInput,
-): Promise<KernelOutput> => {
+export const analyzeLogContent = async (input: AnalyzeLogContentInput): Promise<KernelOutput> => {
   return analyzeLogContentWith(mlaRuntimeAdapter, {
     ...input,
     parseOptions: input.parseOptions ?? DEFAULT_CORE_PARSE_OPTIONS,
@@ -73,9 +63,7 @@ export const analyzeZipBuffer = async (
   })
 }
 
-export const analyzeZipFile = async (
-  input: AnalyzeZipFileInput,
-): Promise<KernelOutput | null> => {
+export const analyzeZipFile = async (input: AnalyzeZipFileInput): Promise<KernelOutput | null> => {
   const extracted = await extractZipContentFromNodeFile(input.zipFilePath, {
     focus: input.focus,
     archiveLimits: input.archiveLimits,
@@ -111,9 +99,7 @@ export const analyzeDirectory = async (
   })
 }
 
-export {
-  DEFAULT_CORE_PARSE_OPTIONS,
-} from '@windsland52/maa-log-runtime'
+export { DEFAULT_CORE_PARSE_OPTIONS } from '@windsland52/maa-log-runtime'
 export type { AnalyzeLogContentInput, ParseFileOptions } from '@windsland52/maa-log-runtime'
 export * from './nodeInput'
 export * from './frameworkInput'

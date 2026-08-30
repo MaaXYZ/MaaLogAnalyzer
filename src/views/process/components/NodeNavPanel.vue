@@ -1,35 +1,33 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import {
-  NCard, NEmpty,
-} from 'naive-ui'
+import { NCard, NEmpty } from 'naive-ui'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import type { DynamicScrollerInstance } from '../../../types/virtualScroller'
-import type {
-  NodeNavMode,
-  NodeNavViewItem,
-} from '../composables/useNodeNavSearch'
+import type { NodeNavMode, NodeNavViewItem } from '../composables/useNodeNavSearch'
 import NodeNavItem from './NodeNavItem.vue'
 import NodeNavHeader from './NodeNavHeader.vue'
 import NodeNavSearchInput from './NodeNavSearchInput.vue'
 import { useKeepAliveScrollPosition } from '../composables/keepAliveScrollPosition'
 
-const props = withDefaults(defineProps<{
-  items: NodeNavViewItem[]
-  selectedTaskKey?: string | null
-  preserveScrollOnActivate?: boolean
-  selectedNodeId?: number | null
-  currentNodesLength: number
-  displayMode: string
-  searchText: string
-  normalizedSearchText: string
-  mode: NodeNavMode
-  failedOnly: boolean
-  emptyDescription: string
-}>(), {
-  selectedTaskKey: null,
-  preserveScrollOnActivate: true,
-})
+const props = withDefaults(
+  defineProps<{
+    items: NodeNavViewItem[]
+    selectedTaskKey?: string | null
+    preserveScrollOnActivate?: boolean
+    selectedNodeId?: number | null
+    currentNodesLength: number
+    displayMode: string
+    searchText: string
+    normalizedSearchText: string
+    mode: NodeNavMode
+    failedOnly: boolean
+    emptyDescription: string
+  }>(),
+  {
+    selectedTaskKey: null,
+    preserveScrollOnActivate: true,
+  },
+)
 
 const emit = defineEmits<{
   'update:search-text': [value: string]
@@ -55,10 +53,7 @@ const getScrollerElement = (): HTMLElement | null => {
   return nested || root
 }
 
-const {
-  captureCurrentScrollPosition,
-  cancelScrollRestore,
-} = useKeepAliveScrollPosition({
+const { captureCurrentScrollPosition, cancelScrollRestore } = useKeepAliveScrollPosition({
   getScrollerElement,
   getContextKey: () => props.selectedTaskKey ?? null,
   shouldPreserve: () => props.preserveScrollOnActivate,
@@ -132,7 +127,7 @@ watch(
   async ([nodeId]) => {
     if (nodeId == null) return
     await nextTick()
-    const index = props.items.findIndex(item => item.node.node_id === nodeId)
+    const index = props.items.findIndex((item) => item.node.node_id === nodeId)
     if (index < 0) return
 
     const scrollerEl = getScrollerElement()
@@ -159,7 +154,13 @@ defineExpose({
   <n-card
     size="small"
     data-tour="analysis-node-nav"
-    style="height: 100%; display: flex; flex-direction: column; position: relative; overflow: visible"
+    style="
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: visible;
+    "
     content-style="padding: 0; flex: 1; min-height: 0; overflow: visible"
   >
     <template #header>
@@ -189,16 +190,14 @@ defineExpose({
         @wheel.passive="handleWheel"
       >
         <template #default="{ item, active }">
-          <dynamic-scroller-item
-            :item="item"
-            :active="active"
-          >
+          <dynamic-scroller-item :item="item" :active="active">
             <div
               :title="item.node.name"
               class="node-nav-row"
               :class="{
                 'node-nav-row-detailed': props.displayMode === 'detailed',
-                'node-nav-row-active': props.selectedNodeId != null && item.node.node_id === props.selectedNodeId,
+                'node-nav-row-active':
+                  props.selectedNodeId != null && item.node.node_id === props.selectedNodeId,
               }"
               :data-node-id="item.node.node_id"
               @click="emit('select-item', item)"
@@ -233,7 +232,9 @@ defineExpose({
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 8px;
-  transition: background-color 0.2s, box-shadow 0.2s;
+  transition:
+    background-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .node-nav-row-detailed {

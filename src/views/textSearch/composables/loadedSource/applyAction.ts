@@ -55,11 +55,10 @@ export const createApplyLoadedTargetAction = (
         showFileContent: options.showFileContent,
         contentKey: options.contentKey,
         isLoadingFile: options.isLoadingFile,
-        shouldApply: () => (
+        shouldApply: () =>
           generation === options.sourceLoadGeneration.value &&
           options.sourceMode.value === 'loaded' &&
-          options.selectedLoadedTargetId.value === target.id
-        ),
+          options.selectedLoadedTargetId.value === target.id,
       },
       target,
     )

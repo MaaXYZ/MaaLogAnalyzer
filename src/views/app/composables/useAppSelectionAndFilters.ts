@@ -62,10 +62,7 @@ export const useAppSelectionAndFilters = (options: UseAppSelectionAndFiltersOpti
   const refreshAvailableTaskIds = () => {}
   const resetAvailableTaskIds = () => {}
 
-  const {
-    resetAnalysisState,
-    applyParsedTasks,
-  } = useParsedTaskState({
+  const { resetAnalysisState, applyParsedTasks } = useParsedTaskState({
     tasks: options.tasks,
     selectedTask: options.selectedTask,
     selectedNode: options.selectedNode,

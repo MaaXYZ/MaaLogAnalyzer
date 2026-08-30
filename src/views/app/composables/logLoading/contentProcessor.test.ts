@@ -83,10 +83,13 @@ describe('createProcessLogContent', () => {
       ],
     })
 
-    expect(parser.parseInputs).toHaveBeenCalledWith([
-      expect.objectContaining({ sourcePath: 'maa.bak.log', inputIndex: 0 }),
-      expect.objectContaining({ sourcePath: 'maa.log', inputIndex: 1 }),
-    ], expect.any(Function))
+    expect(parser.parseInputs).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ sourcePath: 'maa.bak.log', inputIndex: 0 }),
+        expect.objectContaining({ sourcePath: 'maa.log', inputIndex: 1 }),
+      ],
+      expect.any(Function),
+    )
   })
 
   it('keeps content-only callers on parseFile', async () => {
@@ -113,7 +116,12 @@ describe('createProcessLogContent', () => {
       setErrorImages: vi.fn(),
       setVisionImages: vi.fn(),
       setWaitFreezesImages: vi.fn(),
-      parseFile: vi.fn(() => new Promise<void>((resolve) => { finishFirstParse = resolve })),
+      parseFile: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishFirstParse = resolve
+          }),
+      ),
       consumeTasks: vi.fn(() => [{ task_id: 1 }]),
     } as unknown as LogParser
     const secondParser = {
@@ -125,7 +133,8 @@ describe('createProcessLogContent', () => {
     } as unknown as LogParser
     const rootParser = { resetParsedEvents: vi.fn() } as unknown as LogParser
     const options = createOptions(rootParser)
-    options.createParser = vi.fn()
+    options.createParser = vi
+      .fn()
       .mockReturnValueOnce(firstParser)
       .mockReturnValueOnce(secondParser)
     const processLogContent = createProcessLogContent(options)

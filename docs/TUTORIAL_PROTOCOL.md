@@ -106,7 +106,7 @@ export const TOUR_STEPS: TourStep[] = [
     content: '先看这里，四个主视图都从这里切换。',
     target: '[data-tour="header-view-switch"]',
     view: 'analysis',
-    action: 'none'
+    action: 'none',
   },
   {
     id: 'step-analysis',
@@ -114,8 +114,8 @@ export const TOUR_STEPS: TourStep[] = [
     content: '这里是你最常用的分析工作区。',
     target: '[data-tour="analysis-main"]',
     view: 'analysis',
-    action: 'selectFirstTask'
-  }
+    action: 'selectFirstTask',
+  },
 ]
 ```
 

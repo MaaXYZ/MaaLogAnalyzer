@@ -13,7 +13,9 @@ export interface LoadedSearchTarget {
 
 export type UploadFileHandler = (
   file: File | File[],
-  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+  selectPrimaryLogs?: (
+    options: PrimaryLogSelectionOption[],
+  ) => Promise<PrimaryLogSelectionOption[] | null>,
 ) => void | Promise<void>
 export type UploadContentHandler = (
   content: string,

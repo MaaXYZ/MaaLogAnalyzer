@@ -1,9 +1,6 @@
 import { executeSearchByMode } from './executeByMode'
 import { ensureSearchSourceReady } from './sourceGuard'
-import type {
-  TextSearchExecutionSnapshot,
-  TextSearchSearchExecutorOptions,
-} from './executorTypes'
+import type { TextSearchExecutionSnapshot, TextSearchSearchExecutorOptions } from './executorTypes'
 
 export const buildSearchResultState = (options: TextSearchSearchExecutorOptions) => ({
   searchResults: options.searchResults,

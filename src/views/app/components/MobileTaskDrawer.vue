@@ -29,12 +29,7 @@ const isSelectedTask = (task: TaskInfo) => {
 </script>
 
 <template>
-  <n-drawer
-    :show="show"
-    placement="left"
-    :width="280"
-    @update:show="handleUpdateShow"
-  >
+  <n-drawer :show="show" placement="left" :width="280" @update:show="handleUpdateShow">
     <n-drawer-content title="任务列表">
       <n-scrollbar style="height: 100%">
         <n-list hoverable clickable>
@@ -51,15 +46,38 @@ const isSelectedTask = (task: TaskInfo) => {
             <n-flex vertical style="gap: 8px">
               <n-flex align="center" justify="space-between">
                 <n-text strong style="font-size: 15px">{{ task.entry }}</n-text>
-                <n-tag size="small" :type="task.status === 'succeeded' ? 'success' : task.status === 'failed' ? 'error' : 'warning'">
+                <n-tag
+                  size="small"
+                  :type="
+                    task.status === 'succeeded'
+                      ? 'success'
+                      : task.status === 'failed'
+                        ? 'error'
+                        : 'warning'
+                  "
+                >
                   #{{ index + 1 }}
                 </n-tag>
               </n-flex>
               <n-flex vertical style="gap: 4px">
                 <n-text depth="3" style="font-size: 12px">
                   状态:
-                  <n-text :type="task.status === 'succeeded' ? 'success' : task.status === 'failed' ? 'error' : 'warning'">
-                    {{ task.status === 'succeeded' ? '成功' : task.status === 'failed' ? '失败' : '运行中' }}
+                  <n-text
+                    :type="
+                      task.status === 'succeeded'
+                        ? 'success'
+                        : task.status === 'failed'
+                          ? 'error'
+                          : 'warning'
+                    "
+                  >
+                    {{
+                      task.status === 'succeeded'
+                        ? '成功'
+                        : task.status === 'failed'
+                          ? '失败'
+                          : '运行中'
+                    }}
                   </n-text>
                 </n-text>
                 <n-text depth="3" style="font-size: 12px">

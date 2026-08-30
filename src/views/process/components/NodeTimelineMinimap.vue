@@ -24,27 +24,39 @@ const scrollerRefLocal = ref<DynamicScrollerInstance | null>(null)
 const nodesRef = shallowRef<NodeTimelineItem[]>([])
 const selectedNodeIdRef = ref<number | null>(null)
 
-watch(() => props.scrollerRef, (v) => { scrollerRefLocal.value = v })
-watch(() => props.nodes, (v) => { nodesRef.value = v }, { immediate: true })
-watch(() => props.selectedNodeId, (v) => { selectedNodeIdRef.value = v }, { immediate: true })
-
-const {
-  handleClick,
-  handleMouseDown,
-  redraw,
-  updateViewport,
-  handleResize,
-} = createMinimapInteraction({
-  canvasRef,
-  scrollerRef: scrollerRefLocal,
-  nodes: nodesRef,
-  selectedNodeId: selectedNodeIdRef,
-  safeScrollToItem: (index: number) => props.safeScrollToItem(index),
-  onNodeClick: (index: number) => {
-    const node = props.nodes[index]
-    if (node) emit('select-node', node)
+watch(
+  () => props.scrollerRef,
+  (v) => {
+    scrollerRefLocal.value = v
   },
-})
+)
+watch(
+  () => props.nodes,
+  (v) => {
+    nodesRef.value = v
+  },
+  { immediate: true },
+)
+watch(
+  () => props.selectedNodeId,
+  (v) => {
+    selectedNodeIdRef.value = v
+  },
+  { immediate: true },
+)
+
+const { handleClick, handleMouseDown, redraw, updateViewport, handleResize } =
+  createMinimapInteraction({
+    canvasRef,
+    scrollerRef: scrollerRefLocal,
+    nodes: nodesRef,
+    selectedNodeId: selectedNodeIdRef,
+    safeScrollToItem: (index: number) => props.safeScrollToItem(index),
+    onNodeClick: (index: number) => {
+      const node = props.nodes[index]
+      if (node) emit('select-node', node)
+    },
+  })
 
 let resizeObserver: ResizeObserver | null = null
 let scrollerEl: HTMLElement | null = null
@@ -110,36 +122,52 @@ const detachScroller = () => {
 
 const visible = ref(false)
 
-watch(() => props.nodes.length, () => {
-  if (visibleTimer) {
-    clearTimeout(visibleTimer)
-    visibleTimer = null
-  }
+watch(
+  () => props.nodes.length,
+  () => {
+    if (visibleTimer) {
+      clearTimeout(visibleTimer)
+      visibleTimer = null
+    }
 
-  if (props.nodes.length < MINIMAP_CONFIG.minNodesToShow) {
-    visible.value = false
-    return
-  }
+    if (props.nodes.length < MINIMAP_CONFIG.minNodesToShow) {
+      visible.value = false
+      return
+    }
 
-  visibleTimer = setTimeout(() => {
-    visibleTimer = null
-    visible.value = true
+    visibleTimer = setTimeout(() => {
+      visibleTimer = null
+      visible.value = true
+      scheduleIdleRedraw()
+    }, 120)
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.nodes,
+  () => {
     scheduleIdleRedraw()
-  }, 120)
-}, { immediate: true })
+  },
+  { flush: 'post' },
+)
 
-watch(() => props.nodes, () => {
-  scheduleIdleRedraw()
-}, { flush: 'post' })
+watch(
+  () => props.selectedNodeId,
+  () => {
+    scheduleRedraw()
+  },
+  { flush: 'post' },
+)
 
-watch(() => props.selectedNodeId, () => {
-  scheduleRedraw()
-}, { flush: 'post' })
-
-watch(() => props.scrollerRef, () => {
-  observeScroller()
-  scheduleRedraw()
-}, { flush: 'post' })
+watch(
+  () => props.scrollerRef,
+  () => {
+    observeScroller()
+    scheduleRedraw()
+  },
+  { flush: 'post' },
+)
 
 onMounted(() => {
   if (containerRef.value) {

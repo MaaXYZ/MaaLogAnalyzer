@@ -3,9 +3,7 @@ import { BulbOutlined, BulbFilled, InfoCircleOutlined, SettingOutlined } from '@
 import type { DropdownMixedOption } from 'naive-ui/es/dropdown/src/interface'
 import { useHeaderBarBindings } from '../useHeaderBarBindings'
 import { isVSCode } from '../../../../utils/platform'
-import type {
-  UseAppPresentationBindingsOptions,
-} from './types'
+import type { UseAppPresentationBindingsOptions } from './types'
 
 interface UsePresentationHeaderBindingsOptions {
   propsIsDark: Ref<boolean>
@@ -27,7 +25,7 @@ export const usePresentationHeaderBindings = (options: UsePresentationHeaderBind
   const allowThemeToggle = computed(() => !options.isVscodeLaunchEmbed && !isNativeVSCodeHost)
 
   const mobileMenuOptions = computed<DropdownMixedOption[]>(() => [
-    ...options.viewModeOptions.value.map(opt => ({
+    ...options.viewModeOptions.value.map((opt) => ({
       type: 'option' as const,
       label: opt.label,
       key: `view-${opt.key}`,
@@ -37,12 +35,14 @@ export const usePresentationHeaderBindings = (options: UsePresentationHeaderBind
     { type: 'option' as const, label: '设置', key: 'settings', icon: () => h(SettingOutlined) },
     { type: 'option' as const, label: '关于', key: 'about', icon: () => h(InfoCircleOutlined) },
     ...(allowThemeToggle.value
-      ? [{
-          type: 'option' as const,
-          label: isDark.value ? '浅色模式' : '深色模式',
-          key: 'theme',
-          icon: () => h(isDark.value ? BulbOutlined : BulbFilled),
-        }]
+      ? [
+          {
+            type: 'option' as const,
+            label: isDark.value ? '浅色模式' : '深色模式',
+            key: 'theme',
+            icon: () => h(isDark.value ? BulbOutlined : BulbFilled),
+          },
+        ]
       : []),
   ])
 
@@ -58,10 +58,7 @@ export const usePresentationHeaderBindings = (options: UsePresentationHeaderBind
     }
   }
 
-  const {
-    headerBarProps,
-    headerBarEventHandlers,
-  } = useHeaderBarBindings({
+  const { headerBarProps, headerBarEventHandlers } = useHeaderBarBindings({
     isMobile: options.isMobile,
     currentViewLabel: options.currentViewLabel,
     viewMode: options.viewMode,

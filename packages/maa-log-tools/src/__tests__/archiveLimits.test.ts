@@ -11,12 +11,12 @@ import {
 
 const findSignature = (data: Uint8Array, signature: number): number => {
   for (let offset = 0; offset <= data.byteLength - 4; offset += 1) {
-    const current = (
-      data[offset]
-      | (data[offset + 1] << 8)
-      | (data[offset + 2] << 16)
-      | (data[offset + 3] << 24)
-    ) >>> 0
+    const current =
+      (data[offset] |
+        (data[offset + 1] << 8) |
+        (data[offset + 2] << 16) |
+        (data[offset + 3] << 24)) >>>
+      0
     if (current === signature) return offset
   }
   throw new Error(`ZIP signature ${signature.toString(16)} not found`)
@@ -63,21 +63,27 @@ describe('Node archive resource budgets', () => {
 
   it('rejects invalid budget overrides', () => {
     expect(() => resolveArchiveLimits({ maxPathBytes: -1 })).toThrow(RangeError)
-    expect(() => resolveArchiveLimits({ maxCompressionRatio: Number.POSITIVE_INFINITY })).toThrow(RangeError)
+    expect(() => resolveArchiveLimits({ maxCompressionRatio: Number.POSITIVE_INFINITY })).toThrow(
+      RangeError,
+    )
   })
 
   it('rejects oversized archive buffers before inspecting entries', () => {
     const zipData = zipSync({ 'maa.log': strToU8('test') })
-    expectLimitCode(() => extractZipEntriesWithinLimits(
-      zipData,
-      () => true,
-      resolveArchiveLimits({ maxVolumes: 0 }),
-    ), 'volume-count')
-    expectLimitCode(() => extractZipEntriesWithinLimits(
-      zipData,
-      () => true,
-      resolveArchiveLimits({ maxCompressedBytes: zipData.byteLength - 1 }),
-    ), 'compressed-size')
+    expectLimitCode(
+      () =>
+        extractZipEntriesWithinLimits(zipData, () => true, resolveArchiveLimits({ maxVolumes: 0 })),
+      'volume-count',
+    )
+    expectLimitCode(
+      () =>
+        extractZipEntriesWithinLimits(
+          zipData,
+          () => true,
+          resolveArchiveLimits({ maxCompressedBytes: zipData.byteLength - 1 }),
+        ),
+      'compressed-size',
+    )
   })
 
   it('bounds central-directory path metadata', () => {
@@ -85,44 +91,71 @@ describe('Node archive resource budgets', () => {
       'maa.log': strToU8('main'),
       'notes.txt': strToU8('notes'),
     })
-    expectLimitCode(() => extractZipEntriesWithinLimits(
-      zipData,
-      () => true,
-      resolveArchiveLimits({ maxPathBytes: 3 }),
-    ), 'path-size')
-    expectLimitCode(() => extractZipEntriesWithinLimits(
-      zipData,
-      () => true,
-      resolveArchiveLimits({ maxTotalPathBytes: 10 }),
-    ), 'total-path-size')
+    expectLimitCode(
+      () =>
+        extractZipEntriesWithinLimits(
+          zipData,
+          () => true,
+          resolveArchiveLimits({ maxPathBytes: 3 }),
+        ),
+      'path-size',
+    )
+    expectLimitCode(
+      () =>
+        extractZipEntriesWithinLimits(
+          zipData,
+          () => true,
+          resolveArchiveLimits({ maxTotalPathBytes: 10 }),
+        ),
+      'total-path-size',
+    )
   })
 
   it('checks selected file, image, aggregate, and compression-ratio sizes before extraction', () => {
-    const zipData = zipSync({
-      'maa.log': strToU8('main log data'),
-      'on_error/image.png': new Uint8Array(32),
-    }, { level: 9 })
+    const zipData = zipSync(
+      {
+        'maa.log': strToU8('main log data'),
+        'on_error/image.png': new Uint8Array(32),
+      },
+      { level: 9 },
+    )
 
-    expectLimitCode(() => extractZipEntriesWithinLimits(
-      zipData,
-      () => true,
-      resolveArchiveLimits({ maxFileBytes: 5 }),
-    ), 'file-size')
-    expectLimitCode(() => extractZipEntriesWithinLimits(
-      zipData,
-      () => true,
-      resolveArchiveLimits({ maxImageBytes: 10 }),
-    ), 'image-size')
-    expectLimitCode(() => extractZipEntriesWithinLimits(
-      zipData,
-      () => true,
-      resolveArchiveLimits({ maxExtractedBytes: 20 }),
-    ), 'extracted-size')
-    expectLimitCode(() => extractZipEntriesWithinLimits(
-      zipData,
-      () => true,
-      resolveArchiveLimits({ compressionRatioMinBytes: 1, maxCompressionRatio: 1 }),
-    ), 'compression-ratio')
+    expectLimitCode(
+      () =>
+        extractZipEntriesWithinLimits(
+          zipData,
+          () => true,
+          resolveArchiveLimits({ maxFileBytes: 5 }),
+        ),
+      'file-size',
+    )
+    expectLimitCode(
+      () =>
+        extractZipEntriesWithinLimits(
+          zipData,
+          () => true,
+          resolveArchiveLimits({ maxImageBytes: 10 }),
+        ),
+      'image-size',
+    )
+    expectLimitCode(
+      () =>
+        extractZipEntriesWithinLimits(
+          zipData,
+          () => true,
+          resolveArchiveLimits({ maxExtractedBytes: 20 }),
+        ),
+      'extracted-size',
+    )
+    expectLimitCode(
+      () =>
+        extractZipEntriesWithinLimits(
+          zipData,
+          () => true,
+          resolveArchiveLimits({ compressionRatioMinBytes: 1, maxCompressionRatio: 1 }),
+        ),
+      'compression-ratio',
+    )
   })
 
   it('does not charge unselected payloads against extraction budgets', () => {
@@ -144,14 +177,18 @@ describe('Node archive resource budgets', () => {
   ])('rejects forged $label local and central original sizes while streaming', ({ level }) => {
     const archive = zipSync({ 'maa.log': new Uint8Array(4_096) }, { level })
     const forged = forgeDeclaredOriginalSize(archive, 32)
-    expect(() => extractZipEntriesWithinLimits(
-      forged,
-      () => true,
-      resolveArchiveLimits({ compressionRatioMinBytes: 10_000 }),
-    )).toThrow(expect.objectContaining<Partial<ArchiveFormatError>>({
-      name: 'ArchiveFormatError',
-      code: 'actual-size-mismatch',
-    }))
+    expect(() =>
+      extractZipEntriesWithinLimits(
+        forged,
+        () => true,
+        resolveArchiveLimits({ compressionRatioMinBytes: 10_000 }),
+      ),
+    ).toThrow(
+      expect.objectContaining<Partial<ArchiveFormatError>>({
+        name: 'ArchiveFormatError',
+        code: 'actual-size-mismatch',
+      }),
+    )
   })
 
   it('rejects local and central declarations that disagree before extraction', () => {

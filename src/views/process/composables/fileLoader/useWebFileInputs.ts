@@ -13,10 +13,7 @@ import {
 } from '../../../../utils/logFileDiscovery'
 import { decodeFileContent } from '../../../../utils/textEncoding'
 import type { UseProcessFileLoaderOptions } from './types'
-import {
-  collectMxuZipVolumes,
-  findMxuZipVolumes,
-} from '../../../../utils/mxuZipVolumes'
+import { collectMxuZipVolumes, findMxuZipVolumes } from '../../../../utils/mxuZipVolumes'
 import {
   chargeBrowserInputFile,
   createBrowserInputBudget,
@@ -55,7 +52,7 @@ const resolveSelectedLogContent = async (
 ) => {
   const fileList = Array.from(files)
   const selectedLogs = selectPrimaryLogGroup(
-    fileList.map(file => ({
+    fileList.map((file) => ({
       file,
       name: file.name,
       path: getFileRelativePath(file),
@@ -72,7 +69,9 @@ const resolveSelectedLogContent = async (
   }
 
   const selectedOptions = selectPrimaryLogs
-    ? await selectPrimaryLogs(createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item)))
+    ? await selectPrimaryLogs(
+        createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item)),
+      )
     : createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item))
   if (!selectedOptions) {
     return {
@@ -90,7 +89,7 @@ const resolveSelectedLogContent = async (
       cancelled: false,
     }
   }
-  const selectedPaths = new Set(selectedOptions.map(option => option.path))
+  const selectedPaths = new Set(selectedOptions.map((option) => option.path))
 
   const selectedOrder = new Map(selectedOptions.map((option, index) => [option.path, index]))
   const selectedLogItems = selectedLogs
@@ -195,7 +194,7 @@ export const useWebFileInputs = (
     }
 
     const files = Array.from(items)
-      .map(item => item.getAsFile())
+      .map((item) => item.getAsFile())
       .filter((file): file is File => file != null)
     const file = files[0]
     if (file) {

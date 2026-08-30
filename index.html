@@ -1,53 +1,55 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
-  <!-- 主题颜色（控制浏览器地址栏/状态栏颜色）-->
-  <meta name="theme-color" content="#18181c" id="theme-color-meta">
-  <title>MAA 日志分析器</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    html,
-    body {
-      width: 100%;
-      height: 100%;
-    }
-    /* 初始主题由 VS Code 变量或应用主题控制 */
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: var(--vscode-panel-background, #18181c);
-      color: var(--vscode-foreground, rgba(255, 255, 255, 0.82));
-    }
-    #app {
-      height: 100vh;
-      overflow: hidden;
-    }
-    /* 启动占位，避免白/黑屏 */
-    #app:empty {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--vscode-panel-background, #18181c);
-      color: var(--vscode-foreground, rgba(255, 255, 255, 0.62));
-      font-size: 12px;
-      letter-spacing: 0.4px;
-    }
-    #app:empty::before {
-      content: "正在加载 MAA 日志分析器...";
-    }
-  </style>
-</head>
-<body>
-  <div id="app"></div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <!-- 主题颜色（控制浏览器地址栏/状态栏颜色）-->
+    <meta name="theme-color" content="#18181c" id="theme-color-meta" />
+    <title>MAA 日志分析器</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+      }
+      /* 初始主题由 VS Code 变量或应用主题控制 */
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+          sans-serif;
+        background: var(--vscode-panel-background, #18181c);
+        color: var(--vscode-foreground, rgba(255, 255, 255, 0.82));
+      }
+      #app {
+        height: 100vh;
+        overflow: hidden;
+      }
+      /* 启动占位，避免白/黑屏 */
+      #app:empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--vscode-panel-background, #18181c);
+        color: var(--vscode-foreground, rgba(255, 255, 255, 0.62));
+        font-size: 12px;
+        letter-spacing: 0.4px;
+      }
+      #app:empty::before {
+        content: '正在加载 MAA 日志分析器...';
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

@@ -25,9 +25,8 @@ interface PendingAcknowledgement {
   timer: ReturnType<typeof setTimeout>
 }
 
-const acknowledgementKey = (transferId: string, sequence: number): string => (
+const acknowledgementKey = (transferId: string, sequence: number): string =>
   `${transferId}:${sequence}`
-)
 
 export class WebviewByteTransferAckBroker {
   private readonly pending = new Map<string, PendingAcknowledgement>()
@@ -40,7 +39,9 @@ export class WebviewByteTransferAckBroker {
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(key)
-        reject(new Error(`Timed out waiting for VS Code Webview byte-transfer acknowledgement: ${key}`))
+        reject(
+          new Error(`Timed out waiting for VS Code Webview byte-transfer acknowledgement: ${key}`),
+        )
       }, timeoutMs)
       this.pending.set(key, { resolve, reject, timer })
     })
@@ -138,7 +139,11 @@ export class WebviewByteTransferSender {
       mimeType: file.mimeType,
     })
 
-    for (let offset = 0; offset < file.bytes.byteLength; offset += WEBVIEW_BYTE_TRANSFER_CHUNK_BYTES) {
+    for (
+      let offset = 0;
+      offset < file.bytes.byteLength;
+      offset += WEBVIEW_BYTE_TRANSFER_CHUNK_BYTES
+    ) {
       this.operation.throwIfCancelled()
       const end = Math.min(offset + WEBVIEW_BYTE_TRANSFER_CHUNK_BYTES, file.bytes.byteLength)
       // vscode.workspace.fs.readFile may return a Node Buffer. Buffer.slice()

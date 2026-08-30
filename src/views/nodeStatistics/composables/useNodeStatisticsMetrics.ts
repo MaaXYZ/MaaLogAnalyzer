@@ -49,7 +49,7 @@ export const useNodeStatisticsMetrics = (options: UseNodeStatisticsMetricsOption
     }
     const taskId = Number(options.selectedTaskId.value)
     if (!Number.isFinite(taskId)) return []
-    return options.effectiveTasks.value.filter(task => task.task_id === taskId)
+    return options.effectiveTasks.value.filter((task) => task.task_id === taskId)
   })
 
   const nodeStatistics = computed<NodeStatistics[]>(() => {
@@ -112,13 +112,24 @@ export const useNodeStatisticsMetrics = (options: UseNodeStatisticsMetricsOption
     if (recognitionActionStatistics.value.length === 0) return null
 
     const totalNodes = recognitionActionStatistics.value.reduce((sum, item) => sum + item.count, 0)
-    const totalRecognitionDuration = recognitionActionStatistics.value.reduce((sum, item) => sum + item.totalRecognitionDuration, 0)
-    const totalActionDuration = recognitionActionStatistics.value.reduce((sum, item) => sum + item.totalActionDuration, 0)
-    const totalRecognitionAttempts = recognitionActionStatistics.value.reduce((sum, item) => sum + item.totalRecognitionAttempts, 0)
+    const totalRecognitionDuration = recognitionActionStatistics.value.reduce(
+      (sum, item) => sum + item.totalRecognitionDuration,
+      0,
+    )
+    const totalActionDuration = recognitionActionStatistics.value.reduce(
+      (sum, item) => sum + item.totalActionDuration,
+      0,
+    )
+    const totalRecognitionAttempts = recognitionActionStatistics.value.reduce(
+      (sum, item) => sum + item.totalRecognitionAttempts,
+      0,
+    )
     const avgRecognitionDuration = totalRecognitionDuration / totalNodes
     const avgActionDuration = totalActionDuration / totalNodes
     const avgRecognitionAttempts = totalRecognitionAttempts / totalNodes
-    const slowestActionNode = [...recognitionActionStatistics.value].sort((a, b) => b.avgActionDuration - a.avgActionDuration)[0]
+    const slowestActionNode = [...recognitionActionStatistics.value].sort(
+      (a, b) => b.avgActionDuration - a.avgActionDuration,
+    )[0]
 
     return {
       totalNodes,
@@ -134,11 +145,18 @@ export const useNodeStatisticsMetrics = (options: UseNodeStatisticsMetricsOption
     if (waitFreezeStatistics.value.length === 0) return null
 
     const totalCount = waitFreezeStatistics.value.reduce((sum, item) => sum + item.count, 0)
-    const totalRepeatCount = waitFreezeStatistics.value.reduce((sum, item) => sum + item.repeatCount, 0)
-    const totalElapsed = waitFreezeStatistics.value.reduce((sum, item) => sum + item.totalElapsed, 0)
+    const totalRepeatCount = waitFreezeStatistics.value.reduce(
+      (sum, item) => sum + item.repeatCount,
+      0,
+    )
+    const totalElapsed = waitFreezeStatistics.value.reduce(
+      (sum, item) => sum + item.totalElapsed,
+      0,
+    )
     const avgElapsed = totalCount > 0 ? totalElapsed / totalCount : 0
-    const focusNode = [...waitFreezeStatistics.value]
-      .sort((a, b) => b.repeatCount - a.repeatCount || b.avgElapsed - a.avgElapsed)[0]
+    const focusNode = [...waitFreezeStatistics.value].sort(
+      (a, b) => b.repeatCount - a.repeatCount || b.avgElapsed - a.avgElapsed,
+    )[0]
 
     return {
       totalCount,

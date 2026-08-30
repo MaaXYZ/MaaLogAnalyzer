@@ -17,7 +17,7 @@ const makeEventLine = (
   source?: {
     processId?: string
     threadId?: string
-  }
+  },
 ): string => {
   const processId = source?.processId ?? 'Px1'
   const threadId = source?.threadId ?? 'Tx1'
@@ -26,7 +26,7 @@ const makeEventLine = (
 
 const collectFlowItems = (
   items: UnifiedFlowItem[] | undefined,
-  matcher: (item: UnifiedFlowItem, path: UnifiedFlowItem[]) => boolean
+  matcher: (item: UnifiedFlowItem, path: UnifiedFlowItem[]) => boolean,
 ): Array<{ item: UnifiedFlowItem; path: UnifiedFlowItem[] }> => {
   if (!items || items.length === 0) return []
 
@@ -50,21 +50,40 @@ const collectFlowItems = (
 describe('LogParser sub task scoped node aggregation', () => {
   it('keeps main and sub task NextList/WaitFreezes isolated by task_id scope', async () => {
     const lines = [
-      makeEventLine(1, 'Tasker.Task.Starting', { task_id: 1, entry: 'MainTask', hash: 'h-main', uuid: 'u-main' }),
-      makeEventLine(2, 'Node.PipelineNode.Starting', { task_id: 1, node_id: 101, name: 'MainNode' }),
+      makeEventLine(1, 'Tasker.Task.Starting', {
+        task_id: 1,
+        entry: 'MainTask',
+        hash: 'h-main',
+        uuid: 'u-main',
+      }),
+      makeEventLine(2, 'Node.PipelineNode.Starting', {
+        task_id: 1,
+        node_id: 101,
+        name: 'MainNode',
+      }),
       makeEventLine(3, 'Node.NextList.Starting', {
         task_id: 1,
         name: 'MainNode',
         list: [{ name: 'MainNext', anchor: false, jump_back: false }],
       }),
-      makeEventLine(4, 'Tasker.Task.Starting', { task_id: 2, entry: 'SubTask', hash: 'h-sub', uuid: 'u-sub' }),
+      makeEventLine(4, 'Tasker.Task.Starting', {
+        task_id: 2,
+        entry: 'SubTask',
+        hash: 'h-sub',
+        uuid: 'u-sub',
+      }),
       makeEventLine(5, 'Node.PipelineNode.Starting', { task_id: 2, node_id: 201, name: 'SubNode' }),
       makeEventLine(6, 'Node.NextList.Starting', {
         task_id: 2,
         name: 'SubNode',
         list: [{ name: 'SubNext', anchor: true, jump_back: false }],
       }),
-      makeEventLine(7, 'Node.WaitFreezes.Starting', { task_id: 2, wf_id: 1, phase: 'pre', name: 'SubNode' }),
+      makeEventLine(7, 'Node.WaitFreezes.Starting', {
+        task_id: 2,
+        wf_id: 1,
+        phase: 'pre',
+        name: 'SubNode',
+      }),
       makeEventLine(8, 'Node.WaitFreezes.Succeeded', {
         task_id: 2,
         wf_id: 1,
@@ -72,9 +91,23 @@ describe('LogParser sub task scoped node aggregation', () => {
         name: 'SubNode',
         elapsed: 33,
       }),
-      makeEventLine(9, 'Node.PipelineNode.Succeeded', { task_id: 2, node_id: 201, name: 'SubNode' }),
-      makeEventLine(10, 'Tasker.Task.Succeeded', { task_id: 2, entry: 'SubTask', hash: 'h-sub', uuid: 'u-sub' }),
-      makeEventLine(11, 'Node.WaitFreezes.Starting', { task_id: 1, wf_id: 1, phase: 'repeat', name: 'MainNode' }),
+      makeEventLine(9, 'Node.PipelineNode.Succeeded', {
+        task_id: 2,
+        node_id: 201,
+        name: 'SubNode',
+      }),
+      makeEventLine(10, 'Tasker.Task.Succeeded', {
+        task_id: 2,
+        entry: 'SubTask',
+        hash: 'h-sub',
+        uuid: 'u-sub',
+      }),
+      makeEventLine(11, 'Node.WaitFreezes.Starting', {
+        task_id: 1,
+        wf_id: 1,
+        phase: 'repeat',
+        name: 'MainNode',
+      }),
       makeEventLine(12, 'Node.WaitFreezes.Failed', {
         task_id: 1,
         wf_id: 1,
@@ -82,26 +115,33 @@ describe('LogParser sub task scoped node aggregation', () => {
         name: 'MainNode',
         elapsed: 66,
       }),
-      makeEventLine(13, 'Node.PipelineNode.Succeeded', { task_id: 1, node_id: 101, name: 'MainNode' }),
-      makeEventLine(14, 'Tasker.Task.Succeeded', { task_id: 1, entry: 'MainTask', hash: 'h-main', uuid: 'u-main' }),
+      makeEventLine(13, 'Node.PipelineNode.Succeeded', {
+        task_id: 1,
+        node_id: 101,
+        name: 'MainNode',
+      }),
+      makeEventLine(14, 'Tasker.Task.Succeeded', {
+        task_id: 1,
+        entry: 'MainTask',
+        hash: 'h-main',
+        uuid: 'u-main',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const mainTask = tasks.find(item => item.task_id === 1)
+    const mainTask = tasks.find((item) => item.task_id === 1)
 
     expect(mainTask).toBeTruthy()
     expect(mainTask?.nodes.length).toBe(1)
 
     const mainNode = mainTask!.nodes[0]
-    expect(mainNode.next_list).toEqual([
-      { name: 'MainNext', anchor: false, jump_back: false },
-    ])
+    expect(mainNode.next_list).toEqual([{ name: 'MainNext', anchor: false, jump_back: false }])
 
     const allWaitFreezes = collectFlowItems(
       mainNode.node_flow,
-      (item) => item.type === 'wait_freezes'
+      (item) => item.type === 'wait_freezes',
     )
     expect(allWaitFreezes.length).toBeGreaterThanOrEqual(2)
 
@@ -109,7 +149,7 @@ describe('LogParser sub task scoped node aggregation', () => {
       ({ item }) =>
         item.wait_freezes_details?.wf_id === 1 &&
         item.wait_freezes_details?.phase === 'repeat' &&
-        item.status === 'failed'
+        item.status === 'failed',
     )
     expect(mainWaitFreezes).toBeTruthy()
     expect(mainWaitFreezes?.item.task_id).toBe(1)
@@ -119,24 +159,52 @@ describe('LogParser sub task scoped node aggregation', () => {
       ({ item }) =>
         item.wait_freezes_details?.wf_id === 1 &&
         item.wait_freezes_details?.phase === 'post' &&
-        item.status === 'success'
+        item.status === 'success',
     )
     expect(subWaitFreezes).toBeTruthy()
     expect(subWaitFreezes?.item.task_id).toBe(2)
     expect(subWaitFreezes?.item.node_id).toBe(201)
     expect(subWaitFreezes?.item.id).not.toBe(mainWaitFreezes?.item.id)
-    expect(subWaitFreezes?.path.some(pathNode => pathNode.type === 'task' && pathNode.task_id === 2)).toBe(true)
+    expect(
+      subWaitFreezes?.path.some((pathNode) => pathNode.type === 'task' && pathNode.task_id === 2),
+    ).toBe(true)
   })
 
   it('keeps sub task ActionNode timeline after helper extraction', async () => {
     const lines = [
-      makeEventLine(101, 'Tasker.Task.Starting', { task_id: 11, entry: 'MainTask', hash: 'h-main-2', uuid: 'u-main-2' }),
-      makeEventLine(102, 'Node.PipelineNode.Starting', { task_id: 11, node_id: 1101, name: 'MainNode' }),
+      makeEventLine(101, 'Tasker.Task.Starting', {
+        task_id: 11,
+        entry: 'MainTask',
+        hash: 'h-main-2',
+        uuid: 'u-main-2',
+      }),
+      makeEventLine(102, 'Node.PipelineNode.Starting', {
+        task_id: 11,
+        node_id: 1101,
+        name: 'MainNode',
+      }),
 
-      makeEventLine(103, 'Tasker.Task.Starting', { task_id: 12, entry: 'SubTask', hash: 'h-sub-2', uuid: 'u-sub-2' }),
-      makeEventLine(104, 'Node.PipelineNode.Starting', { task_id: 12, node_id: 1201, name: 'SubNode' }),
-      makeEventLine(105, 'Node.Action.Starting', { task_id: 12, action_id: 5001, name: 'SubAction' }),
-      makeEventLine(106, 'Node.Action.Succeeded', { task_id: 12, action_id: 5001, name: 'SubAction' }),
+      makeEventLine(103, 'Tasker.Task.Starting', {
+        task_id: 12,
+        entry: 'SubTask',
+        hash: 'h-sub-2',
+        uuid: 'u-sub-2',
+      }),
+      makeEventLine(104, 'Node.PipelineNode.Starting', {
+        task_id: 12,
+        node_id: 1201,
+        name: 'SubNode',
+      }),
+      makeEventLine(105, 'Node.Action.Starting', {
+        task_id: 12,
+        action_id: 5001,
+        name: 'SubAction',
+      }),
+      makeEventLine(106, 'Node.Action.Succeeded', {
+        task_id: 12,
+        action_id: 5001,
+        name: 'SubAction',
+      }),
       makeEventLine(107, 'Node.ActionNode.Starting', {
         task_id: 12,
         action_id: 5001,
@@ -178,26 +246,46 @@ describe('LogParser sub task scoped node aggregation', () => {
           success: false,
         },
       }),
-      makeEventLine(110, 'Tasker.Task.Failed', { task_id: 12, entry: 'SubTask', hash: 'h-sub-2', uuid: 'u-sub-2' }),
+      makeEventLine(110, 'Tasker.Task.Failed', {
+        task_id: 12,
+        entry: 'SubTask',
+        hash: 'h-sub-2',
+        uuid: 'u-sub-2',
+      }),
 
-      makeEventLine(111, 'Node.PipelineNode.Succeeded', { task_id: 11, node_id: 1101, name: 'MainNode' }),
-      makeEventLine(112, 'Tasker.Task.Succeeded', { task_id: 11, entry: 'MainTask', hash: 'h-main-2', uuid: 'u-main-2' }),
+      makeEventLine(111, 'Node.PipelineNode.Succeeded', {
+        task_id: 11,
+        node_id: 1101,
+        name: 'MainNode',
+      }),
+      makeEventLine(112, 'Tasker.Task.Succeeded', {
+        task_id: 11,
+        entry: 'MainTask',
+        hash: 'h-main-2',
+        uuid: 'u-main-2',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const mainTask = tasks.find(item => item.task_id === 11)
+    const mainTask = tasks.find((item) => item.task_id === 11)
     expect(mainTask).toBeTruthy()
 
     const mainNode = mainTask!.nodes[0]
     const subTaskActionItems = collectFlowItems(
       mainNode.node_flow,
-      (item, path) => item.type === 'action' && item.action_id === 5001 && path.some(pathNode => pathNode.type === 'task' && pathNode.task_id === 12)
+      (item, path) =>
+        item.type === 'action' &&
+        item.action_id === 5001 &&
+        path.some((pathNode) => pathNode.type === 'task' && pathNode.task_id === 12),
     )
     const subTaskActionNodeItems = collectFlowItems(
       mainNode.node_flow,
-      (item, path) => item.type === 'action_node' && item.action_id === 5001 && path.some(pathNode => pathNode.type === 'task' && pathNode.task_id === 12)
+      (item, path) =>
+        item.type === 'action_node' &&
+        item.action_id === 5001 &&
+        path.some((pathNode) => pathNode.type === 'task' && pathNode.task_id === 12),
     )
 
     expect(subTaskActionItems.length).toBeGreaterThan(0)
@@ -208,9 +296,22 @@ describe('LogParser sub task scoped node aggregation', () => {
 
   it('keeps realtime sub task flow under the explicit running action node', () => {
     const lines = [
-      makeEventLine(121, 'Tasker.Task.Starting', { task_id: 1, entry: 'MainTask', hash: 'h-main-rt', uuid: 'u-main-rt' }),
-      makeEventLine(122, 'Node.PipelineNode.Starting', { task_id: 1, node_id: 101, name: 'MainNode' }),
-      makeEventLine(123, 'Node.Action.Starting', { task_id: 1, action_id: 1001, name: 'MainAction' }),
+      makeEventLine(121, 'Tasker.Task.Starting', {
+        task_id: 1,
+        entry: 'MainTask',
+        hash: 'h-main-rt',
+        uuid: 'u-main-rt',
+      }),
+      makeEventLine(122, 'Node.PipelineNode.Starting', {
+        task_id: 1,
+        node_id: 101,
+        name: 'MainNode',
+      }),
+      makeEventLine(123, 'Node.Action.Starting', {
+        task_id: 1,
+        action_id: 1001,
+        name: 'MainAction',
+      }),
       makeEventLine(124, 'Node.ActionNode.Starting', {
         task_id: 1,
         node_id: 101,
@@ -225,10 +326,28 @@ describe('LogParser sub task scoped node aggregation', () => {
           success: true,
         },
       }),
-      makeEventLine(125, 'Tasker.Task.Starting', { task_id: 2, entry: 'SubTask', hash: 'h-sub-rt', uuid: 'u-sub-rt' }),
-      makeEventLine(126, 'Node.PipelineNode.Starting', { task_id: 2, node_id: 201, name: 'SubNode' }),
-      makeEventLine(127, 'Node.PipelineNode.Succeeded', { task_id: 2, node_id: 201, name: 'SubNode' }),
-      makeEventLine(128, 'Tasker.Task.Succeeded', { task_id: 2, entry: 'SubTask', hash: 'h-sub-rt', uuid: 'u-sub-rt' }),
+      makeEventLine(125, 'Tasker.Task.Starting', {
+        task_id: 2,
+        entry: 'SubTask',
+        hash: 'h-sub-rt',
+        uuid: 'u-sub-rt',
+      }),
+      makeEventLine(126, 'Node.PipelineNode.Starting', {
+        task_id: 2,
+        node_id: 201,
+        name: 'SubNode',
+      }),
+      makeEventLine(127, 'Node.PipelineNode.Succeeded', {
+        task_id: 2,
+        node_id: 201,
+        name: 'SubNode',
+      }),
+      makeEventLine(128, 'Tasker.Task.Succeeded', {
+        task_id: 2,
+        entry: 'SubTask',
+        hash: 'h-sub-rt',
+        uuid: 'u-sub-rt',
+      }),
     ]
 
     const parser = new LogParser()
@@ -237,7 +356,7 @@ describe('LogParser sub task scoped node aggregation', () => {
     }
 
     const tasks = parser.getTasksSnapshot()
-    const mainTask = tasks.find(item => item.task_id === 1)
+    const mainTask = tasks.find((item) => item.task_id === 1)
 
     expect(mainTask).toBeTruthy()
     expect(mainTask?.nodes.length).toBe(1)
@@ -245,7 +364,7 @@ describe('LogParser sub task scoped node aggregation', () => {
     const mainNode = mainTask!.nodes[0]
     const runningMainActionNode = collectFlowItems(
       mainNode.node_flow,
-      (item) => item.type === 'action_node' && item.action_id === 1001 && item.status === 'running'
+      (item) => item.type === 'action_node' && item.action_id === 1001 && item.status === 'running',
     )
     expect(runningMainActionNode.length).toBeGreaterThan(0)
 
@@ -254,7 +373,7 @@ describe('LogParser sub task scoped node aggregation', () => {
       (item, path) =>
         item.type === 'task' &&
         item.task_id === 2 &&
-        path.some(pathNode => pathNode.type === 'action_node' && pathNode.action_id === 1001)
+        path.some((pathNode) => pathNode.type === 'action_node' && pathNode.action_id === 1001),
     )
     expect(nestedSubTask.length).toBeGreaterThan(0)
 
@@ -263,7 +382,7 @@ describe('LogParser sub task scoped node aggregation', () => {
       (item, path) =>
         item.type === 'pipeline_node' &&
         item.task_id === 2 &&
-        path.some(pathNode => pathNode.type === 'task' && pathNode.task_id === 2)
+        path.some((pathNode) => pathNode.type === 'task' && pathNode.task_id === 2),
     )
     expect(nestedSubPipeline.length).toBeGreaterThan(0)
     expect(nestedSubPipeline[0].item.status).toBe('success')
@@ -271,9 +390,22 @@ describe('LogParser sub task scoped node aggregation', () => {
 
   it('nests outer-task wait_freezes into the active foreign pipeline flow', async () => {
     const lines = [
-      makeEventLine(201, 'Tasker.Task.Starting', { task_id: 1, entry: 'MainTask', hash: 'h-main-3', uuid: 'u-main-3' }),
-      makeEventLine(202, 'Node.PipelineNode.Starting', { task_id: 1, node_id: 101, name: 'MainNode' }),
-      makeEventLine(203, 'Node.Action.Starting', { task_id: 1, action_id: 1001, name: 'SOSSelectNode' }),
+      makeEventLine(201, 'Tasker.Task.Starting', {
+        task_id: 1,
+        entry: 'MainTask',
+        hash: 'h-main-3',
+        uuid: 'u-main-3',
+      }),
+      makeEventLine(202, 'Node.PipelineNode.Starting', {
+        task_id: 1,
+        node_id: 101,
+        name: 'MainNode',
+      }),
+      makeEventLine(203, 'Node.Action.Starting', {
+        task_id: 1,
+        action_id: 1001,
+        name: 'SOSSelectNode',
+      }),
 
       makeEventLine(204, 'Node.PipelineNode.Starting', { task_id: 2, node_id: 201, name: 'Click' }),
       makeEventLine(205, 'Node.NextList.Starting', {
@@ -337,14 +469,23 @@ describe('LogParser sub task scoped node aggregation', () => {
         action_id: 1001,
         name: 'SOSSelectNode',
       }),
-      makeEventLine(215, 'Node.PipelineNode.Succeeded', { task_id: 1, node_id: 101, name: 'MainNode' }),
-      makeEventLine(216, 'Tasker.Task.Succeeded', { task_id: 1, entry: 'MainTask', hash: 'h-main-3', uuid: 'u-main-3' }),
+      makeEventLine(215, 'Node.PipelineNode.Succeeded', {
+        task_id: 1,
+        node_id: 101,
+        name: 'MainNode',
+      }),
+      makeEventLine(216, 'Tasker.Task.Succeeded', {
+        task_id: 1,
+        entry: 'MainTask',
+        hash: 'h-main-3',
+        uuid: 'u-main-3',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const mainTask = tasks.find(item => item.task_id === 1)
+    const mainTask = tasks.find((item) => item.task_id === 1)
 
     expect(mainTask).toBeTruthy()
     const mainNode = mainTask!.nodes[0]
@@ -379,21 +520,39 @@ describe('LogParser sub task scoped node aggregation', () => {
 
   it('tolerates malformed NextList payloads', async () => {
     const lines = [
-      makeEventLine(151, 'Tasker.Task.Starting', { task_id: 31, entry: 'MainTask', hash: 'h-main-4', uuid: 'u-main-4' }),
-      makeEventLine(152, 'Node.PipelineNode.Starting', { task_id: 31, node_id: 3101, name: 'MainNode' }),
+      makeEventLine(151, 'Tasker.Task.Starting', {
+        task_id: 31,
+        entry: 'MainTask',
+        hash: 'h-main-4',
+        uuid: 'u-main-4',
+      }),
+      makeEventLine(152, 'Node.PipelineNode.Starting', {
+        task_id: 31,
+        node_id: 3101,
+        name: 'MainNode',
+      }),
       makeEventLine(153, 'Node.NextList.Succeeded', {
         task_id: 31,
         name: 'MainNode',
         list: { invalid: true },
       }),
-      makeEventLine(154, 'Node.PipelineNode.Succeeded', { task_id: 31, node_id: 3101, name: 'MainNode' }),
-      makeEventLine(155, 'Tasker.Task.Succeeded', { task_id: 31, entry: 'MainTask', hash: 'h-main-4', uuid: 'u-main-4' }),
+      makeEventLine(154, 'Node.PipelineNode.Succeeded', {
+        task_id: 31,
+        node_id: 3101,
+        name: 'MainNode',
+      }),
+      makeEventLine(155, 'Tasker.Task.Succeeded', {
+        task_id: 31,
+        entry: 'MainTask',
+        hash: 'h-main-4',
+        uuid: 'u-main-4',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const mainTask = tasks.find(item => item.task_id === 31)
+    const mainTask = tasks.find((item) => item.task_id === 31)
     expect(mainTask).toBeTruthy()
     expect(mainTask?.nodes.length).toBe(1)
     expect(mainTask?.nodes[0].next_list).toEqual([])
@@ -401,8 +560,17 @@ describe('LogParser sub task scoped node aggregation', () => {
 
   it('keeps next_list when Node.NextList.Failed carries list payload', async () => {
     const lines = [
-      makeEventLine(161, 'Tasker.Task.Starting', { task_id: 41, entry: 'MainTask', hash: 'h-main-5', uuid: 'u-main-5' }),
-      makeEventLine(162, 'Node.PipelineNode.Starting', { task_id: 41, node_id: 4101, name: 'MainNode' }),
+      makeEventLine(161, 'Tasker.Task.Starting', {
+        task_id: 41,
+        entry: 'MainTask',
+        hash: 'h-main-5',
+        uuid: 'u-main-5',
+      }),
+      makeEventLine(162, 'Node.PipelineNode.Starting', {
+        task_id: 41,
+        node_id: 4101,
+        name: 'MainNode',
+      }),
       makeEventLine(163, 'Node.NextList.Succeeded', {
         task_id: 41,
         name: 'MainNode',
@@ -413,14 +581,23 @@ describe('LogParser sub task scoped node aggregation', () => {
         name: 'MainNode',
         list: [{ name: 'CandidateA', anchor: true, jump_back: false }],
       }),
-      makeEventLine(165, 'Node.PipelineNode.Succeeded', { task_id: 41, node_id: 4101, name: 'MainNode' }),
-      makeEventLine(166, 'Tasker.Task.Succeeded', { task_id: 41, entry: 'MainTask', hash: 'h-main-5', uuid: 'u-main-5' }),
+      makeEventLine(165, 'Node.PipelineNode.Succeeded', {
+        task_id: 41,
+        node_id: 4101,
+        name: 'MainNode',
+      }),
+      makeEventLine(166, 'Tasker.Task.Succeeded', {
+        task_id: 41,
+        entry: 'MainTask',
+        hash: 'h-main-5',
+        uuid: 'u-main-5',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const mainTask = tasks.find(item => item.task_id === 41)
+    const mainTask = tasks.find((item) => item.task_id === 41)
     expect(mainTask).toBeTruthy()
     expect(mainTask?.nodes.length).toBe(1)
     expect(mainTask?.nodes[0].next_list).toEqual([
@@ -430,8 +607,17 @@ describe('LogParser sub task scoped node aggregation', () => {
 
   it('clears next_list when Node.NextList.Failed has no list payload', async () => {
     const lines = [
-      makeEventLine(167, 'Tasker.Task.Starting', { task_id: 42, entry: 'MainTask', hash: 'h-main-5b', uuid: 'u-main-5b' }),
-      makeEventLine(168, 'Node.PipelineNode.Starting', { task_id: 42, node_id: 4201, name: 'MainNode' }),
+      makeEventLine(167, 'Tasker.Task.Starting', {
+        task_id: 42,
+        entry: 'MainTask',
+        hash: 'h-main-5b',
+        uuid: 'u-main-5b',
+      }),
+      makeEventLine(168, 'Node.PipelineNode.Starting', {
+        task_id: 42,
+        node_id: 4201,
+        name: 'MainNode',
+      }),
       makeEventLine(169, 'Node.NextList.Succeeded', {
         task_id: 42,
         name: 'MainNode',
@@ -441,14 +627,23 @@ describe('LogParser sub task scoped node aggregation', () => {
         task_id: 42,
         name: 'MainNode',
       }),
-      makeEventLine(171, 'Node.PipelineNode.Succeeded', { task_id: 42, node_id: 4201, name: 'MainNode' }),
-      makeEventLine(172, 'Tasker.Task.Succeeded', { task_id: 42, entry: 'MainTask', hash: 'h-main-5b', uuid: 'u-main-5b' }),
+      makeEventLine(171, 'Node.PipelineNode.Succeeded', {
+        task_id: 42,
+        node_id: 4201,
+        name: 'MainNode',
+      }),
+      makeEventLine(172, 'Tasker.Task.Succeeded', {
+        task_id: 42,
+        entry: 'MainTask',
+        hash: 'h-main-5b',
+        uuid: 'u-main-5b',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const mainTask = tasks.find(item => item.task_id === 42)
+    const mainTask = tasks.find((item) => item.task_id === 42)
     expect(mainTask).toBeTruthy()
     expect(mainTask?.nodes.length).toBe(1)
     expect(mainTask?.nodes[0].next_list).toEqual([])
@@ -456,21 +651,39 @@ describe('LogParser sub task scoped node aggregation', () => {
 
   it('ignores Node events with unknown phase', async () => {
     const lines = [
-      makeEventLine(171, 'Tasker.Task.Starting', { task_id: 51, entry: 'MainTask', hash: 'h-main-6', uuid: 'u-main-6' }),
-      makeEventLine(172, 'Node.PipelineNode.Starting', { task_id: 51, node_id: 5101, name: 'MainNode' }),
+      makeEventLine(171, 'Tasker.Task.Starting', {
+        task_id: 51,
+        entry: 'MainTask',
+        hash: 'h-main-6',
+        uuid: 'u-main-6',
+      }),
+      makeEventLine(172, 'Node.PipelineNode.Starting', {
+        task_id: 51,
+        node_id: 5101,
+        name: 'MainNode',
+      }),
       makeEventLine(173, 'Node.NextList.Custom', {
         task_id: 51,
         name: 'MainNode',
         list: [{ name: 'ShouldIgnore', anchor: false, jump_back: false }],
       }),
-      makeEventLine(174, 'Node.PipelineNode.Succeeded', { task_id: 51, node_id: 5101, name: 'MainNode' }),
-      makeEventLine(175, 'Tasker.Task.Succeeded', { task_id: 51, entry: 'MainTask', hash: 'h-main-6', uuid: 'u-main-6' }),
+      makeEventLine(174, 'Node.PipelineNode.Succeeded', {
+        task_id: 51,
+        node_id: 5101,
+        name: 'MainNode',
+      }),
+      makeEventLine(175, 'Tasker.Task.Succeeded', {
+        task_id: 51,
+        entry: 'MainTask',
+        hash: 'h-main-6',
+        uuid: 'u-main-6',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const mainTask = tasks.find(item => item.task_id === 51)
+    const mainTask = tasks.find((item) => item.task_id === 51)
     expect(mainTask).toBeTruthy()
     expect(mainTask?.nodes.length).toBe(1)
     expect(mainTask?.nodes[0].next_list).toEqual([])
@@ -478,98 +691,168 @@ describe('LogParser sub task scoped node aggregation', () => {
 
   it('ignores Tasker.Task events with unknown phase', async () => {
     const lines = [
-      makeEventLine(181, 'Tasker.Task.Starting', { task_id: 61, entry: 'MainTask', hash: 'h-main-7', uuid: 'u-main-7' }),
-      makeEventLine(182, 'Node.PipelineNode.Starting', { task_id: 61, node_id: 6101, name: 'MainNode' }),
-      makeEventLine(183, 'Tasker.Task.Custom', { task_id: 61, entry: 'MainTask', hash: 'h-main-7', uuid: 'u-main-7' }),
-      makeEventLine(184, 'Node.PipelineNode.Succeeded', { task_id: 61, node_id: 6101, name: 'MainNode' }),
-      makeEventLine(185, 'Tasker.Task.Succeeded', { task_id: 61, entry: 'MainTask', hash: 'h-main-7', uuid: 'u-main-7' }),
+      makeEventLine(181, 'Tasker.Task.Starting', {
+        task_id: 61,
+        entry: 'MainTask',
+        hash: 'h-main-7',
+        uuid: 'u-main-7',
+      }),
+      makeEventLine(182, 'Node.PipelineNode.Starting', {
+        task_id: 61,
+        node_id: 6101,
+        name: 'MainNode',
+      }),
+      makeEventLine(183, 'Tasker.Task.Custom', {
+        task_id: 61,
+        entry: 'MainTask',
+        hash: 'h-main-7',
+        uuid: 'u-main-7',
+      }),
+      makeEventLine(184, 'Node.PipelineNode.Succeeded', {
+        task_id: 61,
+        node_id: 6101,
+        name: 'MainNode',
+      }),
+      makeEventLine(185, 'Tasker.Task.Succeeded', {
+        task_id: 61,
+        entry: 'MainTask',
+        hash: 'h-main-7',
+        uuid: 'u-main-7',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const mainTask = tasks.find(item => item.task_id === 61)
+    const mainTask = tasks.find((item) => item.task_id === 61)
     expect(mainTask).toBeTruthy()
-    expect(tasks.filter(item => item.task_id === 61)).toHaveLength(1)
+    expect(tasks.filter((item) => item.task_id === 61)).toHaveLength(1)
     expect(mainTask?.status).toBe('succeeded')
     expect(mainTask?.nodes.length).toBe(1)
   })
 
   it('binds reused task IDs to their own sequential executions', async () => {
     const lines = [
-      makeEventLine(100, 'Tasker.Task.Starting', { task_id: 90, entry: 'First', hash: 'h-first', uuid: 'u-first' }),
-      makeEventLine(200, 'Tasker.Task.Succeeded', { task_id: 90, entry: 'First', hash: 'h-first', uuid: 'u-first' }),
-      makeEventLine(201, 'Tasker.Task.Starting', { task_id: 90, entry: 'Second', hash: 'h-second', uuid: 'u-second' }),
-      makeEventLine(300, 'Tasker.Task.Succeeded', { task_id: 90, entry: 'Second', hash: 'h-second', uuid: 'u-second' }),
+      makeEventLine(100, 'Tasker.Task.Starting', {
+        task_id: 90,
+        entry: 'First',
+        hash: 'h-first',
+        uuid: 'u-first',
+      }),
+      makeEventLine(200, 'Tasker.Task.Succeeded', {
+        task_id: 90,
+        entry: 'First',
+        hash: 'h-first',
+        uuid: 'u-first',
+      }),
+      makeEventLine(201, 'Tasker.Task.Starting', {
+        task_id: 90,
+        entry: 'Second',
+        hash: 'h-second',
+        uuid: 'u-second',
+      }),
+      makeEventLine(300, 'Tasker.Task.Succeeded', {
+        task_id: 90,
+        entry: 'Second',
+        hash: 'h-second',
+        uuid: 'u-second',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
-    const tasks = parser.getTasksSnapshot().filter(item => item.task_id === 90)
+    const tasks = parser.getTasksSnapshot().filter((item) => item.task_id === 90)
 
     expect(tasks).toHaveLength(2)
-    expect(tasks[0]?.events.map(event => event._lineNumber)).toEqual([1, 2])
-    expect(tasks[1]?.events.map(event => event._lineNumber)).toEqual([3, 4])
+    expect(tasks[0]?.events.map((event) => event._lineNumber)).toEqual([1, 2])
+    expect(tasks[1]?.events.map((event) => event._lineNumber)).toEqual([3, 4])
   })
 
   it('binds reused task IDs to the source that produced each trace occurrence', async () => {
     const parser = new LogParser()
-    await parser.parseInputs([
-      {
-        sourceKey: 'source-a.log',
-        content: makeEventLine(100, 'Tasker.Task.Starting', {
-          task_id: 90,
-          entry: 'SourceA',
-          hash: 'h-a',
-          uuid: 'u-a',
-        }),
-      },
-      {
-        sourceKey: 'source-b.log',
-        content: [
-          makeEventLine(100, 'Tasker.Task.Starting', {
+    await parser.parseInputs(
+      [
+        {
+          sourceKey: 'source-a.log',
+          content: makeEventLine(100, 'Tasker.Task.Starting', {
             task_id: 90,
-            entry: 'SourceB',
-            hash: 'h-b',
-            uuid: 'u-b',
+            entry: 'SourceA',
+            hash: 'h-a',
+            uuid: 'u-a',
           }),
-          makeEventLine(200, 'Tasker.Task.Succeeded', {
-            task_id: 90,
-            entry: 'SourceB',
-            hash: 'h-b',
-            uuid: 'u-b',
-          }),
-        ].join('\n'),
-      },
-    ], undefined, { yieldControl: null })
+        },
+        {
+          sourceKey: 'source-b.log',
+          content: [
+            makeEventLine(100, 'Tasker.Task.Starting', {
+              task_id: 90,
+              entry: 'SourceB',
+              hash: 'h-b',
+              uuid: 'u-b',
+            }),
+            makeEventLine(200, 'Tasker.Task.Succeeded', {
+              task_id: 90,
+              entry: 'SourceB',
+              hash: 'h-b',
+              uuid: 'u-b',
+            }),
+          ].join('\n'),
+        },
+      ],
+      undefined,
+      { yieldControl: null },
+    )
 
-    const tasks = parser.getTasksSnapshot().filter(item => item.task_id === 90)
-    const sourceATask = tasks.find(item => item.entry === 'SourceA')
-    const sourceBTask = tasks.find(item => item.entry === 'SourceB')
+    const tasks = parser.getTasksSnapshot().filter((item) => item.task_id === 90)
+    const sourceATask = tasks.find((item) => item.entry === 'SourceA')
+    const sourceBTask = tasks.find((item) => item.entry === 'SourceB')
 
-    expect(sourceATask?.events.map(event => event.details.entry)).toEqual(['SourceA'])
-    expect(sourceBTask?.events.map(event => event.details.entry)).toEqual(['SourceB', 'SourceB'])
+    expect(sourceATask?.events.map((event) => event.details.entry)).toEqual(['SourceA'])
+    expect(sourceBTask?.events.map((event) => event.details.entry)).toEqual(['SourceB', 'SourceB'])
   })
 
   it('deduplicates mirrored cross-source Tasker.Task.Starting for same task_id and uuid', async () => {
     const lines = [
-      makeEventLine(191, 'Tasker.Task.Starting', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }, {
-        processId: 'Px1',
-        threadId: 'Tx1',
+      makeEventLine(
+        191,
+        'Tasker.Task.Starting',
+        { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' },
+        {
+          processId: 'Px1',
+          threadId: 'Tx1',
+        },
+      ),
+      makeEventLine(
+        192,
+        'Tasker.Task.Starting',
+        { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' },
+        {
+          processId: 'Px2',
+          threadId: 'Tx2',
+        },
+      ),
+      makeEventLine(193, 'Node.PipelineNode.Starting', {
+        task_id: 91,
+        node_id: 9101,
+        name: 'MainNode',
       }),
-      makeEventLine(192, 'Tasker.Task.Starting', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }, {
-        processId: 'Px2',
-        threadId: 'Tx2',
+      makeEventLine(194, 'Node.PipelineNode.Succeeded', {
+        task_id: 91,
+        node_id: 9101,
+        name: 'MainNode',
       }),
-      makeEventLine(193, 'Node.PipelineNode.Starting', { task_id: 91, node_id: 9101, name: 'MainNode' }),
-      makeEventLine(194, 'Node.PipelineNode.Succeeded', { task_id: 91, node_id: 9101, name: 'MainNode' }),
-      makeEventLine(195, 'Tasker.Task.Succeeded', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }),
+      makeEventLine(195, 'Tasker.Task.Succeeded', {
+        task_id: 91,
+        entry: 'MainTask',
+        hash: 'h-main-91',
+        uuid: 'u-main-91',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const matchedTasks = tasks.filter(item => item.task_id === 91)
+    const matchedTasks = tasks.filter((item) => item.task_id === 91)
     expect(matchedTasks).toHaveLength(1)
     expect(matchedTasks[0].status).toBe('succeeded')
     expect(matchedTasks[0].nodes.length).toBe(1)
@@ -577,26 +860,49 @@ describe('LogParser sub task scoped node aggregation', () => {
 
   it('deduplicates delayed mirrored cross-source Tasker.Task.Succeeded without creating an empty terminal task', async () => {
     const lines = [
-      makeEventLine(200, 'Tasker.Task.Starting', { task_id: 92, entry: 'MainTask', hash: 'h-main-92', uuid: 'u-main-92' }, {
-        processId: 'Px1',
-        threadId: 'Tx1',
+      makeEventLine(
+        200,
+        'Tasker.Task.Starting',
+        { task_id: 92, entry: 'MainTask', hash: 'h-main-92', uuid: 'u-main-92' },
+        {
+          processId: 'Px1',
+          threadId: 'Tx1',
+        },
+      ),
+      makeEventLine(201, 'Node.PipelineNode.Starting', {
+        task_id: 92,
+        node_id: 9201,
+        name: 'MainNode',
       }),
-      makeEventLine(201, 'Node.PipelineNode.Starting', { task_id: 92, node_id: 9201, name: 'MainNode' }),
-      makeEventLine(202, 'Node.PipelineNode.Succeeded', { task_id: 92, node_id: 9201, name: 'MainNode' }),
-      makeEventLine(203, 'Tasker.Task.Succeeded', { task_id: 92, entry: 'MainTask', hash: 'h-main-92', uuid: 'u-main-92' }, {
-        processId: 'Px1',
-        threadId: 'Tx1',
+      makeEventLine(202, 'Node.PipelineNode.Succeeded', {
+        task_id: 92,
+        node_id: 9201,
+        name: 'MainNode',
       }),
-      makeEventLine(230, 'Tasker.Task.Succeeded', { task_id: 92, entry: 'MainTask', hash: 'h-main-92', uuid: 'u-main-92' }, {
-        processId: 'Px2',
-        threadId: 'Tx2',
-      }),
+      makeEventLine(
+        203,
+        'Tasker.Task.Succeeded',
+        { task_id: 92, entry: 'MainTask', hash: 'h-main-92', uuid: 'u-main-92' },
+        {
+          processId: 'Px1',
+          threadId: 'Tx1',
+        },
+      ),
+      makeEventLine(
+        230,
+        'Tasker.Task.Succeeded',
+        { task_id: 92, entry: 'MainTask', hash: 'h-main-92', uuid: 'u-main-92' },
+        {
+          processId: 'Px2',
+          threadId: 'Tx2',
+        },
+      ),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const matchedTasks = tasks.filter(item => item.task_id === 92)
+    const matchedTasks = tasks.filter((item) => item.task_id === 92)
 
     expect(matchedTasks).toHaveLength(1)
     expect(matchedTasks[0]?.status).toBe('succeeded')
@@ -607,42 +913,93 @@ describe('LogParser sub task scoped node aggregation', () => {
 
   it('keeps same-source duplicate Tasker.Task.Starting as separate task scopes', async () => {
     const lines = [
-      makeEventLine(191, 'Tasker.Task.Starting', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }),
-      makeEventLine(192, 'Tasker.Task.Starting', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }),
-      makeEventLine(193, 'Node.PipelineNode.Starting', { task_id: 91, node_id: 9101, name: 'MainNode' }),
-      makeEventLine(194, 'Node.PipelineNode.Succeeded', { task_id: 91, node_id: 9101, name: 'MainNode' }),
-      makeEventLine(195, 'Tasker.Task.Succeeded', { task_id: 91, entry: 'MainTask', hash: 'h-main-91', uuid: 'u-main-91' }),
+      makeEventLine(191, 'Tasker.Task.Starting', {
+        task_id: 91,
+        entry: 'MainTask',
+        hash: 'h-main-91',
+        uuid: 'u-main-91',
+      }),
+      makeEventLine(192, 'Tasker.Task.Starting', {
+        task_id: 91,
+        entry: 'MainTask',
+        hash: 'h-main-91',
+        uuid: 'u-main-91',
+      }),
+      makeEventLine(193, 'Node.PipelineNode.Starting', {
+        task_id: 91,
+        node_id: 9101,
+        name: 'MainNode',
+      }),
+      makeEventLine(194, 'Node.PipelineNode.Succeeded', {
+        task_id: 91,
+        node_id: 9101,
+        name: 'MainNode',
+      }),
+      makeEventLine(195, 'Tasker.Task.Succeeded', {
+        task_id: 91,
+        entry: 'MainTask',
+        hash: 'h-main-91',
+        uuid: 'u-main-91',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const matchedTasks = tasks.filter(item => item.task_id === 91)
+    const matchedTasks = tasks.filter((item) => item.task_id === 91)
     expect(matchedTasks).toHaveLength(2)
-    expect(matchedTasks.map(item => item.status)).toEqual(['running', 'succeeded'])
+    expect(matchedTasks.map((item) => item.status)).toEqual(['running', 'succeeded'])
     expect(matchedTasks[0]?.nodes).toEqual([])
-    expect(matchedTasks[0]?.events.map(event => event._lineNumber)).toEqual([1])
+    expect(matchedTasks[0]?.events.map((event) => event._lineNumber)).toEqual([1])
     expect(matchedTasks[1]?.nodes).toHaveLength(1)
-    expect(matchedTasks[1]?.events.map(event => event._lineNumber)).toEqual([2, 3, 4, 5])
+    expect(matchedTasks[1]?.events.map((event) => event._lineNumber)).toEqual([2, 3, 4, 5])
   })
 
   it('ignores non-numeric task_id in Tasker.Task lifecycle events', async () => {
     const lines = [
-      makeEventLine(196, 'Tasker.Task.Starting', { task_id: '92', entry: 'InvalidTask', hash: 'h-invalid', uuid: 'u-invalid' }),
-      makeEventLine(197, 'Tasker.Task.Succeeded', { task_id: '92', entry: 'InvalidTask', hash: 'h-invalid', uuid: 'u-invalid' }),
-      makeEventLine(198, 'Tasker.Task.Starting', { task_id: 93, entry: 'MainTask', hash: 'h-main-93', uuid: 'u-main-93' }),
-      makeEventLine(199, 'Node.PipelineNode.Starting', { task_id: 93, node_id: 9301, name: 'MainNode' }),
-      makeEventLine(200, 'Node.PipelineNode.Succeeded', { task_id: 93, node_id: 9301, name: 'MainNode' }),
-      makeEventLine(201, 'Tasker.Task.Succeeded', { task_id: 93, entry: 'MainTask', hash: 'h-main-93', uuid: 'u-main-93' }),
+      makeEventLine(196, 'Tasker.Task.Starting', {
+        task_id: '92',
+        entry: 'InvalidTask',
+        hash: 'h-invalid',
+        uuid: 'u-invalid',
+      }),
+      makeEventLine(197, 'Tasker.Task.Succeeded', {
+        task_id: '92',
+        entry: 'InvalidTask',
+        hash: 'h-invalid',
+        uuid: 'u-invalid',
+      }),
+      makeEventLine(198, 'Tasker.Task.Starting', {
+        task_id: 93,
+        entry: 'MainTask',
+        hash: 'h-main-93',
+        uuid: 'u-main-93',
+      }),
+      makeEventLine(199, 'Node.PipelineNode.Starting', {
+        task_id: 93,
+        node_id: 9301,
+        name: 'MainNode',
+      }),
+      makeEventLine(200, 'Node.PipelineNode.Succeeded', {
+        task_id: 93,
+        node_id: 9301,
+        name: 'MainNode',
+      }),
+      makeEventLine(201, 'Tasker.Task.Succeeded', {
+        task_id: 93,
+        entry: 'MainTask',
+        hash: 'h-main-93',
+        uuid: 'u-main-93',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
 
-    expect(tasks.find(item => item.uuid === 'u-invalid')).toBeUndefined()
+    expect(tasks.find((item) => item.uuid === 'u-invalid')).toBeUndefined()
 
-    const validTask = tasks.find(item => item.task_id === 93)
+    const validTask = tasks.find((item) => item.task_id === 93)
     expect(validTask).toBeTruthy()
     expect(validTask?.status).toBe('succeeded')
     expect(validTask?.nodes.length).toBe(1)
@@ -650,46 +1007,99 @@ describe('LogParser sub task scoped node aggregation', () => {
 
   it('builds multi-level nested sub tasks by parent task relation', async () => {
     const lines = [
-      makeEventLine(211, 'Tasker.Task.Starting', { task_id: 21, entry: 'MainTask', hash: 'h-main-3', uuid: 'u-main-3' }),
-      makeEventLine(212, 'Node.PipelineNode.Starting', { task_id: 21, node_id: 2101, name: 'MainNode' }),
+      makeEventLine(211, 'Tasker.Task.Starting', {
+        task_id: 21,
+        entry: 'MainTask',
+        hash: 'h-main-3',
+        uuid: 'u-main-3',
+      }),
+      makeEventLine(212, 'Node.PipelineNode.Starting', {
+        task_id: 21,
+        node_id: 2101,
+        name: 'MainNode',
+      }),
 
-      makeEventLine(213, 'Tasker.Task.Starting', { task_id: 22, entry: 'SubTaskL1', hash: 'h-sub-l1', uuid: 'u-sub-l1' }),
-      makeEventLine(214, 'Node.PipelineNode.Starting', { task_id: 22, node_id: 2201, name: 'SubNodeL1' }),
+      makeEventLine(213, 'Tasker.Task.Starting', {
+        task_id: 22,
+        entry: 'SubTaskL1',
+        hash: 'h-sub-l1',
+        uuid: 'u-sub-l1',
+      }),
+      makeEventLine(214, 'Node.PipelineNode.Starting', {
+        task_id: 22,
+        node_id: 2201,
+        name: 'SubNodeL1',
+      }),
 
-      makeEventLine(215, 'Tasker.Task.Starting', { task_id: 23, entry: 'SubTaskL2', hash: 'h-sub-l2', uuid: 'u-sub-l2' }),
-      makeEventLine(216, 'Node.PipelineNode.Starting', { task_id: 23, node_id: 2301, name: 'SubNodeL2' }),
-      makeEventLine(217, 'Node.PipelineNode.Succeeded', { task_id: 23, node_id: 2301, name: 'SubNodeL2' }),
-      makeEventLine(218, 'Tasker.Task.Succeeded', { task_id: 23, entry: 'SubTaskL2', hash: 'h-sub-l2', uuid: 'u-sub-l2' }),
+      makeEventLine(215, 'Tasker.Task.Starting', {
+        task_id: 23,
+        entry: 'SubTaskL2',
+        hash: 'h-sub-l2',
+        uuid: 'u-sub-l2',
+      }),
+      makeEventLine(216, 'Node.PipelineNode.Starting', {
+        task_id: 23,
+        node_id: 2301,
+        name: 'SubNodeL2',
+      }),
+      makeEventLine(217, 'Node.PipelineNode.Succeeded', {
+        task_id: 23,
+        node_id: 2301,
+        name: 'SubNodeL2',
+      }),
+      makeEventLine(218, 'Tasker.Task.Succeeded', {
+        task_id: 23,
+        entry: 'SubTaskL2',
+        hash: 'h-sub-l2',
+        uuid: 'u-sub-l2',
+      }),
 
-      makeEventLine(219, 'Node.PipelineNode.Succeeded', { task_id: 22, node_id: 2201, name: 'SubNodeL1' }),
-      makeEventLine(220, 'Tasker.Task.Succeeded', { task_id: 22, entry: 'SubTaskL1', hash: 'h-sub-l1', uuid: 'u-sub-l1' }),
+      makeEventLine(219, 'Node.PipelineNode.Succeeded', {
+        task_id: 22,
+        node_id: 2201,
+        name: 'SubNodeL1',
+      }),
+      makeEventLine(220, 'Tasker.Task.Succeeded', {
+        task_id: 22,
+        entry: 'SubTaskL1',
+        hash: 'h-sub-l1',
+        uuid: 'u-sub-l1',
+      }),
 
-      makeEventLine(221, 'Node.PipelineNode.Succeeded', { task_id: 21, node_id: 2101, name: 'MainNode' }),
-      makeEventLine(222, 'Tasker.Task.Succeeded', { task_id: 21, entry: 'MainTask', hash: 'h-main-3', uuid: 'u-main-3' }),
+      makeEventLine(221, 'Node.PipelineNode.Succeeded', {
+        task_id: 21,
+        node_id: 2101,
+        name: 'MainNode',
+      }),
+      makeEventLine(222, 'Tasker.Task.Succeeded', {
+        task_id: 21,
+        entry: 'MainTask',
+        hash: 'h-main-3',
+        uuid: 'u-main-3',
+      }),
     ]
 
     const parser = new LogParser()
     await parser.parseFile(lines.join('\n'))
     const tasks = parser.getTasksSnapshot()
-    const mainTask = tasks.find(item => item.task_id === 21)
+    const mainTask = tasks.find((item) => item.task_id === 21)
 
     expect(mainTask).toBeTruthy()
     expect(mainTask?.nodes.length).toBe(1)
 
     const mainNode = mainTask!.nodes[0]
-    const taskFlowItems = collectFlowItems(
-      mainNode.node_flow,
-      (item) => item.type === 'task'
-    )
+    const taskFlowItems = collectFlowItems(mainNode.node_flow, (item) => item.type === 'task')
 
     const task22 = taskFlowItems.find(({ item }) => item.task_id === 22)
     const task23 = taskFlowItems.find(({ item }) => item.task_id === 23)
     expect(task22).toBeTruthy()
     expect(task23).toBeTruthy()
-    expect(task23?.path.some(pathNode => pathNode.type === 'task' && pathNode.task_id === 22)).toBe(true)
+    expect(
+      task23?.path.some((pathNode) => pathNode.type === 'task' && pathNode.task_id === 22),
+    ).toBe(true)
 
     const rootTaskIds = taskFlowItems
-      .filter(({ path }) => path.filter(pathNode => pathNode.type === 'task').length === 1)
+      .filter(({ path }) => path.filter((pathNode) => pathNode.type === 'task').length === 1)
       .map(({ item }) => item.task_id)
     expect(rootTaskIds).toContain(22)
     expect(rootTaskIds).not.toContain(23)

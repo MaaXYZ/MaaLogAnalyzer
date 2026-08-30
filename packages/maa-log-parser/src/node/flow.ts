@@ -73,10 +73,10 @@ const sortFlowTree = (item: UnifiedFlowItem): UnifiedFlowItem => {
 const mapRecognitionAttempt = (
   attempt: RecognitionAttempt,
   id: string,
-  nestedNode = false
+  nestedNode = false,
 ): UnifiedFlowItem => {
   const children = (attempt.nested_nodes ?? []).map((nested, nestedIndex) =>
-    mapRecognitionAttempt(nested, `${id}.nested.${nestedIndex}`, true)
+    mapRecognitionAttempt(nested, `${id}.nested.${nestedIndex}`, true),
   )
   return {
     id,
@@ -96,7 +96,7 @@ const mapRecognitionAttempt = (
 
 const mapFlowRecognitionToAttempt = (item: UnifiedFlowItem): RecognitionAttempt => {
   const nestedNodes = (item.children ?? [])
-    .filter(child => child.type === 'recognition_node')
+    .filter((child) => child.type === 'recognition_node')
     .map(mapFlowRecognitionToAttempt)
   const recoId = item.reco_id ?? item.reco_details?.reco_id
   return {
@@ -115,7 +115,7 @@ const mapFlowRecognitionToAttempt = (item: UnifiedFlowItem): RecognitionAttempt 
 
 export const buildRecognitionFlowItems = (attempts: RecognitionAttempt[]): UnifiedFlowItem[] => {
   const roots = attempts.map((attempt, attemptIndex) =>
-    mapRecognitionAttempt(attempt, `node.recognition.${attemptIndex}`)
+    mapRecognitionAttempt(attempt, `node.recognition.${attemptIndex}`),
   )
   return sortFlowItems(roots).map(sortFlowTree)
 }
@@ -128,7 +128,7 @@ const mapActionItem = (
   endTimestamp: string | undefined,
   actionDetails: UnifiedFlowItem['action_details'],
   actionId?: number,
-  type: 'action' | 'action_node' = 'action'
+  type: 'action' | 'action_node' = 'action',
 ): UnifiedFlowItem => {
   const fallbackTs = startTimestamp || endTimestamp || ''
   return {
@@ -143,12 +143,9 @@ const mapActionItem = (
   }
 }
 
-const mapEmbeddedFlowItem = (
-  item: UnifiedFlowItem,
-  itemPath: string
-): UnifiedFlowItem => {
+const mapEmbeddedFlowItem = (item: UnifiedFlowItem, itemPath: string): UnifiedFlowItem => {
   const mappedChildren = (item.children ?? []).map((child, childIndex) =>
-    mapEmbeddedFlowItem(child, `${itemPath}.child.${childIndex}`)
+    mapEmbeddedFlowItem(child, `${itemPath}.child.${childIndex}`),
   )
   return {
     ...item,
@@ -159,7 +156,7 @@ const mapEmbeddedFlowItem = (
 
 const attachChildTasksToActionRoot = (
   items: UnifiedFlowItem[],
-  childTaskItems: UnifiedFlowItem[]
+  childTaskItems: UnifiedFlowItem[],
 ): UnifiedFlowItem[] => {
   if (childTaskItems.length === 0) return items
 
@@ -171,10 +168,7 @@ const attachChildTasksToActionRoot = (
         attached = true
         return {
           ...node,
-          children: sortFlowItems([
-            ...(mappedChildren ?? []),
-            ...childTaskItems,
-          ]),
+          children: sortFlowItems([...(mappedChildren ?? []), ...childTaskItems]),
         }
       }
       if (mappedChildren) {
@@ -196,25 +190,22 @@ const mapNestedPipelineNode = (
   nestedNode: NestedActionNode,
   nodeIndex: number,
   groupPath: string,
-  ownerTaskId: number
+  ownerTaskId: number,
 ): UnifiedFlowItem => {
   const baseId = `${groupPath}.pipeline.${nodeIndex}.${nestedNode.node_id}`
   const childTaskItems = (nestedNode.child_tasks ?? []).map((group, childIndex) =>
-    mapNestedTaskGroup(group, `${baseId}.task.${childIndex}.${group.task_id}`)
+    mapNestedTaskGroup(group, `${baseId}.task.${childIndex}.${group.task_id}`),
   )
   let children: UnifiedFlowItem[]
 
   if (nestedNode.node_flow && nestedNode.node_flow.length > 0) {
     const scopedNodeFlowChildren = nestedNode.node_flow.map((item, flowIndex) =>
-      mapEmbeddedFlowItem(item, `${baseId}.flow.${flowIndex}`)
+      mapEmbeddedFlowItem(item, `${baseId}.flow.${flowIndex}`),
     )
-    children = attachChildTasksToActionRoot(
-      sortFlowItems(scopedNodeFlowChildren),
-      childTaskItems
-    )
+    children = attachChildTasksToActionRoot(sortFlowItems(scopedNodeFlowChildren), childTaskItems)
   } else {
     const recognitionChildren = (nestedNode.recognitions ?? []).map((attempt, attemptIndex) =>
-      mapRecognitionAttempt(attempt, `${baseId}.recognition.${attemptIndex}`)
+      mapRecognitionAttempt(attempt, `${baseId}.recognition.${attemptIndex}`),
     )
     const actionChild = nestedNode.action_details
       ? mapActionItem(
@@ -229,13 +220,14 @@ const mapNestedPipelineNode = (
           nestedNode.action_details.end_ts || nestedNode.end_ts,
           nestedNode.action_details,
           nestedNode.action_details.action_id,
-          'action'
+          'action',
         )
       : null
 
-    const actionChildWithNested = actionChild && childTaskItems.length > 0
-      ? { ...actionChild, children: sortFlowItems(childTaskItems) }
-      : actionChild
+    const actionChildWithNested =
+      actionChild && childTaskItems.length > 0
+        ? { ...actionChild, children: sortFlowItems(childTaskItems) }
+        : actionChild
     const pipelineChildren: UnifiedFlowItem[] = [
       ...recognitionChildren,
       ...(actionChildWithNested ? [actionChildWithNested] : childTaskItems),
@@ -258,12 +250,9 @@ const mapNestedPipelineNode = (
   }
 }
 
-const mapNestedTaskGroup = (
-  group: NestedActionGroup,
-  groupPath: string
-): UnifiedFlowItem => {
+const mapNestedTaskGroup = (group: NestedActionGroup, groupPath: string): UnifiedFlowItem => {
   const pipelineChildren = (group.nested_actions ?? []).map((nested, nodeIndex) =>
-    mapNestedPipelineNode(nested, nodeIndex, groupPath, group.task_id)
+    mapNestedPipelineNode(nested, nodeIndex, groupPath, group.task_id),
   )
   return {
     id: groupPath,
@@ -280,21 +269,21 @@ const mapNestedTaskGroup = (
 
 const buildTaskFlowItemsFromGroups = (
   groups: NestedActionGroup[],
-  idPrefix = 'node.task'
+  idPrefix = 'node.task',
 ): UnifiedFlowItem[] => {
   return groups.map((group, groupIndex) =>
-    mapNestedTaskGroup(group, `${idPrefix}.${groupIndex}.${group.task_id}`)
+    mapNestedTaskGroup(group, `${idPrefix}.${groupIndex}.${group.task_id}`),
   )
 }
 
 export const buildActionFlowItems = (
   actionLevelRecognitionNodes: RecognitionAttempt[],
-  nestedActionGroups: NestedActionGroup[]
+  nestedActionGroups: NestedActionGroup[],
 ): UnifiedFlowItem[] => {
   const roots: UnifiedFlowItem[] = []
 
   const actionLevelRecognitionItems = actionLevelRecognitionNodes.map((attempt, attemptIndex) =>
-    mapRecognitionAttempt(attempt, `node.action.recognition.${attemptIndex}`, true)
+    mapRecognitionAttempt(attempt, `node.action.recognition.${attemptIndex}`, true),
   )
 
   const taskItems = buildTaskFlowItemsFromGroups(nestedActionGroups)
@@ -311,7 +300,7 @@ export const buildNodeFlowItems = (node: NodeInfo): UnifiedFlowItem[] => {
 
 export const buildNodeRecognitionFlowItems = (node: NodeInfo): UnifiedFlowItem[] => {
   return buildNodeFlowItems(node).filter(
-    item => item.type === 'recognition' || item.type === 'recognition_node'
+    (item) => item.type === 'recognition' || item.type === 'recognition_node',
   )
 }
 
@@ -320,26 +309,27 @@ export const buildNodeRecognitionAttempts = (node: NodeInfo): RecognitionAttempt
   if (flowAttempts.length > 0) return flowAttempts
   if (!node.reco_details) return []
 
-  const fallbackTimestamp =
-    node.action_details?.ts ||
-    node.end_ts ||
-    node.ts
+  const fallbackTimestamp = node.action_details?.ts || node.end_ts || node.ts
 
-  return [{
-    reco_id: node.reco_details.reco_id,
-    name: node.reco_details.name || node.name,
-    ts: fallbackTimestamp,
-    end_ts: fallbackTimestamp,
-    status: node.status === 'running' ? 'running' : 'success',
-    reco_details: node.reco_details,
-    error_image: node.error_image,
-  }]
+  return [
+    {
+      reco_id: node.reco_details.reco_id,
+      name: node.reco_details.name || node.name,
+      ts: fallbackTimestamp,
+      end_ts: fallbackTimestamp,
+      status: node.status === 'running' ? 'running' : 'success',
+      reco_details: node.reco_details,
+      error_image: node.error_image,
+    },
+  ]
 }
 
 export const buildNodeActionRootItem = (node: NodeInfo): UnifiedFlowItem | null => {
-  return buildNodeFlowItems(node).find(
-    item => item.type === 'action' || item.type === 'action_node'
-  ) || null
+  return (
+    buildNodeFlowItems(node).find(
+      (item) => item.type === 'action' || item.type === 'action_node',
+    ) || null
+  )
 }
 
 export const buildNodeWaitFreezesFlowItems = (node: NodeInfo): UnifiedFlowItem[] => {
@@ -364,24 +354,19 @@ export const buildNodeActionFlowItems = (node: NodeInfo): UnifiedFlowItem[] => {
 }
 
 export const buildNodeActionLevelRecognitionItems = (node: NodeInfo): UnifiedFlowItem[] => {
-  return buildNodeActionFlowItems(node).filter(item => item.type === 'recognition_node')
+  return buildNodeActionFlowItems(node).filter((item) => item.type === 'recognition_node')
 }
 
 export const buildNodeTaskFlowItems = (node: NodeInfo): UnifiedFlowItem[] => {
-  return buildNodeActionFlowItems(node).filter(item => item.type === 'task')
+  return buildNodeActionFlowItems(node).filter((item) => item.type === 'task')
 }
 
 const buildFallbackActionRootItem = (node: NodeInfo): UnifiedFlowItem | null => {
   if (!node.action_details) return null
   const actionStatus: UnifiedFlowItem['status'] =
-    node.status === 'running'
-      ? 'running'
-      : (node.action_details.success ? 'success' : 'failed')
+    node.status === 'running' ? 'running' : node.action_details.success ? 'success' : 'failed'
   const actionTimestamp =
-    node.action_details.ts ||
-    node.action_details.end_ts ||
-    node.end_ts ||
-    node.ts
+    node.action_details.ts || node.action_details.end_ts || node.end_ts || node.ts
 
   return {
     id: `node.action.${node.action_details.action_id ?? node.node_id}`,
@@ -398,13 +383,11 @@ const buildFallbackActionRootItem = (node: NodeInfo): UnifiedFlowItem | null => 
 
 export const buildNodeActionTimelineItems = (node: NodeInfo): UnifiedFlowItem[] => {
   const nodeFlowItems = buildNodeFlowItems(node)
-  const actionRootFromFlow = nodeFlowItems.find(
-    item => item.type === 'action' || item.type === 'action_node'
-  ) || null
+  const actionRootFromFlow =
+    nodeFlowItems.find((item) => item.type === 'action' || item.type === 'action_node') || null
   const actionRootItem = actionRootFromFlow ?? buildFallbackActionRootItem(node)
-  const auxiliaryItems = nodeFlowItems.filter((item) =>
-    item.type === 'wait_freezes'
-    || item.type === 'resource_loading'
+  const auxiliaryItems = nodeFlowItems.filter(
+    (item) => item.type === 'wait_freezes' || item.type === 'resource_loading',
   )
 
   const timelineItems: UnifiedFlowItem[] = []
@@ -419,13 +402,11 @@ export const buildNodeActionTimelineItems = (node: NodeInfo): UnifiedFlowItem[] 
 export const buildNodeActionRepeatCount = (node: NodeInfo): number | null => {
   const waitFreezesItems = buildNodeWaitFreezesFlowItems(node)
   const repeatWaitFreezesCount = waitFreezesItems.filter(
-    item => item.wait_freezes_details?.phase === 'repeat'
+    (item) => item.wait_freezes_details?.phase === 'repeat',
   ).length
 
   const hasActionOrWaitFreezes =
-    buildNodeActionRootItem(node) != null ||
-    !!node.action_details ||
-    waitFreezesItems.length > 0
+    buildNodeActionRootItem(node) != null || !!node.action_details || waitFreezesItems.length > 0
 
   if (!hasActionOrWaitFreezes) return null
   return repeatWaitFreezesCount + 1

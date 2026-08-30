@@ -16,7 +16,8 @@ const makeTask = (startEventIndex: number): TaskInfo => ({
 
 describe('buildFollowTasksFingerprint', () => {
   it('distinguishes task executions that reuse the same numeric id', () => {
-    expect(buildFollowTasksFingerprint([makeTask(10)]))
-      .not.toBe(buildFollowTasksFingerprint([makeTask(20)]))
+    expect(buildFollowTasksFingerprint([makeTask(10)])).not.toBe(
+      buildFollowTasksFingerprint([makeTask(20)]),
+    )
   })
 })

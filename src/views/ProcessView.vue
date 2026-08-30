@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import {
-  NCard
-} from 'naive-ui'
+import { NCard } from 'naive-ui'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import type { TaskInfo, NodeInfo } from '../types'
 import type { LogParser } from '@windsland52/maa-log-parser'
@@ -37,8 +35,20 @@ const props = defineProps<{
 const emit = defineEmits<{
   'select-task': [task: TaskInfo]
   'locate-failure': [index: number, nodeId: number]
-  'upload-file': [file: File | File[], selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>]
-  'upload-content': [content: string, errorImages?: Map<string, string>, visionImages?: Map<string, string>, waitFreezesImages?: Map<string, string>, textFiles?: LoadedTextFile[], primaryLogFiles?: PrimaryLogFile[]]
+  'upload-file': [
+    file: File | File[],
+    selectPrimaryLogs?: (
+      options: PrimaryLogSelectionOption[],
+    ) => Promise<PrimaryLogSelectionOption[] | null>,
+  ]
+  'upload-content': [
+    content: string,
+    errorImages?: Map<string, string>,
+    visionImages?: Map<string, string>,
+    waitFreezesImages?: Map<string, string>,
+    textFiles?: LoadedTextFile[],
+    primaryLogFiles?: PrimaryLogFile[],
+  ]
   'select-node': [node: NodeInfo]
   'select-action': [node: NodeInfo]
   'select-recognition': [node: NodeInfo, attemptIndex: number]
@@ -52,15 +62,24 @@ const emit = defineEmits<{
 
 const followLastModel = ref(props.followLast ?? true)
 
-watch(() => props.followLast, (value) => {
-  if (typeof value === 'boolean') followLastModel.value = value
-}, { flush: 'sync' })
+watch(
+  () => props.followLast,
+  (value) => {
+    if (typeof value === 'boolean') followLastModel.value = value
+  },
+  { flush: 'sync' },
+)
 
-watch(followLastModel, (value) => {
-  if (value !== props.followLast) emit('update:follow-last', value)
-}, { flush: 'sync' })
+watch(
+  followLastModel,
+  (value) => {
+    if (value !== props.followLast) emit('update:follow-last', value)
+  },
+  { flush: 'sync' },
+)
 
-let resolvePrimaryLogSelection: ((options: PrimaryLogSelectionOption[] | null) => void) | null = null
+let resolvePrimaryLogSelection: ((options: PrimaryLogSelectionOption[] | null) => void) | null =
+  null
 const showPrimaryLogSelection = ref(false)
 const primaryLogSelectionOptions = ref<PrimaryLogSelectionOption[]>([])
 
@@ -143,13 +162,25 @@ const {
   selectPrimaryLogs,
   emitters: {
     onSelectTask: (task) => emit('select-task', task),
-    onUploadFile: (file, requestedSelectPrimaryLogs) => emit(
-      'upload-file',
-      file,
-      requestedSelectPrimaryLogs ?? selectPrimaryLogs,
-    ),
-    onUploadContent: (content, errorImages, visionImages, waitFreezesImages, textFiles, primaryLogFiles) => {
-      emit('upload-content', content, errorImages, visionImages, waitFreezesImages, textFiles, primaryLogFiles)
+    onUploadFile: (file, requestedSelectPrimaryLogs) =>
+      emit('upload-file', file, requestedSelectPrimaryLogs ?? selectPrimaryLogs),
+    onUploadContent: (
+      content,
+      errorImages,
+      visionImages,
+      waitFreezesImages,
+      textFiles,
+      primaryLogFiles,
+    ) => {
+      emit(
+        'upload-content',
+        content,
+        errorImages,
+        visionImages,
+        waitFreezesImages,
+        textFiles,
+        primaryLogFiles,
+      )
     },
     onSelectNode: (node: NodeInfo) => emit('select-node', node),
     onSelectAction: (node: NodeInfo) => emit('select-action', node),
@@ -238,15 +269,15 @@ void fileInputRef
       :on-select-action="handleActionClick"
       :on-select-recognition="handleRecognitionClick"
       :on-select-flow-item="handleFlowItemClick"
-      :on-update-task-list-size="(value) => taskListSize = value"
-      :on-update-node-nav-size="(value) => nodeNavSize = value"
+      :on-update-task-list-size="(value) => (taskListSize = value)"
+      :on-update-node-nav-size="(value) => (nodeNavSize = value)"
       :on-toggle-task-list="toggleTaskList"
       :on-toggle-node-nav="toggleNodeNav"
       :on-expand-detail="() => onExpandDetailView?.()"
       :on-select-task-index="handleTabChange"
       :on-locate-task-failure="(index, nodeId) => emit('locate-failure', index, nodeId)"
       :on-toggle-follow="toggleFollowLast"
-      :on-update-node-nav-search-text="(value) => nodeNavSearchText = value"
+      :on-update-node-nav-search-text="(value) => (nodeNavSearchText = value)"
       :on-update-node-nav-mode="(value: NodeNavMode) => setNodeNavMode(value)"
       :on-toggle-node-nav-failed-only="toggleNodeNavFailedOnly"
       :on-select-node-nav="scrollToNode"

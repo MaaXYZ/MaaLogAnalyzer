@@ -49,7 +49,9 @@ interface UseMainContentBindingsOptions {
   findDeferredTargetWithContent: (locate: string) => Promise<string | null>
   handleFileUpload: (
     file: File | File[],
-    selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+    selectPrimaryLogs?: (
+      options: PrimaryLogSelectionOption[],
+    ) => Promise<PrimaryLogSelectionOption[] | null>,
   ) => void | Promise<void>
   handleContentUpload: (
     content: string,
@@ -104,7 +106,7 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
       const task = options.filteredTasks.value[index]
       if (!task) return
       options.handleSelectTask(task)
-      const node = (task.nodes || []).find(item => item.node_id === nodeId)
+      const node = (task.nodes || []).find((item) => item.node_id === nodeId)
       if (!node) return
       options.handleSelectNode(node)
       options.pendingScrollNodeId.value = nodeId
@@ -117,9 +119,15 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
     'select-flow-item': options.handleSelectFlowItem,
     'file-loading-start': options.handleFileLoadingStart,
     'file-loading-end': options.handleFileLoadingEnd,
-    'open-task-drawer': () => { options.showTaskDrawer.value = true },
-    'scroll-done': () => { options.pendingScrollNodeId.value = null },
-    'update:follow-last': (value) => { options.followLast.value = value },
+    'open-task-drawer': () => {
+      options.showTaskDrawer.value = true
+    },
+    'scroll-done': () => {
+      options.pendingScrollNodeId.value = null
+    },
+    'update:follow-last': (value) => {
+      options.followLast.value = value
+    },
   }
 
   const detailViewProps = computed(() => ({
@@ -135,7 +143,9 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
     bridgeNodeDefinitionError: options.bridgeNodeDefinitionError.value,
     bridgeOpenCrop: options.bridgeOpenCrop,
     // 实时模式下日志持续增长，原文定位意义有限，隐藏“在原文中查看”
-    onSearchInSource: options.realtimeStreaming.value ? undefined : options.handleSearchNodeInSource,
+    onSearchInSource: options.realtimeStreaming.value
+      ? undefined
+      : options.handleSearchNodeInSource,
   }))
 
   const textSearchViewProps = computed(() => ({

@@ -16,17 +16,18 @@ import {
   readNodeTextFileContent,
 } from './nodeInput'
 import type { SourceSegment } from './runtimeInspection'
-import {
-  analyzeLogContent,
-  buildRuntimeInspection,
-} from './index'
+import { analyzeLogContent, buildRuntimeInspection } from './index'
 
 const printUsage = (): void => {
-  console.error('Usage: mla-log-tools <path> [--pretty] [--no-events] [--preflight|--runtime-inspection]')
+  console.error(
+    'Usage: mla-log-tools <path> [--pretty] [--no-events] [--preflight|--runtime-inspection]',
+  )
   console.error('  <path>: log file path, zip path, or log directory path')
 }
 
-const parseArgs = (argv: string[]): {
+const parseArgs = (
+  argv: string[],
+): {
   targetPath: string | null
   pretty: boolean
   noEvents: boolean
@@ -68,14 +69,8 @@ const parseArgs = (argv: string[]): {
   return { targetPath, pretty, noEvents, preflight, runtimeInspection }
 }
 
-const renderOutput = (
-  output: KernelOutput,
-  pretty: boolean,
-  noEvents: boolean,
-): string => {
-  const payload = noEvents
-    ? { ...output, events: [] }
-    : output
+const renderOutput = (output: KernelOutput, pretty: boolean, noEvents: boolean): string => {
+  const payload = noEvents ? { ...output, events: [] } : output
   return JSON.stringify(payload, null, pretty ? 2 : 0)
 }
 
@@ -133,13 +128,14 @@ export const buildPreflightOutput = (
   }
 
   const taskLifecycleCount = output.tasks.filter(isTaskLifecycleProjection).length
-  const reason: PreflightReason = output.events.length > 0
-    ? taskLifecycleCount > 0
-      ? 'notify_events_parsed'
-      : 'no_task_lifecycle'
-    : output.warnings.includes('Empty log content.')
-      ? 'empty_log'
-      : 'no_notify_events'
+  const reason: PreflightReason =
+    output.events.length > 0
+      ? taskLifecycleCount > 0
+        ? 'notify_events_parsed'
+        : 'no_task_lifecycle'
+      : output.warnings.includes('Empty log content.')
+        ? 'empty_log'
+        : 'no_notify_events'
   return {
     schemaVersion: MLA_PREFLIGHT_SCHEMA_VERSION,
     status: reason === 'notify_events_parsed' ? 'supported' : 'unsupported',
@@ -156,13 +152,9 @@ export const buildPreflightOutput = (
 }
 
 export const main = async (): Promise<void> => {
-  const {
-    targetPath,
-    pretty,
-    noEvents,
-    preflight,
-    runtimeInspection,
-  } = parseArgs(process.argv.slice(2))
+  const { targetPath, pretty, noEvents, preflight, runtimeInspection } = parseArgs(
+    process.argv.slice(2),
+  )
   if (preflight && runtimeInspection) {
     console.error('--preflight and --runtime-inspection are mutually exclusive.')
     process.exit(1)
@@ -174,9 +166,10 @@ export const main = async (): Promise<void> => {
 
   const resolvedPath = path.resolve(targetPath)
   const targetStat = await stat(resolvedPath)
-  const framework = preflight || runtimeInspection
-    ? extractFrameworkSessions(await loadFrameworkLogSources(resolvedPath))
-    : EMPTY_FRAMEWORK_EXTRACTION
+  const framework =
+    preflight || runtimeInspection
+      ? extractFrameworkSessions(await loadFrameworkLogSources(resolvedPath))
+      : EMPTY_FRAMEWORK_EXTRACTION
 
   let result: KernelOutput | null = null
   let sourceSegments: readonly SourceSegment[] = []
@@ -206,22 +199,22 @@ export const main = async (): Promise<void> => {
   } else {
     const content = await readNodeTextFileContent(resolvedPath)
     const lineCount = (content.match(/\n/g) ?? []).length + 1
-    sourceSegments = [{
-      source: `file:${resolvedPath.replace(/\\/g, '/')}`,
-      path: path.basename(resolvedPath),
-      startLine: 1,
-      lineCount,
-    }]
+    sourceSegments = [
+      {
+        source: `file:${resolvedPath.replace(/\\/g, '/')}`,
+        path: path.basename(resolvedPath),
+        startLine: 1,
+        lineCount,
+      },
+    ]
     result = await analyzeLogContent({ content })
   }
 
   if (!result) {
     if (preflight) {
-      process.stdout.write(JSON.stringify(
-        buildPreflightOutput(null, framework),
-        null,
-        pretty ? 2 : 0,
-      ))
+      process.stdout.write(
+        JSON.stringify(buildPreflightOutput(null, framework), null, pretty ? 2 : 0),
+      )
       process.stdout.write('\n')
     }
     console.error('No analyzable log content found in the provided path.')
@@ -239,11 +232,13 @@ export const main = async (): Promise<void> => {
   }
 
   if (runtimeInspection) {
-    process.stdout.write(JSON.stringify(
-      buildRuntimeInspection(result, framework, sourceSegments),
-      null,
-      pretty ? 2 : 0,
-    ))
+    process.stdout.write(
+      JSON.stringify(
+        buildRuntimeInspection(result, framework, sourceSegments),
+        null,
+        pretty ? 2 : 0,
+      ),
+    )
     process.stdout.write('\n')
     return
   }

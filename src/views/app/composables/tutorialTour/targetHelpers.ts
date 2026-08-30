@@ -15,10 +15,7 @@ export const waitForElement = async (
   return null
 }
 
-export const updateTourRectFromElement = (
-  el: HTMLElement,
-  step: TourStepLike | null,
-): TourRect => {
+export const updateTourRectFromElement = (el: HTMLElement, step: TourStepLike | null): TourRect => {
   const rect = el.getBoundingClientRect()
   const padding = step?.padding ?? 8
   const top = Math.max(4, rect.top - padding)
@@ -28,9 +25,6 @@ export const updateTourRectFromElement = (
   return { top, left, width, height }
 }
 
-export const getTourTargetSelector = (
-  step: TourStepLike,
-  isMobile: boolean,
-) => {
+export const getTourTargetSelector = (step: TourStepLike, isMobile: boolean) => {
   return isMobile && step.mobileTarget ? step.mobileTarget : step.target
 }

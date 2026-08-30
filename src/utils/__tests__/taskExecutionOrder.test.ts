@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { NodeInfo } from '../../types'
 import { sortNodesByGlobalExecutionOrder } from '@windsland52/maa-log-tools/task-execution-order'
 
-const makeNode = (params: {
-  nodeId: number
-  name: string
-  ts: string
-}): NodeInfo => ({
+const makeNode = (params: { nodeId: number; name: string; ts: string }): NodeInfo => ({
   node_id: params.nodeId,
   name: params.name,
   ts: params.ts,
@@ -24,8 +20,8 @@ describe('sortNodesByGlobalExecutionOrder', () => {
     ]
 
     const ordered = sortNodesByGlobalExecutionOrder(nodes)
-    expect(ordered.map(node => node.name)).toEqual(['A', 'B', 'C'])
-    expect(ordered.map(node => node.node_id)).toEqual([1001, 1002, 1003])
+    expect(ordered.map((node) => node.name)).toEqual(['A', 'B', 'C'])
+    expect(ordered.map((node) => node.node_id)).toEqual([1001, 1002, 1003])
   })
 
   it('keeps original relative order when timestamp is invalid', () => {
@@ -36,6 +32,6 @@ describe('sortNodesByGlobalExecutionOrder', () => {
     ]
 
     const ordered = sortNodesByGlobalExecutionOrder(nodes)
-    expect(ordered.map(node => node.name)).toEqual(['Y', 'X', 'Z'])
+    expect(ordered.map((node) => node.name)).toEqual(['Y', 'X', 'Z'])
   })
 })

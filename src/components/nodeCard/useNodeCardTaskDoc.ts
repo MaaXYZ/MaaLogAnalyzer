@@ -31,9 +31,13 @@ export const useNodeCardTaskDoc = (options: UseNodeCardTaskDocOptions) => {
     taskDocText.value = ''
   }
 
-  watch(() => options.node.value.node_id, () => {
-    resetTaskDocPopover()
-  }, { flush: 'sync' })
+  watch(
+    () => options.node.value.node_id,
+    () => {
+      resetTaskDocPopover()
+    },
+    { flush: 'sync' },
+  )
 
   const handleTaskDocHoverEnter = () => {
     taskDocHovering.value = true

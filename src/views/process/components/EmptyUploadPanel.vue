@@ -16,7 +16,7 @@ const emit = defineEmits<{
   'tauri-open-folder': []
   'vscode-open': []
   'vscode-open-folder': []
-  'drop': [event: DragEvent]
+  drop: [event: DragEvent]
   'drag-over': [event: DragEvent]
   'reload-select': [key: string]
 }>()
@@ -119,7 +119,11 @@ const handleReloadSelect = (key: string | number) => {
         <n-text depth="3" style="font-size: 14px; display: block; margin-bottom: 12px">
           支持 maa.log / maafw.log、.zip 压缩包，文件夹需包含日志文件
         </n-text>
-        <n-dropdown v-if="props.showReloadControls" :options="props.reloadOptions" @select="handleReloadSelect">
+        <n-dropdown
+          v-if="props.showReloadControls"
+          :options="props.reloadOptions"
+          @select="handleReloadSelect"
+        >
           <n-button type="primary" size="large">
             <template #icon>
               <n-icon><folder-open-outlined /></n-icon>

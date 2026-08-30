@@ -105,10 +105,7 @@ const handleToggleDetail = () => {
     </template>
 
     <template #2>
-      <text-search-view
-        v-bind="textSearchViewProps"
-        style="height: 100%"
-      />
+      <text-search-view v-bind="textSearchViewProps" style="height: 100%" />
     </template>
   </n-split>
 </template>

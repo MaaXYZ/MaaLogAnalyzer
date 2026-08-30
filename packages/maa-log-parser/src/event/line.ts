@@ -1,13 +1,10 @@
 import type { EventNotification } from '../shared/types'
-import {
-  buildEventDedupSignature,
-  formatEventTimestampMs,
-  parseEventTimestampMs,
-} from './meta'
+import { buildEventDedupSignature, formatEventTimestampMs, parseEventTimestampMs } from './meta'
 
 // Event line regex: extracts timestamp, level, processId, threadId, msg, detailsJson.
 // 优化正则：使用 .*? 减少贪婪匹配带来的回溯消耗，极大提升长行解析速度
-const EVENT_LINE_REGEX = /^\[([^\]]+)\]\[([^\]]+)\]\[(Px[^\]]+)\]\[(Tx[^\]]+)\].*?!!!OnEventNotify!!!\s*\[handle=[^\]]*\]\s*\[msg=([^\]]+)\]\s*\[details=(.*)\]\s*$/
+const EVENT_LINE_REGEX =
+  /^\[([^\]]+)\]\[([^\]]+)\]\[(Px[^\]]+)\]\[(Tx[^\]]+)\].*?!!!OnEventNotify!!!\s*\[handle=[^\]]*\]\s*\[msg=([^\]]+)\]\s*\[details=(.*)\]\s*$/
 
 export type ParsedEventLine = EventNotification & {
   processId: string
@@ -24,7 +21,7 @@ interface ParseEventLineOptions {
 export const parseEventLine = (
   line: string,
   lineNum: number,
-  options: ParseEventLineOptions
+  options: ParseEventLineOptions,
 ): ParsedEventLine | null => {
   const match = line.match(EVENT_LINE_REGEX)
   if (!match) return null

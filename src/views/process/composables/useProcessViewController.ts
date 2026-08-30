@@ -9,12 +9,12 @@ interface UseProcessViewControllerOptions {
   props: ProcessViewControllerProps
   followLast: Ref<boolean>
   emitters: ProcessViewControllerEmitters
-  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>
+  selectPrimaryLogs?: (
+    options: PrimaryLogSelectionOption[],
+  ) => Promise<PrimaryLogSelectionOption[] | null>
 }
 
-export const useProcessViewController = (
-  options: UseProcessViewControllerOptions,
-) => {
+export const useProcessViewController = (options: UseProcessViewControllerOptions) => {
   const runtimeLayout = useProcessRuntimeLayout(options.props)
   const followNav = useProcessFollowNav({
     props: options.props,

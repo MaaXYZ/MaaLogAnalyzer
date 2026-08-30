@@ -19,9 +19,13 @@ export const useBridgeDetailLoaders = (options: UseBridgeDetailLoadersOptions) =
     return `${target.sessionId}:${target.taskId}:${target.sourceType}:${target.recoIds.join(',')}`
   })
 
-  watch(bridgeRecognitionQueryKey, () => {
-    void options.loadBridgeRecognitionImages()
-  }, { immediate: true })
+  watch(
+    bridgeRecognitionQueryKey,
+    () => {
+      void options.loadBridgeRecognitionImages()
+    },
+    { immediate: true },
+  )
 
   const bridgeNodeDefinitionQueryKey = computed(() => {
     const sessionId = options.getBridgeSessionId()
@@ -31,7 +35,11 @@ export const useBridgeDetailLoaders = (options: UseBridgeDetailLoadersOptions) =
     return `${sessionId}:${nodeId}`
   })
 
-  watch(bridgeNodeDefinitionQueryKey, () => {
-    void options.loadBridgeNodeDefinition()
-  }, { immediate: true })
+  watch(
+    bridgeNodeDefinitionQueryKey,
+    () => {
+      void options.loadBridgeNodeDefinition()
+    },
+    { immediate: true },
+  )
 }

@@ -52,9 +52,7 @@ export const getArchiveBudgetCode = (error: unknown): ArchiveBudgetCode | null =
   const message = error instanceof Error ? error.message : String(error)
   const match = /Archive ([a-z-]+) exceeds the configured limit/u.exec(message)
   const code = match?.[1]
-  return archiveBudgetCodes.has(code as ArchiveBudgetCode)
-    ? code as ArchiveBudgetCode
-    : null
+  return archiveBudgetCodes.has(code as ArchiveBudgetCode) ? (code as ArchiveBudgetCode) : null
 }
 
 export class ArchiveIntegrityError extends Error {
@@ -146,15 +144,17 @@ export class LoadOperationCoordinator {
   }
 }
 
-export const isLoadOperationCancelled = (error: unknown): boolean => (
+export const isLoadOperationCancelled = (error: unknown): boolean =>
   error instanceof LoadOperationCancelledError
-)
 
 export interface LoadMessageTarget<TMessage> {
   postMessage(message: TMessage): PromiseLike<boolean>
 }
 
-export const deliverLoadOperationMessage = async <TMessage, TTarget extends LoadMessageTarget<TMessage>>(
+export const deliverLoadOperationMessage = async <
+  TMessage,
+  TTarget extends LoadMessageTarget<TMessage>,
+>(
   operation: LoadOperation,
   getTarget: () => TTarget | undefined,
   message: TMessage,
@@ -241,10 +241,11 @@ export const DEFAULT_ARCHIVE_LIMITS = validateLimits({ ...configuredArchiveLimit
 
 export const resolveArchiveLimits = (
   overrides: Partial<ArchiveLimits> = {},
-): Readonly<ArchiveLimits> => validateLimits({
-  ...DEFAULT_ARCHIVE_LIMITS,
-  ...overrides,
-})
+): Readonly<ArchiveLimits> =>
+  validateLimits({
+    ...DEFAULT_ARCHIVE_LIMITS,
+    ...overrides,
+  })
 
 export const EMPTY_ARCHIVE_DIRECTORY_BUDGET: Readonly<ArchiveDirectoryBudget> = Object.freeze({
   totalPathBytes: 0,
@@ -265,11 +266,7 @@ const addSize = (total: number, value: number, label: string): number => {
   return next
 }
 
-const throwBudgetError = (
-  code: ArchiveBudgetCode,
-  actual: number,
-  limit: number,
-): never => {
+const throwBudgetError = (code: ArchiveBudgetCode, actual: number, limit: number): never => {
   throw new ArchiveBudgetError(code, actual, limit)
 }
 
@@ -358,15 +355,15 @@ export const canonicalizeArchivePath = (value: string): string => {
   const isDirectory = normalized.endsWith('/')
   const pathWithoutDirectoryMarker = isDirectory ? normalized.slice(0, -1) : normalized
   if (
-    !pathWithoutDirectoryMarker
-    || normalized.startsWith('/')
-    || /^[a-z]:/i.test(pathWithoutDirectoryMarker)
+    !pathWithoutDirectoryMarker ||
+    normalized.startsWith('/') ||
+    /^[a-z]:/i.test(pathWithoutDirectoryMarker)
   ) {
     throw new ArchiveIntegrityError(`Archive entry path is absolute or empty: ${value}`)
   }
 
   const parts = pathWithoutDirectoryMarker.split('/')
-  if (parts.some(part => !part || part === '.' || part === '..')) {
+  if (parts.some((part) => !part || part === '.' || part === '..')) {
     throw new ArchiveIntegrityError(`Archive entry path is not canonical: ${value}`)
   }
 
@@ -397,10 +394,11 @@ const getArchiveBaseName = (value: string): string => {
   return separator >= 0 ? normalized.slice(separator + 1) : normalized
 }
 
-const isPrimaryLogName = (name: string): boolean => (
-  /^(?:maa|maafw)\.log$/i.test(name.trim())
-  || /^(?:maa|maafw)\.bak(?:\.\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3})?\.log$/i.test(name.trim())
-)
+const isPrimaryLogName = (name: string): boolean =>
+  /^(?:maa|maafw)\.log$/i.test(name.trim()) ||
+  /^(?:maa|maafw)\.bak(?:\.\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3})?\.log$/i.test(
+    name.trim(),
+  )
 
 const isSearchTextPath = (path: string): boolean => /\.(?:log|txt|jsonl)$/i.test(path)
 
@@ -440,8 +438,8 @@ export const classifyNeededArchiveEntry = (
 
   const lower = relativePath.toLowerCase()
   if (
-    (lower.startsWith('on_error/') && lower.endsWith('.png'))
-    || (lower.startsWith('vision/') && lower.endsWith('.jpg'))
+    (lower.startsWith('on_error/') && lower.endsWith('.png')) ||
+    (lower.startsWith('vision/') && lower.endsWith('.jpg'))
   ) {
     return 'image'
   }
@@ -452,9 +450,8 @@ export const classifyNeededArchiveEntry = (
 export const getNeededArchiveEntries = (
   entries: readonly ArchiveEntryMetadata[],
   selection: ArchiveSelection,
-): ArchiveEntryMetadata[] => entries.filter(
-  entry => classifyNeededArchiveEntry(entry.name, selection) != null,
-)
+): ArchiveEntryMetadata[] =>
+  entries.filter((entry) => classifyNeededArchiveEntry(entry.name, selection) != null)
 
 const isImageEntry = (name: string): boolean => /\.(?:png|jpe?g)$/i.test(name)
 
@@ -489,10 +486,7 @@ export const assertExtractedEntriesWithinLimits = (
   }
 }
 
-export const createStoredEntryMetadata = (
-  name: string,
-  size: number,
-): ArchiveEntryMetadata => ({
+export const createStoredEntryMetadata = (name: string, size: number): ArchiveEntryMetadata => ({
   name,
   size,
   originalSize: size,
@@ -538,7 +532,7 @@ export const inspectArchiveVolumes = async <T>(
 
 const STREAM_INPUT_CHUNK_BYTES = 4 * 1024 * 1024
 
-const yieldToExtensionHost = (): Promise<void> => new Promise(resolve => setImmediate(resolve))
+const yieldToExtensionHost = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
 interface StreamedArchiveEntries {
   entries: Map<string, Uint8Array>
@@ -631,7 +625,9 @@ const unzipSelectedEntries = async (
       const dataChunk = chunk ?? new Uint8Array()
       const nextOffset = addSize(outputOffset, dataChunk.byteLength, 'actual file size')
       if (nextOffset > metadata.originalSize) {
-        throw new ArchiveIntegrityError(`Actual size exceeds declared size for archive entry: ${file.name}`)
+        throw new ArchiveIntegrityError(
+          `Actual size exceeds declared size for archive entry: ${file.name}`,
+        )
       }
       if (limits) {
         assertActualEntryChunkWithinLimits(metadata, nextOffset, limits)
@@ -642,7 +638,9 @@ const unzipSelectedEntries = async (
 
       if (!final) return
       if (outputOffset !== metadata.originalSize) {
-        throw new ArchiveIntegrityError(`Actual size differs from declared size for archive entry: ${file.name}`)
+        throw new ArchiveIntegrityError(
+          `Actual size differs from declared size for archive entry: ${file.name}`,
+        )
       }
       entries.set(file.name, output)
     }
@@ -775,10 +773,10 @@ const sampleMatchesEncoding = (sample: Uint8Array, encoding: string): boolean =>
 }
 
 export const decodeArchiveText = (bytes: Uint8Array): string => {
-  const sample = bytes.length > ENCODING_SAMPLE_SIZE
-    ? bytes.subarray(0, ENCODING_SAMPLE_SIZE)
-    : bytes
-  const encoding = DECODE_CANDIDATE_ENCODINGS.find(candidate => sampleMatchesEncoding(sample, candidate))
-    ?? 'utf-8'
+  const sample =
+    bytes.length > ENCODING_SAMPLE_SIZE ? bytes.subarray(0, ENCODING_SAMPLE_SIZE) : bytes
+  const encoding =
+    DECODE_CANDIDATE_ENCODINGS.find((candidate) => sampleMatchesEncoding(sample, candidate)) ??
+    'utf-8'
   return new TextDecoder(encoding, { fatal: false }).decode(bytes)
 }

@@ -2,9 +2,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { isValidReleaseVersion } from '../../../scripts/sync-version.mjs'
 
-const readWorkflow = (name: string): string => (
+const readWorkflow = (name: string): string =>
   readFileSync(new URL(`../../../.github/workflows/${name}`, import.meta.url), 'utf8')
-)
 
 const extractRunBlocks = (workflow: string): string[] => {
   const lines = workflow.split(/\r?\n/)
@@ -31,13 +30,16 @@ const extractRunBlocks = (workflow: string): string[] => {
 }
 
 describe('release workflow shell safety', () => {
-  it.each(['build.yml', 'release-vscode.yml'])('does not inject refs into run blocks in %s', (name) => {
-    const runScripts = extractRunBlocks(readWorkflow(name)).join('\n')
+  it.each(['build.yml', 'release-vscode.yml'])(
+    'does not inject refs into run blocks in %s',
+    (name) => {
+      const runScripts = extractRunBlocks(readWorkflow(name)).join('\n')
 
-    expect(runScripts).not.toContain('${{ github.ref }}')
-    expect(runScripts).not.toContain('${{ github.ref_name }}')
-    expect(runScripts).toContain('GITHUB_REF')
-  })
+      expect(runScripts).not.toContain('${{ github.ref }}')
+      expect(runScripts).not.toContain('${{ github.ref_name }}')
+      expect(runScripts).toContain('GITHUB_REF')
+    },
+  )
 
   it('delegates manifest updates and tag validation to the shared version command', () => {
     const workflows = [
@@ -50,12 +52,11 @@ describe('release workflow shell safety', () => {
     expect(workflows).not.toContain('npm pkg set')
     expect(workflows).not.toMatch(/sed -i.*version/)
     expect(['3.5.0', '3.5.0-rc.1', '3.5.0+build.7'].every(isValidReleaseVersion)).toBe(true)
-    expect([
-      '1.2.3;id',
-      '1.2.3$(id)',
-      '1.2.3";whoami;#',
-      'main',
-    ].every(version => !isValidReleaseVersion(version))).toBe(true)
+    expect(
+      ['1.2.3;id', '1.2.3$(id)', '1.2.3";whoami;#', 'main'].every(
+        (version) => !isValidReleaseVersion(version),
+      ),
+    ).toBe(true)
   })
 
   it('creates desktop releases only for version tags', () => {

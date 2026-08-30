@@ -8,7 +8,7 @@ export type TaskScopedNodeAggregation = {
 
 export const getOrCreateTaskNodeAggregation = (
   taskScopedNodeAggregationByTaskId: Map<number, TaskScopedNodeAggregation>,
-  taskId: number
+  taskId: number,
 ): TaskScopedNodeAggregation => {
   const existing = taskScopedNodeAggregationByTaskId.get(taskId)
   if (existing) return existing
@@ -22,14 +22,14 @@ export const getOrCreateTaskNodeAggregation = (
 
 export const getTaskNextList = (
   taskScopedNodeAggregationByTaskId: Map<number, TaskScopedNodeAggregation>,
-  taskId: number
+  taskId: number,
 ): NextListItem[] => {
   return taskScopedNodeAggregationByTaskId.get(taskId)?.nextList ?? []
 }
 
 export const resetTaskNodeAggregation = (
   taskScopedNodeAggregationByTaskId: Map<number, TaskScopedNodeAggregation>,
-  taskId: number
+  taskId: number,
 ): void => {
   const aggregation = getOrCreateTaskNodeAggregation(taskScopedNodeAggregationByTaskId, taskId)
   aggregation.nextList = []
@@ -38,7 +38,7 @@ export const resetTaskNodeAggregation = (
 
 export const clearTaskNodeAggregation = (
   taskScopedNodeAggregationByTaskId: Map<number, TaskScopedNodeAggregation>,
-  taskId: number
+  taskId: number,
 ): void => {
   taskScopedNodeAggregationByTaskId.delete(taskId)
 }
@@ -46,7 +46,7 @@ export const clearTaskNodeAggregation = (
 export const setTaskNextList = (
   taskScopedNodeAggregationByTaskId: Map<number, TaskScopedNodeAggregation>,
   taskId: number,
-  nextList: NextListItem[]
+  nextList: NextListItem[],
 ): NextListItem[] => {
   const aggregation = getOrCreateTaskNodeAggregation(taskScopedNodeAggregationByTaskId, taskId)
   aggregation.nextList = nextList

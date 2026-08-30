@@ -1,12 +1,6 @@
 <script setup lang="ts">
-import {
-  ref,
-  computed,
-  watch,
-} from 'vue'
-import {
-  NCard, NTag, useMessage,
-} from 'naive-ui'
+import { ref, computed, watch } from 'vue'
+import { NCard, NTag, useMessage } from 'naive-ui'
 import type { TaskInfo } from '../types'
 import { useIsMobile } from '../composables/useIsMobile'
 import { useNodeStatisticsDataSource } from './nodeStatistics/composables/useNodeStatisticsDataSource'
@@ -14,14 +8,11 @@ import {
   useNodeStatisticsMetrics,
   type StatMode,
 } from './nodeStatistics/composables/useNodeStatisticsMetrics'
-import {
-  useNodeStatisticsTableColumns,
-} from './nodeStatistics/composables/useNodeStatisticsTableColumns'
+import { useNodeStatisticsTableColumns } from './nodeStatistics/composables/useNodeStatisticsTableColumns'
 import NodeStatisticsHeaderControls from './nodeStatistics/components/NodeStatisticsHeaderControls.vue'
 import NodeStatisticsSummarySection from './nodeStatistics/components/NodeStatisticsSummarySection.vue'
 import NodeStatisticsDataPanel from './nodeStatistics/components/NodeStatisticsDataPanel.vue'
 import NodeStatisticsLoadingModals from './nodeStatistics/components/NodeStatisticsLoadingModals.vue'
-
 
 const { isMobile } = useIsMobile()
 
@@ -56,7 +47,7 @@ const selectedTaskId = ref<string | number>('all')
 
 const taskOptions = computed(() => [
   { label: '全部任务', value: 'all' },
-  ...effectiveTasks.value.map(task => ({
+  ...effectiveTasks.value.map((task) => ({
     label: `${task.task_id} · ${task.entry}`,
     value: task.task_id,
   })),
@@ -65,22 +56,18 @@ const taskOptions = computed(() => [
 watch(effectiveTasks, (tasks) => {
   if (selectedTaskId.value === 'all') return
   const selected = Number(selectedTaskId.value)
-  if (!tasks.some(task => task.task_id === selected)) {
+  if (!tasks.some((task) => task.task_id === selected)) {
     selectedTaskId.value = 'all'
   }
 })
 
-const {
-  statistics,
-  nodeSummary,
-  recognitionActionSummary,
-  waitFreezeSummary,
-} = useNodeStatisticsMetrics({
-  effectiveTasks,
-  selectedTaskId,
-  searchKeyword,
-  statMode,
-})
+const { statistics, nodeSummary, recognitionActionSummary, waitFreezeSummary } =
+  useNodeStatisticsMetrics({
+    effectiveTasks,
+    selectedTaskId,
+    searchKeyword,
+    statMode,
+  })
 const { columns } = useNodeStatisticsTableColumns({
   isMobile,
   statMode,
@@ -113,16 +100,34 @@ const hasSummaryContent = computed(() => {
         <div class="statistics-title-block">
           <div class="statistics-title-row">
             <div class="statistics-title">运行性能统计</div>
-            <n-tag size="small" round :type="statMode === 'node' ? 'info' : statMode === 'recognition-action' ? 'warning' : 'success'">
-              {{ statMode === 'node' ? '节点' : statMode === 'recognition-action' ? '识别 / 动作' : 'Wait Freezes' }}
+            <n-tag
+              size="small"
+              round
+              :type="
+                statMode === 'node'
+                  ? 'info'
+                  : statMode === 'recognition-action'
+                    ? 'warning'
+                    : 'success'
+              "
+            >
+              {{
+                statMode === 'node'
+                  ? '节点'
+                  : statMode === 'recognition-action'
+                    ? '识别 / 动作'
+                    : 'Wait Freezes'
+              }}
             </n-tag>
           </div>
           <div class="statistics-subtitle">
-            {{ statMode === 'node'
-              ? '聚合查看频次、耗时和稳定性，适合先找最慢热点。'
-              : statMode === 'recognition-action'
-                ? '拆分识别与动作阶段，适合判断瓶颈更偏向哪一段。'
-                : '统计等待画面静止的次数、重复等待和冻结耗时，定位反复等待热点。' }}
+            {{
+              statMode === 'node'
+                ? '聚合查看频次、耗时和稳定性，适合先找最慢热点。'
+                : statMode === 'recognition-action'
+                  ? '拆分识别与动作阶段，适合判断瓶颈更偏向哪一段。'
+                  : '统计等待画面静止的次数、重复等待和冻结耗时，定位反复等待热点。'
+            }}
           </div>
         </div>
 
@@ -282,4 +287,3 @@ const hasSummaryContent = computed(() => {
   }
 }
 </style>
-

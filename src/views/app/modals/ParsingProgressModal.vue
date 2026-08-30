@@ -32,9 +32,7 @@ const showModel = computed({
     :close-on-esc="false"
   >
     <n-flex vertical style="gap: 20px; padding: 20px 0">
-      <n-text style="text-align: center; font-size: 16px">
-        解析进度：{{ props.progress }}%
-      </n-text>
+      <n-text style="text-align: center; font-size: 16px"> 解析进度：{{ props.progress }}% </n-text>
       <n-progress
         type="line"
         :percentage="props.progress"

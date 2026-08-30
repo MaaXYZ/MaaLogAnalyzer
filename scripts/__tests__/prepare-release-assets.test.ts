@@ -41,7 +41,7 @@ describe('desktop release asset preparation', () => {
 
     const checksums = readFileSync(join(output, 'SHA256SUMS'), 'utf8').trim().split('\n')
     expect(checksums).toHaveLength(4)
-    expect(checksums.every(line => /^[a-f0-9]{64} {2}\S+$/.test(line))).toBe(true)
+    expect(checksums.every((line) => /^[a-f0-9]{64} {2}\S+$/.test(line))).toBe(true)
   })
 
   it('rejects ambiguous platform artifacts', () => {
@@ -52,10 +52,9 @@ describe('desktop release asset preparation', () => {
       'utf8',
     )
 
-    expect(() => prepareReleaseAssets(
-      join(root, 'artifacts'),
-      join(root, 'release-assets'),
-    )).toThrow('must contain exactly one .msi file; found 2')
+    expect(() =>
+      prepareReleaseAssets(join(root, 'artifacts'), join(root, 'release-assets')),
+    ).toThrow('must contain exactly one .msi file; found 2')
   })
 
   it('refuses to delete an output directory that contains the source artifacts', () => {

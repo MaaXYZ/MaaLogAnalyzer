@@ -43,10 +43,7 @@ export interface LoadablePrimaryLogFile extends PrimaryLogSourceEntry {
 }
 
 export type PrimaryLogFile =
-  | LoadedPrimaryLogFile
-  | BytePrimaryLogFile
-  | FilePrimaryLogFile
-  | LoadablePrimaryLogFile
+  LoadedPrimaryLogFile | BytePrimaryLogFile | FilePrimaryLogFile | LoadablePrimaryLogFile
 
 export interface PrimaryLogSelectionOption extends PrimaryLogSourceEntry {
   kind: PrimaryLogKind
@@ -61,7 +58,8 @@ export interface MatchedPrimaryLogEntry<T extends PrimaryLogSourceEntry> {
 }
 
 const MAIN_LOG_RE = /^(maa|maafw)\.log$/i
-const BAK_LOG_RE = /^(maa|maafw)\.bak(?:\.(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3}))?\.log$/i
+const BAK_LOG_RE =
+  /^(maa|maafw)\.bak(?:\.(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3}))?\.log$/i
 const CONTENT_TIMESTAMP_RE = /\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{1,3})\]/
 
 const toPosixPath = (value: string): string => value.replace(/\\/g, '/')
@@ -246,10 +244,11 @@ export const sortPrimaryLogParseInputs = (
   const sortable = inputs.map((input, index) => ({
     input,
     path: input.sourcePath ?? input.sourceKey ?? `primary-log:${index}`,
-    name: (input.sourcePath ?? input.sourceKey ?? `primary-log:${index}`)
-      .replace(/\\/g, '/')
-      .split('/')
-      .pop() ?? `primary-log:${index}`,
+    name:
+      (input.sourcePath ?? input.sourceKey ?? `primary-log:${index}`)
+        .replace(/\\/g, '/')
+        .split('/')
+        .pop() ?? `primary-log:${index}`,
     content: input.content,
   }))
   return sortLoadedPrimaryLogSegments(sortable).map(({ input }, index) => ({
@@ -297,9 +296,7 @@ export const createPrimaryLogParseInputs = <T extends PrimaryLogFile>(
   })
 }
 
-export const getPrimaryLogContentLoader = (
-  entry: PrimaryLogFile,
-): (() => Promise<string>) => {
+export const getPrimaryLogContentLoader = (entry: PrimaryLogFile): (() => Promise<string>) => {
   if ('loadContent' in entry && entry.loadContent) return entry.loadContent
   return async () => entry.content
 }

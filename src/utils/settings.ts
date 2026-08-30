@@ -67,10 +67,7 @@ const isFiniteNumberInRange = (
   minimum: number,
   maximum: number,
 ): value is number => {
-  return typeof value === 'number'
-    && Number.isFinite(value)
-    && value >= minimum
-    && value <= maximum
+  return typeof value === 'number' && Number.isFinite(value) && value >= minimum && value <= maximum
 }
 
 const normalizeSettings = (value: unknown): AppSettings => {
@@ -92,7 +89,11 @@ const normalizeSettings = (value: unknown): AppSettings => {
     if (isBoolean(value[key])) normalized[key] = value[key]
   }
 
-  if (value.displayMode === 'detailed' || value.displayMode === 'compact' || value.displayMode === 'tree') {
+  if (
+    value.displayMode === 'detailed' ||
+    value.displayMode === 'compact' ||
+    value.displayMode === 'tree'
+  ) {
     normalized.displayMode = value.displayMode
   }
   if (value.flowchartEdgeStyle === 'orthogonal' || value.flowchartEdgeStyle === 'default') {
@@ -107,7 +108,6 @@ const normalizeSettings = (value: unknown): AppSettings => {
 
   return normalized
 }
-
 
 export function getDefaultSettings(): AppSettings {
   return { ...defaultSettings }

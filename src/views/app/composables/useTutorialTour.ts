@@ -1,9 +1,15 @@
 import { computed, nextTick, ref } from 'vue'
 import { useTourSectionState } from './tutorialTour/sectionState'
-import { getTourTargetSelector, updateTourRectFromElement, waitForElement } from './tutorialTour/targetHelpers'
+import {
+  getTourTargetSelector,
+  updateTourRectFromElement,
+  waitForElement,
+} from './tutorialTour/targetHelpers'
 import type { TourRect, TourStepLike, UseTutorialTourOptions } from './tutorialTour/types'
 
-export const useTutorialTour = <T extends TourStepLike>(options: Omit<UseTutorialTourOptions, 'steps'> & { steps: T[] }) => {
+export const useTutorialTour = <T extends TourStepLike>(
+  options: Omit<UseTutorialTourOptions, 'steps'> & { steps: T[] },
+) => {
   const tourActive = ref(false)
   const activeTourStepIndexes = ref<number[]>([])
   const tourStepIndex = ref(0)
@@ -12,8 +18,12 @@ export const useTutorialTour = <T extends TourStepLike>(options: Omit<UseTutoria
   const tourTargetRect = ref<TourRect | null>(null)
   const tourResolveRunId = ref(0)
 
-  const currentTourSteps = computed(() => activeTourStepIndexes.value.map(i => options.steps[i]).filter(Boolean) as T[])
-  const currentTourStep = computed<T | null>(() => currentTourSteps.value[tourStepIndex.value] ?? null)
+  const currentTourSteps = computed(
+    () => activeTourStepIndexes.value.map((i) => options.steps[i]).filter(Boolean) as T[],
+  )
+  const currentTourStep = computed<T | null>(
+    () => currentTourSteps.value[tourStepIndex.value] ?? null,
+  )
 
   const {
     currentTourSectionIndex,
@@ -38,7 +48,8 @@ export const useTutorialTour = <T extends TourStepLike>(options: Omit<UseTutoria
 
     const runId = ++tourResolveRunId.value
     const targetSelector = getTourTargetSelector(step, options.isMobile.value)
-    const needsAboutModal = step.id === 'tutorial-replay-entry' || targetSelector.includes('about-start-tutorial')
+    const needsAboutModal =
+      step.id === 'tutorial-replay-entry' || targetSelector.includes('about-start-tutorial')
 
     if (step.view && options.viewMode.value !== step.view) {
       options.viewMode.value = step.view
@@ -51,7 +62,7 @@ export const useTutorialTour = <T extends TourStepLike>(options: Omit<UseTutoria
     }
 
     await nextTick()
-    await new Promise(resolve => setTimeout(resolve, needsAboutModal ? 180 : 80))
+    await new Promise((resolve) => setTimeout(resolve, needsAboutModal ? 180 : 80))
 
     const timeout = step.optional ? 1500 : 5000
     const el = await waitForElement(targetSelector, timeout)
@@ -68,7 +79,7 @@ export const useTutorialTour = <T extends TourStepLike>(options: Omit<UseTutoria
     }
 
     el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' })
-    await new Promise(resolve => setTimeout(resolve, 140))
+    await new Promise((resolve) => setTimeout(resolve, 140))
 
     if (runId !== tourResolveRunId.value || !tourActive.value) {
       return

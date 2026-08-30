@@ -71,9 +71,9 @@ describe('embedded app version check', () => {
   })
 
   it('reloads an embedded page only when the manifest version changes', async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => (
-      new Response(JSON.stringify({ version: '1.1.0' }))
-    ))
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL) => new Response(JSON.stringify({ version: '1.1.0' })),
+    )
     const replace = vi.fn((_url: string) => {})
 
     const redirected = await redirectIfEmbeddedAppIsOutdated('1.0.0', {

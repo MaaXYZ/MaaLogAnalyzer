@@ -16,8 +16,7 @@ export interface ExternalAnalysisRequest {
 }
 
 export type ExternalUriParseResult =
-  | { ok: true; request: ExternalAnalysisRequest }
-  | { ok: false; kind: 'unrelated' | 'invalid' }
+  { ok: true; request: ExternalAnalysisRequest } | { ok: false; kind: 'unrelated' | 'invalid' }
 
 export type ExternalPathKind = 'file' | 'folder' | 'other'
 
@@ -39,16 +38,17 @@ export type ExternalUriGateResult =
 const MAX_ENCODED_PATH_LENGTH = 64 * 1024
 const SUPPORTED_FILE_EXTENSION_RE = /\.(?:log|jsonl|txt|zip)$/i
 const STRICT_BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
-const UNSAFE_PATH_TEXT_RE = /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/u
+const UNSAFE_PATH_TEXT_RE =
+  /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/u
 const WINDOWS_NAMESPACE_PATH_RE = /^(?:[\\/]{2}[?.]{1,2}[\\/]|[\\/]\?\?[\\/])/u
 const WINDOWS_RESERVED_COMPONENT_RE = /^(?:con|prn|aux|nul|clock\$|com[1-9]|lpt[1-9])$/i
 
 const decodeCanonicalBase64Path = (encoded: string): string | null => {
   if (
-    encoded.length === 0
-    || encoded.length > MAX_ENCODED_PATH_LENGTH
-    || encoded.length % 4 !== 0
-    || !STRICT_BASE64_RE.test(encoded)
+    encoded.length === 0 ||
+    encoded.length > MAX_ENCODED_PATH_LENGTH ||
+    encoded.length % 4 !== 0 ||
+    !STRICT_BASE64_RE.test(encoded)
   ) {
     return null
   }
@@ -84,9 +84,8 @@ const hasUnsafeWindowsComponent = (targetPath: string): boolean => {
   return false
 }
 
-const hasPosixPathAlias = (targetPath: string): boolean => (
-  targetPath.split('/').some(component => component === '.' || component === '..')
-)
+const hasPosixPathAlias = (targetPath: string): boolean =>
+  targetPath.split('/').some((component) => component === '.' || component === '..')
 
 const validateTargetPath = (
   targetPath: string,
@@ -158,9 +157,7 @@ export const gateExternalAnalysisUri = async (
   if (!approved) return { status: 'cancelled' }
 
   const actualKind = await dependencies.inspectPath(parsed.request)
-  const expectedKind: ExternalPathKind = parsed.request.route === 'analyze-file'
-    ? 'file'
-    : 'folder'
+  const expectedKind: ExternalPathKind = parsed.request.route === 'analyze-file' ? 'file' : 'folder'
   if (actualKind !== expectedKind) {
     return {
       status: 'type-mismatch',

@@ -19,27 +19,21 @@ import {
   type ExternalAnalysisRequest,
   type ExternalPathKind,
 } from './externalUriGate'
-import {
-  normalizeEditorUriScheme,
-  WINDOWS_CONTEXT_MENU_KEYS,
-} from './windowsContextMenu'
-import {
-  WebviewByteTransferAckBroker,
-  WebviewByteTransferSender,
-} from './webviewByteTransfer'
+import { normalizeEditorUriScheme, WINDOWS_CONTEXT_MENU_KEYS } from './windowsContextMenu'
+import { WebviewByteTransferAckBroker, WebviewByteTransferSender } from './webviewByteTransfer'
 
 let currentPanel: vscode.WebviewPanel | undefined = undefined
 let webviewAssetRoot: vscode.Uri | undefined
 const loadOperationCoordinator = new LoadOperationCoordinator()
 const byteTransferAcknowledgements = new WebviewByteTransferAckBroker()
 const execFileAsync = promisify(execFile)
-const t = (message: string, ...args: Array<string | number | boolean>) => (
+const t = (message: string, ...args: Array<string | number | boolean>) =>
   vscode.l10n.t(message, ...args)
-)
 
 const PRIMARY_LOG_FILE_HINT = 'maa.log / maa.bak*.log / maafw.log / maafw.bak*.log'
 const MAIN_LOG_RE = /^(maa|maafw)\.log$/i
-const BAK_LOG_RE = /^(maa|maafw)\.bak(?:\.(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3}))?\.log$/i
+const BAK_LOG_RE =
+  /^(maa|maafw)\.bak(?:\.(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3}))?\.log$/i
 
 const beginLoadOperation = (): LoadOperation => {
   byteTransferAcknowledgements.cancelAll(new Error('Load operation was superseded'))
@@ -52,11 +46,7 @@ const createByteTransfer = (operation: LoadOperation): WebviewByteTransferSender
   return new WebviewByteTransferSender(webview, operation, byteTransferAcknowledgements)
 }
 
-const showLoadError = (
-  prefix: string,
-  error: unknown,
-  operation: LoadOperation,
-): void => {
+const showLoadError = (prefix: string, error: unknown, operation: LoadOperation): void => {
   if (operation.cancelled || isLoadOperationCancelled(error)) return
   vscode.window.showErrorMessage(`${prefix}: ${error}`)
 }
@@ -98,7 +88,7 @@ async function pickPrimaryLogSelection(
   entries: PrimaryLogSelectionEntry[],
 ): Promise<Set<string> | null> {
   if (entries.length <= 1) {
-    return new Set(entries.map(entry => entry.path))
+    return new Set(entries.map((entry) => entry.path))
   }
 
   const sorted = [...entries].sort((a, b) => {
@@ -106,11 +96,11 @@ async function pickPrimaryLogSelection(
     return (b.rotatedTimestampHint ?? '').localeCompare(a.rotatedTimestampHint ?? '')
   })
 
-  const mainEntries = sorted.filter(entry => entry.kind === 'main')
+  const mainEntries = sorted.filter((entry) => entry.kind === 'main')
   const defaultEntries = mainEntries.length > 0 ? mainEntries : sorted.slice(0, 1)
-  const defaultPicked = new Set(defaultEntries.map(entry => entry.path))
+  const defaultPicked = new Set(defaultEntries.map((entry) => entry.path))
 
-  const items: PrimaryLogQuickPickItem[] = sorted.map(entry => ({
+  const items: PrimaryLogQuickPickItem[] = sorted.map((entry) => ({
     label: entry.name,
     description: entry.kind === 'main' ? t('Current log') : t('Backup log'),
     detail: `${formatLogSize(entry.size)}${entry.rotatedTimestampHint ? ` · ${entry.rotatedTimestampHint}` : ''}`,
@@ -126,7 +116,7 @@ async function pickPrimaryLogSelection(
   })
 
   if (!picked || picked.length === 0) return null
-  return new Set(picked.map(item => item.logPath))
+  return new Set(picked.map((item) => item.logPath))
 }
 
 const normalizeTimestampMilliseconds = (value: string): string => {
@@ -137,9 +127,10 @@ const normalizeTimestampMilliseconds = (value: string): string => {
   return `${value.slice(0, lastDot)}.${ms.padEnd(3, '0')}`
 }
 
-const getParentUri = (uri: vscode.Uri): vscode.Uri => uri.with({
-  path: path.posix.dirname(uri.path),
-})
+const getParentUri = (uri: vscode.Uri): vscode.Uri =>
+  uri.with({
+    path: path.posix.dirname(uri.path),
+  })
 
 const getPrimaryLogCandidate = (rawPath: string, rawName?: string): PrimaryLogCandidate | null => {
   const normalizedPath = rawPath.replace(/\\/g, '/')
@@ -183,7 +174,7 @@ const selectPrimaryLogGroup = <T extends { path: string; name: string }>(entries
   }
 
   const rankedGroups = Array.from(groups.entries()).map(([dirPath, group]) => {
-    const mainCount = group.filter(entry => entry.candidate.kind === 'main').length
+    const mainCount = group.filter((entry) => entry.candidate.kind === 'main').length
     const depth = dirPath ? dirPath.split('/').filter(Boolean).length : 0
     return {
       dirPath,
@@ -229,12 +220,24 @@ class SidebarActionProvider implements vscode.TreeDataProvider<SidebarActionItem
   getChildren(): SidebarActionItem[] {
     const items: SidebarActionItem[] = [
       new SidebarActionItem(t('Open Analyzer'), 'maaLogAnalyzer.openAnalyzer', 'openAnalyzer'),
-      new SidebarActionItem(t('Analyze File/Folder'), 'maaLogAnalyzer.analyzeFolder', 'analyzeFolder'),
+      new SidebarActionItem(
+        t('Analyze File/Folder'),
+        'maaLogAnalyzer.analyzeFolder',
+        'analyzeFolder',
+      ),
     ]
     if (process.platform === 'win32') {
       items.push(
-        new SidebarActionItem(t('Install Windows Context Menu'), 'maaLogAnalyzer.installContextMenu', 'installContextMenu'),
-        new SidebarActionItem(t('Uninstall Windows Context Menu'), 'maaLogAnalyzer.uninstallContextMenu', 'uninstallContextMenu'),
+        new SidebarActionItem(
+          t('Install Windows Context Menu'),
+          'maaLogAnalyzer.installContextMenu',
+          'installContextMenu',
+        ),
+        new SidebarActionItem(
+          t('Uninstall Windows Context Menu'),
+          'maaLogAnalyzer.uninstallContextMenu',
+          'uninstallContextMenu',
+        ),
       )
     }
     return items
@@ -265,7 +268,7 @@ export function activate(context: vscode.ExtensionContext) {
   const analyzeFileCommand = vscode.commands.registerCommand(
     'maaLogAnalyzer.analyzeFile',
     async (uri?: vscode.Uri) => {
-      const targetUri = uri ?? getActiveFileUri() ?? await pickFileUriForAnalysis()
+      const targetUri = uri ?? getActiveFileUri() ?? (await pickFileUriForAnalysis())
       if (!targetUri) return
 
       createOrShowPanel(context)
@@ -300,7 +303,7 @@ export function activate(context: vscode.ExtensionContext) {
           {
             confirm: confirmExternalAnalysisRequest,
             inspectPath: inspectExternalAnalysisTarget,
-            open: async request => {
+            open: async (request) => {
               const targetUri = vscode.Uri.file(request.targetPath)
               createOrShowPanel(context)
               if (request.route === 'analyze-file') {
@@ -313,36 +316,42 @@ export function activate(context: vscode.ExtensionContext) {
         )
 
         if (result.status === 'invalid') {
-          vscode.window.showWarningMessage(
-            t('Rejected an invalid external analysis request.'),
-          )
+          vscode.window.showWarningMessage(t('Rejected an invalid external analysis request.'))
         } else if (result.status === 'type-mismatch') {
-          const expected = result.request.route === 'analyze-file'
-            ? t('a log file')
-            : t('a log folder')
-          vscode.window.showErrorMessage(
-            t('The approved path is not {0}.', expected),
-          )
+          const expected =
+            result.request.route === 'analyze-file' ? t('a log file') : t('a log folder')
+          vscode.window.showErrorMessage(t('The approved path is not {0}.', expected))
         }
       } catch (error) {
-        vscode.window.showErrorMessage(t('Unable to handle external open request: {0}', String(error)))
+        vscode.window.showErrorMessage(
+          t('Unable to handle external open request: {0}', String(error)),
+        )
       }
     },
   })
 
-  context.subscriptions.push(openAnalyzerCommand, analyzeFolderCommand, analyzeFileCommand, installContextMenuCommand, uninstallContextMenuCommand, sidebarView, uriHandler)
+  context.subscriptions.push(
+    openAnalyzerCommand,
+    analyzeFolderCommand,
+    analyzeFileCommand,
+    installContextMenuCommand,
+    uninstallContextMenuCommand,
+    sidebarView,
+    uriHandler,
+  )
 }
 
 async function confirmExternalAnalysisRequest(request: ExternalAnalysisRequest): Promise<boolean> {
   const approveLabel = t('Open and Analyze')
-  const targetKind = request.route === 'analyze-file'
-    ? t('file')
-    : t('folder')
+  const targetKind = request.route === 'analyze-file' ? t('file') : t('folder')
   const message = request.isUnc
     ? t('An external application requested access to a network {0}.', targetKind)
     : t('An external application requested access to a local {0}.', targetKind)
   const detail = request.isUnc
-    ? t('Network path: {0}\n\nThis can contact a remote server. Continue only if you trust the application and network location that sent this request.', request.targetPath)
+    ? t(
+        'Network path: {0}\n\nThis can contact a remote server. Continue only if you trust the application and network location that sent this request.',
+        request.targetPath,
+      )
     : t('Path: {0}\n\nContinue only if you initiated or trust this request.', request.targetPath)
 
   const action = await vscode.window.showWarningMessage(
@@ -353,7 +362,9 @@ async function confirmExternalAnalysisRequest(request: ExternalAnalysisRequest):
   return action === approveLabel
 }
 
-async function inspectExternalAnalysisTarget(request: ExternalAnalysisRequest): Promise<ExternalPathKind> {
+async function inspectExternalAnalysisTarget(
+  request: ExternalAnalysisRequest,
+): Promise<ExternalPathKind> {
   const stat = await vscode.workspace.fs.stat(vscode.Uri.file(request.targetPath))
   if ((stat.type & vscode.FileType.Directory) === vscode.FileType.Directory) return 'folder'
   if ((stat.type & vscode.FileType.File) === vscode.FileType.File) return 'file'
@@ -381,10 +392,8 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
     {
       enableScripts: true,
       retainContextWhenHidden: true,
-      localResourceRoots: [
-        webviewAssetRoot,
-      ]
-    }
+      localResourceRoots: [webviewAssetRoot],
+    },
   )
 
   // 设置 HTML 内容
@@ -418,9 +427,9 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
           const fileUri = await vscode.window.showOpenDialog({
             canSelectMany: false,
             filters: {
-              [t('Log Files')]: ['log', 'jsonl', 'txt', 'zip']
+              [t('Log Files')]: ['log', 'jsonl', 'txt', 'zip'],
             },
-            title: t('Select Log File')
+            title: t('Select Log File'),
           })
 
           if (fileUri && fileUri[0]) {
@@ -447,7 +456,7 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
         case 'showError':
           vscode.window.showErrorMessage(message.message)
           break
-          
+
         case 'showInfo':
           vscode.window.showInformationMessage(message.message)
           break
@@ -472,14 +481,22 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
 
           try {
             await mseExtension.activate()
-            const result = await vscode.commands.executeCommand<{ imageAccepted?: boolean }>('maa.open-crop', {
-              image: message.image,
-              detail: typeof message.detail === 'object' && message.detail !== null
-                ? message.detail
-                : undefined,
-            })
+            const result = await vscode.commands.executeCommand<{ imageAccepted?: boolean }>(
+              'maa.open-crop',
+              {
+                image: message.image,
+                detail:
+                  typeof message.detail === 'object' && message.detail !== null
+                    ? message.detail
+                    : undefined,
+              },
+            )
             if (result?.imageAccepted !== true) {
-              vscode.window.showWarningMessage(t('The current Maa Pipeline Support version cannot receive images. Update it and try again.'))
+              vscode.window.showWarningMessage(
+                t(
+                  'The current Maa Pipeline Support version cannot receive images. Update it and try again.',
+                ),
+              )
             }
           } catch (error) {
             vscode.window.showErrorMessage(t('Unable to open MSE crop tool: {0}', String(error)))
@@ -489,7 +506,7 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
       }
     },
     undefined,
-    context.subscriptions
+    context.subscriptions,
   )
 
   // 面板关闭时清理
@@ -501,7 +518,7 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
       currentPanel = undefined
     },
     undefined,
-    context.subscriptions
+    context.subscriptions,
   )
 
   return currentPanel
@@ -613,7 +630,11 @@ async function analyzeUri(
 
   operation.throwIfCancelled()
   const lower = uri.fsPath.toLowerCase()
-  const looksLikeFile = lower.endsWith('.zip') || lower.endsWith('.log') || lower.endsWith('.jsonl') || lower.endsWith('.txt')
+  const looksLikeFile =
+    lower.endsWith('.zip') ||
+    lower.endsWith('.log') ||
+    lower.endsWith('.jsonl') ||
+    lower.endsWith('.txt')
   if (looksLikeFile) {
     await analyzeFileUri(uri, operation)
     return
@@ -634,22 +655,31 @@ async function analyzeFolderUri(
       '**/maafw.log',
       '**/maa.bak*.log',
       '**/maafw.bak*.log',
-    ].map(pattern => new vscode.RelativePattern(folderUri, pattern))
+    ].map((pattern) => new vscode.RelativePattern(folderUri, pattern))
     const candidateLists = await Promise.all(
-      candidatePatterns.map(pattern => vscode.workspace.findFiles(pattern, '**/node_modules/**', 200)),
+      candidatePatterns.map((pattern) =>
+        vscode.workspace.findFiles(pattern, '**/node_modules/**', 200),
+      ),
     )
     operation.throwIfCancelled()
 
     const primaryLogUris = candidateLists
       .flat()
-      .filter((uri: vscode.Uri, index: number, all: vscode.Uri[]) => all.findIndex((other: vscode.Uri) => other.toString() === uri.toString()) === index)
-      .filter((uri: vscode.Uri) => getPrimaryLogCandidate(uri.path, path.posix.basename(uri.path)) != null)
+      .filter(
+        (uri: vscode.Uri, index: number, all: vscode.Uri[]) =>
+          all.findIndex((other: vscode.Uri) => other.toString() === uri.toString()) === index,
+      )
+      .filter(
+        (uri: vscode.Uri) =>
+          getPrimaryLogCandidate(uri.path, path.posix.basename(uri.path)) != null,
+      )
 
-    const primaryLogEntries: Array<{ uri: vscode.Uri; path: string; name: string }> = primaryLogUris.map((uri: vscode.Uri) => ({
-      uri,
-      path: uri.path,
-      name: path.posix.basename(uri.path),
-    }))
+    const primaryLogEntries: Array<{ uri: vscode.Uri; path: string; name: string }> =
+      primaryLogUris.map((uri: vscode.Uri) => ({
+        uri,
+        path: uri.path,
+        name: path.posix.basename(uri.path),
+      }))
     const selectedLogs = selectPrimaryLogGroup(primaryLogEntries)
 
     if (selectedLogs.length === 0) {
@@ -685,16 +715,15 @@ async function analyzeFolderUri(
 
     const selectedLogEntries = selectedLogs.filter(({ item }) => selectedPaths.has(item.path))
 
-    const targetMain = selectedLogEntries.find(({ candidate }) => candidate.kind === 'main')?.item.uri
+    const targetMain = selectedLogEntries.find(({ candidate }) => candidate.kind === 'main')?.item
+      .uri
     const selectedBaseDir = selectedLogEntries[0]
       ? getParentUri(selectedLogEntries[0].item.uri)
       : folderUri
     const sourceName = targetMain
       ? path.posix.basename(getParentUri(targetMain).path)
       : path.posix.basename(selectedBaseDir.path || folderUri.path)
-    const contentBaseDir = targetMain
-      ? getParentUri(targetMain)
-      : selectedBaseDir
+    const contentBaseDir = targetMain ? getParentUri(targetMain) : selectedBaseDir
 
     transfer = createByteTransfer(operation)
     await transfer.start({ fileName: sourceName })
@@ -711,10 +740,7 @@ async function analyzeFolderUri(
       })
     }
 
-    const debugAssets = await collectDebugAssetsForBaseDirectory(
-      contentBaseDir,
-      operation,
-    )
+    const debugAssets = await collectDebugAssetsForBaseDirectory(contentBaseDir, operation)
     operation.throwIfCancelled()
 
     await transfer.complete({
@@ -798,9 +824,8 @@ async function collectDebugAssetsForBaseDirectory(
   waitFreezesImages: DebugImageResource[]
 }> {
   const baseName = path.posix.basename(baseDirUri.path).toLowerCase()
-  const candidateDirs = baseName === 'debug'
-    ? [baseDirUri]
-    : [baseDirUri, vscode.Uri.joinPath(baseDirUri, 'debug')]
+  const candidateDirs =
+    baseName === 'debug' ? [baseDirUri] : [baseDirUri, vscode.Uri.joinPath(baseDirUri, 'debug')]
   let debugDirUri: vscode.Uri | undefined
 
   for (const candidate of candidateDirs) {
@@ -867,7 +892,10 @@ async function collectDebugAssetsForBaseDirectory(
 }
 
 async function execReg(args: string[]): Promise<{ stdout: string; stderr: string }> {
-  return execFileAsync('reg.exe', args, { windowsHide: true }) as Promise<{ stdout: string; stderr: string }>
+  return execFileAsync('reg.exe', args, { windowsHide: true }) as Promise<{
+    stdout: string
+    stderr: string
+  }>
 }
 
 async function regKeyExists(key: string): Promise<boolean> {
@@ -879,7 +907,9 @@ async function regKeyExists(key: string): Promise<boolean> {
   }
 }
 
-async function prepareContextMenuAssets(context: vscode.ExtensionContext): Promise<{ helperScript: string; iconPath: string }> {
+async function prepareContextMenuAssets(
+  context: vscode.ExtensionContext,
+): Promise<{ helperScript: string; iconPath: string }> {
   const sourceScriptDir = path.join(context.extensionPath, 'scripts', 'windows')
   const sourceIconPath = path.join(context.extensionPath, 'webview', 'favicon.ico')
 
@@ -905,7 +935,9 @@ async function installWindowsContextMenu(context: vscode.ExtensionContext): Prom
 
   const installLabel = t('Install')
   const action = await vscode.window.showInformationMessage(
-    t('This will install Windows context menu entries for folders, folder backgrounds, .log files, and .zip files. Continue?'),
+    t(
+      'This will install Windows context menu entries for folders, folder backgrounds, .log files, and .zip files. Continue?',
+    ),
     installLabel,
     t('Cancel'),
   )
@@ -934,7 +966,9 @@ async function installWindowsContextMenu(context: vscode.ExtensionContext): Prom
 
     vscode.window.showInformationMessage(t('Windows context menu entries were installed'))
   } catch (error) {
-    vscode.window.showErrorMessage(t('Failed to install Windows context menu entries: {0}', String(error)))
+    vscode.window.showErrorMessage(
+      t('Failed to install Windows context menu entries: {0}', String(error)),
+    )
   }
 }
 
@@ -946,7 +980,9 @@ async function uninstallWindowsContextMenu(context: vscode.ExtensionContext): Pr
 
   const uninstallLabel = t('Uninstall')
   const action = await vscode.window.showInformationMessage(
-    t('This will uninstall Windows context menu entries for folders, folder backgrounds, .log files, and .zip files. Continue?'),
+    t(
+      'This will uninstall Windows context menu entries for folders, folder backgrounds, .log files, and .zip files. Continue?',
+    ),
     uninstallLabel,
     t('Cancel'),
   )
@@ -973,14 +1009,14 @@ async function uninstallWindowsContextMenu(context: vscode.ExtensionContext): Pr
 
     vscode.window.showInformationMessage(t('Windows context menu entries were uninstalled'))
   } catch (error) {
-    vscode.window.showErrorMessage(t('Failed to uninstall Windows context menu entries: {0}', String(error)))
+    vscode.window.showErrorMessage(
+      t('Failed to uninstall Windows context menu entries: {0}', String(error)),
+    )
   }
 }
 /** 解析 on_error 截图文件名为标准化 key */
 function parseErrorImageKey(fileName: string): string | null {
-  const match = fileName.match(
-    /^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+)\.png$/
-  )
+  const match = fileName.match(/^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+)\.png$/)
   if (!match) return null
   const [, timestamp, ms, nodeName] = match
   const paddedMs = ms.padEnd(3, '0')
@@ -1046,10 +1082,9 @@ async function collectMxuZipVolumeUris(
     .filter(([, type]) => type === vscode.FileType.File)
     .map(([name]) => ({ name, info: parseMxuZipVolumeName(name) }))
     .filter(({ info }) => info?.baseName.toLowerCase() === baseName)
-    .sort((left, right) => (
-      left.info!.index - right.info!.index
-      || left.name.localeCompare(right.name)
-    ))
+    .sort(
+      (left, right) => left.info!.index - right.info!.index || left.name.localeCompare(right.name),
+    )
     .map(({ name }) => vscode.Uri.joinPath(directory, name))
 
   return volumes.length > 0 ? volumes : [uri]
@@ -1066,10 +1101,9 @@ async function findFirstMxuZipVolumeUri(
     .filter(([, type]) => type === vscode.FileType.File)
     .map(([name]) => ({ name, info: parseMxuZipVolumeName(name) }))
     .filter(({ info }) => info != null)
-    .sort((left, right) => (
-      left.name.localeCompare(right.name)
-      || left.info!.index - right.info!.index
-    ))[0]
+    .sort(
+      (left, right) => left.name.localeCompare(right.name) || left.info!.index - right.info!.index,
+    )[0]
 
   return first ? vscode.Uri.joinPath(directory, first.name) : null
 }
@@ -1078,10 +1112,7 @@ async function findFirstMxuZipVolumeUri(
  * 在扩展进程内按预算检查并选择性解压 ZIP。
  * Webview 只接收已筛选的文本与图片，避免完整 ZIP 的 Base64 往返副本。
  */
-async function handleZipFile(
-  uri: vscode.Uri,
-  operation: LoadOperation,
-): Promise<void> {
+async function handleZipFile(uri: vscode.Uri, operation: LoadOperation): Promise<void> {
   let transfer: WebviewByteTransferSender | undefined
   try {
     operation.throwIfCancelled()
@@ -1125,22 +1156,28 @@ async function handleZipFile(
     })
     operation.throwIfCancelled()
 
-    const selectedLogs = selectPrimaryLogGroup(Array.from(inspection.entrySizes.keys()).map(filePath => ({
-      path: filePath,
-      name: filePath.replace(/\\/g, '/').split('/').pop() || filePath,
-    })))
+    const selectedLogs = selectPrimaryLogGroup(
+      Array.from(inspection.entrySizes.keys()).map((filePath) => ({
+        path: filePath,
+        name: filePath.replace(/\\/g, '/').split('/').pop() || filePath,
+      })),
+    )
     if (selectedLogs.length === 0) {
-      vscode.window.showWarningMessage(t('No log file was found in the ZIP archive ({0})', PRIMARY_LOG_FILE_HINT))
+      vscode.window.showWarningMessage(
+        t('No log file was found in the ZIP archive ({0})', PRIMARY_LOG_FILE_HINT),
+      )
       return
     }
 
-    const selectionEntries: PrimaryLogSelectionEntry[] = selectedLogs.map(({ item, candidate }) => ({
-      path: item.path,
-      name: item.name,
-      kind: candidate.kind,
-      rotatedTimestampHint: candidate.rotatedTimestampHint,
-      size: inspection.entrySizes.get(item.path) ?? 0,
-    }))
+    const selectionEntries: PrimaryLogSelectionEntry[] = selectedLogs.map(
+      ({ item, candidate }) => ({
+        path: item.path,
+        name: item.name,
+        kind: candidate.kind,
+        rotatedTimestampHint: candidate.rotatedTimestampHint,
+        size: inspection.entrySizes.get(item.path) ?? 0,
+      }),
+    )
     const selectedPaths = await pickPrimaryLogSelection(selectionEntries)
     operation.throwIfCancelled()
     if (!selectedPaths) return
@@ -1230,7 +1267,9 @@ async function handleZipFile(
       operation.throwIfCancelled()
     })
     if (primaryLogCount === 0) {
-      const message = t('The ZIP archive changed while it was being read, so the selected log could not be loaded')
+      const message = t(
+        'The ZIP archive changed while it was being read, so the selected log could not be loaded',
+      )
       await transfer.abort(message)
       vscode.window.showWarningMessage(message)
       return
@@ -1244,12 +1283,10 @@ async function handleZipFile(
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
   // 获取 webview 资源路径
   const webviewUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'webview'))
-  
+
   // 生成 CSP nonce
   const nonce = getNonce()
-  const documentLanguage = /^[A-Za-z0-9-]+$/.test(vscode.env.language)
-    ? vscode.env.language
-    : 'en'
+  const documentLanguage = /^[A-Za-z0-9-]+$/.test(vscode.env.language) ? vscode.env.language : 'en'
   const panelTitle = t('MAA Log Analyzer')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

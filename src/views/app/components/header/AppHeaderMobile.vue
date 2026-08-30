@@ -20,20 +20,12 @@ const handleMobileMenuSelect = (key: string | number) => {
 <template>
   <n-flex justify="space-between" align="center">
     <n-flex align="center" style="gap: 8px">
-      <n-button
-        text
-        style="font-size: 22px"
-        @click="emit('open-task-drawer')"
-      >
+      <n-button text style="font-size: 22px" @click="emit('open-task-drawer')">
         <n-icon><menu-outlined /></n-icon>
       </n-button>
       <n-text strong style="font-size: 16px">MAA 日志工具</n-text>
     </n-flex>
-    <n-dropdown
-      :options="mobileMenuOptions"
-      @select="handleMobileMenuSelect"
-      trigger="click"
-    >
+    <n-dropdown :options="mobileMenuOptions" @select="handleMobileMenuSelect" trigger="click">
       <n-button size="small" data-tour="header-mobile-menu">
         {{ currentViewLabel }}
       </n-button>

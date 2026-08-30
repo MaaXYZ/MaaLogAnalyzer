@@ -4,7 +4,16 @@
  */
 
 export interface LogToken {
-  type: 'timestamp' | 'level-info' | 'level-warn' | 'level-error' | 'level-debug' | 'string' | 'number' | 'text' | 'key'
+  type:
+    | 'timestamp'
+    | 'level-info'
+    | 'level-warn'
+    | 'level-error'
+    | 'level-debug'
+    | 'string'
+    | 'number'
+    | 'text'
+    | 'key'
   content: string
 }
 
@@ -26,7 +35,7 @@ const PATTERNS = {
   number: /\b\d+(\.\d+)?\b|0x[0-9a-fA-F]+/,
 
   // Key-Value keys (e.g. "key":)
-  key: /\b[\w_]+(?=:)/
+  key: /\b[\w_]+(?=:)/,
 }
 
 /**
@@ -42,7 +51,11 @@ export function parseLogLine(line: string): LogToken[] {
     let matchedLength = 0
 
     // 1. Try to match timestamp at the beginning (or if preceded by space/brackets)
-    if (tokens.length === 0 || tokens[tokens.length - 1].content.endsWith(' ') || tokens[tokens.length - 1].content.endsWith('[')) {
+    if (
+      tokens.length === 0 ||
+      tokens[tokens.length - 1].content.endsWith(' ') ||
+      tokens[tokens.length - 1].content.endsWith('[')
+    ) {
       match = remaining.match(PATTERNS.timestamp)
       if (match && match.index === 0) {
         matchedType = 'timestamp'
@@ -52,10 +65,14 @@ export function parseLogLine(line: string): LogToken[] {
 
     // 2. Try to match log levels
     if (!matchedType) {
-      if ((match = remaining.match(PATTERNS.levelInfo)) && match.index === 0) matchedType = 'level-info'
-      else if ((match = remaining.match(PATTERNS.levelWarn)) && match.index === 0) matchedType = 'level-warn'
-      else if ((match = remaining.match(PATTERNS.levelError)) && match.index === 0) matchedType = 'level-error'
-      else if ((match = remaining.match(PATTERNS.levelDebug)) && match.index === 0) matchedType = 'level-debug'
+      if ((match = remaining.match(PATTERNS.levelInfo)) && match.index === 0)
+        matchedType = 'level-info'
+      else if ((match = remaining.match(PATTERNS.levelWarn)) && match.index === 0)
+        matchedType = 'level-warn'
+      else if ((match = remaining.match(PATTERNS.levelError)) && match.index === 0)
+        matchedType = 'level-error'
+      else if ((match = remaining.match(PATTERNS.levelDebug)) && match.index === 0)
+        matchedType = 'level-debug'
 
       if (matchedType && match) matchedLength = match[0].length
     }
@@ -114,7 +131,11 @@ export function parseLogLine(line: string): LogToken[] {
   // Merge adjacent text tokens
   const mergedTokens: LogToken[] = []
   for (const token of tokens) {
-    if (mergedTokens.length > 0 && mergedTokens[mergedTokens.length - 1].type === 'text' && token.type === 'text') {
+    if (
+      mergedTokens.length > 0 &&
+      mergedTokens[mergedTokens.length - 1].type === 'text' &&
+      token.type === 'text'
+    ) {
       mergedTokens[mergedTokens.length - 1].content += token.content
     } else {
       mergedTokens.push(token)

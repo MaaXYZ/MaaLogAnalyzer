@@ -9,31 +9,30 @@ const mockFile = (name: string, content: string, size?: number): File => {
   return { name, size, arrayBuffer: async () => bytes.slice().buffer } as File
 }
 
-const fileHandle = (file: File): FileSystemFileHandle => ({
-  kind: 'file',
-  name: file.name,
-  getFile: async () => file,
-} as FileSystemFileHandle)
+const fileHandle = (file: File): FileSystemFileHandle =>
+  ({
+    kind: 'file',
+    name: file.name,
+    getFile: async () => file,
+  }) as FileSystemFileHandle
 
-const directoryHandle = (
-  name: string,
-  entries: MockEntry[],
-): FileSystemDirectoryHandle => ({
-  kind: 'directory',
-  name,
-  async *values() {
-    yield* entries
-  },
-  async getDirectoryHandle(childName: string) {
-    const entry = entries.find(candidate => (
-      candidate.kind === 'directory' && candidate.name === childName
-    ))
-    if (entry) return entry as FileSystemDirectoryHandle
-    const error = new Error(`Missing directory: ${childName}`)
-    error.name = 'NotFoundError'
-    throw error
-  },
-} as unknown as FileSystemDirectoryHandle)
+const directoryHandle = (name: string, entries: MockEntry[]): FileSystemDirectoryHandle =>
+  ({
+    kind: 'directory',
+    name,
+    async *values() {
+      yield* entries
+    },
+    async getDirectoryHandle(childName: string) {
+      const entry = entries.find(
+        (candidate) => candidate.kind === 'directory' && candidate.name === childName,
+      )
+      if (entry) return entry as FileSystemDirectoryHandle
+      const error = new Error(`Missing directory: ${childName}`)
+      error.name = 'NotFoundError'
+      throw error
+    },
+  }) as unknown as FileSystemDirectoryHandle
 
 const stubPicker = (root: FileSystemDirectoryHandle) => {
   vi.stubGlobal('window', { showDirectoryPicker: vi.fn(async () => root) })
@@ -93,23 +92,22 @@ describe('Web file picker resource budgets', () => {
   })
 
   it('revokes image URLs if a later URL allocation fails', async () => {
-    const errorImage = fileHandle(mockFile(
-      '2026.03.08-13.12.30.216_Node.png',
-      'error-image',
-    ))
-    const visionImage = fileHandle(mockFile(
-      '2026.03.08-13.12.30.216_Node_123456789.jpg',
-      'vision-image',
-    ))
+    const errorImage = fileHandle(mockFile('2026.03.08-13.12.30.216_Node.png', 'error-image'))
+    const visionImage = fileHandle(
+      mockFile('2026.03.08-13.12.30.216_Node_123456789.jpg', 'vision-image'),
+    )
     const root = directoryHandle('debug', [
       fileHandle(mockFile('maa.log', 'primary')),
       directoryHandle('on_error', [errorImage]),
       directoryHandle('vision', [visionImage]),
     ])
     stubPicker(root)
-    const createObjectURL = vi.fn()
+    const createObjectURL = vi
+      .fn()
       .mockReturnValueOnce('blob:first')
-      .mockImplementationOnce(() => { throw new Error('allocation failed') })
+      .mockImplementationOnce(() => {
+        throw new Error('allocation failed')
+      })
     const revokeObjectURL = vi.fn()
     vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
 

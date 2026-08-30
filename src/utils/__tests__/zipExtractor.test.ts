@@ -45,24 +45,32 @@ describe('extractZipContent', () => {
       name: 'maa.log',
     })
     const primary = result!.primaryLogFiles[0]
-    expect('bytes' in primary && decodeFileContent(primary.bytes))
-      .toBe('[2026-04-16 14:55:00.000][INF][Px1][Tx1][test] AutoCollectStart\n')
+    expect('bytes' in primary && decodeFileContent(primary.bytes)).toBe(
+      '[2026-04-16 14:55:00.000][INF][Px1][Tx1][test] AutoCollectStart\n',
+    )
     if ('bytes' in primary) {
       const transferred = toExactArrayBuffer(primary.bytes)
       structuredClone(transferred, { transfer: [transferred] })
       expect(primary.bytes.byteLength).toBe(0)
     }
-    expect(await result?.primaryLogFiles[0]?.loadContent?.())
-      .toBe('[2026-04-16 14:55:00.000][INF][Px1][Tx1][test] AutoCollectStart\n')
+    expect(await result?.primaryLogFiles[0]?.loadContent?.()).toBe(
+      '[2026-04-16 14:55:00.000][INF][Px1][Tx1][test] AutoCollectStart\n',
+    )
     expect(result?.textFiles).toHaveLength(1)
     expect(result?.textFiles[0]).toMatchObject({
       path: 'runtime.txt',
       name: 'runtime.txt',
     })
     expect(await result?.textFiles[0]?.loadContent?.()).toBe('extra searchable text')
-    expect(result?.errorImages.has('2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation')).toBe(true)
-    expect(result?.visionImages.has('2026.04.16-14.57.57.123_AutoCollectRoute1_123456789')).toBe(true)
-    expect(result?.waitFreezesImages.has('2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes')).toBe(true)
+    expect(result?.errorImages.has('2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation')).toBe(
+      true,
+    )
+    expect(result?.visionImages.has('2026.04.16-14.57.57.123_AutoCollectRoute1_123456789')).toBe(
+      true,
+    )
+    expect(
+      result?.waitFreezesImages.has('2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes'),
+    ).toBe(true)
     expect(createObjectUrl).toHaveBeenCalledTimes(3)
   })
 
@@ -91,12 +99,14 @@ describe('extractZipContent', () => {
 
   it('extracts only the primary logs returned by the selection callback', async () => {
     const zipData = zipSync({
-      'debug/maa.bak.2026.04.16-14.00.00.000.log': strToU8('[2026-04-16 14:00:00.000][INF] historical log\n'),
+      'debug/maa.bak.2026.04.16-14.00.00.000.log': strToU8(
+        '[2026-04-16 14:00:00.000][INF] historical log\n',
+      ),
       'debug/maa.log': strToU8('[2026-04-16 15:00:00.000][INF] current log\n'),
     })
-    const selectCurrent = vi.fn(async (options: PrimaryLogSelectionOption[]) => (
-      options.filter(option => option.kind === 'main')
-    ))
+    const selectCurrent = vi.fn(async (options: PrimaryLogSelectionOption[]) =>
+      options.filter((option) => option.kind === 'main'),
+    )
 
     const result = await extractZipContent(
       new File([toArrayBuffer(zipData)], 'selected-primary.zip'),
@@ -111,8 +121,9 @@ describe('extractZipContent', () => {
       path: 'debug/maa.log',
       name: 'maa.log',
     })
-    expect(await result?.primaryLogFiles[0]?.loadContent?.())
-      .toBe('[2026-04-16 15:00:00.000][INF] current log\n')
+    expect(await result?.primaryLogFiles[0]?.loadContent?.()).toBe(
+      '[2026-04-16 15:00:00.000][INF] current log\n',
+    )
   })
 
   it('merges independent MXU ZIP volumes before discovering logs and assets', async () => {

@@ -43,7 +43,11 @@ const resolveNodeSize = (node: any): { width: number; height: number } => {
 export const useFlowchartEdges = (options: UseFlowchartEdgesOptions) => {
   const getBaseEdgeStyle = (edgeData: FlowEdgeData) => {
     if (!edgeData.executed) {
-      const style: Record<string, string | number> = { stroke: '#999', strokeWidth: 1, opacity: 0.5 }
+      const style: Record<string, string | number> = {
+        stroke: '#999',
+        strokeWidth: 1,
+        opacity: 0.5,
+      }
       if (edgeData.jump_back) {
         style.strokeDasharray = '8 4'
       } else if (edgeData.anchor) {
@@ -86,11 +90,12 @@ export const useFlowchartEdges = (options: UseFlowchartEdgesOptions) => {
       }
     }
 
-    const color = edgeData.edgeStatus === 'failed'
-      ? '#d03050'
-      : edgeData.edgeStatus === 'running'
-        ? '#f0a020'
-        : '#18a058'
+    const color =
+      edgeData.edgeStatus === 'failed'
+        ? '#d03050'
+        : edgeData.edgeStatus === 'running'
+          ? '#f0a020'
+          : '#18a058'
 
     const style: Record<string, string | number> = { stroke: color, strokeWidth: 3, opacity: 1 }
     if (edgeData.jump_back) {
@@ -115,7 +120,10 @@ export const useFlowchartEdges = (options: UseFlowchartEdgesOptions) => {
     if (!options.focusedNodeId.value) return null
     const ids = new Set<string>()
     options.flowEdges.value.forEach((edge: any) => {
-      if (edge.source === options.focusedNodeId.value || edge.target === options.focusedNodeId.value) {
+      if (
+        edge.source === options.focusedNodeId.value ||
+        edge.target === options.focusedNodeId.value
+      ) {
         ids.add(edge.id)
       }
     })
@@ -159,7 +167,11 @@ export const useFlowchartEdges = (options: UseFlowchartEdgesOptions) => {
       const isActiveEdge = !hasFocusedNode || activeEdgeIds.has(edge.id)
       const shouldAnimate = options.edgeFlowEnabled.value && edgeData.executed && isActiveEdge
       const hasDashArray = Object.prototype.hasOwnProperty.call(baseStyle, 'strokeDasharray')
-      const flowMode: FlowEdgeData['flowMode'] = !shouldAnimate ? 'none' : (hasDashArray ? 'dash' : 'chevron')
+      const flowMode: FlowEdgeData['flowMode'] = !shouldAnimate
+        ? 'none'
+        : hasDashArray
+          ? 'dash'
+          : 'chevron'
       const nextData: FlowEdgeData = { ...edgeData, flowMode }
       const dimmed = activeEdgeIds != null && !activeEdgeIds.has(edge.id)
       return {
@@ -176,7 +188,9 @@ export const useFlowchartEdges = (options: UseFlowchartEdgesOptions) => {
   }
 
   const recomputeEdgeRoutesForCurrentNodes = () => {
-    const fallbackNodeMap = new Map<string, any>(options.flowNodes.value.map((node: any) => [node.id, node]))
+    const fallbackNodeMap = new Map<string, any>(
+      options.flowNodes.value.map((node: any) => [node.id, node]),
+    )
 
     options.flowEdges.value = options.flowEdges.value.map((edge: any) => {
       // Prefer live positions managed by VueFlow during drag; fall back to local array.

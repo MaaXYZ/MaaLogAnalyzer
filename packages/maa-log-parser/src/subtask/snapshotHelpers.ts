@@ -1,9 +1,6 @@
 import { wrapRaw } from '../shared/rawValue'
 import type { NestedActionGroup } from '../shared/types'
-import {
-  resolveTaskTerminalStatus,
-  type TaskTerminalPhase,
-} from '../event/meta'
+import { resolveTaskTerminalStatus, type TaskTerminalPhase } from '../event/meta'
 import { resolveTaskLifecycleEventDetails } from '../task/lifecycle'
 
 export type SubTaskStatus = 'running' | 'succeeded' | 'failed'
@@ -23,7 +20,7 @@ export type SubTaskSnapshot = {
 }
 
 const markRawTaskDetails = (
-  details: Record<string, any> | undefined
+  details: Record<string, any> | undefined,
 ): Record<string, any> | undefined => {
   if (!details) return undefined
   return wrapRaw({ ...details })
@@ -31,7 +28,7 @@ const markRawTaskDetails = (
 
 export const getOrCreateSubTaskSnapshot = (
   snapshots: Map<number, SubTaskSnapshot>,
-  taskId: number
+  taskId: number,
 ): SubTaskSnapshot => {
   const existing = snapshots.get(taskId)
   if (existing) return existing
@@ -49,7 +46,7 @@ export const applySubTaskSnapshotStarting = (
   details: Record<string, any>,
   message: string,
   timestamp: string,
-  intern: (value: string) => string
+  intern: (value: string) => string,
 ) => {
   const lifecycleDetails = resolveTaskLifecycleEventDetails(details)
   snapshot.entry = intern(lifecycleDetails.entry)
@@ -67,7 +64,7 @@ export const applySubTaskSnapshotTerminal = (
   message: string,
   timestamp: string,
   phase: TaskTerminalPhase,
-  intern: (value: string) => string
+  intern: (value: string) => string,
 ) => {
   snapshot.status = resolveTaskTerminalStatus(phase)
   snapshot.end_ts = intern(timestamp)
@@ -78,14 +75,10 @@ export const applySubTaskSnapshotTerminal = (
 export const mergeSubTaskActionGroupWithSnapshot = (
   group: NestedActionGroup,
   snapshot: SubTaskSnapshot,
-  intern: (value: string) => string
+  intern: (value: string) => string,
 ): NestedActionGroup => {
   const snapshotStatus: 'success' | 'failed' | 'running' =
-    snapshot.status === 'failed'
-      ? 'failed'
-      : snapshot.status === 'running'
-        ? 'running'
-        : 'success'
+    snapshot.status === 'failed' ? 'failed' : snapshot.status === 'running' ? 'running' : 'success'
   const mergedStatus: 'success' | 'failed' | 'running' =
     group.status === 'failed' || snapshotStatus === 'failed'
       ? 'failed'

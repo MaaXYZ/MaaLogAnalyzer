@@ -22,7 +22,11 @@ const matchesKeyword = (query: string, keyword: string): boolean => {
 }
 
 const isJumpBackKeyword = (query: string): boolean => {
-  return matchesKeyword(query, 'jumpback') || matchesKeyword(query, 'jump back') || matchesKeyword(query, '跳回')
+  return (
+    matchesKeyword(query, 'jumpback') ||
+    matchesKeyword(query, 'jump back') ||
+    matchesKeyword(query, '跳回')
+  )
 }
 
 const isAnchorKeyword = (query: string): boolean => {
@@ -75,7 +79,10 @@ export const collectNodeNavMatchDetails = (node: NodeInfo, query: string): NodeN
   const seen = new Set<string>()
   const limit = 6
   const attempts = buildNodeRecognitionAttempts(node)
-  const recognitionTargetByNextName = buildRecognitionTargetByNextName(attempts, node.next_list ?? [])
+  const recognitionTargetByNextName = buildRecognitionTargetByNextName(
+    attempts,
+    node.next_list ?? [],
+  )
 
   if (includesSearchText(node.name, query)) {
     pushUniqueNodeNavMatchDetail(details, seen, { kind: 'node', text: node.name || '未命名节点' })

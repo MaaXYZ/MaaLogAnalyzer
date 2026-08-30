@@ -6,7 +6,7 @@ export type RecognitionOrderMeta = {
 }
 
 export const createRecognitionAttemptHelpers = (
-  recognitionOrderMeta: WeakMap<RecognitionAttempt, RecognitionOrderMeta>
+  recognitionOrderMeta: WeakMap<RecognitionAttempt, RecognitionOrderMeta>,
 ) => {
   const mergeRecognitionOrderMeta = (target: RecognitionAttempt, source: RecognitionAttempt) => {
     const targetMeta = recognitionOrderMeta.get(target)
@@ -26,7 +26,7 @@ export const createRecognitionAttemptHelpers = (
 
   const mergeRecognitionAttempts = (
     left: RecognitionAttempt,
-    right: RecognitionAttempt
+    right: RecognitionAttempt,
   ): RecognitionAttempt => {
     const leftEnded = left.status !== 'running'
     const rightEnded = right.status !== 'running'
@@ -69,13 +69,9 @@ export const createRecognitionAttemptHelpers = (
       preferred.vision_image = secondary.vision_image
     }
 
-    const mergedNestedNodes = [
-      ...(preferred.nested_nodes ?? []),
-      ...(secondary.nested_nodes ?? []),
-    ]
-    preferred.nested_nodes = mergedNestedNodes.length > 0
-      ? dedupeRecognitionAttempts(mergedNestedNodes)
-      : undefined
+    const mergedNestedNodes = [...(preferred.nested_nodes ?? []), ...(secondary.nested_nodes ?? [])]
+    preferred.nested_nodes =
+      mergedNestedNodes.length > 0 ? dedupeRecognitionAttempts(mergedNestedNodes) : undefined
 
     mergeRecognitionOrderMeta(preferred, secondary)
     return preferred
@@ -112,7 +108,10 @@ export const createRecognitionAttemptHelpers = (
     })
   }
 
-  const pickBestAttemptIndex = (attempts: RecognitionAttempt[], node: RecognitionAttempt): number => {
+  const pickBestAttemptIndex = (
+    attempts: RecognitionAttempt[],
+    node: RecognitionAttempt,
+  ): number => {
     const nodeMeta = recognitionOrderMeta.get(node)
     if (!nodeMeta) {
       return attempts.length === 1 ? 0 : -1
@@ -184,7 +183,9 @@ export const createRecognitionAttemptHelpers = (
   const cloneRecognitionAttempt = (attempt: RecognitionAttempt): RecognitionAttempt => {
     const cloned: RecognitionAttempt = {
       ...attempt,
-      nested_nodes: attempt.nested_nodes ? dedupeRecognitionAttempts([...attempt.nested_nodes]) : undefined,
+      nested_nodes: attempt.nested_nodes
+        ? dedupeRecognitionAttempts([...attempt.nested_nodes])
+        : undefined,
     }
     const meta = recognitionOrderMeta.get(attempt)
     if (meta) {
@@ -194,16 +195,13 @@ export const createRecognitionAttemptHelpers = (
   }
 
   const attachNodeToAttempt = (attempt: RecognitionAttempt, node: RecognitionAttempt) => {
-    const mergedNested = dedupeRecognitionAttempts([
-      ...(attempt.nested_nodes ?? []),
-      node,
-    ])
+    const mergedNested = dedupeRecognitionAttempts([...(attempt.nested_nodes ?? []), node])
     attempt.nested_nodes = mergedNested
   }
 
   const attachRecognitionNodesToAttempts = (
     attempts: RecognitionAttempt[],
-    recognitionNodes: RecognitionAttempt[]
+    recognitionNodes: RecognitionAttempt[],
   ) => {
     if (attempts.length === 0) {
       return {
@@ -234,10 +232,7 @@ export const createRecognitionAttemptHelpers = (
       }
 
       const target = mergedAttempts[targetIdx]
-      const mergedNested = dedupeRecognitionAttempts([
-        ...(target.nested_nodes ?? []),
-        node,
-      ])
+      const mergedNested = dedupeRecognitionAttempts([...(target.nested_nodes ?? []), node])
       target.nested_nodes = mergedNested
     }
 

@@ -12,16 +12,21 @@ const loggerLine = (timestamp: string, message: string): string => {
   return `[${timestamp}][DBG][Px1][Tx1][Logger] ${message}`
 }
 
-const log = (version: string): string => [
-  loggerLine('2026-07-01 10:00:00.000', 'MAA Process Start'),
-  loggerLine('2026-07-01 10:00:00.010', `Version ${version}`),
-].join('\n')
+const log = (version: string): string =>
+  [
+    loggerLine('2026-07-01 10:00:00.000', 'MAA Process Start'),
+    loggerLine('2026-07-01 10:00:00.010', `Version ${version}`),
+  ].join('\n')
 
 afterEach(async () => {
-  await Promise.all(tempRoots.splice(0, tempRoots.length).map((root) => rm(root, {
-    recursive: true,
-    force: true,
-  })))
+  await Promise.all(
+    tempRoots.splice(0, tempRoots.length).map((root) =>
+      rm(root, {
+        recursive: true,
+        force: true,
+      }),
+    ),
+  )
 })
 
 describe('loadFrameworkLogSources', () => {
@@ -29,10 +34,13 @@ describe('loadFrameworkLogSources', () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'mla-framework-input-'))
     tempRoots.push(root)
     const zipPath = path.join(root, 'logs.zip')
-    await writeFile(zipPath, zipSync({
-      'debug/maafw.log': strToU8(log('v5.11.1')),
-      'debug/maa.log': strToU8(log('v4.4.0')),
-    }))
+    await writeFile(
+      zipPath,
+      zipSync({
+        'debug/maafw.log': strToU8(log('v5.11.1')),
+        'debug/maa.log': strToU8(log('v4.4.0')),
+      }),
+    )
 
     const sources = await loadFrameworkLogSources(zipPath)
     expect(sources.map((source) => source.name)).toEqual(['maafw.log'])
@@ -63,16 +71,24 @@ describe('loadFrameworkLogSources', () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'mla-framework-input-'))
     tempRoots.push(root)
     const zipPath = path.join(root, 'logs.zip')
-    await writeFile(zipPath, zipSync({
-      'debug/maafw.log': new Uint8Array(2_048),
-    }, { level: 9 }))
+    await writeFile(
+      zipPath,
+      zipSync(
+        {
+          'debug/maafw.log': new Uint8Array(2_048),
+        },
+        { level: 9 },
+      ),
+    )
 
-    await expect(loadFrameworkLogSources(zipPath, {
-      archiveLimits: {
-        compressionRatioMinBytes: 1,
-        maxCompressionRatio: 2,
-      },
-    })).rejects.toMatchObject({
+    await expect(
+      loadFrameworkLogSources(zipPath, {
+        archiveLimits: {
+          compressionRatioMinBytes: 1,
+          maxCompressionRatio: 2,
+        },
+      }),
+    ).rejects.toMatchObject({
       name: 'ArchiveLimitError',
       code: 'compression-ratio',
     })
@@ -82,10 +98,13 @@ describe('loadFrameworkLogSources', () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'mla-framework-input-'))
     tempRoots.push(root)
     const zipPath = path.join(root, 'logs.zip')
-    await writeFile(zipPath, zipSync({
-      'debug/maafw.log': strToU8(log('v5.11.1')),
-      'other/maa.log': new Uint8Array(1_024),
-    }))
+    await writeFile(
+      zipPath,
+      zipSync({
+        'debug/maafw.log': strToU8(log('v5.11.1')),
+        'other/maa.log': new Uint8Array(1_024),
+      }),
+    )
 
     const sources = await loadFrameworkLogSources(zipPath, {
       archiveLimits: { maxFileBytes: 512, maxExtractedBytes: 512 },
@@ -99,9 +118,11 @@ describe('loadFrameworkLogSources', () => {
     const logPath = path.join(root, 'maafw.log')
     await writeFile(logPath, log('v5.11.1'))
 
-    await expect(loadFrameworkLogSources(logPath, {
-      archiveLimits: { maxFileBytes: 8 },
-    })).rejects.toMatchObject({
+    await expect(
+      loadFrameworkLogSources(logPath, {
+        archiveLimits: { maxFileBytes: 8 },
+      }),
+    ).rejects.toMatchObject({
       name: 'ArchiveLimitError',
       code: 'file-size',
     })

@@ -17,10 +17,7 @@ interface UseFlowchartNodeInteractionOptions {
 }
 
 export const useFlowchartNodeInteraction = (options: UseFlowchartNodeInteractionOptions) => {
-  const resolveTimelineIndexForNodeClick = (
-    nodeId: string,
-    data: FlowNodeData
-  ): number => {
+  const resolveTimelineIndexForNodeClick = (nodeId: string, data: FlowNodeData): number => {
     const timelineLength = options.executionTimeline.value.length
     if (timelineLength === 0) return -1
 

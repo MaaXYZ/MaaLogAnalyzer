@@ -49,7 +49,7 @@ export const useFlowchartGraphRuntime = (options: UseFlowchartGraphRuntimeOption
     options.flowEdges.value = options.decorateInitialEdges(edges as any[])
     renderedTask = task
 
-    const renderedNodeIds = new Set(nodes.map(node => node.id))
+    const renderedNodeIds = new Set(nodes.map((node) => node.id))
     if (options.focusedNodeId.value && !renderedNodeIds.has(options.focusedNodeId.value)) {
       options.focusedNodeId.value = null
     }
@@ -84,34 +84,38 @@ export const useFlowchartGraphRuntime = (options: UseFlowchartGraphRuntimeOption
     }
   }
 
-  watch(options.selectedTask, async (task, previousTask) => {
-    if (!task) {
-      layoutRunId.value += 1
-      renderedTask = null
-      options.stopPlayback()
-      options.closePopover()
-      options.focusedNodeId.value = null
-      options.selectedTimelineIndex.value = null
-      options.flowNodes.value = []
-      options.flowEdges.value = []
-      return
-    }
+  watch(
+    options.selectedTask,
+    async (task, previousTask) => {
+      if (!task) {
+        layoutRunId.value += 1
+        renderedTask = null
+        options.stopPlayback()
+        options.closePopover()
+        options.focusedNodeId.value = null
+        options.selectedTimelineIndex.value = null
+        options.flowNodes.value = []
+        options.flowEdges.value = []
+        return
+      }
 
-    const sameSelectedTask = previousTask != null && isSameTask(task, previousTask)
-    if (!sameSelectedTask) {
-      options.stopPlayback()
-      options.closePopover()
-      options.selectedTimelineIndex.value = null
-      options.focusedNodeId.value = null
-    }
+      const sameSelectedTask = previousTask != null && isSameTask(task, previousTask)
+      if (!sameSelectedTask) {
+        options.stopPlayback()
+        options.closePopover()
+        options.selectedTimelineIndex.value = null
+        options.focusedNodeId.value = null
+      }
 
-    const preserveLayout = renderedTask != null && isSameTask(task, renderedTask)
-    await rebuildFlowchartLayout(task, {
-      resetFocus: !sameSelectedTask,
-      fit: !preserveLayout,
-      preserveLayout,
-    })
-  }, { immediate: true })
+      const preserveLayout = renderedTask != null && isSameTask(task, renderedTask)
+      await rebuildFlowchartLayout(task, {
+        resetFocus: !sameSelectedTask,
+        fit: !preserveLayout,
+        preserveLayout,
+      })
+    },
+    { immediate: true },
+  )
 
   const onNodeDragStop = () => {
     if (!options.relayoutAfterDrag.value) return

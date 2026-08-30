@@ -19,8 +19,12 @@ describe('theme preference persistence', () => {
 
   it('tolerates unavailable storage reads and writes', () => {
     vi.stubGlobal('localStorage', {
-      getItem: vi.fn(() => { throw new Error('storage disabled') }),
-      setItem: vi.fn(() => { throw new Error('storage disabled') }),
+      getItem: vi.fn(() => {
+        throw new Error('storage disabled')
+      }),
+      setItem: vi.fn(() => {
+        throw new Error('storage disabled')
+      }),
     })
 
     expect(readThemePreference()).toBeNull()

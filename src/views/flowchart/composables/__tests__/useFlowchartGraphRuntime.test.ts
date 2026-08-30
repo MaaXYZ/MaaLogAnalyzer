@@ -58,31 +58,33 @@ describe('useFlowchartGraphRuntime', () => {
     const fitView = vi.fn()
     const scope = effectScope()
 
-    scope.run(() => useFlowchartGraphRuntime({
-      selectedTask,
-      flowNodes,
-      flowEdges,
-      focusedNodeId,
-      popoverNodeId,
-      selectedTimelineIndex,
-      isPlaying: ref(false),
-      playbackIntervalMs: ref(900),
-      focusZoom: ref(1),
-      edgeStyle: ref('orthogonal'),
-      edgeFlowEnabled: ref(true),
-      ignoreUnexecutedNodes: ref(false),
-      relayoutAfterDrag: ref(true),
-      stopPlayback,
-      startPlayback: vi.fn(),
-      closePopover,
-      fitView,
-      updatePopoverPosition: vi.fn(),
-      decorateInitialEdges: edges => edges,
-      applyFocusStyles: vi.fn(),
-      applyEdgeRenderTypes: vi.fn(),
-      recomputeEdgeRoutesForCurrentNodes: vi.fn(),
-      persistSettings: vi.fn(),
-    }))
+    scope.run(() =>
+      useFlowchartGraphRuntime({
+        selectedTask,
+        flowNodes,
+        flowEdges,
+        focusedNodeId,
+        popoverNodeId,
+        selectedTimelineIndex,
+        isPlaying: ref(false),
+        playbackIntervalMs: ref(900),
+        focusZoom: ref(1),
+        edgeStyle: ref('orthogonal'),
+        edgeFlowEnabled: ref(true),
+        ignoreUnexecutedNodes: ref(false),
+        relayoutAfterDrag: ref(true),
+        stopPlayback,
+        startPlayback: vi.fn(),
+        closePopover,
+        fitView,
+        updatePopoverPosition: vi.fn(),
+        decorateInitialEdges: (edges) => edges,
+        applyFocusStyles: vi.fn(),
+        applyEdgeRenderTypes: vi.fn(),
+        recomputeEdgeRoutesForCurrentNodes: vi.fn(),
+        persistSettings: vi.fn(),
+      }),
+    )
 
     await flushWatchers()
     await vi.runAllTimersAsync()
@@ -101,48 +103,55 @@ describe('useFlowchartGraphRuntime', () => {
     expect(focusedNodeId.value).toBe('NodeA')
     expect(selectedTimelineIndex.value).toBe(0)
     expect(fitView).not.toHaveBeenCalled()
-    expect(buildFlowchartDataMock).toHaveBeenLastCalledWith(refreshedTask, expect.objectContaining({
-      previousNodes: flowNodes.value,
-      previousEdges: flowEdges.value,
-    }))
+    expect(buildFlowchartDataMock).toHaveBeenLastCalledWith(
+      refreshedTask,
+      expect.objectContaining({
+        previousNodes: flowNodes.value,
+        previousEdges: flowEdges.value,
+      }),
+    )
     scope.stop()
   })
 
   it('does not commit an obsolete layout after selection is cleared', async () => {
     let resolveLayout!: (value: { nodes: any[]; edges: any[] }) => void
-    buildFlowchartDataMock.mockReturnValue(new Promise((resolve) => {
-      resolveLayout = resolve
-    }))
+    buildFlowchartDataMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveLayout = resolve
+      }),
+    )
     const selectedTask = ref<TaskInfo | null>(makeTask(10))
     const flowNodes = ref<any[]>([])
     const flowEdges = ref<any[]>([])
     const scope = effectScope()
 
-    scope.run(() => useFlowchartGraphRuntime({
-      selectedTask,
-      flowNodes,
-      flowEdges,
-      focusedNodeId: ref(null),
-      popoverNodeId: ref(null),
-      selectedTimelineIndex: ref(null),
-      isPlaying: ref(false),
-      playbackIntervalMs: ref(900),
-      focusZoom: ref(1),
-      edgeStyle: ref('orthogonal'),
-      edgeFlowEnabled: ref(true),
-      ignoreUnexecutedNodes: ref(false),
-      relayoutAfterDrag: ref(true),
-      stopPlayback: vi.fn(),
-      startPlayback: vi.fn(),
-      closePopover: vi.fn(),
-      fitView: vi.fn(),
-      updatePopoverPosition: vi.fn(),
-      decorateInitialEdges: edges => edges,
-      applyFocusStyles: vi.fn(),
-      applyEdgeRenderTypes: vi.fn(),
-      recomputeEdgeRoutesForCurrentNodes: vi.fn(),
-      persistSettings: vi.fn(),
-    }))
+    scope.run(() =>
+      useFlowchartGraphRuntime({
+        selectedTask,
+        flowNodes,
+        flowEdges,
+        focusedNodeId: ref(null),
+        popoverNodeId: ref(null),
+        selectedTimelineIndex: ref(null),
+        isPlaying: ref(false),
+        playbackIntervalMs: ref(900),
+        focusZoom: ref(1),
+        edgeStyle: ref('orthogonal'),
+        edgeFlowEnabled: ref(true),
+        ignoreUnexecutedNodes: ref(false),
+        relayoutAfterDrag: ref(true),
+        stopPlayback: vi.fn(),
+        startPlayback: vi.fn(),
+        closePopover: vi.fn(),
+        fitView: vi.fn(),
+        updatePopoverPosition: vi.fn(),
+        decorateInitialEdges: (edges) => edges,
+        applyFocusStyles: vi.fn(),
+        applyEdgeRenderTypes: vi.fn(),
+        recomputeEdgeRoutesForCurrentNodes: vi.fn(),
+        persistSettings: vi.fn(),
+      }),
+    )
 
     await nextTick()
     selectedTask.value = null

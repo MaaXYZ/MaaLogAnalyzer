@@ -117,7 +117,11 @@ const toJsonRpcMessage = (raw: unknown): JsonRpcMessage | null => {
   if (Object.prototype.hasOwnProperty.call(record, 'id')) {
     if (Object.prototype.hasOwnProperty.call(record, 'error')) {
       const errorRecord = asRecord(record.error)
-      if (!errorRecord || typeof errorRecord.code !== 'number' || typeof errorRecord.message !== 'string') {
+      if (
+        !errorRecord ||
+        typeof errorRecord.code !== 'number' ||
+        typeof errorRecord.message !== 'string'
+      ) {
         return null
       }
       return {
@@ -159,7 +163,11 @@ export const useBridge = (options: UseBridgeOptions): BridgeController => {
     postToParent(payload)
   }
 
-  const sendRequest = (method: string, params?: unknown, requestOptions?: SendRequestOptions): Promise<unknown> => {
+  const sendRequest = (
+    method: string,
+    params?: unknown,
+    requestOptions?: SendRequestOptions,
+  ): Promise<unknown> => {
     if (!options.enabled) {
       return Promise.reject(new Error('Bridge is disabled'))
     }
@@ -244,7 +252,8 @@ export const useBridge = (options: UseBridgeOptions): BridgeController => {
   }
 
   const handleMessageEvent = (event: MessageEvent) => {
-    if (window.parent !== window && event.source !== window.parent && event.source !== window) return
+    if (window.parent !== window && event.source !== window.parent && event.source !== window)
+      return
     const message = toJsonRpcMessage(event.data)
     if (!message) return
 
@@ -259,7 +268,9 @@ export const useBridge = (options: UseBridgeOptions): BridgeController => {
 
     if ('error' in message) {
       settlePendingRequest(message.id, (pending) => {
-        pending.reject(new JsonRpcRequestError(message.error.code, message.error.message, message.error.data))
+        pending.reject(
+          new JsonRpcRequestError(message.error.code, message.error.message, message.error.data),
+        )
       })
       return
     }

@@ -1,7 +1,4 @@
-import type {
-  DeferredTextSearchTarget,
-  TextSearchLoadedTarget,
-} from '../useTextSearchTargets'
+import type { DeferredTextSearchTarget, TextSearchLoadedTarget } from '../useTextSearchTargets'
 
 export const toDeferredTargetsFromLoadedTargets = (
   targets: TextSearchLoadedTarget[],
@@ -14,15 +11,15 @@ export const toDeferredTargetsFromLoadedTargets = (
   }))
 }
 
-export const createFallbackDeferredTargets = (
-  content: string,
-): DeferredTextSearchTarget[] => {
-  return [{
-    id: 'loaded:fallback',
-    label: '已加载日志',
-    fileName: 'loaded.log',
-    loadContent: async () => content,
-  }]
+export const createFallbackDeferredTargets = (content: string): DeferredTextSearchTarget[] => {
+  return [
+    {
+      id: 'loaded:fallback',
+      label: '已加载日志',
+      fileName: 'loaded.log',
+      loadContent: async () => content,
+    },
+  ]
 }
 
 export const resolveDeferredTargets = (

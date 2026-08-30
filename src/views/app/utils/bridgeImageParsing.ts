@@ -78,16 +78,18 @@ export const toImageDataUrl = (imageData: unknown): string | null => {
   }
   if (!normalizedBase64) return null
 
-  const mimeType = typeof imageRecord.mimeType === 'string' && imageRecord.mimeType.trim()
-    ? imageRecord.mimeType.trim()
-    : 'image/png'
+  const mimeType =
+    typeof imageRecord.mimeType === 'string' && imageRecord.mimeType.trim()
+      ? imageRecord.mimeType.trim()
+      : 'image/png'
   return `data:${mimeType};base64,${normalizedBase64}`
 }
 
 export const parseCachedImageRefs = (detailData: unknown): BridgeCachedImageRefs => {
   const detailRecord = asRecord(detailData)
   const infoRecord = asRecord(detailRecord?.info)
-  const cachedImageRecord = asRecord(detailRecord?.cached_image) ?? asRecord(infoRecord?.cached_image)
+  const cachedImageRecord =
+    asRecord(detailRecord?.cached_image) ?? asRecord(infoRecord?.cached_image)
   return {
     raw: toPositiveInteger(cachedImageRecord?.raw),
     draws: toPositiveIntegerArray(cachedImageRecord?.draws),

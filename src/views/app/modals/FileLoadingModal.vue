@@ -31,9 +31,7 @@ const showModel = computed({
     :close-on-esc="false"
   >
     <n-flex vertical style="gap: 20px; padding: 20px 0">
-      <n-text style="text-align: center; font-size: 16px">
-        正在读取文件内容...
-      </n-text>
+      <n-text style="text-align: center; font-size: 16px"> 正在读取文件内容... </n-text>
       <n-progress
         type="line"
         :percentage="100"

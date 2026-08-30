@@ -1,15 +1,5 @@
 <script setup lang="ts">
-import {
-  NCard,
-  NText,
-  NScrollbar,
-  NEmpty,
-  NSpin,
-  NList,
-  NListItem,
-  NTag,
-  NFlex,
-} from 'naive-ui'
+import { NCard, NText, NScrollbar, NEmpty, NSpin, NList, NListItem, NTag, NFlex } from 'naive-ui'
 
 interface SearchResult {
   lineNumber: number
@@ -45,7 +35,9 @@ const emit = defineEmits<{
   >
     <template #header-extra>
       <n-text v-if="props.totalMatches > 0" type="success" style="font-size: 13px">
-        {{ props.mobileMode ? `${props.totalMatches} 个结果` : `找到 ${props.totalMatches} 个结果` }}
+        {{
+          props.mobileMode ? `${props.totalMatches} 个结果` : `找到 ${props.totalMatches} 个结果`
+        }}
       </n-text>
     </template>
 
@@ -54,7 +46,10 @@ const emit = defineEmits<{
       <n-empty v-else-if="props.isLoadingFile" description="文件加载中...">
         <template #icon><n-spin size="large" /></template>
       </n-empty>
-      <n-empty v-else-if="!props.searchText" :description="props.mobileMode ? '请输入搜索内容' : '请输入搜索内容并点击搜索'" />
+      <n-empty
+        v-else-if="!props.searchText"
+        :description="props.mobileMode ? '请输入搜索内容' : '请输入搜索内容并点击搜索'"
+      />
       <n-empty v-else-if="props.isSearching" description="搜索中...">
         <template #icon><n-spin size="large" /></template>
       </n-empty>
@@ -68,17 +63,44 @@ const emit = defineEmits<{
         >
           <n-flex v-if="props.mobileMode" align="center" style="gap: 6px">
             <n-tag size="small" :bordered="false">{{ result.lineNumber }}</n-tag>
-            <n-text style="font-family: monospace; font-size: 12px; line-height: 1.5; word-break: break-all; flex: 1">
+            <n-text
+              style="
+                font-family: monospace;
+                font-size: 12px;
+                line-height: 1.5;
+                word-break: break-all;
+                flex: 1;
+              "
+            >
               <span>{{ props.highlightMatch(result).before }}</span>
-              <span style="background-color: #f2c97d; color: #000; padding: 1px 3px; border-radius: 2px; font-weight: 600">
+              <span
+                style="
+                  background-color: #f2c97d;
+                  color: #000;
+                  padding: 1px 3px;
+                  border-radius: 2px;
+                  font-weight: 600;
+                "
+              >
                 {{ props.highlightMatch(result).match }}
               </span>
               <span>{{ props.highlightMatch(result).after }}</span>
             </n-text>
           </n-flex>
-          <n-text v-else style="font-family: monospace; font-size: 12px; line-height: 1.6; word-break: break-all">
+          <n-text
+            v-else
+            style="font-family: monospace; font-size: 12px; line-height: 1.6; word-break: break-all"
+          >
             <span>{{ props.highlightMatch(result).before }}</span>
-            <span style="background-color: #f2c97d; color: #000; padding: 2px 4px; border-radius: 2px; font-weight: 600">
+            <span
+              style="
+                background-color: #f2c97d;
+                color: #000;
+                padding: 2px 4px;
+                border-radius: 2px;
+                font-weight: 600;
+              "
+            >
               {{ props.highlightMatch(result).match }}
             </span>
             <span>{{ props.highlightMatch(result).after }}</span>

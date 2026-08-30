@@ -46,10 +46,7 @@ export const readScopeIdentityFields = (payload: unknown): ScopeIdentityFields =
   }
 }
 
-export const resolveScopeLocalId = (
-  kind: ScopeKind,
-  payload: unknown,
-): number | undefined => {
+export const resolveScopeLocalId = (kind: ScopeKind, payload: unknown): number | undefined => {
   const identity = readScopeIdentityFields(payload)
   switch (kind) {
     case 'task':
@@ -74,12 +71,7 @@ export const resolveScopeLocalId = (
   }
 }
 
-export const buildScopeId = ({
-  kind,
-  taskId,
-  localId,
-  startSeq,
-}: ScopeIdParts): string => {
+export const buildScopeId = ({ kind, taskId, localId, startSeq }: ScopeIdParts): string => {
   return `${kind}:${taskId ?? 0}:${localId ?? 0}:seq${startSeq}`
 }
 

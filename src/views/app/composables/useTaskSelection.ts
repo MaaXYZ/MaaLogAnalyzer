@@ -12,7 +12,10 @@ interface UseTaskSelectionOptions {
   afterSelect?: () => void
 }
 
-const flattenFlowItems = (items: UnifiedFlowItem[] | undefined, output: UnifiedFlowItem[] = []): UnifiedFlowItem[] => {
+const flattenFlowItems = (
+  items: UnifiedFlowItem[] | undefined,
+  output: UnifiedFlowItem[] = [],
+): UnifiedFlowItem[] => {
   if (!items || items.length === 0) return output
   for (const item of items) {
     output.push(item)
@@ -31,7 +34,6 @@ const hasMainActionFlowId = (node: NodeInfo, flowItemId: string): boolean => {
 }
 
 export const useTaskSelection = (options: UseTaskSelectionOptions) => {
-  
   // 封装统一的选中后置处理
   const triggerPostSelect = () => {
     if (options.afterSelect) {
@@ -41,8 +43,14 @@ export const useTaskSelection = (options: UseTaskSelectionOptions) => {
 
   const hasFlowItemId = (node: NodeInfo | null, flowItemId: string | null | undefined): boolean => {
     if (!node || !flowItemId) return false
-    if (flattenFlowItems(options.buildNodeRecognitionFlowItems(node)).some(item => item.id === flowItemId)) return true
-    if (flattenFlowItems(options.buildNodeFlowItems(node)).some(item => item.id === flowItemId)) return true
+    if (
+      flattenFlowItems(options.buildNodeRecognitionFlowItems(node)).some(
+        (item) => item.id === flowItemId,
+      )
+    )
+      return true
+    if (flattenFlowItems(options.buildNodeFlowItems(node)).some((item) => item.id === flowItemId))
+      return true
     if (hasMainActionFlowId(node, flowItemId)) return true
     return false
   }

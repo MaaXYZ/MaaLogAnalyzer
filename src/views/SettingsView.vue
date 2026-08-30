@@ -9,13 +9,8 @@ const props = defineProps<{
   show?: boolean
 }>()
 
-const {
-  settings,
-  playbackSpeedOptions,
-  focusZoomOptions,
-  handleSave,
-  handleReset,
-} = useSettingsState(toRef(props, 'show'))
+const { settings, playbackSpeedOptions, focusZoomOptions, handleSave, handleReset } =
+  useSettingsState(toRef(props, 'show'))
 </script>
 
 <template>

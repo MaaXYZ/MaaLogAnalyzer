@@ -20,7 +20,7 @@ describe('large in-memory text search', () => {
       shouldAbort: () => false,
     })
 
-    expect(results?.map(result => result.lineNumber)).toEqual([2, 3])
+    expect(results?.map((result) => result.lineNumber)).toEqual([2, 3])
   })
 
   it('finds regular expression matches and preserves their ranges', async () => {
@@ -49,6 +49,6 @@ describe('large in-memory text search', () => {
       shouldAbort: () => false,
     })
 
-    expect(results?.map(result => result.lineNumber)).toEqual([1])
+    expect(results?.map((result) => result.lineNumber)).toEqual([1])
   })
 })

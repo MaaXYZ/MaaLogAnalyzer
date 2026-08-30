@@ -42,9 +42,7 @@ describe('Analyzer tool handler parse concurrency', () => {
     const handlers = createAnalyzerToolHandlers({
       store,
       resolve_input(input) {
-        return input.path === '/logs/old.log'
-          ? oldInput.promise
-          : newInput.promise
+        return input.path === '/logs/old.log' ? oldInput.promise : newInput.promise
       },
     })
 
@@ -115,9 +113,7 @@ describe('Analyzer tool handler parse concurrency', () => {
     const handlers = createAnalyzerToolHandlers({
       store,
       resolve_input(input) {
-        return input.path === '/logs/first.log'
-          ? firstInput.promise
-          : secondInput.promise
+        return input.path === '/logs/first.log' ? firstInput.promise : secondInput.promise
       },
     })
 

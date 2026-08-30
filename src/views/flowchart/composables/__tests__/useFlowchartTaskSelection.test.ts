@@ -21,9 +21,24 @@ const makeTask = (params: {
 
 describe('useFlowchartTaskSelection', () => {
   it('remaps selection by task identity when task list order changes', async () => {
-    const task1 = makeTask({ taskId: 1, entry: 'Task1', uuid: 'u-1', startTime: '2026-04-07 10:00:00.001' })
-    const task2 = makeTask({ taskId: 2, entry: 'Task2', uuid: 'u-2', startTime: '2026-04-07 10:00:00.002' })
-    const task3 = makeTask({ taskId: 3, entry: 'Task3', uuid: 'u-3', startTime: '2026-04-07 10:00:00.003' })
+    const task1 = makeTask({
+      taskId: 1,
+      entry: 'Task1',
+      uuid: 'u-1',
+      startTime: '2026-04-07 10:00:00.001',
+    })
+    const task2 = makeTask({
+      taskId: 2,
+      entry: 'Task2',
+      uuid: 'u-2',
+      startTime: '2026-04-07 10:00:00.002',
+    })
+    const task3 = makeTask({
+      taskId: 3,
+      entry: 'Task3',
+      uuid: 'u-3',
+      startTime: '2026-04-07 10:00:00.003',
+    })
     const tasks = ref<TaskInfo[]>([task1, task2, task3])
     const selectedTask = ref<TaskInfo | null>(null)
     const onSelectTask = vi.fn((task: TaskInfo) => {
@@ -57,9 +72,24 @@ describe('useFlowchartTaskSelection', () => {
   })
 
   it('prioritizes external selectedTask when it is resolvable', async () => {
-    const task1 = makeTask({ taskId: 1, entry: 'Task1', uuid: 'u-1', startTime: '2026-04-07 10:00:00.001' })
-    const task2 = makeTask({ taskId: 2, entry: 'Task2', uuid: 'u-2', startTime: '2026-04-07 10:00:00.002' })
-    const task3 = makeTask({ taskId: 3, entry: 'Task3', uuid: 'u-3', startTime: '2026-04-07 10:00:00.003' })
+    const task1 = makeTask({
+      taskId: 1,
+      entry: 'Task1',
+      uuid: 'u-1',
+      startTime: '2026-04-07 10:00:00.001',
+    })
+    const task2 = makeTask({
+      taskId: 2,
+      entry: 'Task2',
+      uuid: 'u-2',
+      startTime: '2026-04-07 10:00:00.002',
+    })
+    const task3 = makeTask({
+      taskId: 3,
+      entry: 'Task3',
+      uuid: 'u-3',
+      startTime: '2026-04-07 10:00:00.003',
+    })
     const tasks = ref<TaskInfo[]>([task1, task2, task3])
     const selectedTask = ref<TaskInfo | null>(null)
 
@@ -83,8 +113,18 @@ describe('useFlowchartTaskSelection', () => {
   })
 
   it('ignores out-of-range manual task index updates', async () => {
-    const task1 = makeTask({ taskId: 1, entry: 'Task1', uuid: 'u-1', startTime: '2026-04-07 10:00:00.001' })
-    const task2 = makeTask({ taskId: 2, entry: 'Task2', uuid: 'u-2', startTime: '2026-04-07 10:00:00.002' })
+    const task1 = makeTask({
+      taskId: 1,
+      entry: 'Task1',
+      uuid: 'u-1',
+      startTime: '2026-04-07 10:00:00.001',
+    })
+    const task2 = makeTask({
+      taskId: 2,
+      entry: 'Task2',
+      uuid: 'u-2',
+      startTime: '2026-04-07 10:00:00.002',
+    })
     const tasks = ref<TaskInfo[]>([task1, task2])
     const selectedTask = ref<TaskInfo | null>(null)
     const onSelectTask = vi.fn((task: TaskInfo) => {
@@ -108,9 +148,24 @@ describe('useFlowchartTaskSelection', () => {
   })
 
   it('falls back to first task when external selectedTask becomes unresolvable', async () => {
-    const task1 = makeTask({ taskId: 1, entry: 'Task1', uuid: 'u-1', startTime: '2026-04-07 10:00:00.001' })
-    const task2 = makeTask({ taskId: 2, entry: 'Task2', uuid: 'u-2', startTime: '2026-04-07 10:00:00.002' })
-    const task3 = makeTask({ taskId: 3, entry: 'Task3', uuid: 'u-3', startTime: '2026-04-07 10:00:00.003' })
+    const task1 = makeTask({
+      taskId: 1,
+      entry: 'Task1',
+      uuid: 'u-1',
+      startTime: '2026-04-07 10:00:00.001',
+    })
+    const task2 = makeTask({
+      taskId: 2,
+      entry: 'Task2',
+      uuid: 'u-2',
+      startTime: '2026-04-07 10:00:00.002',
+    })
+    const task3 = makeTask({
+      taskId: 3,
+      entry: 'Task3',
+      uuid: 'u-3',
+      startTime: '2026-04-07 10:00:00.003',
+    })
     const tasks = ref<TaskInfo[]>([task1, task2, task3])
     const selectedTask = ref<TaskInfo | null>(task3)
     const onSelectTask = vi.fn((task: TaskInfo) => {

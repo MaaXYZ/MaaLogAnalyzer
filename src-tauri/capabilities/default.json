@@ -2,9 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-capability",
   "description": "Allow the main window to access dialog and file system APIs used by the desktop log analyzer.",
-  "windows": [
-    "main"
-  ],
+  "windows": ["main"],
   "permissions": [
     "core:app:allow-version",
     "core:app:allow-tauri-version",

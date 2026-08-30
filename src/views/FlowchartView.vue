@@ -35,23 +35,25 @@ const emit = defineEmits<{
   'select-task': [task: TaskInfo]
   'navigate-to-node': [task: TaskInfo, node: NodeInfo]
   'upload-file': [file: File | File[]]
-  'upload-content': [content: string, errorImages?: Map<string, string>, visionImages?: Map<string, string>, waitFreezesImages?: Map<string, string>, textFiles?: LoadedTextFile[], primaryLogFiles?: PrimaryLogFile[]]
+  'upload-content': [
+    content: string,
+    errorImages?: Map<string, string>,
+    visionImages?: Map<string, string>,
+    waitFreezesImages?: Map<string, string>,
+    textFiles?: LoadedTextFile[],
+    primaryLogFiles?: PrimaryLogFile[],
+  ]
 }>()
 
 const { isMobile } = useIsMobile()
 const settings = getSettings()
 
-const {
-  selectedTaskIndex,
-  taskOptions,
-  selectedTask,
-  renderTaskLabel,
-  handleUserTaskSelect,
-} = useFlowchartTaskSelection({
-  tasks: computed(() => props.tasks),
-  selectedTask: computed(() => props.selectedTask),
-  onSelectTask: (task) => emit('select-task', task),
-})
+const { selectedTaskIndex, taskOptions, selectedTask, renderTaskLabel, handleUserTaskSelect } =
+  useFlowchartTaskSelection({
+    tasks: computed(() => props.tasks),
+    selectedTask: computed(() => props.selectedTask),
+    onSelectTask: (task) => emit('select-task', task),
+  })
 
 // 定位到日志分析界面
 function navigateToNode(info: NodeInfo) {
@@ -69,8 +71,23 @@ const {
   handleFolderInputChange,
 } = useFlowchartUpload({
   onUploadFile: (file) => emit('upload-file', file),
-  onUploadContent: (content, errorImages, visionImages, waitFreezesImages, textFiles, primaryLogFiles) => {
-    emit('upload-content', content, errorImages, visionImages, waitFreezesImages, textFiles, primaryLogFiles)
+  onUploadContent: (
+    content,
+    errorImages,
+    visionImages,
+    waitFreezesImages,
+    textFiles,
+    primaryLogFiles,
+  ) => {
+    emit(
+      'upload-content',
+      content,
+      errorImages,
+      visionImages,
+      waitFreezesImages,
+      textFiles,
+      primaryLogFiles,
+    )
   },
 })
 
@@ -94,23 +111,29 @@ const ignoreUnexecutedNodes = computed<boolean>({
 })
 const relayoutAfterDrag = computed(() => settings.flowchartRelayoutAfterDrag)
 const playbackIntervalMs = computed<number>({
-  get: () => (typeof settings.flowchartPlaybackIntervalMs === 'number' && settings.flowchartPlaybackIntervalMs > 0 ? settings.flowchartPlaybackIntervalMs : 900),
-  set: (v) => { settings.flowchartPlaybackIntervalMs = v },
+  get: () =>
+    typeof settings.flowchartPlaybackIntervalMs === 'number' &&
+    settings.flowchartPlaybackIntervalMs > 0
+      ? settings.flowchartPlaybackIntervalMs
+      : 900,
+  set: (v) => {
+    settings.flowchartPlaybackIntervalMs = v
+  },
 })
 const focusZoom = computed<number>({
-  get: () => (typeof settings.flowchartFocusZoom === 'number' && settings.flowchartFocusZoom > 0 ? settings.flowchartFocusZoom : 1.0),
-  set: (v) => { settings.flowchartFocusZoom = v },
+  get: () =>
+    typeof settings.flowchartFocusZoom === 'number' && settings.flowchartFocusZoom > 0
+      ? settings.flowchartFocusZoom
+      : 1.0,
+  set: (v) => {
+    settings.flowchartFocusZoom = v
+  },
 })
 
-const {
-  popoverNodeId,
-  popoverPos,
-  popoverNodeData,
-  updatePopoverPosition,
-  closePopover,
-} = useFlowchartPopover({
-  flowNodes,
-})
+const { popoverNodeId, popoverPos, popoverNodeData, updatePopoverPosition, closePopover } =
+  useFlowchartPopover({
+    flowNodes,
+  })
 
 const {
   selectedTimelineIndex,
@@ -136,43 +159,38 @@ const {
   focusedNodeId,
   edgeStyle,
   edgeFlowEnabled,
-  getNodeById: (nodeId) => getNode.value(nodeId) as { position: { x: number; y: number } } | undefined,
+  getNodeById: (nodeId) =>
+    getNode.value(nodeId) as { position: { x: number; y: number } } | undefined,
 })
 
-const {
-  isPlaying,
-  stopPlayback,
-  startPlayback,
-  togglePlayback,
-  selectTimelineItem,
-} = useFlowchartPlayback({
-  executionTimeline,
-  selectedTimelineIndex,
-  focusedNodeId,
-  showNavDrawer,
-  isMobile,
-  focusZoom,
-  playbackIntervalMs,
-  getNodeById: (nodeId) => getNode.value(nodeId) as { position: { x: number; y: number } } | undefined,
-  centerOnNode: setCenter,
-  popoverNodeId,
-  updatePopoverPosition,
-  closePopover,
-  scrollNavToIndex,
-})
+const { isPlaying, stopPlayback, startPlayback, togglePlayback, selectTimelineItem } =
+  useFlowchartPlayback({
+    executionTimeline,
+    selectedTimelineIndex,
+    focusedNodeId,
+    showNavDrawer,
+    isMobile,
+    focusZoom,
+    playbackIntervalMs,
+    getNodeById: (nodeId) =>
+      getNode.value(nodeId) as { position: { x: number; y: number } } | undefined,
+    centerOnNode: setCenter,
+    popoverNodeId,
+    updatePopoverPosition,
+    closePopover,
+    scrollNavToIndex,
+  })
 
 const handleSelectTimelineItem = (index: number) => {
   selectTimelineItem(index, timelineNavItems.value[index]?.focusNodeId)
 }
 
-watch(
-  [selectedTimelineIndex, timelineNavItems],
-  () => {
-    const index = selectedTimelineIndex.value
-    if (index == null) return
-    focusedNodeId.value = timelineNavItems.value[index]?.focusNodeId ?? executionTimeline.value[index]?.name ?? null
-  }
-)
+watch([selectedTimelineIndex, timelineNavItems], () => {
+  const index = selectedTimelineIndex.value
+  if (index == null) return
+  focusedNodeId.value =
+    timelineNavItems.value[index]?.focusNodeId ?? executionTimeline.value[index]?.name ?? null
+})
 
 // 预计算 node_id → 截图 URL 映射（每个执行独立匹配）
 const nodeImageMap = computed(() => {
@@ -247,12 +265,29 @@ const { onNodeClick, onPaneClick } = useFlowchartNodeInteraction({
     />
 
     <!-- Hidden file inputs -->
-    <input ref="fileInputRef" type="file" multiple accept=".log,.jsonl,.txt,.zip" style="display: none" @change="handleFileInputChange" />
-    <input ref="folderInputRef" type="file" webkitdirectory style="display: none" @change="handleFolderInputChange" />
+    <input
+      ref="fileInputRef"
+      type="file"
+      multiple
+      accept=".log,.jsonl,.txt,.zip"
+      style="display: none"
+      @change="handleFileInputChange"
+    />
+    <input
+      ref="folderInputRef"
+      type="file"
+      webkitdirectory
+      style="display: none"
+      @change="handleFolderInputChange"
+    />
 
     <div class="flowchart-body">
       <!-- Desktop left nav panel -->
-      <div v-if="!isMobile && executionTimeline.length > 0" class="flowchart-nav-panel" data-tour="flowchart-execution-nav">
+      <div
+        v-if="!isMobile && executionTimeline.length > 0"
+        class="flowchart-nav-panel"
+        data-tour="flowchart-execution-nav"
+      >
         <div class="nav-header">
           <n-text strong style="font-size: 13px">执行顺序</n-text>
         </div>
@@ -319,12 +354,7 @@ const { onNodeClick, onPaneClick } = useFlowchartNodeInteraction({
       </div>
 
       <!-- Mobile left drawer for navigation -->
-      <n-drawer
-        v-if="isMobile"
-        v-model:show="showNavDrawer"
-        placement="left"
-        :width="260"
-      >
+      <n-drawer v-if="isMobile" v-model:show="showNavDrawer" placement="left" :width="260">
         <n-drawer-content title="执行顺序">
           <flowchart-timeline-nav-list
             :items="timelineNavItems"

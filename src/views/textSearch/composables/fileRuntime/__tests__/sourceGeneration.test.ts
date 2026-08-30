@@ -70,11 +70,12 @@ const createRuntimeOptions = (): TextSearchFileRuntimeOptions => {
   }
 }
 
-const createUploadEvent = (name: string): Event => ({
-  target: {
-    files: [{ name } as File],
-  },
-} as unknown as Event)
+const createUploadEvent = (name: string): Event =>
+  ({
+    target: {
+      files: [{ name } as File],
+    },
+  }) as unknown as Event
 
 const createUploadedFile = (fileName: string): UploadedFile => ({
   fileName,
@@ -91,21 +92,19 @@ describe('file source generations', () => {
     const first = createDeferred<UploadedFile>()
     const second = createDeferred<UploadedFile>()
     const reportError = vi.fn<(error: unknown) => void>()
-    const readFile = vi.fn((file: File) => (
-      file.name === 'first.log' ? first.promise : second.promise
-    ))
+    const readFile = vi.fn((file: File) =>
+      file.name === 'first.log' ? first.promise : second.promise,
+    )
     const uploadOptions = buildHandleFileUploadOptions(options)
 
-    const firstRun = handleRuntimeFileUpload(
-      uploadOptions,
-      createUploadEvent('first.log'),
-      { readFile, reportError },
-    )
-    const secondRun = handleRuntimeFileUpload(
-      uploadOptions,
-      createUploadEvent('second.log'),
-      { readFile, reportError },
-    )
+    const firstRun = handleRuntimeFileUpload(uploadOptions, createUploadEvent('first.log'), {
+      readFile,
+      reportError,
+    })
+    const secondRun = handleRuntimeFileUpload(uploadOptions, createUploadEvent('second.log'), {
+      readFile,
+      reportError,
+    })
 
     first.resolve(createUploadedFile('first.log'))
     await firstRun
@@ -150,17 +149,19 @@ describe('file source generations', () => {
     options.isLargeFile.value = true
     const first = createDeferred<void>()
     const second = createDeferred<void>()
-    const loadContext = vi.fn(async (
-      loaderOptions: Parameters<typeof loadContextLinesForRuntime>[0],
-      targetLine: number,
-      dependencies?: Parameters<typeof loadContextLinesForRuntime>[2],
-    ) => {
-      await (targetLine === 1 ? first.promise : second.promise)
-      if (dependencies?.shouldApply?.()) {
-        loaderOptions.contextLines.value = [`context ${targetLine}`]
-        loaderOptions.contextStartLine.value = targetLine
-      }
-    })
+    const loadContext = vi.fn(
+      async (
+        loaderOptions: Parameters<typeof loadContextLinesForRuntime>[0],
+        targetLine: number,
+        dependencies?: Parameters<typeof loadContextLinesForRuntime>[2],
+      ) => {
+        await (targetLine === 1 ? first.promise : second.promise)
+        if (dependencies?.shouldApply?.()) {
+          loaderOptions.contextLines.value = [`context ${targetLine}`]
+          loaderOptions.contextStartLine.value = targetLine
+        }
+      },
+    )
     const actions = createFileRuntimeActions(options, { loadContextLines: loadContext })
 
     const firstJump = actions.jumpToLine(1)
@@ -178,7 +179,7 @@ describe('file source generations', () => {
 
   it('drops context loaded from a superseded source', async () => {
     const options = createRuntimeOptions()
-    const pending = createDeferred<{ lines: string[], startLine: number }>()
+    const pending = createDeferred<{ lines: string[]; startLine: number }>()
     const load = loadContextLinesForRuntime(
       {
         sourceLoadGeneration: options.sourceLoadGeneration,

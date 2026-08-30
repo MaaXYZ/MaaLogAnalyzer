@@ -71,14 +71,18 @@ const parseErrorImageKey = (fileName: string): string | null => {
 }
 
 const parseVisionImageKey = (fileName: string): string | null => {
-  const match = fileName.match(/^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+_\d{9,})\.jpg$/i)
+  const match = fileName.match(
+    /^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+_\d{9,})\.jpg$/i,
+  )
   if (!match) return null
   const [, timestamp, ms, rest] = match
   return `${timestamp}.${ms.padEnd(3, '0')}_${rest}`
 }
 
 const parseWaitFreezesKey = (fileName: string): string | null => {
-  const match = fileName.match(/^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+_wait_freezes)\.jpg$/i)
+  const match = fileName.match(
+    /^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+_wait_freezes)\.jpg$/i,
+  )
   if (!match) return null
   const [, timestamp, ms, rest] = match
   return `${timestamp}.${ms.padEnd(3, '0')}_${rest}`
@@ -164,9 +168,7 @@ const getFileFromEntry = (fileEntry: FileSystemFileEntry, relativePath: string):
   })
 }
 
-const readDirectoryEntries = (
-  reader: FileSystemDirectoryReader,
-): Promise<FileSystemEntry[]> => {
+const readDirectoryEntries = (reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> => {
   return new Promise((resolve, reject) => {
     const entries: FileSystemEntry[] = []
 
@@ -193,9 +195,7 @@ export const readDirectoryFiles = async (
   depth = 0,
 ): Promise<File[]> => {
   if (depth > BROWSER_INPUT_MAX_DIRECTORY_DEPTH) {
-    throw new InputResourceLimitError(
-      `目录嵌套层级超过限制 (${BROWSER_INPUT_MAX_DIRECTORY_DEPTH})`,
-    )
+    throw new InputResourceLimitError(`目录嵌套层级超过限制 (${BROWSER_INPUT_MAX_DIRECTORY_DEPTH})`)
   }
   const reader = dirEntry.createReader()
   const entries = await readDirectoryEntries(reader)

@@ -8,9 +8,8 @@ import type { TaskInfo } from '../types'
  */
 const RAW_DETAIL_KEYS = ['task_details', 'wait_freezes_details'] as const
 
-const isObject = (value: unknown): value is Record<PropertyKey, unknown> => (
+const isObject = (value: unknown): value is Record<PropertyKey, unknown> =>
   value !== null && typeof value === 'object'
-)
 
 /**
  * 第一遍：重新标记 `markRaw`。

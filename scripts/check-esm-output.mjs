@@ -27,10 +27,7 @@ const walk = async (directory) => {
     const fullPath = path.join(directory, entry.name)
     if (entry.isDirectory()) {
       files.push(...(await walk(fullPath)))
-    } else if (
-      entry.isFile()
-      && (fullPath.endsWith('.js') || fullPath.endsWith('.d.ts'))
-    ) {
+    } else if (entry.isFile() && (fullPath.endsWith('.js') || fullPath.endsWith('.d.ts'))) {
       files.push(fullPath)
     }
   }

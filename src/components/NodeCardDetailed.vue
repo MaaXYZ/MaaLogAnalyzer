@@ -59,136 +59,142 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
 
 <template>
   <n-card v-if="hasRecognitionSection" key="recognition-section" size="small">
-      <template #header>
-        <n-flex align="center" style="gap: 8px">
-          <span>Recognition</span>
-          <n-button
-            size="small"
-            class="fixed-toggle-button"
-            @click="emit('toggle-recognition')" @mousedown.prevent
-          >
-            {{ recognitionExpanded ? 'Hide' : 'Show' }}
-          </n-button>
-        </n-flex>
-      </template>
-
-      <n-flex vertical style="gap: 8px">
-        <div
-          v-for="(item, idx) in mergedRecognitionList"
-          :key="buildRecognitionItemKey(item, idx)"
-          class="recognition-item-fragment"
+    <template #header>
+      <n-flex align="center" style="gap: 8px">
+        <span>Recognition</span>
+        <n-button
+          size="small"
+          class="fixed-toggle-button"
+          @click="emit('toggle-recognition')"
+          @mousedown.prevent
         >
-          <n-text
-            v-if="item.isRoundSeparator && recognitionExpanded"
-            depth="3"
-            class="round-separator"
-          >
-            {{ item.name }}
-          </n-text>
-
-          <n-button
-            v-else-if="recognitionExpanded && item.status === 'not-recognized'"
-            size="small"
-            type="default"
-            ghost
-            disabled
-            style="align-self: flex-start; opacity: 0.5"
-          >
-            <template #icon>
-              <status-icon status="not-recognized" />
-            </template>
-            {{ item.name }}
-          </n-button>
-
-          <template v-else-if="recognitionExpanded || item.status === 'success' || item.status === 'running'">
-            <n-flex align="center" style="gap: 8px; align-self: flex-start">
-              <task-doc-hover-popover
-                :enabled="isVscodeLaunchEmbed === true"
-                :request-task-doc="bridgeRequestTaskDoc"
-                :task-name="item.attempt?.name ?? item.name"
-              >
-                <n-button
-                  size="small"
-                  :type="resolveStatusButtonType(item.status)"
-                  ghost
-                  @click="emit('select-recognition', node, item.attemptIndex!)"
-                >
-                  <template #icon>
-                    <status-icon :status="item.status" />
-                  </template>
-                  {{ item.name }}
-                </n-button>
-              </task-doc-hover-popover>
-              <n-button
-                v-if="item.attemptIndex != null && hasRecognitionNestedRows(item.attemptIndex)"
-                size="small"
-                class="fixed-toggle-button"
-                @click="emit('toggle-nested', item.attemptIndex)" @mousedown.prevent
-              >
-                {{ isExpanded(item.attemptIndex) ? 'Hide' : 'Show' }}
-              </n-button>
-            </n-flex>
-
-            <n-flex
-              v-if="
-                item.attemptIndex != null &&
-                hasRecognitionNestedRows(item.attemptIndex) &&
-                isExpanded(item.attemptIndex) &&
-                getRecognitionNestedRows(item.attemptIndex).length > 0
-              "
-              vertical
-              style="gap: 8px"
-            >
-              <template
-                v-for="nested in getRecognitionNestedRows(item.attemptIndex)"
-                :key="`nested-${item.attemptIndex}-${nested.item.id}`"
-              >
-                <n-flex
-                  align="center"
-                  style="gap: 8px"
-                  :style="{ marginLeft: toDetailOffset(nested.depth) }"
-                >
-                  <task-doc-hover-popover
-                    :enabled="isVscodeLaunchEmbed === true"
-                    :request-task-doc="bridgeRequestTaskDoc"
-                    :task-name="nested.item.name"
-                  >
-                    <n-button
-                      size="small"
-                      class="flow-item-button"
-                      :type="getFlowItemButtonType(nested.item)"
-                      ghost
-                      @click="emit('select-flow-item', node, nested.item.id)"
-                    >
-                      <template #icon>
-                        <status-icon :status="nested.item.status" />
-                      </template>
-                      <template v-if="nested.item.type === 'wait_freezes'">
-                        [{{ waitFreezesShortLabel }}] {{ nested.item.name }}{{ formatWaitFreezesMeta(nested.item) }}
-                      </template>
-                      <template v-else-if="nested.item.type === 'recognition_node'">
-                        [{{ recognitionNodeShortLabel }}] {{ nested.item.name }}
-                      </template>
-                      <template v-else>
-                        [{{ getFlowItemShortLabel(nested.item.type) }}] {{ nested.item.name }}
-                      </template>
-                    </n-button>
-                  </task-doc-hover-popover>
-                  <n-button
-                    v-if="nested.hasChildren"
-                    size="small"
-                    class="fixed-toggle-button"
-                    @click.stop="toggleNestedRecognitionFlowItemExpand(nested.item.id)" @mousedown.prevent
-                  >
-                    {{ nested.expanded ? 'Hide' : 'Show' }}
-                  </n-button>
-                </n-flex>
-              </template>
-            </n-flex>
-          </template>
-        </div>
+          {{ recognitionExpanded ? 'Hide' : 'Show' }}
+        </n-button>
       </n-flex>
-    </n-card>
+    </template>
+
+    <n-flex vertical style="gap: 8px">
+      <div
+        v-for="(item, idx) in mergedRecognitionList"
+        :key="buildRecognitionItemKey(item, idx)"
+        class="recognition-item-fragment"
+      >
+        <n-text
+          v-if="item.isRoundSeparator && recognitionExpanded"
+          depth="3"
+          class="round-separator"
+        >
+          {{ item.name }}
+        </n-text>
+
+        <n-button
+          v-else-if="recognitionExpanded && item.status === 'not-recognized'"
+          size="small"
+          type="default"
+          ghost
+          disabled
+          style="align-self: flex-start; opacity: 0.5"
+        >
+          <template #icon>
+            <status-icon status="not-recognized" />
+          </template>
+          {{ item.name }}
+        </n-button>
+
+        <template
+          v-else-if="recognitionExpanded || item.status === 'success' || item.status === 'running'"
+        >
+          <n-flex align="center" style="gap: 8px; align-self: flex-start">
+            <task-doc-hover-popover
+              :enabled="isVscodeLaunchEmbed === true"
+              :request-task-doc="bridgeRequestTaskDoc"
+              :task-name="item.attempt?.name ?? item.name"
+            >
+              <n-button
+                size="small"
+                :type="resolveStatusButtonType(item.status)"
+                ghost
+                @click="emit('select-recognition', node, item.attemptIndex!)"
+              >
+                <template #icon>
+                  <status-icon :status="item.status" />
+                </template>
+                {{ item.name }}
+              </n-button>
+            </task-doc-hover-popover>
+            <n-button
+              v-if="item.attemptIndex != null && hasRecognitionNestedRows(item.attemptIndex)"
+              size="small"
+              class="fixed-toggle-button"
+              @click="emit('toggle-nested', item.attemptIndex)"
+              @mousedown.prevent
+            >
+              {{ isExpanded(item.attemptIndex) ? 'Hide' : 'Show' }}
+            </n-button>
+          </n-flex>
+
+          <n-flex
+            v-if="
+              item.attemptIndex != null &&
+              hasRecognitionNestedRows(item.attemptIndex) &&
+              isExpanded(item.attemptIndex) &&
+              getRecognitionNestedRows(item.attemptIndex).length > 0
+            "
+            vertical
+            style="gap: 8px"
+          >
+            <template
+              v-for="nested in getRecognitionNestedRows(item.attemptIndex)"
+              :key="`nested-${item.attemptIndex}-${nested.item.id}`"
+            >
+              <n-flex
+                align="center"
+                style="gap: 8px"
+                :style="{ marginLeft: toDetailOffset(nested.depth) }"
+              >
+                <task-doc-hover-popover
+                  :enabled="isVscodeLaunchEmbed === true"
+                  :request-task-doc="bridgeRequestTaskDoc"
+                  :task-name="nested.item.name"
+                >
+                  <n-button
+                    size="small"
+                    class="flow-item-button"
+                    :type="getFlowItemButtonType(nested.item)"
+                    ghost
+                    @click="emit('select-flow-item', node, nested.item.id)"
+                  >
+                    <template #icon>
+                      <status-icon :status="nested.item.status" />
+                    </template>
+                    <template v-if="nested.item.type === 'wait_freezes'">
+                      [{{ waitFreezesShortLabel }}] {{ nested.item.name
+                      }}{{ formatWaitFreezesMeta(nested.item) }}
+                    </template>
+                    <template v-else-if="nested.item.type === 'recognition_node'">
+                      [{{ recognitionNodeShortLabel }}] {{ nested.item.name }}
+                    </template>
+                    <template v-else>
+                      [{{ getFlowItemShortLabel(nested.item.type) }}] {{ nested.item.name }}
+                    </template>
+                  </n-button>
+                </task-doc-hover-popover>
+                <n-button
+                  v-if="nested.hasChildren"
+                  size="small"
+                  class="fixed-toggle-button"
+                  @click.stop="toggleNestedRecognitionFlowItemExpand(nested.item.id)"
+                  @mousedown.prevent
+                >
+                  {{ nested.expanded ? 'Hide' : 'Show' }}
+                </n-button>
+              </n-flex>
+            </template>
+          </n-flex>
+        </template>
+      </div>
+    </n-flex>
+  </n-card>
 
   <n-card v-if="hasActionSection" key="action-section" size="small">
     <template #header>
@@ -198,7 +204,8 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
           v-if="actionTimelineRows.length > 0"
           size="small"
           class="fixed-toggle-button"
-          @click="emit('toggle-action')" @mousedown.prevent
+          @click="emit('toggle-action')"
+          @mousedown.prevent
         >
           {{ actionExpanded ? 'Hide' : 'Show' }}
         </n-button>
@@ -206,11 +213,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
     </template>
 
     <n-flex vertical style="gap: 10px">
-      <n-flex
-        v-if="actionExpanded && actionTimelineRows.length > 0"
-        vertical
-        style="gap: 8px"
-      >
+      <n-flex v-if="actionExpanded && actionTimelineRows.length > 0" vertical style="gap: 8px">
         <n-flex
           v-for="(row, rowIndex) in actionTimelineRows"
           :key="`detailed-flow-${rowIndex}-${row.item.id}`"
@@ -238,10 +241,12 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
                   <status-icon :status="row.item.status" />
                 </template>
                 <template v-if="row.item.type === 'wait_freezes'">
-                  [{{ waitFreezesShortLabel }}] {{ row.item.name }}{{ formatWaitFreezesMeta(row.item) }}
+                  [{{ waitFreezesShortLabel }}] {{ row.item.name
+                  }}{{ formatWaitFreezesMeta(row.item) }}
                 </template>
                 <template v-else>
-                  [{{ getFlowItemShortLabel(row.item.type) }}] {{ getActionTimelineItemDisplayName(row.item) }}
+                  [{{ getFlowItemShortLabel(row.item.type) }}]
+                  {{ getActionTimelineItemDisplayName(row.item) }}
                 </template>
               </n-button>
             </task-doc-hover-popover>
@@ -249,14 +254,14 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
               v-if="row.hasChildren"
               size="small"
               class="fixed-toggle-button"
-              @click.stop="toggleActionFlowItem(row.item.id)" @mousedown.prevent
+              @click.stop="toggleActionFlowItem(row.item.id)"
+              @mousedown.prevent
             >
               {{ row.expanded ? 'Hide' : 'Show' }}
             </n-button>
           </n-flex>
         </n-flex>
       </n-flex>
-
     </n-flex>
   </n-card>
 </template>

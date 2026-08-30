@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import {
-  NCard, NDescriptions, NDescriptionsItem, NFlex, NTag,
-  NCollapse, NText, NButton,
+  NCard,
+  NDescriptions,
+  NDescriptionsItem,
+  NFlex,
+  NTag,
+  NCollapse,
+  NText,
+  NButton,
 } from 'naive-ui'
 import type { UnifiedFlowItem } from '../../../types'
 import { getRuntimeStatusTagType, getRuntimeStatusText } from '../../../utils/runtimeStatus'
@@ -84,7 +90,10 @@ watch(
       </n-descriptions-item>
 
       <n-descriptions-item
-        v-if="props.selectedFlowItem.type === 'resource_loading' && props.selectedFlowItem.resource_loading_details?.path"
+        v-if="
+          props.selectedFlowItem.type === 'resource_loading' &&
+          props.selectedFlowItem.resource_loading_details?.path
+        "
         label="资源路径"
         :span="props.descriptionColumns"
       >
@@ -92,13 +101,15 @@ watch(
       </n-descriptions-item>
 
       <n-descriptions-item
-        v-if="props.selectedFlowItem.type === 'resource_loading' && props.selectedFlowItem.resource_loading_details?.hash"
+        v-if="
+          props.selectedFlowItem.type === 'resource_loading' &&
+          props.selectedFlowItem.resource_loading_details?.hash
+        "
         label="Hash"
         :span="props.descriptionColumns"
       >
         <n-text code>{{ props.selectedFlowItem.resource_loading_details.hash }}</n-text>
       </n-descriptions-item>
-
     </n-descriptions>
 
     <div v-if="props.selectedFlowErrorImage" style="margin-top: 12px">
@@ -112,11 +123,17 @@ watch(
           打开截图工具
         </n-button>
       </n-flex>
-      <safe-preview-image :src="props.resolveImageSrc(props.selectedFlowErrorImage)" class="detail-preview-image" />
+      <safe-preview-image
+        :src="props.resolveImageSrc(props.selectedFlowErrorImage)"
+        class="detail-preview-image"
+      />
     </div>
 
     <div
-      v-if="props.selectedFlowItem.wait_freezes_details?.images && props.selectedFlowItem.wait_freezes_details.images.length > 0"
+      v-if="
+        props.selectedFlowItem.wait_freezes_details?.images &&
+        props.selectedFlowItem.wait_freezes_details.images.length > 0
+      "
       style="margin-top: 12px"
     >
       <n-text depth="3" style="font-size: 13px; display: block; margin-bottom: 8px">
@@ -147,7 +164,11 @@ watch(
     </div>
 
     <div
-      v-if="props.selectedFlowItem.type === 'wait_freezes' && props.bridgeRecognitionDrawImages && props.bridgeRecognitionDrawImages.length > 0"
+      v-if="
+        props.selectedFlowItem.type === 'wait_freezes' &&
+        props.bridgeRecognitionDrawImages &&
+        props.bridgeRecognitionDrawImages.length > 0
+      "
       style="margin-top: 12px"
     >
       <n-text depth="3" style="font-size: 13px; display: block; margin-bottom: 8px">

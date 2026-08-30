@@ -106,7 +106,10 @@ export const useBridgeRuntimeCore = (options: UseBridgeRuntimeCoreOptions) => {
   })
 
   const isRealtimeContext = computed(() => {
-    return realtimeSession.value !== null || options.runtime.textSearchLoadedDefaultTargetId.value.startsWith('realtime:')
+    return (
+      realtimeSession.value !== null ||
+      options.runtime.textSearchLoadedDefaultTargetId.value.startsWith('realtime:')
+    )
   })
 
   const { handleJsonRpcMethod } = useBridgeRpcHandler({

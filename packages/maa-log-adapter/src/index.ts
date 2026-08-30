@@ -4,10 +4,7 @@ import type {
   RuntimeParseInput,
   RuntimeParseResult,
 } from '@windsland52/maa-log-runtime'
-import {
-  DEFAULT_PARSER_VERSION,
-  LogParser,
-} from '@windsland52/maa-log-parser'
+import { DEFAULT_PARSER_VERSION, LogParser } from '@windsland52/maa-log-parser'
 import { NodeStatisticsAnalyzer } from '@windsland52/maa-log-parser/node-statistics'
 import type { TaskInfo as ParserTaskInfo } from '@windsland52/maa-log-parser/types'
 
@@ -20,11 +17,7 @@ export const createMlaRuntimeAdapter = (): RuntimeExecutionAdapter<ParserTaskInf
       parser.setVisionImages(input.visionImages ?? new Map())
       parser.setWaitFreezesImages(input.waitFreezesImages ?? new Map())
 
-      await parser.parseFile(
-        input.content,
-        undefined,
-        input.parseOptions,
-      )
+      await parser.parseFile(input.content, undefined, input.parseOptions)
 
       return {
         tasks: parser.getTasksSnapshot(),

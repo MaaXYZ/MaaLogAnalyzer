@@ -35,41 +35,38 @@ const makeProtocolEvent = (params: {
   taskId: number
   nodeId?: number
   name?: string
-}): ProtocolEvent => ({
-  kind: params.kind,
-  seq: params.seq,
-  ts: `2026-04-08 00:00:${String(params.seq).padStart(2, '0')}.000`,
-  tsMs: params.seq,
-  processId: `Px${params.taskId}`,
-  threadId: `Tx${params.taskId}`,
-  source: {
-    sourceKey: `task-${params.taskId}.log`,
-    inputIndex: params.taskId - 1,
-    line: params.seq,
-  },
-  rawMessage: `${params.kind}.${params.phase}`,
-  phase: params.phase,
-  rawDetails: {
-    task_id: params.taskId,
-    node_id: params.nodeId,
+}): ProtocolEvent =>
+  ({
+    kind: params.kind,
+    seq: params.seq,
+    ts: `2026-04-08 00:00:${String(params.seq).padStart(2, '0')}.000`,
+    tsMs: params.seq,
+    processId: `Px${params.taskId}`,
+    threadId: `Tx${params.taskId}`,
+    source: {
+      sourceKey: `task-${params.taskId}.log`,
+      inputIndex: params.taskId - 1,
+      line: params.seq,
+    },
+    rawMessage: `${params.kind}.${params.phase}`,
+    phase: params.phase,
+    rawDetails: {
+      task_id: params.taskId,
+      node_id: params.nodeId,
+      name: params.name,
+    },
+    taskId: params.taskId,
+    nodeId: params.nodeId,
     name: params.name,
-  },
-  taskId: params.taskId,
-  nodeId: params.nodeId,
-  name: params.name,
-} as ProtocolEvent)
+  }) as ProtocolEvent
 
 describe('TraceIndex', () => {
   it('builds deterministic scope ids from payload identity', () => {
     expect(createScopeId('pipeline_node', { taskId: 12, nodeId: 38 }, 42)).toBe(
       'pipeline_node:12:38:seq42',
     )
-    expect(createScopeId('next_list', { taskId: 12 }, 43)).toBe(
-      'next_list:12:0:seq43',
-    )
-    expect(createScopeId('controller_action', { ctrlId: 7 }, 6)).toBe(
-      'controller_action:0:7:seq6',
-    )
+    expect(createScopeId('next_list', { taskId: 12 }, 43)).toBe('next_list:12:0:seq43')
+    expect(createScopeId('controller_action', { ctrlId: 7 }, 6)).toBe('controller_action:0:7:seq6')
   })
 
   it('indexes pipeline executions and resolves parent chain by unique locator', () => {
@@ -190,7 +187,8 @@ describe('TraceIndex', () => {
     })
 
     expect(
-      helpers.findScopesByLocator({ kind: 'recognition', taskId: 1, localId: 501 })
+      helpers
+        .findScopesByLocator({ kind: 'recognition', taskId: 1, localId: 501 })
         .map((scope) => scope.id),
     ).toEqual([recognition.id])
 
@@ -558,14 +556,54 @@ describe('TraceIndex', () => {
     }
     const events = [
       makeProtocolEvent({ kind: 'task', seq: 1, phase: 'starting', taskId: 1 }),
-      makeProtocolEvent({ kind: 'pipeline_node', seq: 2, phase: 'starting', taskId: 1, nodeId: 101, name: 'MainNode' }),
-      makeProtocolEvent({ kind: 'next_list', seq: 3, phase: 'starting', taskId: 1, name: 'MainNode' }),
+      makeProtocolEvent({
+        kind: 'pipeline_node',
+        seq: 2,
+        phase: 'starting',
+        taskId: 1,
+        nodeId: 101,
+        name: 'MainNode',
+      }),
+      makeProtocolEvent({
+        kind: 'next_list',
+        seq: 3,
+        phase: 'starting',
+        taskId: 1,
+        name: 'MainNode',
+      }),
       makeProtocolEvent({ kind: 'task', seq: 4, phase: 'starting', taskId: 2 }),
-      makeProtocolEvent({ kind: 'pipeline_node', seq: 5, phase: 'starting', taskId: 2, nodeId: 202, name: 'SiblingNode' }),
-      makeProtocolEvent({ kind: 'pipeline_node', seq: 6, phase: 'succeeded', taskId: 2, nodeId: 202, name: 'SiblingNode' }),
+      makeProtocolEvent({
+        kind: 'pipeline_node',
+        seq: 5,
+        phase: 'starting',
+        taskId: 2,
+        nodeId: 202,
+        name: 'SiblingNode',
+      }),
+      makeProtocolEvent({
+        kind: 'pipeline_node',
+        seq: 6,
+        phase: 'succeeded',
+        taskId: 2,
+        nodeId: 202,
+        name: 'SiblingNode',
+      }),
       makeProtocolEvent({ kind: 'task', seq: 7, phase: 'succeeded', taskId: 2 }),
-      makeProtocolEvent({ kind: 'next_list', seq: 8, phase: 'succeeded', taskId: 1, name: 'MainNode' }),
-      makeProtocolEvent({ kind: 'pipeline_node', seq: 9, phase: 'succeeded', taskId: 1, nodeId: 101, name: 'MainNode' }),
+      makeProtocolEvent({
+        kind: 'next_list',
+        seq: 8,
+        phase: 'succeeded',
+        taskId: 1,
+        name: 'MainNode',
+      }),
+      makeProtocolEvent({
+        kind: 'pipeline_node',
+        seq: 9,
+        phase: 'succeeded',
+        taskId: 1,
+        nodeId: 101,
+        name: 'MainNode',
+      }),
       makeProtocolEvent({ kind: 'task', seq: 10, phase: 'succeeded', taskId: 1 }),
     ]
     const index = buildTraceIndex(root, events)
@@ -574,11 +612,13 @@ describe('TraceIndex', () => {
       ok: true,
       value: [events[1], events[2], events[7], events[8]],
     })
-    expect(getNodeTimeline(index, {
-      taskId: 1,
-      nodeId: 101,
-      scopeId: targetPipeline.id,
-    })).toEqual({
+    expect(
+      getNodeTimeline(index, {
+        taskId: 1,
+        nodeId: 101,
+        scopeId: targetPipeline.id,
+      }),
+    ).toEqual({
       ok: true,
       value: [
         expect.objectContaining({ seq: 2, scopeId: targetPipeline.id }),
@@ -632,9 +672,28 @@ describe('TraceIndex', () => {
       children: [pipeline],
     }
     const events = [
-      makeProtocolEvent({ kind: 'pipeline_node', seq: 2, phase: 'starting', taskId: 1, nodeId: 101, name: 'RunningNode' }),
-      makeProtocolEvent({ kind: 'recognition', seq: 3, phase: 'starting', taskId: 1, name: 'Reco' }),
-      makeProtocolEvent({ kind: 'recognition', seq: 4, phase: 'succeeded', taskId: 1, name: 'Reco' }),
+      makeProtocolEvent({
+        kind: 'pipeline_node',
+        seq: 2,
+        phase: 'starting',
+        taskId: 1,
+        nodeId: 101,
+        name: 'RunningNode',
+      }),
+      makeProtocolEvent({
+        kind: 'recognition',
+        seq: 3,
+        phase: 'starting',
+        taskId: 1,
+        name: 'Reco',
+      }),
+      makeProtocolEvent({
+        kind: 'recognition',
+        seq: 4,
+        phase: 'succeeded',
+        taskId: 1,
+        name: 'Reco',
+      }),
       makeProtocolEvent({ kind: 'action', seq: 5, phase: 'starting', taskId: 1, name: 'Action' }),
     ]
     const index = buildTraceIndex(root, events)

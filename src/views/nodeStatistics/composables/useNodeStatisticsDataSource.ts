@@ -47,9 +47,7 @@ interface UseNodeStatisticsDataSourceOptions {
   message: NodeStatisticsMessageApi
 }
 
-export const useNodeStatisticsDataSource = (
-  options: UseNodeStatisticsDataSourceOptions,
-) => {
+export const useNodeStatisticsDataSource = (options: UseNodeStatisticsDataSourceOptions) => {
   const localTasks = ref<TaskInfo[]>([])
   const useLocalData = ref(false)
   const isUploading = ref(false)

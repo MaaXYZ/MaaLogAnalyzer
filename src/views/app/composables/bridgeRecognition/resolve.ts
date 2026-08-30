@@ -8,7 +8,11 @@ interface ResolveBridgeRecognitionImagesOptions {
   recoData: unknown
   sessionId: string
   taskId: number
-  loadCachedImageDataUrl: (sessionId: string, taskId: number, imageRefId: number) => Promise<string | null>
+  loadCachedImageDataUrl: (
+    sessionId: string,
+    taskId: number,
+    imageRefId: number,
+  ) => Promise<string | null>
 }
 
 interface ResolveBridgeRecognitionImagesResult {
@@ -31,22 +35,30 @@ export const resolveBridgeRecognitionImages = async (
       ? options.loadCachedImageDataUrl(options.sessionId, options.taskId, refs.raw)
       : Promise.resolve<string | null>(null)
 
-  const drawPromises = inlineImages.draws.length > 0
-    ? inlineImages.draws.map((item) => Promise.resolve<string | null>(item))
-    : refs.draws.map((refId) => options.loadCachedImageDataUrl(options.sessionId, options.taskId, refId))
+  const drawPromises =
+    inlineImages.draws.length > 0
+      ? inlineImages.draws.map((item) => Promise.resolve<string | null>(item))
+      : refs.draws.map((refId) =>
+          options.loadCachedImageDataUrl(options.sessionId, options.taskId, refId),
+        )
 
   const raw = await rawPromise.catch(() => null)
-  const drawResults = await Promise.all(drawPromises.map(async (promise) => {
-    try {
-      return await promise
-    } catch {
-      return null
-    }
-  }))
+  const drawResults = await Promise.all(
+    drawPromises.map(async (promise) => {
+      try {
+        return await promise
+      } catch {
+        return null
+      }
+    }),
+  )
 
-  const draws = drawResults.filter((item): item is string => typeof item === 'string' && item.length > 0)
+  const draws = drawResults.filter(
+    (item): item is string => typeof item === 'string' && item.length > 0,
+  )
   const requestedRaw = !!inlineImages.raw || refs.raw != null
-  const requestedDrawCount = inlineImages.draws.length > 0 ? inlineImages.draws.length : refs.draws.length
+  const requestedDrawCount =
+    inlineImages.draws.length > 0 ? inlineImages.draws.length : refs.draws.length
 
   return {
     refs,

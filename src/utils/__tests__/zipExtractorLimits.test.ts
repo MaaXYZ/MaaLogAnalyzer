@@ -37,9 +37,11 @@ describe('ZIP extraction resource budgets', () => {
       arrayBuffer,
     } as unknown as File
 
-    await expect(extractZipContent(oversizedFile, undefined, {
-      archiveLimits: { maxCompressedBytes: 10 },
-    })).rejects.toMatchObject({ code: 'compressed-size' })
+    await expect(
+      extractZipContent(oversizedFile, undefined, {
+        archiveLimits: { maxCompressedBytes: 10 },
+      }),
+    ).rejects.toMatchObject({ code: 'compressed-size' })
     expect(arrayBuffer).not.toHaveBeenCalled()
     expect(unzipCall).not.toHaveBeenCalled()
   })
@@ -49,10 +51,8 @@ describe('ZIP extraction resource budgets', () => {
       'maa.log': [strToU8('x'.repeat(2_048)), { level: 9 }],
     })
 
-    await expect(extractZipContent(
-      new File([toArrayBuffer(zipData)], 'high-ratio.zip'),
-      undefined,
-      {
+    await expect(
+      extractZipContent(new File([toArrayBuffer(zipData)], 'high-ratio.zip'), undefined, {
         includeAuxiliaryFiles: false,
         archiveLimits: {
           maxFileBytes: 4_096,
@@ -60,8 +60,8 @@ describe('ZIP extraction resource budgets', () => {
           maxCompressionRatio: 2,
           compressionRatioMinBytes: 1,
         },
-      },
-    )).rejects.toMatchObject({ code: 'compression-ratio' })
+      }),
+    ).rejects.toMatchObject({ code: 'compression-ratio' })
     expect(unzipCall).not.toHaveBeenCalled()
   })
 

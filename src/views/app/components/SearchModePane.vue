@@ -12,9 +12,6 @@ defineProps<{
 
 <template>
   <div v-if="active" data-tour="search-main" style="height: 100%">
-    <text-search-view
-      v-bind="textSearchViewProps"
-      style="height: 100%"
-    />
+    <text-search-view v-bind="textSearchViewProps" style="height: 100%" />
   </div>
 </template>

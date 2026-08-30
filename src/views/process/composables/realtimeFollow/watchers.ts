@@ -19,37 +19,49 @@ interface SetupRealtimeFollowWatchersOptions {
 }
 
 export const setupRealtimeFollowWatchers = (options: SetupRealtimeFollowWatchersOptions) => {
-  watch(() => options.selectedTask.value, async (newTask, oldTask) => {
-    const switchedTask = (() => {
-      if (!newTask && !oldTask) return false
-      if (!newTask || !oldTask) return true
-      return !isSameTask(newTask, oldTask)
-    })()
+  watch(
+    () => options.selectedTask.value,
+    async (newTask, oldTask) => {
+      const switchedTask = (() => {
+        if (!newTask && !oldTask) return false
+        if (!newTask || !oldTask) return true
+        return !isSameTask(newTask, oldTask)
+      })()
 
-    if (newTask) {
-      const index = findTaskIndex(options.tasks.value, newTask)
-      if (index !== -1 && index !== options.activeTaskIndex.value) {
-        options.activeTaskIndex.value = index
+      if (newTask) {
+        const index = findTaskIndex(options.tasks.value, newTask)
+        if (index !== -1 && index !== options.activeTaskIndex.value) {
+          options.activeTaskIndex.value = index
+        }
       }
-    }
 
-    // 只有真正切换任务时才重置到顶部；实时更新同一任务不打断当前位置
-    if (switchedTask) {
-      await options.safeScrollToItem(0)
-    }
-  }, { immediate: true, flush: 'post' })
+      // 只有真正切换任务时才重置到顶部；实时更新同一任务不打断当前位置
+      if (switchedTask) {
+        await options.safeScrollToItem(0)
+      }
+    },
+    { immediate: true, flush: 'post' },
+  )
 
   const followTasksFingerprint = computed(() => buildFollowTasksFingerprint(options.tasks.value))
-  watch([followTasksFingerprint, options.isRealtimeStreaming, options.followLast], ([, streaming, following]) => {
-    if (!streaming || !following) return
-    options.scheduleFollowToLatest()
-  }, { immediate: true, flush: 'post' })
+  watch(
+    [followTasksFingerprint, options.isRealtimeStreaming, options.followLast],
+    ([, streaming, following]) => {
+      if (!streaming || !following) return
+      options.scheduleFollowToLatest()
+    },
+    { immediate: true, flush: 'post' },
+  )
 
-  watch(options.isRealtimeStreaming, (streaming) => {
-    if (!streaming) return
-    if (!options.followLast.value) return
-    options.scheduleFollowToLatest()
-  }, { flush: 'post' })
+  watch(
+    options.isRealtimeStreaming,
+    (streaming) => {
+      if (!streaming) return
+      if (!options.followLast.value) return
+      options.scheduleFollowToLatest()
+    },
+    { flush: 'post' },
+  )
 
   watch(
     [() => options.pendingScrollNodeId.value, options.currentNodes],
@@ -65,6 +77,6 @@ export const setupRealtimeFollowWatchers = (options: SetupRealtimeFollowWatchers
         void options.scrollToNode(index)
       })
     },
-    { immediate: true, flush: 'post' }
+    { immediate: true, flush: 'post' },
   )
 }

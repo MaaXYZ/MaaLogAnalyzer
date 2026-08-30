@@ -7,9 +7,9 @@ export const setupLoadedTargetModeSync = (options: LoadedSourceSyncOptions) => {
     if (mode !== 'loaded') return
     const sourceGeneration = options.sourceLoadGeneration.value
     if (
-      (options.loadedTargets.value?.length ?? 0) === 0
-      && options.hasDeferredLoadedTargets.value
-      && options.ensureLoadedTargets.value
+      (options.loadedTargets.value?.length ?? 0) === 0 &&
+      options.hasDeferredLoadedTargets.value &&
+      options.ensureLoadedTargets.value
     ) {
       await options.ensureLoadedTargets.value()
       await nextTick()
@@ -17,7 +17,8 @@ export const setupLoadedTargetModeSync = (options: LoadedSourceSyncOptions) => {
     if (
       options.sourceMode.value !== 'loaded' ||
       options.sourceLoadGeneration.value !== sourceGeneration
-    ) return
+    )
+      return
 
     const targets = options.loadedTargets.value ?? []
     if (targets.length === 0) {
@@ -33,7 +34,7 @@ export const setupLoadedTargetModeSync = (options: LoadedSourceSyncOptions) => {
     if (options.selectedLoadedTargetId.value !== nextId) {
       options.prepareLoadedTarget(nextId)
     } else {
-      await options.applyLoadedTarget(targets.find(item => item.id === nextId))
+      await options.applyLoadedTarget(targets.find((item) => item.id === nextId))
     }
   })
 }

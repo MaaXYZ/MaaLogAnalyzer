@@ -27,7 +27,9 @@ describe('renderFocusRichText', () => {
   it('sanitizes markdown links', () => {
     const html = renderFocusRichText('[Docs](https://example.com) [Bad](javascript:alert(1))')
 
-    expect(html).toContain('<a href="https://example.com" target="_blank" rel="noopener noreferrer">Docs</a>')
+    expect(html).toContain(
+      '<a href="https://example.com" target="_blank" rel="noopener noreferrer">Docs</a>',
+    )
     expect(html).toContain('<a>Bad</a>')
     expect(html).not.toContain('javascript:')
   })
@@ -40,7 +42,9 @@ describe('renderFocusRichText', () => {
     expect(html).toContain('<img ')
     expect(html).toContain('src="data:image/png;base64,AAAA"')
     expect(html).toContain('alt="preview"')
-    expect(html).toContain('style="display: block; width: 128px; height: 128px; border-radius: 6px"')
+    expect(html).toContain(
+      'style="display: block; width: 128px; height: 128px; border-radius: 6px"',
+    )
   })
 
   it('blocks unsafe image sources', () => {

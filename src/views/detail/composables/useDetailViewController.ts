@@ -13,7 +13,10 @@ import {
   buildRecognitionFocusCardData,
 } from './focus'
 import type { BridgeOpenCropRequest } from './types'
-import { buildNodeFlowItems, buildNodeRecognitionAttempts } from '@windsland52/maa-log-parser/node-flow'
+import {
+  buildNodeFlowItems,
+  buildNodeRecognitionAttempts,
+} from '@windsland52/maa-log-parser/node-flow'
 
 interface DetailViewControllerProps {
   selectedNode: NodeInfo | null
@@ -35,9 +38,7 @@ interface DetailViewControllerProps {
   bridgeOpenCrop?: ((request: BridgeOpenCropRequest) => Promise<void>) | null
 }
 
-export const useDetailViewController = (
-  props: DetailViewControllerProps,
-) => {
+export const useDetailViewController = (props: DetailViewControllerProps) => {
   const pickRecognitionErrorImage = (attempts: RecognitionAttempt[]): string | null => {
     for (let index = attempts.length - 1; index >= 0; index -= 1) {
       const attempt = attempts[index]
@@ -63,18 +64,10 @@ export const useDetailViewController = (
   }
 
   const { isMobile } = useIsMobile()
-  const {
-    rawJsonDefaultExpanded,
-    resolveImageSrc,
-    formatJson,
-    copyToClipboard,
-  } = useDetailUiHelpers()
+  const { rawJsonDefaultExpanded, resolveImageSrc, formatJson, copyToClipboard } =
+    useDetailUiHelpers()
 
-  const {
-    selectedFlowItem,
-    isFlowItemSelected,
-    selectedFlowErrorImage,
-  } = useDetailFlowSelection({
+  const { selectedFlowItem, isFlowItemSelected, selectedFlowErrorImage } = useDetailFlowSelection({
     selectedNode: computed(() => props.selectedNode),
     selectedFlowItemId: computed(() => props.selectedFlowItemId),
   })
@@ -133,9 +126,7 @@ export const useDetailViewController = (
     selectedNode: computed(() => props.selectedNode),
   })
 
-  const {
-    formattedBridgeNodeDefinition,
-  } = useDetailNodeDefinition({
+  const { formattedBridgeNodeDefinition } = useDetailNodeDefinition({
     bridgeNodeDefinition: computed(() => props.bridgeNodeDefinition),
   })
 
@@ -158,18 +149,15 @@ export const useDetailViewController = (
     return props.selectedNode?.error_image ?? null
   })
 
-  const openSelectedFlowErrorInCrop = () => openImageInCrop(
-    selectedFlowErrorImage.value,
-    selectedFlowItem.value,
-  )
-  const openCurrentActionErrorInCrop = () => openImageInCrop(
-    currentActionErrorImage.value,
-    currentActionItem.value ?? currentActionDetails.value,
-  )
-  const openSelectedNodeErrorInCrop = () => openImageInCrop(
-    selectedNodeDisplayErrorImage.value,
-    props.selectedNode,
-  )
+  const openSelectedFlowErrorInCrop = () =>
+    openImageInCrop(selectedFlowErrorImage.value, selectedFlowItem.value)
+  const openCurrentActionErrorInCrop = () =>
+    openImageInCrop(
+      currentActionErrorImage.value,
+      currentActionItem.value ?? currentActionDetails.value,
+    )
+  const openSelectedNodeErrorInCrop = () =>
+    openImageInCrop(selectedNodeDisplayErrorImage.value, props.selectedNode)
 
   const currentFocusCard = computed(() => {
     if (currentRecognitionItem.value) {

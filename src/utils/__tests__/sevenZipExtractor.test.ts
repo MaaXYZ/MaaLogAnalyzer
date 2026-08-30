@@ -12,7 +12,7 @@ import {
 const listing = (...records: ReadonlyArray<Readonly<Record<string, string>>>): string[] => [
   '7-Zip listing',
   '----------',
-  ...records.flatMap(record => [
+  ...records.flatMap((record) => [
     ...Object.entries(record).map(([key, value]) => `${key} = ${value}`),
     '',
   ]),
@@ -75,57 +75,80 @@ const createSevenZipFixture = async (): Promise<File> => {
 describe('7z/RAR archive extraction safety', () => {
   it('parses canonical unencrypted entries and rejects aliases or special records', () => {
     const limits = resolveArchiveLimits()
-    const entries = parseSevenZipListing(listing({
-      Path: 'debug/maa.log',
-      Size: '5',
-      'Packed Size': '4',
-      Attributes: 'A',
-      Encrypted: '-',
-      Block: '0',
-    }), limits)
-    expect(entries).toMatchObject([{
-      path: 'debug/maa.log',
-      size: 5,
-      packedSize: 4,
-      block: '0',
-      isDirectory: false,
-    }])
+    const entries = parseSevenZipListing(
+      listing({
+        Path: 'debug/maa.log',
+        Size: '5',
+        'Packed Size': '4',
+        Attributes: 'A',
+        Encrypted: '-',
+        Block: '0',
+      }),
+      limits,
+    )
+    expect(entries).toMatchObject([
+      {
+        path: 'debug/maa.log',
+        size: 5,
+        packedSize: 4,
+        block: '0',
+        isDirectory: false,
+      },
+    ])
 
-    expect(() => parseSevenZipListing(listing(
-      { Path: 'maa.log', Size: '1' },
-      { Path: 'MAA.LOG', Size: '1' },
-    ), limits)).toThrow(SevenZipArchiveError)
-    expect(() => parseSevenZipListing(listing({
-      Path: 'debug/maa.log.',
-      Size: '1',
-    }), limits)).toThrow(SevenZipArchiveError)
-    expect(() => parseSevenZipListing(listing({
-      Path: 'maa.log',
-      Size: '1',
-      Anti: '+',
-    }), limits)).toThrow(SevenZipArchiveError)
+    expect(() =>
+      parseSevenZipListing(
+        listing({ Path: 'maa.log', Size: '1' }, { Path: 'MAA.LOG', Size: '1' }),
+        limits,
+      ),
+    ).toThrow(SevenZipArchiveError)
+    expect(() =>
+      parseSevenZipListing(
+        listing({
+          Path: 'debug/maa.log.',
+          Size: '1',
+        }),
+        limits,
+      ),
+    ).toThrow(SevenZipArchiveError)
+    expect(() =>
+      parseSevenZipListing(
+        listing({
+          Path: 'maa.log',
+          Size: '1',
+          Anti: '+',
+        }),
+        limits,
+      ),
+    ).toThrow(SevenZipArchiveError)
   })
 
   it('selectively extracts a real 7z file and applies selected output limits', async () => {
     const file = await createSevenZipFixture()
-    const extracted = await extractSevenZipEntries(file, async entries => (
-      entries.filter(entry => !entry.isDirectory).map(entry => entry.path)
-    ))
+    const extracted = await extractSevenZipEntries(file, async (entries) =>
+      entries.filter((entry) => !entry.isDirectory).map((entry) => entry.path),
+    )
     expect(new TextDecoder().decode(extracted?.get('debug/maa.log'))).toBe('main\n')
     expect(new TextDecoder().decode(extracted?.get('@notes.txt'))).toBe('notes\n')
 
     const archiveResult = await extractArchiveContent(file)
-    expect(archiveResult?.primaryLogFiles).toMatchObject([{
-      path: 'debug/maa.log',
-      name: 'maa.log',
-      content: 'main\n',
-    }])
+    expect(archiveResult?.primaryLogFiles).toMatchObject([
+      {
+        path: 'debug/maa.log',
+        name: 'maa.log',
+        content: 'main\n',
+      },
+    ])
 
-    await expect(extractSevenZipEntries(file, async entries => (
-      entries.filter(entry => !entry.isDirectory).map(entry => entry.path)
-    ), {
-      archiveLimits: { maxFileBytes: 4 },
-    })).rejects.toMatchObject({
+    await expect(
+      extractSevenZipEntries(
+        file,
+        async (entries) => entries.filter((entry) => !entry.isDirectory).map((entry) => entry.path),
+        {
+          archiveLimits: { maxFileBytes: 4 },
+        },
+      ),
+    ).rejects.toMatchObject({
       name: 'ArchiveLimitError',
       code: 'file-size',
     })

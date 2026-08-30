@@ -36,7 +36,11 @@ const emit = defineEmits<{
 
 <template>
   <n-flex class="statistics-controls" align="center" :wrap="true">
-    <n-radio-group :value="props.statMode" size="small" @update:value="emit('update:statMode', $event)">
+    <n-radio-group
+      :value="props.statMode"
+      size="small"
+      @update:value="emit('update:statMode', $event)"
+    >
       <n-radio-button value="node">节点</n-radio-button>
       <n-radio-button value="recognition-action">识别/动作</n-radio-button>
       <n-radio-button value="wait-freezes">Wait Freezes</n-radio-button>

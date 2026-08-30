@@ -1,9 +1,6 @@
 import { commitSearchResults } from './executorHelpers'
 import { executeSearchByMode } from './executeByMode'
-import type {
-  ActiveTextSearchRequest,
-  TextSearchSearchExecutorOptions,
-} from './executorTypes'
+import type { ActiveTextSearchRequest, TextSearchSearchExecutorOptions } from './executorTypes'
 import { buildExecuteByModeOptions, buildSearchResultState } from './optionBuilders'
 
 export const executeAndCommitSearch = async (
@@ -11,11 +8,9 @@ export const executeAndCommitSearch = async (
   request: ActiveTextSearchRequest,
   executeSearch: typeof executeSearchByMode = executeSearchByMode,
 ) => {
-  const results = await executeSearch(buildExecuteByModeOptions(
-    options,
-    request.snapshot,
-    () => !request.isCurrent(),
-  ))
+  const results = await executeSearch(
+    buildExecuteByModeOptions(options, request.snapshot, () => !request.isCurrent()),
+  )
   if (!request.isCurrent()) return
 
   commitSearchResults(buildSearchResultState(options), results)

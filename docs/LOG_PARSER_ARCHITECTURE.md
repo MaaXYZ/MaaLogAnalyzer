@@ -604,11 +604,14 @@ type ParseArtifacts = {
 
 ```ts
 type RawLineStore = {
-  sources: Map<string, {
-    sourcePath?: string
-    inputIndex: number
-    lines: string[]
-  }>
+  sources: Map<
+    string,
+    {
+      sourcePath?: string
+      inputIndex: number
+      lines: string[]
+    }
+  >
 }
 ```
 
@@ -648,8 +651,7 @@ type TraceIndex = {
 建议 `scope.id` 采用可复现的确定性格式：
 
 ```ts
-type ScopeIdFormat =
-  `${ScopeKind}:${taskIdOrZero}:${localIdOrZero}:seq${startSeq}`
+type ScopeIdFormat = `${ScopeKind}:${taskIdOrZero}:${localIdOrZero}:seq${startSeq}`
 ```
 
 建议取值规则：
@@ -786,8 +788,7 @@ type TraceIndex = {
 
 ```ts
 type ScopeLocator =
-  | { scopeId: string }
-  | { kind: ScopeKind; taskId?: number; localId?: number; startSeq?: number }
+  { scopeId: string } | { kind: ScopeKind; taskId?: number; localId?: number; startSeq?: number }
 
 type NodeExecutionLocator = {
   taskId: number
@@ -797,8 +798,7 @@ type NodeExecutionLocator = {
 }
 
 type UniqueScopeLocator =
-  | { scopeId: string }
-  | { taskId: number; nodeId: number; occurrenceIndex: number }
+  { scopeId: string } | { taskId: number; nodeId: number; occurrenceIndex: number }
 ```
 
 语义：
@@ -828,9 +828,7 @@ type UniqueScopeLocator =
 ```ts
 type QueryErrorCode = 'not_found' | 'ambiguous' | 'invalid_locator'
 
-type QueryResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: QueryErrorCode; message: string }
+type QueryResult<T> = { ok: true; value: T } | { ok: false; error: QueryErrorCode; message: string }
 ```
 
 建议 helper：
@@ -848,11 +846,16 @@ type QueryHelpers = {
   getNextListHistory(locator: NodeExecutionLocator, limit?: number): QueryResult<NextListHistory[]>
 
   getScopeEvents(scopeId: string): ProtocolEvent[]
-  getRawLinesBySeqRange(startSeq: number, endSeq: number): QueryResult<Array<{
-    sourceKey: string
-    line: number
-    text: string
-  }>>
+  getRawLinesBySeqRange(
+    startSeq: number,
+    endSeq: number,
+  ): QueryResult<
+    Array<{
+      sourceKey: string
+      line: number
+      text: string
+    }>
+  >
 }
 ```
 

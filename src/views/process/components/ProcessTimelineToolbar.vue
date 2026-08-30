@@ -26,16 +26,30 @@ const handleReloadSelect = (key: string | number) => {
 
 <template>
   <n-flex align="center" style="gap: 8px">
-    <n-tag v-if="showRealtimeStatus && realtimeParseFailed" type="error" size="small">实时解析异常</n-tag>
-    <n-tag v-else-if="showRealtimeStatus && isRealtimeStreaming" type="info" size="small">实时解析中</n-tag>
+    <n-tag v-if="showRealtimeStatus && realtimeParseFailed" type="error" size="small"
+      >实时解析异常</n-tag
+    >
+    <n-tag v-else-if="showRealtimeStatus && isRealtimeStreaming" type="info" size="small"
+      >实时解析中</n-tag
+    >
     <n-button
       v-if="showRealtimeStatus"
       size="small"
-      :type="realtimeParseFailed ? 'error' : (isRealtimeStreaming && followLast ? 'primary' : 'default')"
+      :type="
+        realtimeParseFailed ? 'error' : isRealtimeStreaming && followLast ? 'primary' : 'default'
+      "
       :disabled="!isRealtimeStreaming"
       @click="emit('toggle-follow')"
     >
-      {{ realtimeParseFailed ? '解析异常' : (isRealtimeStreaming ? (followLast ? '跟随中' : '跟随最新') : '未实时') }}
+      {{
+        realtimeParseFailed
+          ? '解析异常'
+          : isRealtimeStreaming
+            ? followLast
+              ? '跟随中'
+              : '跟随最新'
+            : '未实时'
+      }}
     </n-button>
     <n-dropdown v-if="showReloadControls" :options="reloadOptions" @select="handleReloadSelect">
       <n-button size="small">

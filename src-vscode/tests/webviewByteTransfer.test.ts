@@ -18,10 +18,7 @@ describe('VS Code Webview byte transfer', () => {
         const record = message as Record<string, unknown>
         messages.push(record)
         await Promise.resolve()
-        acknowledgements.acknowledge(
-          record.transferId as string,
-          record.sequence as number,
-        )
+        acknowledgements.acknowledge(record.transferId as string, record.sequence as number)
         activePosts--
         return true
       },
@@ -39,12 +36,12 @@ describe('VS Code Webview byte transfer', () => {
     await sender.sendFile({ kind: 'primary', path: 'maa.log', name: 'maa.log', bytes })
     await sender.complete()
 
-    const chunks = messages.filter(message => message.type === 'loadBytesChunk')
+    const chunks = messages.filter((message) => message.type === 'loadBytesChunk')
     expect(chunks).toHaveLength(2)
     expect((chunks[0].bytes as ArrayBuffer).byteLength).toBe(WEBVIEW_BYTE_TRANSFER_CHUNK_BYTES)
     expect((chunks[1].bytes as ArrayBuffer).byteLength).toBe(17)
     expect(maxActivePosts).toBe(1)
-    expect(messages.map(message => message.type)).toEqual([
+    expect(messages.map((message) => message.type)).toEqual([
       'loadBytesStart',
       'loadBytesFileStart',
       'loadBytesChunk',

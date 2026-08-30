@@ -1,14 +1,16 @@
 import type { SearchResult } from '../types'
 import type { StreamSearchOptions } from './searchTypes'
-import {
-  compileSearchPattern,
-  findMatchInLine,
-  pushSearchResult,
-} from './matcher'
+import { compileSearchPattern, findMatchInLine, pushSearchResult } from './matcher'
 import { forEachFileLine } from '../stream/fileLineReader'
 
-export const runStreamSearch = async (options: StreamSearchOptions): Promise<SearchResult[] | null> => {
-  const searchPattern = compileSearchPattern(options.keyword, options.useRegex, options.caseSensitive)
+export const runStreamSearch = async (
+  options: StreamSearchOptions,
+): Promise<SearchResult[] | null> => {
+  const searchPattern = compileSearchPattern(
+    options.keyword,
+    options.useRegex,
+    options.caseSensitive,
+  )
 
   const results: SearchResult[] = []
   await forEachFileLine(

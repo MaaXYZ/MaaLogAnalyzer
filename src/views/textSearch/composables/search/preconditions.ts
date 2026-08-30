@@ -31,12 +31,14 @@ export const ensureSearchPreconditions = async (
     return false
   }
 
-  if (isManualSourceMissing(
-    options.sourceMode.value,
-    options.fileName.value,
-    options.fileContent.value,
-    options.fileHandle.value,
-  )) {
+  if (
+    isManualSourceMissing(
+      options.sourceMode.value,
+      options.fileName.value,
+      options.fileContent.value,
+      options.fileHandle.value,
+    )
+  ) {
     toastWarning('请先选择文件')
     return false
   }

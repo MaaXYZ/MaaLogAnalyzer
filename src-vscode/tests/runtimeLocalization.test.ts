@@ -3,9 +3,9 @@ import * as ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
 const sourceText = readFileSync(new URL('../src/extension.ts', import.meta.url), 'utf8')
-const manifest = JSON.parse(
-  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-) as { l10n?: string }
+const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+  l10n?: string
+}
 const zhBundle = JSON.parse(
   readFileSync(new URL('../l10n/bundle.l10n.zh-cn.json', import.meta.url), 'utf8'),
 ) as Record<string, string>
@@ -21,7 +21,11 @@ const sourceFile = ts.createSourceFile(
 const localizedMessages: string[] = []
 const hardcodedChinese: string[] = []
 const visit = (node: ts.Node) => {
-  if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 't') {
+  if (
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 't'
+  ) {
     const message = node.arguments[0]
     if (message && ts.isStringLiteral(message)) localizedMessages.push(message.text)
   }
@@ -39,7 +43,7 @@ describe('VS Code runtime localization', () => {
 
   it('provides a Chinese translation for every runtime message', () => {
     expect(localizedMessages.length).toBeGreaterThan(40)
-    expect(localizedMessages.filter(message => !(message in zhBundle))).toEqual([])
+    expect(localizedMessages.filter((message) => !(message in zhBundle))).toEqual([])
   })
 
   it('does not hardcode Chinese user-facing strings in extension source', () => {

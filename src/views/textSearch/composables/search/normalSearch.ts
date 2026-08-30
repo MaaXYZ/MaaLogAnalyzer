@@ -1,13 +1,15 @@
 import type { SearchResult } from '../types'
 import type { NormalSearchOptions } from './searchTypes'
-import {
-  compileSearchPattern,
-  findMatchInLine,
-  pushSearchResult,
-} from './matcher'
+import { compileSearchPattern, findMatchInLine, pushSearchResult } from './matcher'
 
-export const runNormalSearch = async (options: NormalSearchOptions): Promise<SearchResult[] | null> => {
-  const searchPattern = compileSearchPattern(options.keyword, options.useRegex, options.caseSensitive)
+export const runNormalSearch = async (
+  options: NormalSearchOptions,
+): Promise<SearchResult[] | null> => {
+  const searchPattern = compileSearchPattern(
+    options.keyword,
+    options.useRegex,
+    options.caseSensitive,
+  )
   return new Promise((resolve) => {
     setTimeout(() => {
       const lines = options.content.split('\n')

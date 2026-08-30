@@ -29,7 +29,7 @@ describe('SubTaskSnapshotHelpers', () => {
       { entry: 'SubTask', hash: 'h7', uuid: 'u7' },
       'Tasker.Task.Starting',
       '2026-04-08 00:00:00.100',
-      identity
+      identity,
     )
     expect(snapshot.entry).toBe('SubTask')
     expect(snapshot.hash).toBe('h7')
@@ -44,7 +44,7 @@ describe('SubTaskSnapshotHelpers', () => {
       'Tasker.Task.Failed',
       '2026-04-08 00:00:01.200',
       'Failed',
-      identity
+      identity,
     )
     expect(snapshot.status).toBe('failed')
     expect(snapshot.end_ts).toBe('2026-04-08 00:00:01.200')

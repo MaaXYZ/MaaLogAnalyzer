@@ -106,7 +106,8 @@ describe('createPerformSearchAction', () => {
     const { options } = createOptions()
     const firstReady = createDeferred<boolean>()
     const secondReady = createDeferred<boolean>()
-    const ensurePreconditions = vi.fn()
+    const ensurePreconditions = vi
+      .fn()
       .mockReturnValueOnce(firstReady.promise)
       .mockReturnValueOnce(secondReady.promise)
     const executeSearch = vi.fn(async (_execution: ExecuteSearchOptions) => [

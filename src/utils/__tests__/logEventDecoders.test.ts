@@ -39,7 +39,7 @@ describe('logEventDecoders', () => {
         entry: 'Run',
         hash: 'abc',
         uuid: 'u-1',
-      })
+      }),
     ).toEqual({
       task_id: 7,
       entry: 'Run',
@@ -51,7 +51,7 @@ describe('logEventDecoders', () => {
       decodeTaskLifecycleEventDetails({
         task_id: 'bad',
         entry: 0,
-      })
+      }),
     ).toEqual({
       task_id: undefined,
       entry: '',
@@ -68,7 +68,7 @@ describe('logEventDecoders', () => {
         reco_id: 3,
         action_id: 4,
         wf_id: 5,
-      })
+      }),
     ).toEqual({
       task_id: 1,
       node_id: 2,
@@ -81,7 +81,7 @@ describe('logEventDecoders', () => {
       decodeEventIdentityIds({
         task_id: '1',
         node_id: null,
-      })
+      }),
     ).toEqual({
       task_id: undefined,
       node_id: undefined,
@@ -109,7 +109,7 @@ describe('logEventDecoders', () => {
         time: 10,
         timeout: 1000,
         unexpected: 999,
-      })
+      }),
     ).toEqual({
       method: 1,
       rate_limit: 0.5,
@@ -130,7 +130,7 @@ describe('logEventDecoders', () => {
         name: 'DoTap',
         success: true,
         ignored: 1,
-      })
+      }),
     ).toEqual({
       action_id: 3,
       action: 'Tap',
@@ -148,7 +148,7 @@ describe('logEventDecoders', () => {
         action_id: 7,
         node_id: 11,
         extra: 'x',
-      })
+      }),
     ).toEqual({
       action_id: 7,
       node_id: 11,

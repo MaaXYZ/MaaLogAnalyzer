@@ -33,7 +33,17 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: hidden">
+  <div
+    style="
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px;
+      overflow: hidden;
+    "
+  >
     <text-search-search-pane
       :mobile-mode="true"
       :search-text="props.searchText"

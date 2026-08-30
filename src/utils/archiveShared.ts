@@ -14,16 +14,18 @@ export const isSearchTextFile = (normalizedPath: string) => {
 export function isNeededFile(path: string): boolean {
   const lower = path.replace(/\\/g, '/').toLowerCase()
   if (isSearchTextFile(lower)) return true
-  if ((lower.includes('/on_error/') || lower.startsWith('on_error/')) && lower.endsWith('.png')) return true
-  if ((lower.includes('/vision/') || lower.startsWith('vision/')) && lower.endsWith('.jpg')) return true
+  if ((lower.includes('/on_error/') || lower.startsWith('on_error/')) && lower.endsWith('.png'))
+    return true
+  if ((lower.includes('/vision/') || lower.startsWith('vision/')) && lower.endsWith('.jpg'))
+    return true
   return false
 }
 
 const toBlobArrayBuffer = (data: Uint8Array): ArrayBuffer => {
   if (
-    data.buffer instanceof ArrayBuffer
-    && data.byteOffset === 0
-    && data.byteLength === data.buffer.byteLength
+    data.buffer instanceof ArrayBuffer &&
+    data.byteOffset === 0 &&
+    data.byteLength === data.buffer.byteLength
   ) {
     return data.buffer
   }
@@ -76,11 +78,7 @@ export function extractErrorImages(
         const key = `${timestamp}.${paddedMs}_${nodeName}`
         const data = files.get(p)
         if (data) {
-          replaceBlobUrl(
-            imageMap,
-            key,
-            new Blob([toBlobArrayBuffer(data)], { type: 'image/png' }),
-          )
+          replaceBlobUrl(imageMap, key, new Blob([toBlobArrayBuffer(data)], { type: 'image/png' }))
         }
       }
     }
@@ -106,11 +104,7 @@ export function extractVisionImages(
       if (key != null) {
         const data = files.get(p)
         if (data) {
-          replaceBlobUrl(
-            imageMap,
-            key,
-            new Blob([toBlobArrayBuffer(data)], { type: 'image/jpeg' }),
-          )
+          replaceBlobUrl(imageMap, key, new Blob([toBlobArrayBuffer(data)], { type: 'image/jpeg' }))
         }
       }
     }
@@ -136,11 +130,7 @@ export function extractWaitFreezesImages(
       if (key != null) {
         const data = files.get(p)
         if (data) {
-          replaceBlobUrl(
-            imageMap,
-            key,
-            new Blob([toBlobArrayBuffer(data)], { type: 'image/jpeg' }),
-          )
+          replaceBlobUrl(imageMap, key, new Blob([toBlobArrayBuffer(data)], { type: 'image/jpeg' }))
         }
       }
     }

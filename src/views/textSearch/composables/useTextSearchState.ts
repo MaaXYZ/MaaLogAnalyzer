@@ -1,8 +1,4 @@
-import {
-  useTextSearchFileState,
-  useTextSearchSearchState,
-  useTextSearchUiState,
-} from './state'
+import { useTextSearchFileState, useTextSearchSearchState, useTextSearchUiState } from './state'
 
 export const useTextSearchState = () => {
   const uiState = useTextSearchUiState()

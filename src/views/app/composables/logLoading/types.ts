@@ -4,10 +4,7 @@ import type { PrimaryLogFile, PrimaryLogSelectionOption } from '../../../../util
 import type { TaskInfo } from '../../../../types'
 import type { LogParser } from '@windsland52/maa-log-parser'
 import type { LogParseSourceInput } from '../../../../utils/logInputSource'
-import type {
-  DeferredTextSearchTarget,
-  TextSearchLoadedTarget,
-} from '../useTextSearchTargets'
+import type { DeferredTextSearchTarget, TextSearchLoadedTarget } from '../useTextSearchTargets'
 
 export interface LogLoadingPipelineOptions {
   parser: LogParser
@@ -29,7 +26,9 @@ export interface LogLoadingPipelineOptions {
   onError: (message: string) => void
   onFileLoadingStart?: () => void
   onFileLoadingEnd?: () => void
-  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>
+  selectPrimaryLogs?: (
+    options: PrimaryLogSelectionOption[],
+  ) => Promise<PrimaryLogSelectionOption[] | null>
 }
 
 export interface ProcessLogContentParams {

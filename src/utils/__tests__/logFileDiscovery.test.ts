@@ -23,23 +23,27 @@ describe('logFileDiscovery', () => {
   it('prefers the current-folder group before deeper groups', () => {
     const selected = selectPrimaryLogGroup([
       { path: 'root/maa.bak.log', name: 'maa.bak.log' },
-      { path: 'root/debug/maafw.bak.2026.04.14-04.11.31.124.log', name: 'maafw.bak.2026.04.14-04.11.31.124.log' },
+      {
+        path: 'root/debug/maafw.bak.2026.04.14-04.11.31.124.log',
+        name: 'maafw.bak.2026.04.14-04.11.31.124.log',
+      },
       { path: 'root/debug/maafw.log', name: 'maafw.log' },
     ])
 
-    expect(selected.map(entry => entry.item.path)).toEqual([
-      'root/maa.bak.log',
-    ])
+    expect(selected.map((entry) => entry.item.path)).toEqual(['root/maa.bak.log'])
   })
 
   it('prefers the same-depth group that contains a main log', () => {
     const selected = selectPrimaryLogGroup([
       { path: 'root/debug-a/maa.bak.log', name: 'maa.bak.log' },
-      { path: 'root/debug-b/maafw.bak.2026.04.14-04.11.31.124.log', name: 'maafw.bak.2026.04.14-04.11.31.124.log' },
+      {
+        path: 'root/debug-b/maafw.bak.2026.04.14-04.11.31.124.log',
+        name: 'maafw.bak.2026.04.14-04.11.31.124.log',
+      },
       { path: 'root/debug-b/maafw.log', name: 'maafw.log' },
     ])
 
-    expect(selected.map(entry => entry.item.path)).toEqual([
+    expect(selected.map((entry) => entry.item.path)).toEqual([
       'root/debug-b/maafw.bak.2026.04.14-04.11.31.124.log',
       'root/debug-b/maafw.log',
     ])
@@ -81,7 +85,7 @@ describe('logFileDiscovery', () => {
 
     const sorted = sortLoadedPrimaryLogSegments(segments)
 
-    expect(sorted.map(segment => segment.name)).toEqual([
+    expect(sorted.map((segment) => segment.name)).toEqual([
       'maa.bak.log',
       'maa.log',
       'maafw.bak.2026.04.14-04.11.31.124.log',
@@ -93,7 +97,11 @@ describe('logFileDiscovery', () => {
     expect(combineLoadedPrimaryLogSegments(segments)).toContain(
       '[2026-04-13 05:18:03.641][DBG] legacy-bak\n[2026-04-13 06:07:22.681][DBG] legacy-current\n',
     )
-    expect(combineLoadedPrimaryLogSegments(segments).trimEnd().endsWith('[2026-04-14 04:37:25.504][DBG] current')).toBe(true)
+    expect(
+      combineLoadedPrimaryLogSegments(segments)
+        .trimEnd()
+        .endsWith('[2026-04-14 04:37:25.504][DBG] current'),
+    ).toBe(true)
   })
 
   it('creates parse inputs in primary log order without combining content', () => {
@@ -129,7 +137,10 @@ describe('logFileDiscovery', () => {
   it('creates default-selected primary log options from the current group', () => {
     const options = createPrimaryLogSelectionOptions([
       { path: 'root/debug/maafw.log', name: 'maafw.log' },
-      { path: 'root/debug/maafw.bak.2026.04.14-04.11.31.124.log', name: 'maafw.bak.2026.04.14-04.11.31.124.log' },
+      {
+        path: 'root/debug/maafw.bak.2026.04.14-04.11.31.124.log',
+        name: 'maafw.bak.2026.04.14-04.11.31.124.log',
+      },
     ])
 
     expect(options).toEqual([

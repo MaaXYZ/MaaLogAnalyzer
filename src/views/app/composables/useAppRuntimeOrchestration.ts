@@ -4,7 +4,11 @@ import { useBridgeRuntime } from './useBridgeRuntime'
 
 type RuntimeOptionOverrides = Omit<
   UseBridgeRuntimeOptions,
-  'parseIntervalMs' | 'snapshotTimeoutMs' | 'snapshotMaxBatchSize' | 'onSessionReset' | 'onRealtimeStartReset'
+  | 'parseIntervalMs'
+  | 'snapshotTimeoutMs'
+  | 'snapshotMaxBatchSize'
+  | 'onSessionReset'
+  | 'onRealtimeStartReset'
 >
 
 export interface UseAppRuntimeOrchestrationOptions extends RuntimeOptionOverrides {

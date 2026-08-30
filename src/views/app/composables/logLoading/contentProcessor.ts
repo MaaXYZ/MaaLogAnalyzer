@@ -14,9 +14,7 @@ import {
 } from '../../../../utils/logInputSource'
 import { sortPrimaryLogParseInputs } from '../../../../utils/logFileDiscovery'
 
-export const createProcessLogContent = (
-  options: LogLoadingPipelineOptions,
-) => {
+export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
   let latestRequestId = 0
 
   return async (params: ProcessLogContentParams) => {
@@ -74,17 +72,20 @@ export const createProcessLogContent = (
         parsedTasks = await parseInline()
       } else {
         try {
-          const inputs = params.parseInputs && params.parseInputs.length > 0
-            ? await Promise.all(params.parseInputs.map(materializeWorkerParseInput))
-            : [{ content: params.content }]
-          parsedTasks = reviveParsedTaskList(await parseLogsInWorker({
-            inputs,
-            sortInputsByTimestamp: params.sortParseInputs,
-            errorImages: params.errorImages,
-            visionImages: params.visionImages,
-            waitFreezesImages: params.waitFreezesImages,
-            onProgress: (percentage) => onProgress({ percentage }),
-          }))
+          const inputs =
+            params.parseInputs && params.parseInputs.length > 0
+              ? await Promise.all(params.parseInputs.map(materializeWorkerParseInput))
+              : [{ content: params.content }]
+          parsedTasks = reviveParsedTaskList(
+            await parseLogsInWorker({
+              inputs,
+              sortInputsByTimestamp: params.sortParseInputs,
+              errorImages: params.errorImages,
+              visionImages: params.visionImages,
+              waitFreezesImages: params.waitFreezesImages,
+              onProgress: (percentage) => onProgress({ percentage }),
+            }),
+          )
         } catch (error) {
           if (!(error instanceof LogParserWorkerUnavailableError)) throw error
           parsedTasks = await parseInline()

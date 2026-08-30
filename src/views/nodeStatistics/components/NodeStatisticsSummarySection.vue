@@ -26,11 +26,12 @@ const updateSearchKeyword = (value: string) => {
   emit('update:searchKeyword', value)
 }
 
-const hasSummaryCard = computed(() => (
-  (props.statMode === 'node' && props.nodeSummary !== null)
-  || (props.statMode === 'recognition-action' && props.recognitionActionSummary !== null)
-  || (props.statMode === 'wait-freezes' && props.waitFreezeSummary !== null)
-))
+const hasSummaryCard = computed(
+  () =>
+    (props.statMode === 'node' && props.nodeSummary !== null) ||
+    (props.statMode === 'recognition-action' && props.recognitionActionSummary !== null) ||
+    (props.statMode === 'wait-freezes' && props.waitFreezeSummary !== null),
+)
 </script>
 
 <template>
@@ -49,12 +50,7 @@ const hasSummaryCard = computed(() => (
                 <div class="summary-title">节点总览</div>
                 <div class="summary-caption">4 个核心指标 + 1 个焦点节点</div>
               </div>
-              <n-tag
-                v-if="props.searchKeyword.trim()"
-                size="small"
-                type="primary"
-                round
-              >
+              <n-tag v-if="props.searchKeyword.trim()" size="small" type="primary" round>
                 筛选中
               </n-tag>
             </div>
@@ -146,12 +142,7 @@ const hasSummaryCard = computed(() => (
                 <div class="summary-title">识别 / 动作总览</div>
                 <div class="summary-caption">4 个核心指标 + 1 个焦点节点</div>
               </div>
-              <n-tag
-                v-if="props.searchKeyword.trim()"
-                size="small"
-                type="warning"
-                round
-              >
+              <n-tag v-if="props.searchKeyword.trim()" size="small" type="warning" round>
                 筛选中
               </n-tag>
             </div>
@@ -215,13 +206,19 @@ const hasSummaryCard = computed(() => (
             <div class="focus-metric">
               <div class="focus-metric-label">平均识别耗时</div>
               <div class="focus-metric-value">
-                {{ formatDuration(props.recognitionActionSummary.slowestActionNode.avgRecognitionDuration) }}
+                {{
+                  formatDuration(
+                    props.recognitionActionSummary.slowestActionNode.avgRecognitionDuration,
+                  )
+                }}
               </div>
             </div>
             <div class="focus-metric">
               <div class="focus-metric-label">平均动作耗时</div>
               <div class="focus-metric-value">
-                {{ formatDuration(props.recognitionActionSummary.slowestActionNode.avgActionDuration) }}
+                {{
+                  formatDuration(props.recognitionActionSummary.slowestActionNode.avgActionDuration)
+                }}
               </div>
             </div>
             <div class="focus-metric">
@@ -249,12 +246,7 @@ const hasSummaryCard = computed(() => (
                 <div class="summary-title">Wait Freezes 总览</div>
                 <div class="summary-caption">重复等待 + 冻结耗时</div>
               </div>
-              <n-tag
-                v-if="props.searchKeyword.trim()"
-                size="small"
-                type="primary"
-                round
-              >
+              <n-tag v-if="props.searchKeyword.trim()" size="small" type="primary" round>
                 筛选中
               </n-tag>
             </div>
@@ -289,7 +281,9 @@ const hasSummaryCard = computed(() => (
 
             <div class="summary-panel metric-tile tone-amber">
               <div class="metric-label">平均冻结耗时</div>
-              <div class="metric-value">{{ formatDuration(props.waitFreezeSummary.avgElapsed) }}</div>
+              <div class="metric-value">
+                {{ formatDuration(props.waitFreezeSummary.avgElapsed) }}
+              </div>
               <div class="metric-note">单次等待画面静止平均耗时</div>
             </div>
           </div>
@@ -313,7 +307,9 @@ const hasSummaryCard = computed(() => (
           <div class="focus-metrics">
             <div class="focus-metric">
               <div class="focus-metric-label">重复等待</div>
-              <div class="focus-metric-value">{{ props.waitFreezeSummary.focusNode.repeatCount }}</div>
+              <div class="focus-metric-value">
+                {{ props.waitFreezeSummary.focusNode.repeatCount }}
+              </div>
             </div>
             <div class="focus-metric">
               <div class="focus-metric-label">平均冻结耗时</div>
@@ -585,20 +581,36 @@ const hasSummaryCard = computed(() => (
 @supports (background: color-mix(in srgb, white 50%, black)) {
   .summary-section-card {
     background:
-      radial-gradient(circle at top left, color-mix(in srgb, var(--summary-accent) 10%, transparent), transparent 36%),
+      radial-gradient(
+        circle at top left,
+        color-mix(in srgb, var(--summary-accent) 10%, transparent),
+        transparent 36%
+      ),
       var(--summary-surface);
   }
 
   .tone-cyan {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--summary-info-accent) 10%, var(--summary-surface-muted)), var(--summary-surface-muted));
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--summary-info-accent) 10%, var(--summary-surface-muted)),
+      var(--summary-surface-muted)
+    );
   }
 
   .tone-emerald {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--summary-success-accent) 10%, var(--summary-surface-muted)), var(--summary-surface-muted));
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--summary-success-accent) 10%, var(--summary-surface-muted)),
+      var(--summary-surface-muted)
+    );
   }
 
   .tone-amber {
-    background: linear-gradient(180deg, color-mix(in srgb, var(--summary-warning-accent) 10%, var(--summary-surface-muted)), var(--summary-surface-muted));
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--summary-warning-accent) 10%, var(--summary-surface-muted)),
+      var(--summary-surface-muted)
+    );
   }
 
   .focus-badge {

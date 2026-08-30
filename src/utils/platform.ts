@@ -24,9 +24,9 @@ export function isVSCode(): boolean {
   const classList = document.body?.classList
   if (!classList) return false
   return (
-    classList.contains('vscode-light')
-    || classList.contains('vscode-high-contrast-light')
-    || classList.contains('vscode-dark')
-    || classList.contains('vscode-high-contrast')
+    classList.contains('vscode-light') ||
+    classList.contains('vscode-high-contrast-light') ||
+    classList.contains('vscode-dark') ||
+    classList.contains('vscode-high-contrast')
   )
 }

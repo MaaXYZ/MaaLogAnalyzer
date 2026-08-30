@@ -28,7 +28,7 @@ const appendAttemptItem = (
   result: MergedRecognitionItem[],
   attempt: RecognitionAttempt,
   attemptIndex: number,
-  name: string = attempt.name
+  name: string = attempt.name,
 ) => {
   result.push({
     name,
@@ -40,7 +40,7 @@ const appendAttemptItem = (
 
 const appendAttemptsInOriginalOrder = (
   result: MergedRecognitionItem[],
-  attempts: RecognitionAttempt[]
+  attempts: RecognitionAttempt[],
 ) => {
   for (let index = 0; index < attempts.length; index += 1) {
     appendAttemptItem(result, attempts[index], index)
@@ -50,7 +50,7 @@ const appendAttemptsInOriginalOrder = (
 const splitAttemptsIntoRounds = (
   attempts: RecognitionAttempt[],
   nextListNames: ReadonlySet<string>,
-  nextIndexMap: ReadonlyMap<string, number>
+  nextIndexMap: ReadonlyMap<string, number>,
 ): RoundAttempt[][] => {
   const rounds: RoundAttempt[][] = [[]]
   let currentRound = 0
@@ -99,7 +99,7 @@ const registerRoundSplitName = (
   displayName: string,
   nextListNames: Set<string>,
   nextIndexMap: Map<string, number>,
-  nextDisplayMap: Map<string, string>
+  nextDisplayMap: Map<string, string>,
 ) => {
   if (!name) return
   if (!nextIndexMap.has(name)) {
@@ -116,7 +116,7 @@ const appendRoundItems = (
   useRoundSeparator: boolean,
   nextEntries: NextEntry[],
   nextIndexMap: ReadonlyMap<string, number>,
-  nextDisplayMap: ReadonlyMap<string, string>
+  nextDisplayMap: ReadonlyMap<string, string>,
 ) => {
   if (useRoundSeparator) {
     result.push({
@@ -156,7 +156,7 @@ const appendRoundItems = (
       const matchedDisplayName = buildNextListDisplayName(
         nextEntry.nextItem,
         matched.attempt.name,
-        ''
+        '',
       )
       appendAttemptItem(result, matched.attempt, matched.index, matchedDisplayName)
       continue
@@ -194,7 +194,7 @@ const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] =>
       for (const nextItem of nextList) {
         result.push({
           name: buildNextListDisplayName(nextItem),
-          status: 'not-recognized'
+          status: 'not-recognized',
         })
       }
     }
@@ -206,7 +206,7 @@ const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] =>
     const displayName = buildNextListDisplayName(
       nextItem,
       recognitionTargetByNextName.get(nextItem.name),
-      ''
+      '',
     )
     return {
       name: nextItem.name,
@@ -224,7 +224,7 @@ const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] =>
       nextEntry.displayName,
       primaryNextListNames,
       primaryNextIndexMap,
-      primaryNextDisplayMap
+      primaryNextDisplayMap,
     )
   })
 
@@ -246,8 +246,20 @@ const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] =>
     for (const attempt of attempts) {
       const anchorName = normalizeName(attempt.anchor_name)
       const attemptName = normalizeName(attempt.name)
-      registerRoundSplitName(anchorName, anchorName, splitNextListNames, splitNextIndexMap, splitNextDisplayMap)
-      registerRoundSplitName(attemptName, attemptName, splitNextListNames, splitNextIndexMap, splitNextDisplayMap)
+      registerRoundSplitName(
+        anchorName,
+        anchorName,
+        splitNextListNames,
+        splitNextIndexMap,
+        splitNextDisplayMap,
+      )
+      registerRoundSplitName(
+        attemptName,
+        attemptName,
+        splitNextListNames,
+        splitNextIndexMap,
+        splitNextDisplayMap,
+      )
     }
   }
 
@@ -256,11 +268,7 @@ const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] =>
     return result
   }
 
-  const rounds = splitAttemptsIntoRounds(
-    attempts,
-    splitNextListNames,
-    splitNextIndexMap
-  )
+  const rounds = splitAttemptsIntoRounds(attempts, splitNextListNames, splitNextIndexMap)
   const useRoundSeparator = rounds.length > 1
 
   if (!useRoundSeparator && nextEntries.length === 0) {
@@ -276,7 +284,7 @@ const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] =>
       useRoundSeparator,
       nextEntries,
       splitNextIndexMap,
-      splitNextDisplayMap
+      splitNextDisplayMap,
     )
   }
 
@@ -285,7 +293,7 @@ const buildMergedRecognitionItems = (node: NodeInfo): MergedRecognitionItem[] =>
 
 const buildVisibleRecognitionItems = (
   source: MergedRecognitionItem[],
-  showNotRecognizedNodes: boolean
+  showNotRecognizedNodes: boolean,
 ): MergedRecognitionItem[] => {
   if (showNotRecognizedNodes) return source
 
@@ -321,15 +329,12 @@ const buildVisibleRecognitionItems = (
 }
 
 export const useMergedRecognitionList = (params: UseMergedRecognitionListParams) => {
-  const mergedRecognitionList = computed<MergedRecognitionItem[]>(
-    () => buildMergedRecognitionItems(params.node.value)
+  const mergedRecognitionList = computed<MergedRecognitionItem[]>(() =>
+    buildMergedRecognitionItems(params.node.value),
   )
 
-  const visibleRecognitionList = computed<MergedRecognitionItem[]>(
-    () => buildVisibleRecognitionItems(
-      mergedRecognitionList.value,
-      params.showNotRecognizedNodes.value
-    )
+  const visibleRecognitionList = computed<MergedRecognitionItem[]>(() =>
+    buildVisibleRecognitionItems(mergedRecognitionList.value, params.showNotRecognizedNodes.value),
   )
 
   return {

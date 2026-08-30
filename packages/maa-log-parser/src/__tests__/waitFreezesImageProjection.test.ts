@@ -25,23 +25,25 @@ const taskScope = (
     uuid: `uuid-${taskId}`,
     source: { sourceKey: `source-${taskId}` },
   },
-  children: [{
-    id: `pipeline.${nodeId}.seq${seq + 1}`,
-    kind: 'pipeline_node',
-    status: 'succeeded',
-    ts: start,
-    endTs: end,
-    seq: seq + 1,
-    endSeq: seq + 98,
-    taskId,
-    payload: {
+  children: [
+    {
+      id: `pipeline.${nodeId}.seq${seq + 1}`,
+      kind: 'pipeline_node',
+      status: 'succeeded',
+      ts: start,
+      endTs: end,
+      seq: seq + 1,
+      endSeq: seq + 98,
       taskId,
-      nodeId,
-      name: 'SharedNode',
-      source: { sourceKey: `source-${taskId}` },
+      payload: {
+        taskId,
+        nodeId,
+        name: 'SharedNode',
+        source: { sourceKey: `source-${taskId}` },
+      },
+      children: waitFreezesScopes,
     },
-    children: waitFreezesScopes,
-  }],
+  ],
 })
 
 const waitFreezesScope = (
@@ -106,22 +108,13 @@ describe('wait_freezes image projection', () => {
       endSeq: 200,
       payload: {},
       children: [
-        taskScope(
-          1,
-          1,
-          '2026-04-07 10:00:00.100',
-          '2026-04-07 10:00:00.299',
-          101,
-          [firstWait, repeatedWait],
-        ),
-        taskScope(
-          2,
-          101,
-          '2026-04-07 10:00:00.300',
-          '2026-04-07 10:00:00.499',
-          201,
-          [otherTaskWait],
-        ),
+        taskScope(1, 1, '2026-04-07 10:00:00.100', '2026-04-07 10:00:00.299', 101, [
+          firstWait,
+          repeatedWait,
+        ]),
+        taskScope(2, 101, '2026-04-07 10:00:00.300', '2026-04-07 10:00:00.499', 201, [
+          otherTaskWait,
+        ]),
       ],
     }
     const waitFreezesImages = new Map([
@@ -144,9 +137,7 @@ describe('wait_freezes image projection', () => {
       '/images/repeat-early.jpg',
       '/images/repeat-late.jpg',
     ])
-    expect(secondTaskFlow[0]?.wait_freezes_details?.images).toEqual([
-      '/images/task-2.jpg',
-    ])
+    expect(secondTaskFlow[0]?.wait_freezes_details?.images).toEqual(['/images/task-2.jpg'])
   })
 
   it('assigns an image to only the latest matching occurrence when task windows overlap', () => {
@@ -176,22 +167,8 @@ describe('wait_freezes image projection', () => {
       endSeq: 200,
       payload: {},
       children: [
-        taskScope(
-          1,
-          1,
-          '2026-04-07 10:00:00.100',
-          '2026-04-07 10:00:00.400',
-          101,
-          [earlierWait],
-        ),
-        taskScope(
-          2,
-          101,
-          '2026-04-07 10:00:00.200',
-          '2026-04-07 10:00:00.499',
-          201,
-          [laterWait],
-        ),
+        taskScope(1, 1, '2026-04-07 10:00:00.100', '2026-04-07 10:00:00.400', 101, [earlierWait]),
+        taskScope(2, 101, '2026-04-07 10:00:00.200', '2026-04-07 10:00:00.499', 201, [laterWait]),
       ],
     }
 

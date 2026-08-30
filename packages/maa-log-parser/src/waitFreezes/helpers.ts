@@ -29,10 +29,7 @@ export const normalizeWaitFreezesId = (value: unknown): number | null => {
   return Number.isFinite(wfId) ? wfId : null
 }
 
-const buildWaitFreezesFlowItemId = (
-  state: WaitFreezesRuntimeState,
-  taskId?: number
-): string => {
+const buildWaitFreezesFlowItemId = (state: WaitFreezesRuntimeState, taskId?: number): string => {
   const taskScope = Number.isFinite(taskId) ? String(taskId) : 'na'
   const nodeScope = Number.isFinite(state.node_id) ? String(state.node_id) : 'na'
   return `node.wait_freezes.${taskScope}.${nodeScope}.${state.wf_id}`
@@ -40,7 +37,7 @@ const buildWaitFreezesFlowItemId = (
 
 export const toWaitFreezesFlowItem = (
   state: WaitFreezesRuntimeState,
-  taskId?: number
+  taskId?: number,
 ): UnifiedFlowItem => {
   return {
     id: buildWaitFreezesFlowItemId(state, taskId),
@@ -66,7 +63,7 @@ export const toWaitFreezesFlowItem = (
 
 export const buildWaitFreezesFlowItems = (
   waitFreezesRuntimeStates?: Map<number, WaitFreezesRuntimeState>,
-  taskId?: number
+  taskId?: number,
 ): UnifiedFlowItem[] => {
   if (!waitFreezesRuntimeStates || waitFreezesRuntimeStates.size === 0) {
     return []
@@ -95,20 +92,23 @@ interface UpsertWaitFreezesStateParams {
 
 export const upsertWaitFreezesState = (params: UpsertWaitFreezesStateParams): void => {
   const wfId = normalizeWaitFreezesId(
-    readNumberField(params.details, 'wf_id') ?? params.details.wf_id
+    readNumberField(params.details, 'wf_id') ?? params.details.wf_id,
   )
   if (wfId == null) return
 
   const existing = params.runtimeStates.get(wfId)
   const nowTs = params.intern(params.timestamp)
-  const fallbackName = (typeof params.details.name === 'string' && params.details.name.trim())
-    ? params.details.name
-    : existing?.name
+  const fallbackName =
+    typeof params.details.name === 'string' && params.details.name.trim()
+      ? params.details.name
+      : existing?.name
   const name = params.intern(fallbackName || params.activeNodeName || 'WaitFreezes')
   const rawPhase = typeof params.details.phase === 'string' ? params.details.phase.trim() : ''
   const phase = rawPhase ? params.intern(rawPhase) : existing?.phase
-  const nodeId = readNumberField(params.details, 'node_id') ?? existing?.node_id ?? params.activeNodeId
-  const elapsed = typeof params.details.elapsed === 'number' ? params.details.elapsed : existing?.elapsed
+  const nodeId =
+    readNumberField(params.details, 'node_id') ?? existing?.node_id ?? params.activeNodeId
+  const elapsed =
+    typeof params.details.elapsed === 'number' ? params.details.elapsed : existing?.elapsed
   const recoIds = parseNumericArray(params.details.reco_ids) ?? existing?.reco_ids
   const roi = parseRoi(params.details.roi) ?? existing?.roi
   const param = parseWaitFreezesParam(params.details.param) ?? existing?.param
@@ -121,7 +121,7 @@ export const upsertWaitFreezesState = (params: UpsertWaitFreezesStateParams): vo
     node_id: nodeId,
     phase,
     ts: existing?.ts || nowTs,
-    end_ts: params.status === 'running' ? (existing?.end_ts || nowTs) : nowTs,
+    end_ts: params.status === 'running' ? existing?.end_ts || nowTs : nowTs,
     status: params.status,
     elapsed,
     reco_ids: recoIds,

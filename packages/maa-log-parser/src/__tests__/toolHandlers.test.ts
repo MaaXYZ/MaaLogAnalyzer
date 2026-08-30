@@ -17,7 +17,12 @@ const makeEventLine = (
 }
 
 const sourceAContent = [
-  makeEventLine(1, 'Tasker.Task.Starting', { task_id: 1, entry: 'MainTask', hash: 'hash-1', uuid: 'uuid-1' }),
+  makeEventLine(1, 'Tasker.Task.Starting', {
+    task_id: 1,
+    entry: 'MainTask',
+    hash: 'hash-1',
+    uuid: 'uuid-1',
+  }),
   makeEventLine(2, 'Node.PipelineNode.Starting', { task_id: 1, node_id: 101, name: 'MainNode' }),
   makeEventLine(3, 'Node.NextList.Starting', {
     task_id: 1,
@@ -33,19 +38,28 @@ const sourceBContent = [
     list: [{ name: 'CandidateA', anchor: true, jump_back: false }],
   }),
   makeEventLine(5, 'Node.PipelineNode.Succeeded', { task_id: 1, node_id: 101, name: 'MainNode' }),
-  makeEventLine(6, 'Tasker.Task.Succeeded', { task_id: 1, entry: 'MainTask', hash: 'hash-1', uuid: 'uuid-1' }),
+  makeEventLine(6, 'Tasker.Task.Succeeded', {
+    task_id: 1,
+    entry: 'MainTask',
+    hash: 'hash-1',
+    uuid: 'uuid-1',
+  }),
 ].join('\n')
 
 describe('LogParser multi-source parsing', () => {
   it('captures source refs and raw lines across multiple inputs', async () => {
     const parser = new LogParser()
 
-    await parser.parseInputs([
-      { content: sourceAContent, sourceKey: 'a.log' },
-      { content: sourceBContent, sourceKey: 'b.log' },
-    ], undefined, {
-      storeRawLines: true,
-    })
+    await parser.parseInputs(
+      [
+        { content: sourceAContent, sourceKey: 'a.log' },
+        { content: sourceBContent, sourceKey: 'b.log' },
+      ],
+      undefined,
+      {
+        storeRawLines: true,
+      },
+    )
 
     const artifacts = parser.getParseArtifactsSnapshot()
     expect(artifacts.events).toHaveLength(6)
@@ -60,20 +74,26 @@ describe('LogParser multi-source parsing', () => {
       line: 3,
     })
     expect(artifacts.rawLines?.sources.get('a.log')?.lines).toHaveLength(3)
-    expect(artifacts.rawLines?.sources.get('b.log')?.lines[1]).toContain('Node.PipelineNode.Succeeded')
+    expect(artifacts.rawLines?.sources.get('b.log')?.lines[1]).toContain(
+      'Node.PipelineNode.Succeeded',
+    )
   })
 
   it('assigns deterministic unique keys when source keys collide', async () => {
     const parser = new LogParser()
 
-    await parser.parseInputs([
-      { content: sourceAContent, sourceKey: 'duplicate.log' },
-      { content: sourceBContent, sourceKey: 'duplicate.log' },
-      { content: '', sourceKey: 'duplicate.log#2' },
-      { content: '', sourceKey: '', sourcePath: 'fallback.log' },
-    ], undefined, {
-      storeRawLines: true,
-    })
+    await parser.parseInputs(
+      [
+        { content: sourceAContent, sourceKey: 'duplicate.log' },
+        { content: sourceBContent, sourceKey: 'duplicate.log' },
+        { content: '', sourceKey: 'duplicate.log#2' },
+        { content: '', sourceKey: '', sourcePath: 'fallback.log' },
+      ],
+      undefined,
+      {
+        storeRawLines: true,
+      },
+    )
 
     const artifacts = parser.getParseArtifactsSnapshot()
     expect(artifacts.events[0]?.source.sourceKey).toBe('duplicate.log')
@@ -215,14 +235,46 @@ describe('Analyzer tool handlers', () => {
 
   it('requires an execution selector when a task id is reused', async () => {
     const repeatedTaskContent = [
-      makeEventLine(1, 'Tasker.Task.Starting', { task_id: 7, entry: 'First', hash: 'h1', uuid: 'u1' }),
-      makeEventLine(2, 'Node.PipelineNode.Starting', { task_id: 7, node_id: 701, name: 'FirstNode' }),
+      makeEventLine(1, 'Tasker.Task.Starting', {
+        task_id: 7,
+        entry: 'First',
+        hash: 'h1',
+        uuid: 'u1',
+      }),
+      makeEventLine(2, 'Node.PipelineNode.Starting', {
+        task_id: 7,
+        node_id: 701,
+        name: 'FirstNode',
+      }),
       makeEventLine(3, 'Node.PipelineNode.Failed', { task_id: 7, node_id: 701, name: 'FirstNode' }),
-      makeEventLine(4, 'Tasker.Task.Failed', { task_id: 7, entry: 'First', hash: 'h1', uuid: 'u1' }),
-      makeEventLine(5, 'Tasker.Task.Starting', { task_id: 7, entry: 'Retry', hash: 'h2', uuid: 'u2' }),
-      makeEventLine(6, 'Node.PipelineNode.Starting', { task_id: 7, node_id: 702, name: 'RetryNode' }),
-      makeEventLine(7, 'Node.PipelineNode.Succeeded', { task_id: 7, node_id: 702, name: 'RetryNode' }),
-      makeEventLine(8, 'Tasker.Task.Succeeded', { task_id: 7, entry: 'Retry', hash: 'h2', uuid: 'u2' }),
+      makeEventLine(4, 'Tasker.Task.Failed', {
+        task_id: 7,
+        entry: 'First',
+        hash: 'h1',
+        uuid: 'u1',
+      }),
+      makeEventLine(5, 'Tasker.Task.Starting', {
+        task_id: 7,
+        entry: 'Retry',
+        hash: 'h2',
+        uuid: 'u2',
+      }),
+      makeEventLine(6, 'Node.PipelineNode.Starting', {
+        task_id: 7,
+        node_id: 702,
+        name: 'RetryNode',
+      }),
+      makeEventLine(7, 'Node.PipelineNode.Succeeded', {
+        task_id: 7,
+        node_id: 702,
+        name: 'RetryNode',
+      }),
+      makeEventLine(8, 'Tasker.Task.Succeeded', {
+        task_id: 7,
+        entry: 'Retry',
+        hash: 'h2',
+        uuid: 'u2',
+      }),
     ].join('\n')
     const handlers = createAnalyzerToolHandlers({
       async resolve_input() {
@@ -268,10 +320,7 @@ describe('Analyzer tool handlers', () => {
   it('keeps every resolved source when metadata is omitted', async () => {
     const handlers = createAnalyzerToolHandlers({
       async resolve_input() {
-        return [
-          { content: sourceAContent },
-          { content: sourceBContent },
-        ]
+        return [{ content: sourceAContent }, { content: sourceBContent }]
       },
     })
 
@@ -296,10 +345,9 @@ describe('Analyzer tool handlers', () => {
     expect(rawLines.ok).toBe(true)
     if (rawLines.ok) {
       expect(rawLines.data.lines).toHaveLength(6)
-      expect(new Set(rawLines.data.lines.map(line => line.source_key))).toEqual(new Set([
-        '/logs/debug',
-        '/logs/debug#2',
-      ]))
+      expect(new Set(rawLines.data.lines.map((line) => line.source_key))).toEqual(
+        new Set(['/logs/debug', '/logs/debug#2']),
+      )
     }
   })
 
@@ -337,30 +385,73 @@ describe('Analyzer tool handlers', () => {
 
   it('returns projector-linked image evidences for task and node queries', async () => {
     const failedContent = [
-      makeEventLine(1, 'Tasker.Task.Starting', { task_id: 7, entry: 'FailedTask', hash: 'hash-7', uuid: 'uuid-7' }),
-      makeEventLine(2, 'Node.PipelineNode.Starting', { task_id: 7, node_id: 701, name: 'FailedNode' }),
-      makeEventLine(3, 'Node.Recognition.Starting', { task_id: 7, reco_id: 1701, name: 'RecoNode' }),
+      makeEventLine(1, 'Tasker.Task.Starting', {
+        task_id: 7,
+        entry: 'FailedTask',
+        hash: 'hash-7',
+        uuid: 'uuid-7',
+      }),
+      makeEventLine(2, 'Node.PipelineNode.Starting', {
+        task_id: 7,
+        node_id: 701,
+        name: 'FailedNode',
+      }),
+      makeEventLine(3, 'Node.Recognition.Starting', {
+        task_id: 7,
+        reco_id: 1701,
+        name: 'RecoNode',
+      }),
       makeEventLine(4, 'Node.Recognition.Succeeded', {
         task_id: 7,
         reco_id: 1701,
         name: 'RecoNode',
-        reco_details: { reco_id: 1701, algorithm: 'DirectHit', box: [0, 0, 10, 10], detail: null, name: 'RecoNode' },
+        reco_details: {
+          reco_id: 1701,
+          algorithm: 'DirectHit',
+          box: [0, 0, 10, 10],
+          detail: null,
+          name: 'RecoNode',
+        },
       }),
       makeEventLine(5, 'Node.Action.Starting', { task_id: 7, action_id: 2701, name: 'RecoNode' }),
       makeEventLine(6, 'Node.Action.Failed', {
         task_id: 7,
         action_id: 2701,
         name: 'RecoNode',
-        action_details: { action_id: 2701, action: 'Click', box: [0, 0, 10, 10], detail: {}, name: 'RecoNode', success: false },
+        action_details: {
+          action_id: 2701,
+          action: 'Click',
+          box: [0, 0, 10, 10],
+          detail: {},
+          name: 'RecoNode',
+          success: false,
+        },
       }),
       makeEventLine(7, 'Node.PipelineNode.Failed', {
         task_id: 7,
         node_id: 701,
         name: 'FailedNode',
-        reco_details: { reco_id: 1701, algorithm: 'DirectHit', box: [0, 0, 10, 10], detail: null, name: 'RecoNode' },
-        node_details: { action_id: 2701, completed: false, name: 'RecoNode', node_id: 701, reco_id: 1701 },
+        reco_details: {
+          reco_id: 1701,
+          algorithm: 'DirectHit',
+          box: [0, 0, 10, 10],
+          detail: null,
+          name: 'RecoNode',
+        },
+        node_details: {
+          action_id: 2701,
+          completed: false,
+          name: 'RecoNode',
+          node_id: 701,
+          reco_id: 1701,
+        },
       }),
-      makeEventLine(8, 'Tasker.Task.Succeeded', { task_id: 7, entry: 'FailedTask', hash: 'hash-7', uuid: 'uuid-7' }),
+      makeEventLine(8, 'Tasker.Task.Succeeded', {
+        task_id: 7,
+        entry: 'FailedTask',
+        hash: 'hash-7',
+        uuid: 'uuid-7',
+      }),
     ].join('\n')
 
     const handlers = createAnalyzerToolHandlers({
@@ -369,21 +460,19 @@ describe('Analyzer tool handlers', () => {
       },
       create_parser() {
         const parser = new LogParser()
-        parser.setErrorImages(new Map([
-          ['2026.04.14-10.00.00.007_FailedNode', '/images/failed-node.png'],
-        ]))
-        parser.setVisionImages(new Map([
-          ['2026.04.14-10.00.00.004_RecoNode_1701', '/images/reco-vision.png'],
-        ]))
+        parser.setErrorImages(
+          new Map([['2026.04.14-10.00.00.007_FailedNode', '/images/failed-node.png']]),
+        )
+        parser.setVisionImages(
+          new Map([['2026.04.14-10.00.00.004_RecoNode_1701', '/images/reco-vision.png']]),
+        )
         return parser
       },
     })
 
     const parsed = await handlers.parse_log_bundle({
       session_id: 's-images',
-      inputs: [
-        { path: '/logs/failed.log', kind: 'file' },
-      ],
+      inputs: [{ path: '/logs/failed.log', kind: 'file' }],
     })
     expect(parsed.ok).toBe(true)
 
@@ -394,8 +483,16 @@ describe('Analyzer tool handlers', () => {
     })
     expect(timeline.ok).toBe(true)
     if (timeline.ok) {
-      expect(timeline.data.evidences.some((item) => item.payload.image_path === '/images/failed-node.png')).toBe(true)
-      expect(timeline.data.evidences.some((item) => item.payload.image_path === '/images/reco-vision.png')).toBe(true)
+      expect(
+        timeline.data.evidences.some(
+          (item) => item.payload.image_path === '/images/failed-node.png',
+        ),
+      ).toBe(true)
+      expect(
+        timeline.data.evidences.some(
+          (item) => item.payload.image_path === '/images/reco-vision.png',
+        ),
+      ).toBe(true)
     }
   })
 

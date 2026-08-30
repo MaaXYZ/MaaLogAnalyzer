@@ -8,7 +8,7 @@ export const setupLoadedTargetSelectedSync = (options: LoadedSourceSyncOptions) 
     if (options.ensureTargetContentLoaded) {
       await options.ensureTargetContentLoaded(id)
     }
-    const target = (options.loadedTargets.value ?? []).find(item => item.id === id)
+    const target = (options.loadedTargets.value ?? []).find((item) => item.id === id)
     await options.applyLoadedTarget(target)
   })
 }

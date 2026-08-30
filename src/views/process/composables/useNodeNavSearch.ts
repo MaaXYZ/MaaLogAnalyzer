@@ -6,10 +6,7 @@ import {
   normalizeSearchText as normalizeNodeNavMatchText,
   normalizeSearchText,
 } from './nodeNavSearch/match'
-import {
-  formatNodeNavMatchHint,
-  formatNodeNavMatchPreview,
-} from './nodeNavSearch/format'
+import { formatNodeNavMatchHint, formatNodeNavMatchPreview } from './nodeNavSearch/format'
 import {
   buildActionFocusCardData,
   buildNodeFocusCardData,
@@ -50,7 +47,8 @@ const hasFocusValue = (value: unknown): boolean => value !== null && value !== u
 
 const stringifyFocusPreview = (value: unknown): string => {
   if (typeof value === 'string') return value
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value)
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint')
+    return String(value)
   try {
     return JSON.stringify(value)
   } catch {
@@ -61,7 +59,9 @@ const stringifyFocusPreview = (value: unknown): string => {
 const readFocusCardDisplay = (entries: Array<{ display: string[] }>): string => {
   const channels = entries
     .flatMap((entry) => entry.display)
-    .filter((channel, index, items) => channel.trim().length > 0 && items.indexOf(channel) === index)
+    .filter(
+      (channel, index, items) => channel.trim().length > 0 && items.indexOf(channel) === index,
+    )
   return channels.length > 0 ? channels.join('/') : 'log'
 }
 
@@ -90,7 +90,7 @@ export const useNodeNavSearch = (
   const nodeNavSearchText = ref('')
   // Add debouncing to prevent UI freeze during typing for large logs (e.g. 50MB+)
   const debouncedNodeNavSearchText = ref('')
-  
+
   let searchTimeout: ReturnType<typeof setTimeout> | null = null
   watch(nodeNavSearchText, (newVal) => {
     if (searchTimeout) clearTimeout(searchTimeout)
@@ -104,7 +104,9 @@ export const useNodeNavSearch = (
     }
   })
 
-  const normalizedNodeNavSearchText = computed(() => normalizeSearchText(debouncedNodeNavSearchText.value))
+  const normalizedNodeNavSearchText = computed(() =>
+    normalizeSearchText(debouncedNodeNavSearchText.value),
+  )
   const nodeNavMode = ref<NodeNavMode>('pipeline')
   const nodeNavFailedOnly = ref(false)
 
@@ -166,11 +168,12 @@ export const useNodeNavSearch = (
       for (const item of flowItems) {
         if (!hasFocusValue(item.focus)) continue
         const focusKind = getFlowItemFocusKind(item)
-        const focusCard = focusKind === 'recognition'
-          ? buildRecognitionFocusCardData(item, node)
-          : focusKind === 'action'
-            ? buildActionFocusCardData(item, node)
-            : null
+        const focusCard =
+          focusKind === 'recognition'
+            ? buildRecognitionFocusCardData(item, node)
+            : focusKind === 'action'
+              ? buildActionFocusCardData(item, node)
+              : null
         if (!focusCard) continue
         const focusPreview = stringifyFocusPreview(item.focus)
         entries.push({
@@ -201,11 +204,14 @@ export const useNodeNavSearch = (
   })
 
   const appendPrimaryMatches = (entry: SourceEntry, query: string) => {
-    const details = nodeNavMode.value === 'focus'
-      ? (query
-          ? (entry.matchDetails ?? []).filter((detail) => normalizeNodeNavMatchText(detail.text).includes(query))
-          : [...(entry.matchDetails ?? [])])
-      : collectNodeNavMatchDetails(entry.node, query)
+    const details =
+      nodeNavMode.value === 'focus'
+        ? query
+          ? (entry.matchDetails ?? []).filter((detail) =>
+              normalizeNodeNavMatchText(detail.text).includes(query),
+            )
+          : [...(entry.matchDetails ?? [])]
+        : collectNodeNavMatchDetails(entry.node, query)
     if (!query) return details
 
     const withPrimary = normalizeNodeNavMatchText(entry.primaryText).includes(query)
@@ -251,7 +257,11 @@ export const useNodeNavSearch = (
         if (nodeNavMode.value === 'focus') {
           return item.navStatus === 'failed'
         }
-        return item.navStatus === 'failed' || item.navStatus === 'timeout' || item.navStatus === 'action-failed'
+        return (
+          item.navStatus === 'failed' ||
+          item.navStatus === 'timeout' ||
+          item.navStatus === 'action-failed'
+        )
       })
       .filter((item) => !query || item.matchDetails.length > 0)
   })

@@ -52,7 +52,11 @@ export const sameFileIdentity = (
 
 const assertRegularPath = (filePath: string, stats: Stats): void => {
   if (stats.isSymbolicLink()) {
-    throw new InputFileError('symlink', filePath, `Symbolic-link inputs are not allowed: ${filePath}`)
+    throw new InputFileError(
+      'symlink',
+      filePath,
+      `Symbolic-link inputs are not allowed: ${filePath}`,
+    )
   }
   if (!stats.isFile()) {
     throw new InputFileError('not-regular-file', filePath, `Expected a regular file: ${filePath}`)
@@ -73,15 +77,11 @@ const assertHandleIdentity = (
   }
 }
 
-const assertStableContentState = (
-  filePath: string,
-  expected: Stats,
-  actual: Stats,
-): void => {
+const assertStableContentState = (filePath: string, expected: Stats, actual: Stats): void => {
   if (
-    expected.size !== actual.size
-    || expected.mtimeMs !== actual.mtimeMs
-    || expected.ctimeMs !== actual.ctimeMs
+    expected.size !== actual.size ||
+    expected.mtimeMs !== actual.mtimeMs ||
+    expected.ctimeMs !== actual.ctimeMs
   ) {
     throw new InputFileError(
       'content-changed',

@@ -17,20 +17,22 @@ const getLastFlowPathSignature = (items: NodeInfo['node_flow']) => {
 }
 
 export const buildFollowTasksFingerprint = (tasks: TaskInfo[]) => {
-  return tasks.map((task) => {
-    const taskIdentity = buildTaskIdentity(task)
-    const latestNode = task.nodes[task.nodes.length - 1]
-    if (!latestNode) {
-      return `${taskIdentity}:${task.status}:${task.end_time ?? ''}:N0`
-    }
-    return [
-      taskIdentity,
-      task.status,
-      task.end_time ?? '',
-      `N${task.nodes.length}`,
-      latestNode.node_id,
-      latestNode.status,
-      getLastFlowPathSignature(latestNode.node_flow),
-    ].join(':')
-  }).join('|')
+  return tasks
+    .map((task) => {
+      const taskIdentity = buildTaskIdentity(task)
+      const latestNode = task.nodes[task.nodes.length - 1]
+      if (!latestNode) {
+        return `${taskIdentity}:${task.status}:${task.end_time ?? ''}:N0`
+      }
+      return [
+        taskIdentity,
+        task.status,
+        task.end_time ?? '',
+        `N${task.nodes.length}`,
+        latestNode.node_id,
+        latestNode.status,
+        getLastFlowPathSignature(latestNode.node_flow),
+      ].join(':')
+    })
+    .join('|')
 }

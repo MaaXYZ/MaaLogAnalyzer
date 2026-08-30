@@ -1,9 +1,6 @@
 import type { MergedRecognitionItem } from '../../types'
 
-export const buildRecognitionItemKey = (
-  item: MergedRecognitionItem,
-  index: number
-): string => {
+export const buildRecognitionItemKey = (item: MergedRecognitionItem, index: number): string => {
   if (item.isRoundSeparator) {
     return `round-${item.roundIndex ?? index}-${item.name}`
   }

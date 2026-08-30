@@ -16,10 +16,7 @@ import {
   selectPrimaryLogGroup,
   sortLoadedPrimaryLogSegments,
 } from '../../../utils/logFileDiscovery'
-import {
-  collectMxuZipVolumes,
-  findMxuZipVolumes,
-} from '../../../utils/mxuZipVolumes'
+import { collectMxuZipVolumes, findMxuZipVolumes } from '../../../utils/mxuZipVolumes'
 import {
   createTauriArchiveResourceOwner,
   releaseTauriArchiveResource,
@@ -156,7 +153,7 @@ export const useFlowchartUpload = ({
       registerBrowserInputFile(budget, file, getFileRelativePath(file))
     }
     const selectedLogs = selectPrimaryLogGroup(
-      fileList.map(file => ({
+      fileList.map((file) => ({
         name: file.name,
         path: getFileRelativePath(file),
         file,
@@ -237,12 +234,14 @@ export const useFlowchartUpload = ({
             new Map(),
             new Map(),
             undefined,
-            [{
-              path,
-              name: fileName,
-              loadBytes: async () => await readFile(path),
-              loadContent: async () => decodeFileContent(await readFile(path)),
-            }],
+            [
+              {
+                path,
+                name: fileName,
+                loadBytes: async () => await readFile(path),
+                loadContent: async () => decodeFileContent(await readFile(path)),
+              },
+            ],
             undefined,
             generation,
           )

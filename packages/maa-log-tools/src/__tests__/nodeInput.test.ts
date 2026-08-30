@@ -17,7 +17,9 @@ const makeTimestampedLine = (timestamp: string, message: string): string => {
 }
 
 afterEach(async () => {
-  await Promise.all(tempRoots.splice(0, tempRoots.length).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(
+    tempRoots.splice(0, tempRoots.length).map((root) => rm(root, { recursive: true, force: true })),
+  )
 })
 
 describe('node input focus selectors', () => {
@@ -27,19 +29,30 @@ describe('node input focus selectors', () => {
     const debugDir = path.join(root, 'debug')
     await mkdir(debugDir, { recursive: true })
 
-    await writeFile(path.join(debugDir, 'maa.bak.20260415.log'), `${makeTimestampedLine('2026-04-15 09:00:00.000', 'OldHistory')}\n`)
-    await writeFile(path.join(debugDir, 'maa.bak.log'), `${makeTimestampedLine('2026-04-16 14:49:00.000', 'BaselineTask')}\n`)
-    await writeFile(path.join(debugDir, 'maa.log'), `${makeTimestampedLine('2026-04-16 14:55:00.000', 'FocusedTask')}\n`)
+    await writeFile(
+      path.join(debugDir, 'maa.bak.20260415.log'),
+      `${makeTimestampedLine('2026-04-15 09:00:00.000', 'OldHistory')}\n`,
+    )
+    await writeFile(
+      path.join(debugDir, 'maa.bak.log'),
+      `${makeTimestampedLine('2026-04-16 14:49:00.000', 'BaselineTask')}\n`,
+    )
+    await writeFile(
+      path.join(debugDir, 'maa.log'),
+      `${makeTimestampedLine('2026-04-16 14:55:00.000', 'FocusedTask')}\n`,
+    )
 
     const extracted = await loadNodeLogDirectory(root)
     expect(extracted).not.toBeNull()
     expect(extracted?.content).toContain('BaselineTask')
     expect(extracted?.content).toContain('FocusedTask')
     expect(extracted?.content).not.toContain('OldHistory')
-    expect(extracted?.sourceSegments.map(segment => ({
-      path: segment.path,
-      startLine: segment.startLine,
-    }))).toEqual([
+    expect(
+      extracted?.sourceSegments.map((segment) => ({
+        path: segment.path,
+        startLine: segment.startLine,
+      })),
+    ).toEqual([
       { path: 'maa.bak.log', startLine: 1 },
       { path: 'maa.log', startLine: 2 },
     ])
@@ -51,9 +64,18 @@ describe('node input focus selectors', () => {
     const debugDir = path.join(root, 'debug')
     await mkdir(debugDir, { recursive: true })
 
-    await writeFile(path.join(debugDir, 'maa.bak.20260415.log'), `${makeTimestampedLine('2026-04-15 09:00:00.000', 'OldHistory')}\n`)
-    await writeFile(path.join(debugDir, 'maa.bak.log'), `${makeTimestampedLine('2026-04-16 14:49:00.000', 'BaselineTask')}\n`)
-    await writeFile(path.join(debugDir, 'maa.log'), `${makeTimestampedLine('2026-04-16 14:55:00.000', 'AutoCollectStart')}\n`)
+    await writeFile(
+      path.join(debugDir, 'maa.bak.20260415.log'),
+      `${makeTimestampedLine('2026-04-15 09:00:00.000', 'OldHistory')}\n`,
+    )
+    await writeFile(
+      path.join(debugDir, 'maa.bak.log'),
+      `${makeTimestampedLine('2026-04-16 14:49:00.000', 'BaselineTask')}\n`,
+    )
+    await writeFile(
+      path.join(debugDir, 'maa.log'),
+      `${makeTimestampedLine('2026-04-16 14:55:00.000', 'AutoCollectStart')}\n`,
+    )
 
     const extracted = await loadNodeLogDirectory(root, {
       focus: {
@@ -74,23 +96,34 @@ describe('node input focus selectors', () => {
     const debugDir = path.join(root, 'debug')
     await mkdir(path.join(debugDir, 'on_error'), { recursive: true })
 
-    await writeFile(path.join(debugDir, 'maa.log'), `${makeTimestampedLine('2026-04-16 14:55:00.000', 'AutoCollectStart')}\n`)
     await writeFile(
-      path.join(debugDir, 'on_error', '2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation.png'),
+      path.join(debugDir, 'maa.log'),
+      `${makeTimestampedLine('2026-04-16 14:55:00.000', 'AutoCollectStart')}\n`,
+    )
+    await writeFile(
+      path.join(
+        debugDir,
+        'on_error',
+        '2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation.png',
+      ),
       'fake-image',
     )
 
     const extracted = await loadNodeLogDirectory(root)
     expect(extracted).not.toBeNull()
-    expect(extracted?.errorImages.get('2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation')).toContain(
-      'AutoCollectRoute1AssertLocation.png',
-    )
+    expect(
+      extracted?.errorImages.get('2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation'),
+    ).toContain('AutoCollectRoute1AssertLocation.png')
   })
 
   it('filters zip logs by the same focus selectors', () => {
     const zipData = zipSync({
-      'debug/maa.bak.20260415.log': strToU8(`${makeTimestampedLine('2026-04-15 09:00:00.000', 'OldHistory')}\n`),
-      'debug/maa.log': strToU8(`${makeTimestampedLine('2026-04-16 14:55:00.000', 'AutoCollectStart')}\n`),
+      'debug/maa.bak.20260415.log': strToU8(
+        `${makeTimestampedLine('2026-04-15 09:00:00.000', 'OldHistory')}\n`,
+      ),
+      'debug/maa.log': strToU8(
+        `${makeTimestampedLine('2026-04-16 14:55:00.000', 'AutoCollectStart')}\n`,
+      ),
       'debug/notes.txt': strToU8('extra text file\n'),
     })
 
@@ -117,12 +150,12 @@ describe('node input focus selectors', () => {
     const extracted = extractZipContentFromNodeBuffer(zipData, 'logs.zip')
 
     expect(extracted).not.toBeNull()
-    expect(extracted?.errorImages.get('2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation')).toBe(
-      'zip:logs.zip#on_error/2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation.png',
-    )
-    expect(extracted?.waitFreezesImages.get('2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes')).toBe(
-      'zip:logs.zip#vision/2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes.jpg',
-    )
+    expect(
+      extracted?.errorImages.get('2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation'),
+    ).toBe('zip:logs.zip#on_error/2026.04.16-14.57.56.745_AutoCollectRoute1AssertLocation.png')
+    expect(
+      extracted?.waitFreezesImages.get('2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes'),
+    ).toBe('zip:logs.zip#vision/2026.04.16-14.57.58.456_AutoCollectRoute1_wait_freezes.jpg')
     expect(extracted?.sourceSegments).toEqual([
       {
         source: 'zip:logs.zip#maa.log',
@@ -134,19 +167,26 @@ describe('node input focus selectors', () => {
   })
 
   it('applies ZIP limits before expanding selected log content', () => {
-    const zipData = zipSync({
-      'maa.log': new Uint8Array(2_048),
-    }, { level: 9 })
-
-    expect(() => extractZipContentFromNodeBuffer(zipData, 'logs.zip', {
-      archiveLimits: {
-        compressionRatioMinBytes: 1,
-        maxCompressionRatio: 2,
+    const zipData = zipSync(
+      {
+        'maa.log': new Uint8Array(2_048),
       },
-    })).toThrow(expect.objectContaining<Partial<ArchiveLimitError>>({
-      name: 'ArchiveLimitError',
-      code: 'compression-ratio',
-    }))
+      { level: 9 },
+    )
+
+    expect(() =>
+      extractZipContentFromNodeBuffer(zipData, 'logs.zip', {
+        archiveLimits: {
+          compressionRatioMinBytes: 1,
+          maxCompressionRatio: 2,
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining<Partial<ArchiveLimitError>>({
+        name: 'ArchiveLimitError',
+        code: 'compression-ratio',
+      }),
+    )
   })
 
   it('checks regular log file size before and after reading', async () => {
@@ -155,9 +195,11 @@ describe('node input focus selectors', () => {
     const logPath = path.join(root, 'maa.log')
     await writeFile(logPath, '0123456789')
 
-    await expect(readNodeTextFileContent(logPath, {
-      archiveLimits: { maxFileBytes: 5 },
-    })).rejects.toMatchObject({
+    await expect(
+      readNodeTextFileContent(logPath, {
+        archiveLimits: { maxFileBytes: 5 },
+      }),
+    ).rejects.toMatchObject({
       name: 'ArchiveLimitError',
       code: 'file-size',
     })
@@ -171,9 +213,11 @@ describe('node input focus selectors', () => {
     await writeFile(path.join(debugDir, 'maa.log'), 'main\n')
     await writeFile(path.join(debugDir, 'notes.txt'), '0123456789')
 
-    await expect(loadNodeLogDirectory(root, {
-      archiveLimits: { maxFileBytes: 20, maxExtractedBytes: 10 },
-    })).rejects.toMatchObject({
+    await expect(
+      loadNodeLogDirectory(root, {
+        archiveLimits: { maxFileBytes: 20, maxExtractedBytes: 10 },
+      }),
+    ).rejects.toMatchObject({
       name: 'ArchiveLimitError',
       code: 'extracted-size',
     })

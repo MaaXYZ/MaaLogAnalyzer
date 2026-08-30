@@ -12,9 +12,7 @@ interface CreateRealtimeParseSchedulerOptions {
 
 const MAX_REALTIME_PARSE_RETRIES = 3
 
-export const createRealtimeParseScheduler = (
-  options: CreateRealtimeParseSchedulerOptions,
-) => {
+export const createRealtimeParseScheduler = (options: CreateRealtimeParseSchedulerOptions) => {
   const realtimeParsing = ref(false)
   const realtimeReparseRequested = ref(false)
   const realtimeParseFailed = ref(false)

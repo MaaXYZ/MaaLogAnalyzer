@@ -1,11 +1,5 @@
 <script setup lang="ts">
-import {
-  NFlex,
-  NText,
-  NButton,
-  NIcon,
-  NSelect,
-} from 'naive-ui'
+import { NFlex, NText, NButton, NIcon, NSelect } from 'naive-ui'
 import { VerticalAlignTopOutlined, VerticalAlignBottomOutlined } from '@vicons/antd'
 import type { NodeNavMode } from '../composables/useNodeNavSearch'
 
@@ -29,7 +23,10 @@ const modeOptions: Array<{ label: string; value: NodeNavMode }> = [
 </script>
 
 <template>
-  <n-flex align="center" style="padding-right: 6px; flex-wrap: wrap; overflow: hidden; row-gap: 4px">
+  <n-flex
+    align="center"
+    style="padding-right: 6px; flex-wrap: wrap; overflow: hidden; row-gap: 4px"
+  >
     <n-flex align="center" style="gap: 4px; flex-wrap: nowrap; flex-shrink: 0">
       <n-text style="font-size: 14px; font-weight: 500; white-space: nowrap">节点导航</n-text>
       <n-select
@@ -44,9 +41,19 @@ const modeOptions: Array<{ label: string; value: NodeNavMode }> = [
         text
         size="tiny"
         @click="emit('toggle-failed-only')"
-        :title="failedOnly
-          ? (mode === 'pipeline' ? '仅显示失败节点（点击显示全部）' : mode === 'focus' ? '仅显示失败 Focus（点击显示全部）' : '仅显示异常状态节点（点击显示全部）')
-          : (mode === 'pipeline' ? '显示全部节点（点击仅失败）' : mode === 'focus' ? '显示全部 Focus（点击仅失败）' : '显示全部节点（点击仅异常状态）')"
+        :title="
+          failedOnly
+            ? mode === 'pipeline'
+              ? '仅显示失败节点（点击显示全部）'
+              : mode === 'focus'
+                ? '仅显示失败 Focus（点击显示全部）'
+                : '仅显示异常状态节点（点击显示全部）'
+            : mode === 'pipeline'
+              ? '显示全部节点（点击仅失败）'
+              : mode === 'focus'
+                ? '显示全部 Focus（点击仅失败）'
+                : '显示全部节点（点击仅异常状态）'
+        "
       >
         <span class="node-nav-filter-dot" :class="{ 'node-nav-filter-dot--active': failedOnly }" />
       </n-button>

@@ -23,9 +23,7 @@ export const createTaskStackTracker = (rootTaskId: number): TaskStackTracker => 
   }
 
   const peek = (): number => {
-    return activeTaskStack.length > 0
-      ? activeTaskStack[activeTaskStack.length - 1]
-      : rootTaskId
+    return activeTaskStack.length > 0 ? activeTaskStack[activeTaskStack.length - 1] : rootTaskId
   }
 
   const pop = (taskId: number) => {

@@ -31,10 +31,12 @@ export const prepareReleaseAssets = (artifactsRoot, outputDirectory) => {
   const resolvedOutputDirectory = resolve(outputDirectory)
   const artifactsWithinOutput = relative(resolvedOutputDirectory, resolvedArtifactsRoot)
   if (
-    resolvedOutputDirectory === parse(resolvedOutputDirectory).root
-    || (!artifactsWithinOutput.startsWith('..') && !isAbsolute(artifactsWithinOutput))
+    resolvedOutputDirectory === parse(resolvedOutputDirectory).root ||
+    (!artifactsWithinOutput.startsWith('..') && !isAbsolute(artifactsWithinOutput))
   ) {
-    throw new Error('Release output directory must not be a filesystem root or contain the artifacts directory')
+    throw new Error(
+      'Release output directory must not be a filesystem root or contain the artifacts directory',
+    )
   }
 
   rmSync(resolvedOutputDirectory, { recursive: true, force: true })
@@ -43,10 +45,13 @@ export const prepareReleaseAssets = (artifactsRoot, outputDirectory) => {
   const outputs = []
   for (const target of RELEASE_TARGETS) {
     const artifactDirectory = join(resolvedArtifactsRoot, target.artifact)
-    const matches = collectFiles(artifactDirectory)
-      .filter(path => path.toLowerCase().endsWith(target.extension))
+    const matches = collectFiles(artifactDirectory).filter((path) =>
+      path.toLowerCase().endsWith(target.extension),
+    )
     if (matches.length !== 1) {
-      throw new Error(`${target.artifact} must contain exactly one ${target.extension} file; found ${matches.length}`)
+      throw new Error(
+        `${target.artifact} must contain exactly one ${target.extension} file; found ${matches.length}`,
+      )
     }
 
     const outputName = `${target.prefix}-${basename(matches[0])}`
@@ -55,17 +60,17 @@ export const prepareReleaseAssets = (artifactsRoot, outputDirectory) => {
     outputs.push({ name: outputName, path: outputPath })
   }
 
-  const checksumLines = outputs
-    .map(output => `${sha256(output.path)}  ${output.name}`)
-    .join('\n')
+  const checksumLines = outputs.map((output) => `${sha256(output.path)}  ${output.name}`).join('\n')
   writeFileSync(join(resolvedOutputDirectory, 'SHA256SUMS'), `${checksumLines}\n`, 'utf8')
-  return outputs.map(output => output.name)
+  return outputs.map((output) => output.name)
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [artifactsRoot, outputDirectory] = process.argv.slice(2)
   if (!artifactsRoot || !outputDirectory) {
-    throw new Error('Usage: node scripts/prepare-release-assets.mjs <artifacts-root> <output-directory>')
+    throw new Error(
+      'Usage: node scripts/prepare-release-assets.mjs <artifacts-root> <output-directory>',
+    )
   }
   prepareReleaseAssets(artifactsRoot, outputDirectory)
 }

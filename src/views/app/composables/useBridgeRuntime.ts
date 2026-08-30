@@ -69,10 +69,7 @@ export const useBridgeRuntime = (options: UseBridgeRuntimeOptions) => {
     saveBridgeImageToCache,
   })
 
-  const {
-    getBridgeSessionId,
-    queryBridgeNode,
-  } = useBridgeNodeQuery({
+  const { getBridgeSessionId, queryBridgeNode } = useBridgeNodeQuery({
     isVscodeLaunchEmbed: options.isVscodeLaunchEmbed,
     getBridge,
     getSessionId: () => realtimeSession.value?.sessionId,
@@ -98,11 +95,7 @@ export const useBridgeRuntime = (options: UseBridgeRuntimeOptions) => {
   })
   clearBridgeNodeDefinitionStateProxy = clearBridgeNodeDefinitionState
 
-  const {
-    bridgeRequestTaskDoc,
-    bridgeRevealTask,
-    bridgeOpenCrop,
-  } = useBridgeTaskActions({
+  const { bridgeRequestTaskDoc, bridgeRevealTask, bridgeOpenCrop } = useBridgeTaskActions({
     getBridge,
     getBridgeSessionId,
     toTrimmedNonEmptyString: options.toTrimmedNonEmptyString,

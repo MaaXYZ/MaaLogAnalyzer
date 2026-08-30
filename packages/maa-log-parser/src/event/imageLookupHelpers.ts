@@ -4,9 +4,7 @@ interface ImageTimestamp {
 }
 
 function parseEventTimestamp(timestamp: string): ImageTimestamp | undefined {
-  const match = timestamp.match(
-    /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?/,
-  )
+  const match = timestamp.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?/)
   if (!match) return undefined
 
   const [, year, month, day, hour, minute, second, milliseconds = '0'] = match
@@ -17,9 +15,7 @@ function parseEventTimestamp(timestamp: string): ImageTimestamp | undefined {
 }
 
 function parseImageTimestamp(key: string): ImageTimestamp | undefined {
-  const match = key.match(
-    /^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_/,
-  )
+  const match = key.match(/^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_/)
   if (!match) return undefined
 
   return {
@@ -31,7 +27,7 @@ function parseImageTimestamp(key: string): ImageTimestamp | undefined {
 export function findImageByTimestampSuffix(
   source: Map<string, string>,
   timestamp: string,
-  suffix: string
+  suffix: string,
 ): string | undefined {
   if (source.size === 0) return undefined
 
@@ -69,7 +65,7 @@ export function findImageByTimestampSuffix(
 export function findWaitFreezesImages(
   waitFreezesImages: Map<string, string>,
   nodeTimestamp: string,
-  actionName: string
+  actionName: string,
 ): string[] | undefined {
   if (waitFreezesImages.size === 0) return undefined
 

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  collectWorkerInputTransfers,
-  type LogParserWorkerInput,
-} from '../parserWorkerProtocol'
+import { collectWorkerInputTransfers, type LogParserWorkerInput } from '../parserWorkerProtocol'
 
 describe('collectWorkerInputTransfers', () => {
   it('transfers every byte buffer so the main thread drops ownership', () => {
@@ -18,10 +15,7 @@ describe('collectWorkerInputTransfers', () => {
 
   it('skips string-only inputs that cannot be transferred', () => {
     const bytes = new ArrayBuffer(4)
-    const inputs: LogParserWorkerInput[] = [
-      { content: 'inline log text' },
-      { bytes },
-    ]
+    const inputs: LogParserWorkerInput[] = [{ content: 'inline log text' }, { bytes }]
 
     expect(collectWorkerInputTransfers(inputs)).toEqual([bytes])
   })

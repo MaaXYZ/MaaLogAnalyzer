@@ -23,17 +23,25 @@ const makeTask = (params: {
 
 describe('setupRealtimeFollowWatchers', () => {
   it('does not scroll to top when selectedTask is same identity with a new object reference', async () => {
-    const taskA = makeTask({ taskId: 1, entry: 'TaskA', hash: 'h-a', uuid: 'u-a', startEventIndex: 11 })
+    const taskA = makeTask({
+      taskId: 1,
+      entry: 'TaskA',
+      hash: 'h-a',
+      uuid: 'u-a',
+      startEventIndex: 11,
+    })
     const taskARefreshed: TaskInfo = {
       ...taskA,
-      nodes: [{
-        node_id: 101,
-        name: 'NodeA',
-        ts: '2026-04-10 12:00:01.000',
-        status: 'running',
-        task_id: 1,
-        next_list: [],
-      } as NodeInfo],
+      nodes: [
+        {
+          node_id: 101,
+          name: 'NodeA',
+          ts: '2026-04-10 12:00:01.000',
+          status: 'running',
+          task_id: 1,
+          next_list: [],
+        } as NodeInfo,
+      ],
     }
 
     const tasks = ref<TaskInfo[]>([taskA])
@@ -74,8 +82,20 @@ describe('setupRealtimeFollowWatchers', () => {
   })
 
   it('scrolls to top when switching to a different task identity', async () => {
-    const taskA = makeTask({ taskId: 1, entry: 'TaskA', hash: 'h-a', uuid: 'u-a', startEventIndex: 11 })
-    const taskB = makeTask({ taskId: 2, entry: 'TaskB', hash: 'h-b', uuid: 'u-b', startEventIndex: 21 })
+    const taskA = makeTask({
+      taskId: 1,
+      entry: 'TaskA',
+      hash: 'h-a',
+      uuid: 'u-a',
+      startEventIndex: 11,
+    })
+    const taskB = makeTask({
+      taskId: 2,
+      entry: 'TaskB',
+      hash: 'h-b',
+      uuid: 'u-b',
+      startEventIndex: 21,
+    })
 
     const tasks = ref<TaskInfo[]>([taskA, taskB])
     const selectedTask = ref<TaskInfo | null>(taskA)

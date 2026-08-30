@@ -35,11 +35,7 @@ const sortSources = (sources: Iterable<RawLineSource>): RawLineSource[] => {
   })
 }
 
-const matchesLineFilters = (
-  text: string,
-  line: number,
-  options: RawLineQueryOptions,
-): boolean => {
+const matchesLineFilters = (text: string, line: number, options: RawLineQueryOptions): boolean => {
   if (options.lineStart != null && line < options.lineStart) return false
   if (options.lineEnd != null && line > options.lineEnd) return false
   if (options.keywords && options.keywords.length > 0) {
@@ -52,9 +48,7 @@ export const createRawLineStore = (): RawLineStore => ({
   sources: new Map(),
 })
 
-export const cloneRawLineStore = (
-  store: RawLineStore | null | undefined,
-): RawLineStore | null => {
+export const cloneRawLineStore = (store: RawLineStore | null | undefined): RawLineStore | null => {
   if (!store) return null
 
   const cloned = createRawLineStore()
@@ -69,10 +63,7 @@ export const cloneRawLineStore = (
   return cloned
 }
 
-export const setRawLineSource = (
-  store: RawLineStore,
-  source: RawLineSource,
-): RawLineSource => {
+export const setRawLineSource = (store: RawLineStore, source: RawLineSource): RawLineSource => {
   const normalized: RawLineSource = {
     sourceKey: source.sourceKey,
     sourcePath: source.sourcePath,
@@ -87,10 +78,7 @@ export const setRawLineSource = (
  * Store a newly-created source without copying its lines array.
  * The caller transfers ownership and must not mutate the array afterward.
  */
-export const adoptRawLineSource = (
-  store: RawLineStore,
-  source: RawLineSource,
-): RawLineSource => {
+export const adoptRawLineSource = (store: RawLineStore, source: RawLineSource): RawLineSource => {
   const adopted: RawLineSource = {
     sourceKey: source.sourceKey,
     sourcePath: source.sourcePath,
@@ -182,7 +170,9 @@ export const queryRawLines = (
   if (!store || options.limit === 0) return []
 
   const sources = options.sourceKey
-    ? [store.sources.get(options.sourceKey)].filter((value): value is RawLineSource => value != null)
+    ? [store.sources.get(options.sourceKey)].filter(
+        (value): value is RawLineSource => value != null,
+      )
     : sortSources(store.sources.values())
 
   const lines: RawLineRecord[] = []

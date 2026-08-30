@@ -78,7 +78,7 @@ export class AnalyzerSessionStore implements AnalyzerSessionStoreLike {
 
   values(): AnalyzerSession[] {
     this.deleteExpired(this.readNow())
-    return [...this.sessions.values()].map(entry => entry.session)
+    return [...this.sessions.values()].map((entry) => entry.session)
   }
 
   private readNow(): number {

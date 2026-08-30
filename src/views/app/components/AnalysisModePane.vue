@@ -53,10 +53,7 @@ const handleToggleDetail = () => {
 
 <template>
   <template v-if="isMobile">
-    <process-view
-      v-bind="processViewMobileProps"
-      v-on="processViewEventHandlers"
-    />
+    <process-view v-bind="processViewMobileProps" v-on="processViewEventHandlers" />
 
     <mobile-aux-drawers
       :show-task-drawer="showTaskDrawer"

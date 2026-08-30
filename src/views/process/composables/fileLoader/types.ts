@@ -7,7 +7,9 @@ export interface UseProcessFileLoaderOptions {
   isInVSCode: Ref<boolean>
   onUploadFile: (
     file: File | File[],
-    selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+    selectPrimaryLogs?: (
+      options: PrimaryLogSelectionOption[],
+    ) => Promise<PrimaryLogSelectionOption[] | null>,
   ) => void
   onUploadContent: (
     content: string,
@@ -19,5 +21,7 @@ export interface UseProcessFileLoaderOptions {
   ) => void
   onFileLoadingStart: () => void
   onFileLoadingEnd: () => void
-  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>
+  selectPrimaryLogs?: (
+    options: PrimaryLogSelectionOption[],
+  ) => Promise<PrimaryLogSelectionOption[] | null>
 }

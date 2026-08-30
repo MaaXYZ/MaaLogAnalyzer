@@ -39,7 +39,9 @@ const decodeBytes = (bytes: Uint8Array): string => {
 
 const findEntryPath = (paths: string[], target: string): string | null => {
   const normalizedTarget = toPosixPath(target).toLowerCase()
-  return paths.find((candidate) => toPosixPath(candidate).toLowerCase() === normalizedTarget) ?? null
+  return (
+    paths.find((candidate) => toPosixPath(candidate).toLowerCase() === normalizedTarget) ?? null
+  )
 }
 
 const findZipBasePath = (paths: string[]): string | null => {
@@ -82,12 +84,14 @@ const loadZipSources = async (
     const bytes = files[entryPath]
     if (!bytes) return []
     const normalized = toPosixPath(entryPath)
-    return [{
-      path: normalized,
-      name: path.posix.basename(normalized),
-      content: decodeBytes(bytes),
-      reference: `zip:${toPosixPath(zipPath)}#${normalized}`,
-    }]
+    return [
+      {
+        path: normalized,
+        name: path.posix.basename(normalized),
+        content: decodeBytes(bytes),
+        reference: `zip:${toPosixPath(zipPath)}#${normalized}`,
+      },
+    ]
   })
 }
 
@@ -122,17 +126,27 @@ export const loadFrameworkLogSources = async (
   const limits = resolveArchiveLimits(options.archiveLimits)
   const targetStat = await lstat(targetPath)
   if (targetStat.isSymbolicLink()) {
-    throw new InputFileError('symlink', targetPath, `Symbolic-link inputs are not allowed: ${targetPath}`)
+    throw new InputFileError(
+      'symlink',
+      targetPath,
+      `Symbolic-link inputs are not allowed: ${targetPath}`,
+    )
   }
   if (targetStat.isDirectory()) return loadDirectorySources(targetPath, limits)
   if (!targetStat.isFile()) {
-    throw new InputFileError('not-regular-file', targetPath, `Expected a regular file: ${targetPath}`)
+    throw new InputFileError(
+      'not-regular-file',
+      targetPath,
+      `Expected a regular file: ${targetPath}`,
+    )
   }
   if (targetPath.toLowerCase().endsWith('.zip')) return loadZipSources(targetPath, limits)
-  return [{
-    path: toPosixPath(targetPath),
-    name: path.basename(targetPath),
-    content: await readNodeTextFileContent(targetPath, { archiveLimits: limits }),
-    reference: `file:${toPosixPath(targetPath)}`,
-  }]
+  return [
+    {
+      path: toPosixPath(targetPath),
+      name: path.basename(targetPath),
+      content: await readNodeTextFileContent(targetPath, { archiveLimits: limits }),
+      reference: `file:${toPosixPath(targetPath)}`,
+    },
+  ]
 }

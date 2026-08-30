@@ -7,7 +7,7 @@ const makeRecognitionFlowItem = (
   index: number,
   name: string,
   status: 'success' | 'failed' | 'running',
-  timestamp: string
+  timestamp: string,
 ): UnifiedFlowItem => {
   return {
     id: `node.recognition.${index}`,
@@ -35,12 +35,14 @@ const makeNode = (overrides: Partial<NodeInfo> = {}): NodeInfo => {
 
 describe('useMergedRecognitionList', () => {
   it('keeps original recognition attempt order when next_list is empty', () => {
-    const nodeRef = ref(makeNode({
-      node_flow: [
-        makeRecognitionFlowItem(0, 'A', 'failed', '2026-04-06 00:00:00.100'),
-        makeRecognitionFlowItem(1, 'B', 'success', '2026-04-06 00:00:00.200'),
-      ],
-    }))
+    const nodeRef = ref(
+      makeNode({
+        node_flow: [
+          makeRecognitionFlowItem(0, 'A', 'failed', '2026-04-06 00:00:00.100'),
+          makeRecognitionFlowItem(1, 'B', 'success', '2026-04-06 00:00:00.200'),
+        ],
+      }),
+    )
     const showNotRecognizedNodes = ref(true)
 
     const { visibleRecognitionList } = useMergedRecognitionList({
@@ -55,17 +57,19 @@ describe('useMergedRecognitionList', () => {
   })
 
   it('splits multi-round attempts and filters placeholders by settings', () => {
-    const nodeRef = ref(makeNode({
-      next_list: [
-        { name: 'A', anchor: false, jump_back: false },
-        { name: 'B', anchor: false, jump_back: false },
-      ],
-      node_flow: [
-        makeRecognitionFlowItem(0, 'A', 'failed', '2026-04-06 00:00:00.100'),
-        makeRecognitionFlowItem(1, 'B', 'success', '2026-04-06 00:00:00.200'),
-        makeRecognitionFlowItem(2, 'A', 'failed', '2026-04-06 00:00:00.300'),
-      ],
-    }))
+    const nodeRef = ref(
+      makeNode({
+        next_list: [
+          { name: 'A', anchor: false, jump_back: false },
+          { name: 'B', anchor: false, jump_back: false },
+        ],
+        node_flow: [
+          makeRecognitionFlowItem(0, 'A', 'failed', '2026-04-06 00:00:00.100'),
+          makeRecognitionFlowItem(1, 'B', 'success', '2026-04-06 00:00:00.200'),
+          makeRecognitionFlowItem(2, 'A', 'failed', '2026-04-06 00:00:00.300'),
+        ],
+      }),
+    )
     const showNotRecognizedNodes = ref(true)
 
     const { visibleRecognitionList } = useMergedRecognitionList({
@@ -93,19 +97,21 @@ describe('useMergedRecognitionList', () => {
     ])
     expect(
       visibleRecognitionList.value
-        .filter(item => !item.isRoundSeparator)
-        .some(item => item.status === 'not-recognized')
+        .filter((item) => !item.isRoundSeparator)
+        .some((item) => item.status === 'not-recognized'),
     ).toBe(false)
   })
 
   it('hides pure not-recognized list when placeholders are disabled', () => {
-    const nodeRef = ref(makeNode({
-      next_list: [
-        { name: 'X', anchor: false, jump_back: false },
-        { name: 'Y', anchor: false, jump_back: false },
-      ],
-      node_flow: [],
-    }))
+    const nodeRef = ref(
+      makeNode({
+        next_list: [
+          { name: 'X', anchor: false, jump_back: false },
+          { name: 'Y', anchor: false, jump_back: false },
+        ],
+        node_flow: [],
+      }),
+    )
     const showNotRecognizedNodes = ref(false)
 
     const { visibleRecognitionList } = useMergedRecognitionList({
@@ -117,17 +123,19 @@ describe('useMergedRecognitionList', () => {
   })
 
   it('keeps out-of-next-list attempts in stable tail order within a round', () => {
-    const nodeRef = ref(makeNode({
-      next_list: [
-        { name: 'A', anchor: false, jump_back: false },
-        { name: 'B', anchor: false, jump_back: false },
-      ],
-      node_flow: [
-        makeRecognitionFlowItem(0, 'C', 'failed', '2026-04-06 00:00:00.100'),
-        makeRecognitionFlowItem(1, 'A', 'failed', '2026-04-06 00:00:00.200'),
-        makeRecognitionFlowItem(2, 'D', 'failed', '2026-04-06 00:00:00.300'),
-      ],
-    }))
+    const nodeRef = ref(
+      makeNode({
+        next_list: [
+          { name: 'A', anchor: false, jump_back: false },
+          { name: 'B', anchor: false, jump_back: false },
+        ],
+        node_flow: [
+          makeRecognitionFlowItem(0, 'C', 'failed', '2026-04-06 00:00:00.100'),
+          makeRecognitionFlowItem(1, 'A', 'failed', '2026-04-06 00:00:00.200'),
+          makeRecognitionFlowItem(2, 'D', 'failed', '2026-04-06 00:00:00.300'),
+        ],
+      }),
+    )
     const showNotRecognizedNodes = ref(true)
 
     const { visibleRecognitionList } = useMergedRecognitionList({
@@ -144,19 +152,21 @@ describe('useMergedRecognitionList', () => {
   })
 
   it('splits failed retries into rounds when no recognition succeeds', () => {
-    const nodeRef = ref(makeNode({
-      status: 'failed',
-      next_list: [
-        { name: 'A', anchor: false, jump_back: false },
-        { name: 'B', anchor: false, jump_back: false },
-      ],
-      node_flow: [
-        makeRecognitionFlowItem(0, 'A', 'failed', '2026-04-06 00:00:00.100'),
-        makeRecognitionFlowItem(1, 'B', 'failed', '2026-04-06 00:00:00.200'),
-        makeRecognitionFlowItem(2, 'A', 'failed', '2026-04-06 00:00:01.100'),
-        makeRecognitionFlowItem(3, 'B', 'failed', '2026-04-06 00:00:01.200'),
-      ],
-    }))
+    const nodeRef = ref(
+      makeNode({
+        status: 'failed',
+        next_list: [
+          { name: 'A', anchor: false, jump_back: false },
+          { name: 'B', anchor: false, jump_back: false },
+        ],
+        node_flow: [
+          makeRecognitionFlowItem(0, 'A', 'failed', '2026-04-06 00:00:00.100'),
+          makeRecognitionFlowItem(1, 'B', 'failed', '2026-04-06 00:00:00.200'),
+          makeRecognitionFlowItem(2, 'A', 'failed', '2026-04-06 00:00:01.100'),
+          makeRecognitionFlowItem(3, 'B', 'failed', '2026-04-06 00:00:01.200'),
+        ],
+      }),
+    )
     const showNotRecognizedNodes = ref(true)
 
     const { visibleRecognitionList } = useMergedRecognitionList({
@@ -175,19 +185,21 @@ describe('useMergedRecognitionList', () => {
   })
 
   it('splits rounds when next_list is non-empty but attempt names do not match next names', () => {
-    const nodeRef = ref(makeNode({
-      status: 'failed',
-      next_list: [
-        { name: 'EntryA', anchor: false, jump_back: false },
-        { name: 'EntryB', anchor: false, jump_back: false },
-      ],
-      node_flow: [
-        makeRecognitionFlowItem(0, 'RecoA', 'failed', '2026-04-06 00:00:00.100'),
-        makeRecognitionFlowItem(1, 'RecoB', 'failed', '2026-04-06 00:00:00.200'),
-        makeRecognitionFlowItem(2, 'RecoA', 'failed', '2026-04-06 00:00:01.100'),
-        makeRecognitionFlowItem(3, 'RecoB', 'failed', '2026-04-06 00:00:01.200'),
-      ],
-    }))
+    const nodeRef = ref(
+      makeNode({
+        status: 'failed',
+        next_list: [
+          { name: 'EntryA', anchor: false, jump_back: false },
+          { name: 'EntryB', anchor: false, jump_back: false },
+        ],
+        node_flow: [
+          makeRecognitionFlowItem(0, 'RecoA', 'failed', '2026-04-06 00:00:00.100'),
+          makeRecognitionFlowItem(1, 'RecoB', 'failed', '2026-04-06 00:00:00.200'),
+          makeRecognitionFlowItem(2, 'RecoA', 'failed', '2026-04-06 00:00:01.100'),
+          makeRecognitionFlowItem(3, 'RecoB', 'failed', '2026-04-06 00:00:01.200'),
+        ],
+      }),
+    )
     const showNotRecognizedNodes = ref(false)
 
     const { visibleRecognitionList } = useMergedRecognitionList({

@@ -46,9 +46,7 @@ export interface LogParserWorkerErrorResponse {
 }
 
 export type LogParserWorkerResponse =
-  | LogParserWorkerProgressResponse
-  | LogParserWorkerResultResponse
-  | LogParserWorkerErrorResponse
+  LogParserWorkerProgressResponse | LogParserWorkerResultResponse | LogParserWorkerErrorResponse
 
 export const LOG_PARSER_WORKER_OOM_MESSAGE =
   '日志解析占用的内存超出了当前设备的可用上限，解析已中止。请尝试减少一次载入的日志量。'

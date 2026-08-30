@@ -13,7 +13,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  isDark: true
+  isDark: true,
 })
 
 // Emits
@@ -46,18 +46,9 @@ const {
     :data-embed-mode="appEmbedMode"
     style="height: 100vh; min-height: 0; display: flex; flex-direction: column; overflow: hidden"
   >
-    <app-header-bar
-      v-bind="headerBarProps"
-      v-on="headerBarEventHandlers"
-    />
-    
-    <app-main-content
-      v-bind="mainContentProps"
-      v-on="mainContentEventHandlers"
-    />
-    <app-overlay-stack
-      v-bind="overlayProps"
-      v-on="overlayEventHandlers"
-    />
+    <app-header-bar v-bind="headerBarProps" v-on="headerBarEventHandlers" />
+
+    <app-main-content v-bind="mainContentProps" v-on="mainContentEventHandlers" />
+    <app-overlay-stack v-bind="overlayProps" v-on="overlayEventHandlers" />
   </div>
 </template>

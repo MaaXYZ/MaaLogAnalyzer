@@ -14,10 +14,7 @@ vi.mock('vue', async () => {
   }
 })
 
-import {
-  useHostFileMessageReceiver,
-  useVSCodeOpenCommands,
-} from '../useVSCodeBridge'
+import { useHostFileMessageReceiver, useVSCodeOpenCommands } from '../useVSCodeBridge'
 
 describe('root-owned host file receiver', () => {
   beforeEach(() => {
@@ -46,13 +43,16 @@ describe('root-owned host file receiver', () => {
     vi.stubGlobal('window', fakeWindow)
 
     const onUploadContent = vi.fn()
-    useHostFileMessageReceiver({
-      onUploadFile: vi.fn(),
-      onUploadContent,
-      onFileLoadingStart: vi.fn(),
-      onFileLoadingEnd: vi.fn(),
-    }, () => true)
-    lifecycle.mounted.forEach(callback => callback())
+    useHostFileMessageReceiver(
+      {
+        onUploadFile: vi.fn(),
+        onUploadContent,
+        onFileLoadingStart: vi.fn(),
+        onFileLoadingEnd: vi.fn(),
+      },
+      () => true,
+    )
+    lifecycle.mounted.forEach((callback) => callback())
 
     expect(listeners).toHaveLength(1)
     const deliver = (data: Record<string, unknown>) => {
@@ -60,11 +60,19 @@ describe('root-owned host file receiver', () => {
     }
 
     deliver({
-      type: 'loadBytesStart', transferId: 'stable', sequence: 0, payload: {},
+      type: 'loadBytesStart',
+      transferId: 'stable',
+      sequence: 0,
+      payload: {},
     })
     deliver({
-      type: 'loadBytesFileStart', transferId: 'stable', sequence: 1,
-      kind: 'primary', path: 'debug/maa.log', name: 'maa.log', size: 3,
+      type: 'loadBytesFileStart',
+      transferId: 'stable',
+      sequence: 1,
+      kind: 'primary',
+      path: 'debug/maa.log',
+      name: 'maa.log',
+      size: 3,
     })
 
     // Responsive/view switches recreate these controls, but no longer recreate
@@ -74,17 +82,22 @@ describe('root-owned host file receiver', () => {
     expect(listeners).toHaveLength(1)
 
     deliver({
-      type: 'loadBytesChunk', transferId: 'stable', sequence: 2,
-      offset: 0, bytes: new Uint8Array([1, 2, 3]).buffer,
+      type: 'loadBytesChunk',
+      transferId: 'stable',
+      sequence: 2,
+      offset: 0,
+      bytes: new Uint8Array([1, 2, 3]).buffer,
     })
     deliver({ type: 'loadBytesFileComplete', transferId: 'stable', sequence: 3 })
     deliver({ type: 'loadBytesComplete', transferId: 'stable', sequence: 4, payload: {} })
 
     expect(onUploadContent).toHaveBeenCalledOnce()
     expect(postMessage).toHaveBeenCalledTimes(5)
-    expect(postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ error: expect.anything() }))
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.anything() }),
+    )
 
-    lifecycle.unmounted.forEach(callback => callback())
+    lifecycle.unmounted.forEach((callback) => callback())
     expect(listeners).toHaveLength(0)
   })
 })

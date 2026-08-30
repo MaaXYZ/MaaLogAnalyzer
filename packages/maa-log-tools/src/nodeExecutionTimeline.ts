@@ -1,8 +1,5 @@
 import type { NodeInfo } from '@windsland52/maa-log-parser/types'
-import {
-  resolveNodeExecutionName,
-  resolveNodeMatchedRecognitionName,
-} from './nodeExecutionName'
+import { resolveNodeExecutionName, resolveNodeMatchedRecognitionName } from './nodeExecutionName'
 import { sortNodesByGlobalExecutionOrder } from './taskExecutionOrder'
 
 export type NodeExecutionNavStatus = NodeInfo['status'] | 'timeout' | 'action-failed'
@@ -26,7 +23,7 @@ export interface BuildNodeExecutionTimelineOptions {
 const isNodeActionFailed = (node: NodeInfo): boolean => {
   if (node.action_details && node.action_details.success === false) return true
   return (node.node_flow || []).some(
-    (item) => (item.type === 'action' || item.type === 'action_node') && item.status === 'failed'
+    (item) => (item.type === 'action' || item.type === 'action_node') && item.status === 'failed',
   )
 }
 
@@ -41,9 +38,10 @@ export const buildNodeExecutionTimeline = (
     originalIndexByNode.set(node, index)
   }
 
-  const filteredNodes = options.rootTaskId == null
-    ? [...nodes]
-    : nodes.filter((node) => node.task_id === options.rootTaskId)
+  const filteredNodes =
+    options.rootTaskId == null
+      ? [...nodes]
+      : nodes.filter((node) => node.task_id === options.rootTaskId)
   const orderedNodes = sortNodesByGlobalExecutionOrder(filteredNodes)
 
   return orderedNodes.map((node, index) => {

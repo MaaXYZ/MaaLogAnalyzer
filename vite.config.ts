@@ -5,7 +5,7 @@ import { resolveUmamiWebsiteId, UMAMI_SCRIPT_SRC } from './scripts/umami-analyti
 
 const isTauriDev = Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_DEV_HOST)
 const { version: appVersion } = JSON.parse(
-  readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
 ) as { version: string }
 
 export default defineConfig({
@@ -28,15 +28,17 @@ export default defineConfig({
       transformIndexHtml() {
         const websiteId = resolveUmamiWebsiteId(process.env)
         if (!websiteId) return []
-        return [{
-          tag: 'script',
-          injectTo: 'head' as const,
-          attrs: {
-            async: true,
-            src: UMAMI_SCRIPT_SRC,
-            'data-website-id': websiteId,
+        return [
+          {
+            tag: 'script',
+            injectTo: 'head' as const,
+            attrs: {
+              async: true,
+              src: UMAMI_SCRIPT_SRC,
+              'data-website-id': websiteId,
+            },
           },
-        }]
+        ]
       },
     },
     // 自定义插件：强制忽略 "pkgs copy" 目录下的模块
@@ -48,8 +50,8 @@ export default defineConfig({
           return { id: source, external: true }
         }
         return null
-      }
-    }
+      },
+    },
   ],
   base: '/',
   server: {
@@ -57,8 +59,8 @@ export default defineConfig({
     open: !isTauriDev,
     watch: {
       // 让文件监视器忽略该目录，避免重启和扫描
-      ignored: ['**/sample/**']
-    }
+      ignored: ['**/sample/**'],
+    },
   },
   optimizeDeps: {
     // 限制依赖预构建的入口范围，避免 Vite 扫描到那个目录
@@ -66,7 +68,7 @@ export default defineConfig({
       'src/**/*.{js,ts,jsx,tsx,vue}',
       'index.html',
       // 如果你的项目还有其他入口（如 main.ts），可以继续加
-    ]
+    ],
   },
   worker: {
     format: 'es',
@@ -86,7 +88,10 @@ export default defineConfig({
           if (normalizedId.includes('/node_modules/vue/')) return 'vue-vendor'
           if (normalizedId.includes('/node_modules/naive-ui/')) return 'naive-ui'
           if (normalizedId.includes('/node_modules/elkjs/')) return 'elkjs'
-          if (normalizedId.includes('/node_modules/highlight.js/') || normalizedId.includes('/node_modules/vue-virtual-scroller/')) {
+          if (
+            normalizedId.includes('/node_modules/highlight.js/') ||
+            normalizedId.includes('/node_modules/vue-virtual-scroller/')
+          ) {
             return 'vendor'
           }
 

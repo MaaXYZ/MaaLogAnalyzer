@@ -108,11 +108,14 @@ export const percentile = (values: number[], p: number): number => {
 
 export class NodeStatisticsAnalyzer {
   static analyze(tasks: TaskInfo[]): NodeStatistics[] {
-    const statsMap = new Map<string, {
-      durations: number[]
-      successCount: number
-      failCount: number
-    }>()
+    const statsMap = new Map<
+      string,
+      {
+        durations: number[]
+        successCount: number
+        failCount: number
+      }
+    >()
 
     for (const task of tasks) {
       const nodes = task.nodes
@@ -212,21 +215,24 @@ export class NodeStatisticsAnalyzer {
     const allStats = this.analyze(tasks)
     return [...allStats]
       .filter((s) => s.failCount > 0)
-      .sort((a, b) => (b.failCount / b.count) - (a.failCount / a.count))
+      .sort((a, b) => b.failCount / b.count - a.failCount / a.count)
       .slice(0, topN)
   }
 
   static analyzeRecognitionAction(tasks: TaskInfo[]): RecognitionActionStatistics[] {
-    const statsMap = new Map<string, {
-      recognitionDurations: number[]
-      actionDurations: number[]
-      recognitionAttempts: number[]
-      successCount: number
-      failCount: number
-      singleAttemptCount: number
-      multiAttemptCount: number
-      firstTrySuccessCount: number
-    }>()
+    const statsMap = new Map<
+      string,
+      {
+        recognitionDurations: number[]
+        actionDurations: number[]
+        recognitionAttempts: number[]
+        successCount: number
+        failCount: number
+        singleAttemptCount: number
+        multiAttemptCount: number
+        firstTrySuccessCount: number
+      }
+    >()
 
     for (const task of tasks) {
       const nodes = task.nodes
@@ -265,7 +271,11 @@ export class NodeStatisticsAnalyzer {
           const lastAttemptTime = toTimestampMs(lastAttempt.end_ts || lastAttempt.ts)
           const recognitionDuration = lastAttemptTime - firstAttemptTs
 
-          if (Number.isFinite(recognitionDuration) && recognitionDuration >= 0 && recognitionDuration < 3600000) {
+          if (
+            Number.isFinite(recognitionDuration) &&
+            recognitionDuration >= 0 &&
+            recognitionDuration < 3600000
+          ) {
             stats.recognitionDurations.push(recognitionDuration)
           }
 
@@ -328,9 +338,8 @@ export class NodeStatisticsAnalyzer {
         singleAttemptCount: stats.singleAttemptCount,
         multiAttemptCount: stats.multiAttemptCount,
         firstTrySuccessCount: stats.firstTrySuccessCount,
-        firstTrySuccessRate: stats.firstTrySuccessCount > 0
-          ? (stats.firstTrySuccessCount / count) * 100
-          : 0,
+        firstTrySuccessRate:
+          stats.firstTrySuccessCount > 0 ? (stats.firstTrySuccessCount / count) * 100 : 0,
         successCount: stats.successCount,
         failCount: stats.failCount,
         successRate,
@@ -348,14 +357,17 @@ export class NodeStatisticsAnalyzer {
   }
 
   static analyzeWaitFreezes(tasks: TaskInfo[]): WaitFreezeStatistics[] {
-    const statsMap = new Map<string, {
-      elapsedValues: number[]
-      successCount: number
-      failCount: number
-      phaseCounts: Record<string, number>
-      totalRecoIds: number
-      imageCount: number
-    }>()
+    const statsMap = new Map<
+      string,
+      {
+        elapsedValues: number[]
+        successCount: number
+        failCount: number
+        phaseCounts: Record<string, number>
+        totalRecoIds: number
+        imageCount: number
+      }
+    >()
 
     for (const task of tasks) {
       for (const node of task.nodes) {

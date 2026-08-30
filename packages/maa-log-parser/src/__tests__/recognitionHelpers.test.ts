@@ -6,7 +6,7 @@ const createAttempt = (
   recoId: number,
   status: RecognitionAttempt['status'],
   ts = '2026-04-08 00:00:00.000',
-  endTs?: string
+  endTs?: string,
 ): RecognitionAttempt => ({
   reco_id: recoId,
   name: `Reco-${recoId}`,
@@ -59,7 +59,7 @@ describe('RecognitionHelpers', () => {
 
     const result = attachRecognitionNodesToAttempts(
       [attemptA, attemptB],
-      [nodeForB, orphan, nodeForA]
+      [nodeForB, orphan, nodeForA],
     )
 
     expect(result.attempts).toHaveLength(2)
@@ -70,7 +70,8 @@ describe('RecognitionHelpers', () => {
 
   it('clones attempt with copied order meta and deduped nested nodes', () => {
     const orderMeta = new WeakMap<RecognitionAttempt, { startSeq: number; endSeq: number }>()
-    const { cloneRecognitionAttempt, attachNodeToAttempt } = createRecognitionAttemptHelpers(orderMeta)
+    const { cloneRecognitionAttempt, attachNodeToAttempt } =
+      createRecognitionAttemptHelpers(orderMeta)
 
     const base = createAttempt(1, 'success')
     const nested = createAttempt(2, 'running')

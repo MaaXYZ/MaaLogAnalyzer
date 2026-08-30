@@ -29,17 +29,37 @@ const handleReloadSelect = (key: string | number) => {
     <n-button text style="font-size: 20px" @click="emit('open-task-drawer')">
       <n-icon><menu-outlined /></n-icon>
     </n-button>
-    <n-text strong style="font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+    <n-text
+      strong
+      style="
+        font-size: 14px;
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      "
+    >
       {{ selectedTaskEntry || '选择任务' }}
     </n-text>
     <n-button
       v-if="showRealtimeStatus"
       size="small"
-      :type="realtimeParseFailed ? 'error' : (isRealtimeStreaming && followLast ? 'primary' : 'default')"
+      :type="
+        realtimeParseFailed ? 'error' : isRealtimeStreaming && followLast ? 'primary' : 'default'
+      "
       :disabled="!isRealtimeStreaming"
       @click="emit('toggle-follow')"
     >
-      {{ realtimeParseFailed ? '解析异常' : (isRealtimeStreaming ? (followLast ? '跟随中' : '跟随最新') : '未实时') }}
+      {{
+        realtimeParseFailed
+          ? '解析异常'
+          : isRealtimeStreaming
+            ? followLast
+              ? '跟随中'
+              : '跟随最新'
+            : '未实时'
+      }}
     </n-button>
     <n-dropdown v-if="showReloadControls" :options="reloadOptions" @select="handleReloadSelect">
       <n-button size="small">

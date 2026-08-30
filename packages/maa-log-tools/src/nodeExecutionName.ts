@@ -22,7 +22,7 @@ const normalizeHitCandidateName = (value: string): string => {
 
 const resolveCandidateNextName = (
   candidate: unknown,
-  nextNames: ReadonlySet<string>
+  nextNames: ReadonlySet<string>,
 ): string | undefined => {
   const normalized = normalizeOptionalName(candidate)
   if (!normalized) return undefined
@@ -32,10 +32,7 @@ const resolveCandidateNextName = (
   return undefined
 }
 
-const pushSuccessFlowCandidates = (
-  rootItems: UnifiedFlowItem[] | undefined,
-  output: unknown[]
-) => {
+const pushSuccessFlowCandidates = (rootItems: UnifiedFlowItem[] | undefined, output: unknown[]) => {
   if (!Array.isArray(rootItems) || rootItems.length === 0) return
 
   const stack = [...rootItems]
@@ -64,12 +61,16 @@ export const resolveNodeMatchedRecognitionName = (node: NodeInfo): string | unde
   return resolveNodeMatchedNextListItem(node)?.name
 }
 
-export const resolveNodeMatchedNextListItem = (node: NodeInfo): ResolvedNodeMatchedNext | undefined => {
-  const nextNames = new Set((node.next_list || []).map((item) => item.name).filter((name) => !!name))
+export const resolveNodeMatchedNextListItem = (
+  node: NodeInfo,
+): ResolvedNodeMatchedNext | undefined => {
+  const nextNames = new Set(
+    (node.next_list || []).map((item) => item.name).filter((name) => !!name),
+  )
   if (nextNames.size === 0) return undefined
 
   const nextItemByName = new Map<string, NodeInfo['next_list'][number]>()
-  for (const nextItem of (node.next_list || [])) {
+  for (const nextItem of node.next_list || []) {
     if (!nextItem?.name || nextItemByName.has(nextItem.name)) continue
     nextItemByName.set(nextItem.name, nextItem)
   }

@@ -2,7 +2,10 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref 
 import { version } from '../../../../package.json'
 import { getErrorMessage } from '../../../utils/errorHandler'
 import { useIsMobile } from '../../../composables/useIsMobile'
-import { buildNodeFlowItems, buildNodeRecognitionFlowItems } from '@windsland52/maa-log-parser/node-flow'
+import {
+  buildNodeFlowItems,
+  buildNodeRecognitionFlowItems,
+} from '@windsland52/maa-log-parser/node-flow'
 import { TOUR_STEPS, TOUR_STORAGE_KEY, TOUR_VERSION } from '../../../tutorial/steps'
 import type { NodeInfo, TaskInfo } from '../../../types'
 import { LogParser } from '@windsland52/maa-log-parser'
@@ -34,10 +37,7 @@ interface UseAppRootViewModelOptions {
   onToggleTheme: () => void
 }
 
-export const useAppRootViewModel = ({
-  propsIsDark,
-  onToggleTheme,
-}: UseAppRootViewModelOptions) => {
+export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootViewModelOptions) => {
   const { isMobile } = useIsMobile()
   const {
     isVscodeLaunchEmbed,
@@ -105,12 +105,14 @@ export const useAppRootViewModel = ({
     if (!shouldMaintainRealtimeTextTargets) return
     const targetId = `realtime:${session.sessionId}`
     setTextSearchLoadedTargets(
-      [{
-        id: targetId,
-        label: `realtime/${session.sessionId}.log`,
-        fileName: `realtime-${session.sessionId}.log`,
-        content: (session.lines ?? []).join('\n'),
-      }],
+      [
+        {
+          id: targetId,
+          label: `realtime/${session.sessionId}.log`,
+          fileName: `realtime-${session.sessionId}.log`,
+          content: (session.lines ?? []).join('\n'),
+        },
+      ],
       targetId,
     )
   }
@@ -237,25 +239,25 @@ export const useAppRootViewModel = ({
     tutorialAutoStartEnabled,
   })
 
-  useHostFileMessageReceiver({
-    onUploadFile: (file, selectPrimaryLogs) => {
-      void handleFileUpload(file, selectPrimaryLogs)
+  useHostFileMessageReceiver(
+    {
+      onUploadFile: (file, selectPrimaryLogs) => {
+        void handleFileUpload(file, selectPrimaryLogs)
+      },
+      onUploadContent: (...args) => {
+        void handleContentUpload(...args)
+      },
+      onFileLoadingStart: handleFileLoadingStart,
+      onFileLoadingEnd: handleFileLoadingEnd,
     },
-    onUploadContent: (...args) => {
-      void handleContentUpload(...args)
-    },
-    onFileLoadingStart: handleFileLoadingStart,
-    onFileLoadingEnd: handleFileLoadingEnd,
-  }, isVSCode)
+    isVSCode,
+  )
 
   const isDark = computed(() => propsIsDark.value)
 
   // 详情面板 → 文本搜索的原文定位桥
-  const {
-    pendingTextSearchRequest,
-    requestTextSearch,
-    consumeTextSearchRequest,
-  } = useTextSearchBridge()
+  const { pendingTextSearchRequest, requestTextSearch, consumeTextSearchRequest } =
+    useTextSearchBridge()
 
   const handleSearchNodeInSource = (keyword: string, locate?: string) => {
     requestTextSearch(keyword, locate)
@@ -316,10 +318,7 @@ export const useAppRootViewModel = ({
     showTaskDrawer,
   })
 
-  const {
-    headerBarProps,
-    headerBarEventHandlers,
-  } = usePresentationHeaderBindings({
+  const { headerBarProps, headerBarEventHandlers } = usePresentationHeaderBindings({
     propsIsDark,
     onToggleTheme,
     isMobile,
@@ -333,10 +332,7 @@ export const useAppRootViewModel = ({
     showAboutModal,
   })
 
-  const {
-    mainContentProps,
-    mainContentEventHandlers,
-  } = usePresentationMainContentBindings({
+  const { mainContentProps, mainContentEventHandlers } = usePresentationMainContentBindings({
     viewMode,
     isMobile,
     isVscodeLaunchEmbed,
@@ -389,10 +385,18 @@ export const useAppRootViewModel = ({
   }))
 
   const overlayEventHandlers = {
-    'update:show-settings-modal': (value: boolean) => { showSettingsModal.value = value },
-    'update:show-about-modal': (value: boolean) => { showAboutModal.value = value },
-    'update:show-file-loading-modal': (value: boolean) => { showFileLoadingModal.value = value },
-    'update:show-parsing-modal': (value: boolean) => { showParsingModal.value = value },
+    'update:show-settings-modal': (value: boolean) => {
+      showSettingsModal.value = value
+    },
+    'update:show-about-modal': (value: boolean) => {
+      showAboutModal.value = value
+    },
+    'update:show-file-loading-modal': (value: boolean) => {
+      showFileLoadingModal.value = value
+    },
+    'update:show-parsing-modal': (value: boolean) => {
+      showParsingModal.value = value
+    },
     'tour-prev': handleTourPrev,
     'tour-next': handleTourNext,
     'tour-retry': handleTourRetry,

@@ -29,10 +29,7 @@ describe('resolveNodeByOriginalIndex', () => {
     const nodeB = createNode({ nodeId: 102, name: 'B' })
     const nodeC = createNode({ nodeId: 103, name: 'C' })
 
-    const filteredItems: NodeNavViewItem[] = [
-      createNavItem(nodeB, 1),
-      createNavItem(nodeC, 2),
-    ]
+    const filteredItems: NodeNavViewItem[] = [createNavItem(nodeB, 1), createNavItem(nodeC, 2)]
 
     expect(resolveNodeByOriginalIndex(filteredItems, 1)).toBe(nodeB)
     expect(resolveNodeByOriginalIndex(filteredItems, 2)).toBe(nodeC)
@@ -40,9 +37,7 @@ describe('resolveNodeByOriginalIndex', () => {
   })
 
   it('returns null when index does not exist', () => {
-    const items: NodeNavViewItem[] = [
-      createNavItem(createNode({ nodeId: 201, name: 'X' }), 4),
-    ]
+    const items: NodeNavViewItem[] = [createNavItem(createNode({ nodeId: 201, name: 'X' }), 4)]
 
     expect(resolveNodeByOriginalIndex(items, 2)).toBeNull()
   })

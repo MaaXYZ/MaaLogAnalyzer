@@ -1,12 +1,5 @@
 <script setup lang="ts">
-import {
-  NCard,
-  NRadioButton,
-  NRadioGroup,
-  NSelect,
-  NSwitch,
-  NText,
-} from 'naive-ui'
+import { NCard, NRadioButton, NRadioGroup, NSelect, NSwitch, NText } from 'naive-ui'
 import type { AppSettings } from '../../../utils/settings'
 
 const props = defineProps<{

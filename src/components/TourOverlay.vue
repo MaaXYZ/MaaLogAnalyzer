@@ -57,7 +57,7 @@ onBeforeUnmount(() => {
 
 const viewport = computed(() => ({
   width: viewportWidth.value,
-  height: viewportHeight.value
+  height: viewportHeight.value,
 }))
 
 const isMobileViewport = computed(() => viewport.value.width <= 900)
@@ -92,7 +92,7 @@ watch(
       stepSwitching.value = false
       switchTimer = null
     }, 1200)
-  }
+  },
 )
 watch(
   () => props.step?.id,
@@ -105,11 +105,17 @@ watch(
       stepSwitching.value = false
       switchTimer = null
     }, 1200)
-  }
+  },
 )
 
 watch(
-  () => [props.targetFound, props.targetRect?.top, props.targetRect?.left, props.targetRect?.width, props.targetRect?.height],
+  () => [
+    props.targetFound,
+    props.targetRect?.top,
+    props.targetRect?.left,
+    props.targetRect?.width,
+    props.targetRect?.height,
+  ],
   () => {
     if (!stepSwitching.value) return
     if (!props.targetFound || !props.targetRect) return
@@ -118,7 +124,7 @@ watch(
     requestAnimationFrame(() => {
       stepSwitching.value = false
     })
-  }
+  },
 )
 
 const maskTopStyle = computed(() => {
@@ -129,7 +135,7 @@ const maskTopStyle = computed(() => {
     top: '0px',
     left: '0px',
     width: '100vw',
-    height: `${Math.max(0, props.targetRect.top)}px`
+    height: `${Math.max(0, props.targetRect.top)}px`,
   }
 })
 
@@ -142,7 +148,7 @@ const maskBottomStyle = computed(() => {
     top: `${top}px`,
     left: '0px',
     width: '100vw',
-    height: `${Math.max(0, viewport.value.height - top)}px`
+    height: `${Math.max(0, viewport.value.height - top)}px`,
   }
 })
 
@@ -154,7 +160,7 @@ const maskLeftStyle = computed(() => {
     top: `${props.targetRect.top}px`,
     left: '0px',
     width: `${Math.max(0, props.targetRect.left)}px`,
-    height: `${props.targetRect.height}px`
+    height: `${props.targetRect.height}px`,
   }
 })
 
@@ -167,7 +173,7 @@ const maskRightStyle = computed(() => {
     top: `${props.targetRect.top}px`,
     left: `${left}px`,
     width: `${Math.max(0, viewport.value.width - left)}px`,
-    height: `${props.targetRect.height}px`
+    height: `${props.targetRect.height}px`,
   }
 })
 
@@ -179,7 +185,7 @@ const highlightStyle = computed(() => {
     top: `${props.targetRect.top}px`,
     left: `${props.targetRect.left}px`,
     width: `${props.targetRect.width}px`,
-    height: `${props.targetRect.height}px`
+    height: `${props.targetRect.height}px`,
   }
 })
 
@@ -198,7 +204,7 @@ const cardStyle = computed(() => {
       width: `${width}px`,
       left: `${clamp(centerLeft, safeGap, maxLeft)}px`,
       top: `${clamp(centerTop, safeGap, maxTop)}px`,
-      maxHeight: `${maxHeight}px`
+      maxHeight: `${maxHeight}px`,
     }
   }
 
@@ -206,9 +212,7 @@ const cardStyle = computed(() => {
   const rect = props.targetRect
   const centerX = rect.left + rect.width / 2
   const placeBottom = rect.top + rect.height + cardHeightEstimate + safeGap <= viewport.value.height
-  const rawTop = placeBottom
-    ? rect.top + rect.height + gap
-    : rect.top - cardHeightEstimate - gap
+  const rawTop = placeBottom ? rect.top + rect.height + gap : rect.top - cardHeightEstimate - gap
 
   const rawLeft = centerX - width / 2
   const left = clamp(rawLeft, safeGap, maxLeft)
@@ -218,7 +222,7 @@ const cardStyle = computed(() => {
     width: `${width}px`,
     left: `${Math.round(left)}px`,
     top: `${Math.round(top)}px`,
-    maxHeight: `${maxHeight}px`
+    maxHeight: `${maxHeight}px`,
   }
 })
 </script>
@@ -238,7 +242,8 @@ const cardStyle = computed(() => {
           板块 {{ sectionIndex }} / {{ sectionTotal }} · {{ sectionTitle || '未分组' }}
         </n-text>
         <n-text depth="3" style="font-size: 12px">
-          板块内步骤 {{ sectionStepIndex }} / {{ sectionStepTotal }} · 总步骤 {{ stepIndex + 1 }} / {{ totalSteps }}
+          板块内步骤 {{ sectionStepIndex }} / {{ sectionStepTotal }} · 总步骤 {{ stepIndex + 1 }} /
+          {{ totalSteps }}
         </n-text>
         <n-text strong style="font-size: 16px">{{ step?.title || '引导' }}</n-text>
         <n-text depth="2">{{ step?.content || '' }}</n-text>
@@ -247,7 +252,11 @@ const cardStyle = computed(() => {
           当前步骤目标还未出现，可重试或先下一步。
         </n-text>
 
-        <n-flex justify="space-between" align="center" style="margin-top: 4px; gap: 8px; flex-wrap: wrap">
+        <n-flex
+          justify="space-between"
+          align="center"
+          style="margin-top: 4px; gap: 8px; flex-wrap: wrap"
+        >
           <n-button tertiary @click="emit('skip')">跳过并完成</n-button>
           <n-flex style="gap: 8px; flex-wrap: wrap">
             <n-button v-if="!targetFound" tertiary @click="emit('retry')">重试定位</n-button>
@@ -279,7 +288,9 @@ const cardStyle = computed(() => {
   position: fixed;
   border: 2px solid #18a058;
   border-radius: 10px;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.0), 0 0 0 4px rgba(24, 160, 88, 0.25);
+  box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0),
+    0 0 0 4px rgba(24, 160, 88, 0.25);
   pointer-events: none;
 }
 
@@ -295,4 +306,3 @@ const cardStyle = computed(() => {
   max-height: calc(100vh - 96px);
 }
 </style>
-

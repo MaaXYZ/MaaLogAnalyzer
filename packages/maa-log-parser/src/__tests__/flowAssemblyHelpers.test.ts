@@ -13,11 +13,7 @@ const toTimestampMs = (value?: string): number => {
   return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY
 }
 
-const wf = (
-  id: number,
-  ts: string,
-  phase?: string
-): UnifiedFlowItem => ({
+const wf = (id: number, ts: string, phase?: string): UnifiedFlowItem => ({
   id: `wf-${id}`,
   type: 'wait_freezes',
   name: `WF-${id}`,
@@ -50,15 +46,17 @@ describe('FlowAssemblyHelpers', () => {
       ts: '2026-04-08 00:00:02.000',
       end_ts: '2026-04-08 00:00:04.000',
     }
-    const recognitionFlow: UnifiedFlowItem[] = [{
-      id: 'reco-root',
-      type: 'recognition',
-      name: 'RootReco',
-      status: 'success',
-      ts: '2026-04-08 00:00:01.000',
-      end_ts: '2026-04-08 00:00:05.000',
-      children: [childRecognition],
-    }]
+    const recognitionFlow: UnifiedFlowItem[] = [
+      {
+        id: 'reco-root',
+        type: 'recognition',
+        name: 'RootReco',
+        status: 'success',
+        ts: '2026-04-08 00:00:01.000',
+        end_ts: '2026-04-08 00:00:05.000',
+        children: [childRecognition],
+      },
+    ]
 
     const actionFlow: UnifiedFlowItem[] = []
     const contextInRange = wf(1, '2026-04-08 00:00:03.000', 'context')
@@ -145,7 +143,7 @@ describe('FlowAssemblyHelpers', () => {
       toTimestampMs,
       '2026-04-08 00:00:02.000',
       '2026-04-08 00:00:04.000',
-      'success'
+      'success',
     )
     expect(partitioned.before.map((item) => item.id)).toEqual(['wf-1'])
     expect(partitioned.inside.map((item) => item.id)).toEqual(['wf-2'])

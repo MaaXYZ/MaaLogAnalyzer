@@ -22,7 +22,7 @@ const createDeferredTargetsFromTextFiles = (
   textFiles?: LoadedTextFile[],
   primaryLogFiles?: PrimaryLogFile[],
 ): DeferredTextSearchTarget[] => {
-  const primaryPaths = new Set((primaryLogFiles ?? []).map(file => file.path))
+  const primaryPaths = new Set((primaryLogFiles ?? []).map((file) => file.path))
   const primaryTargets: DeferredTextSearchTarget[] = (primaryLogFiles ?? []).map((file, index) => ({
     id: `loaded:primary:${index}:${file.path}`,
     label: file.path || file.name,
@@ -30,7 +30,7 @@ const createDeferredTargetsFromTextFiles = (
     loadContent: getPrimaryLogContentLoader(file),
   }))
   const explicitTargets: DeferredTextSearchTarget[] = (textFiles ?? [])
-    .filter(file => !primaryPaths.has(file.path))
+    .filter((file) => !primaryPaths.has(file.path))
     .map((file, index) => ({
       id: `loaded:text:${index}:${file.path}`,
       label: file.path || file.name,
@@ -39,23 +39,28 @@ const createDeferredTargetsFromTextFiles = (
     }))
   if (primaryTargets.length > 0) return [...primaryTargets, ...explicitTargets]
   if (explicitTargets.length > 0) return explicitTargets
-  return [{
-    id: 'loaded:content',
-    label: 'loaded.log',
-    fileName: 'loaded.log',
-    loadContent: async () => content,
-  }]
+  return [
+    {
+      id: 'loaded:content',
+      label: 'loaded.log',
+      fileName: 'loaded.log',
+      loadContent: async () => content,
+    },
+  ]
 }
 
 const pickPreferredDeferredTargetId = (
   pipeline: LogLoadingPipelineOptions,
   targets: DeferredTextSearchTarget[],
-): string => pipeline.pickPreferredLogTargetId(targets.map((target): TextSearchLoadedTarget => ({
-  id: target.id,
-  label: target.label,
-  fileName: target.fileName,
-  content: '',
-})))
+): string =>
+  pipeline.pickPreferredLogTargetId(
+    targets.map((target): TextSearchLoadedTarget => ({
+      id: target.id,
+      label: target.label,
+      fileName: target.fileName,
+      content: '',
+    })),
+  )
 
 export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOptions) => {
   const { pipeline, processLogContent } = options
@@ -86,15 +91,20 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
             return
           }
 
-          const deferredTargets = createDeferredTargetsFromTextFiles(result.content, result.textFiles, result.primaryLogFiles)
+          const deferredTargets = createDeferredTargetsFromTextFiles(
+            result.content,
+            result.textFiles,
+            result.primaryLogFiles,
+          )
           const defaultTargetId = pickPreferredDeferredTargetId(pipeline, deferredTargets)
           pipeline.onFileLoadingEnd?.()
           fileLoadingActive = false
           await processLogContent({
             content: result.content,
-            parseInputs: result.primaryLogFiles.length > 0
-              ? createPrimaryLogParseInputs(result.primaryLogFiles)
-              : undefined,
+            parseInputs:
+              result.primaryLogFiles.length > 0
+                ? createPrimaryLogParseInputs(result.primaryLogFiles)
+                : undefined,
             sortParseInputs: result.primaryLogFiles.length > 1,
             errorImages: result.errorImages,
             visionImages: result.visionImages,
@@ -113,19 +123,23 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
       const fileName = file.name || 'loaded.log'
       await processLogContent({
         content: '',
-        parseInputs: [{
-          file,
-          sourceKey: fileName,
-          sourcePath: fileName,
-          inputIndex: 0,
-        }],
+        parseInputs: [
+          {
+            file,
+            sourceKey: fileName,
+            sourcePath: fileName,
+            inputIndex: 0,
+          },
+        ],
         loadedDefaultTargetId: 'loaded:single',
-        deferredTargets: [{
-          id: 'loaded:single',
-          label: file.name,
-          fileName: file.name,
-          loadContent: async () => decodeFileContent(new Uint8Array(await file.arrayBuffer())),
-        }],
+        deferredTargets: [
+          {
+            id: 'loaded:single',
+            label: file.name,
+            fileName: file.name,
+            loadContent: async () => decodeFileContent(new Uint8Array(await file.arrayBuffer())),
+          },
+        ],
       })
     } catch (error) {
       pipeline.onError(getErrorMessage(error))
@@ -148,13 +162,18 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
     }
     pipeline.loading.value = true
     try {
-      const deferredTargets = createDeferredTargetsFromTextFiles(content, textFiles, primaryLogFiles)
+      const deferredTargets = createDeferredTargetsFromTextFiles(
+        content,
+        textFiles,
+        primaryLogFiles,
+      )
       const defaultTargetId = pickPreferredDeferredTargetId(pipeline, deferredTargets)
       await processLogContent({
         content,
-        parseInputs: primaryLogFiles && primaryLogFiles.length > 0
-          ? createPrimaryLogParseInputs(primaryLogFiles)
-          : undefined,
+        parseInputs:
+          primaryLogFiles && primaryLogFiles.length > 0
+            ? createPrimaryLogParseInputs(primaryLogFiles)
+            : undefined,
         sortParseInputs: (primaryLogFiles?.length ?? 0) > 1,
         errorImages,
         visionImages,

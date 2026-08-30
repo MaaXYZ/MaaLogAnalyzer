@@ -59,7 +59,13 @@ const nodeNavSizeModel = computed({
         <n-card
           size="small"
           data-tour="analysis-node-timeline"
-          style="height: 100%; display: flex; flex-direction: column; position: relative; overflow: visible"
+          style="
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: visible;
+          "
           content-style="padding: 0; flex: 1; min-height: 0; overflow: visible"
         >
           <template #header>

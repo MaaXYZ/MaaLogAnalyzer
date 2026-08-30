@@ -48,10 +48,7 @@ const handleToggleDetail = () => {
     style="height: 100%"
   >
     <template #1>
-      <process-view
-        v-bind="processViewProps"
-        v-on="processViewEventHandlers"
-      />
+      <process-view v-bind="processViewProps" v-on="processViewEventHandlers" />
     </template>
     <template #2>
       <detail-panel-card

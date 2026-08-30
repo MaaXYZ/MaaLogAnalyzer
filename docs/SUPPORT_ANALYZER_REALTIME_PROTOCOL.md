@@ -44,7 +44,7 @@
 {
   "jsonrpc": "2.0",
   "method": "realtime.push",
-  "params": { }
+  "params": {}
 }
 ```
 
@@ -57,7 +57,7 @@
   "jsonrpc": "2.0",
   "id": "req-1",
   "method": "query.detail",
-  "params": { }
+  "params": {}
 }
 ```
 
@@ -67,7 +67,7 @@
 {
   "jsonrpc": "2.0",
   "id": "req-1",
-  "result": { }
+  "result": {}
 }
 ```
 
@@ -288,9 +288,9 @@ interface QueryDetailCachedImageData {
 2. 图片正文仅通过 `target='cached_image'` 获取，避免实时推送阶段提前占用 Analyzer 内存。
 3. Support 侧按 `sessionId + taskId + (reco_id/action_id)` 维护详情缓存，避免跨 task 串数据。
 4. Analyzer 推荐调用顺序：
-   1) `query.detail(target='reco', id=reco_id, taskId=task_id)`
-   2) 读取 `data.cached_image.raw/draws`
-   3) 对每个图片引用 id 调 `query.detail(target='cached_image', id=<refId>, taskId=task_id)`
+   1. `query.detail(target='reco', id=reco_id, taskId=task_id)`
+   2. 读取 `data.cached_image.raw/draws`
+   3. 对每个图片引用 id 调 `query.detail(target='cached_image', id=<refId>, taskId=task_id)`
 5. `cached_image.id` 与 `reco_id/action_id` 语义不同，禁止混用。
 
 ### 5.9 query.node（Request）
@@ -444,15 +444,15 @@ Support 侧消息可能是去前缀格式（例如 `Task.Starting`）。
 
 Analyzer 应映射为标准名：
 
-| 输入 | 标准化后 |
-| --- | --- |
-| `Task.*` | `Tasker.Task.*` |
-| `PipelineNode.*` | `Node.PipelineNode.*` |
+| 输入                | 标准化后                 |
+| ------------------- | ------------------------ |
+| `Task.*`            | `Tasker.Task.*`          |
+| `PipelineNode.*`    | `Node.PipelineNode.*`    |
 | `RecognitionNode.*` | `Node.RecognitionNode.*` |
-| `ActionNode.*` | `Node.ActionNode.*` |
-| `NextList.*` | `Node.NextList.*` |
-| `Recognition.*` | `Node.Recognition.*` |
-| `Action.*` | `Node.Action.*` |
+| `ActionNode.*`      | `Node.ActionNode.*`      |
+| `NextList.*`        | `Node.NextList.*`        |
+| `Recognition.*`     | `Node.Recognition.*`     |
+| `Action.*`          | `Node.Action.*`          |
 
 未命中映射：记录 warning 并忽略。
 

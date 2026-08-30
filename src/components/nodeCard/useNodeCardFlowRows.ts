@@ -19,7 +19,7 @@ export const useNodeCardFlowRows = (params: UseNodeCardFlowRowsParams) => {
   const actionRepeatCount = computed(() => buildNodeActionRepeatCount(params.node.value))
   const actionTimelineItems = computed(() => buildNodeActionTimelineItems(params.node.value))
   const actionTimelineRows = computed(() =>
-    flattenFlowItems(actionTimelineItems.value, params.isActionFlowItemExpanded)
+    flattenFlowItems(actionTimelineItems.value, params.isActionFlowItemExpanded),
   )
 
   const recognitionRootFlowItems = computed(() => buildNodeRecognitionFlowItems(params.node.value))
@@ -30,7 +30,7 @@ export const useNodeCardFlowRows = (params: UseNodeCardFlowRowsParams) => {
       if (children.length === 0) return
       rowsByIndex.set(
         index,
-        flattenFlowItems(children, params.isRecognitionNestedFlowItemExpanded, 1)
+        flattenFlowItems(children, params.isRecognitionNestedFlowItemExpanded, 1),
       )
     })
     return rowsByIndex
@@ -42,8 +42,8 @@ export const useNodeCardFlowRows = (params: UseNodeCardFlowRowsParams) => {
 
   const waitFreezesItems = computed(() =>
     flattenFlowItems(actionTimelineItems.value, () => true)
-      .map(row => row.item)
-      .filter(item => item.type === 'wait_freezes')
+      .map((row) => row.item)
+      .filter((item) => item.type === 'wait_freezes'),
   )
   const repeatWaitFreezesIndexById = computed<Map<string, number>>(() => {
     const indexById = new Map<string, number>()
@@ -86,8 +86,8 @@ export const useNodeCardFlowRows = (params: UseNodeCardFlowRowsParams) => {
     return formatActionDisplayName(item.name)
   }
 
-  const hasActionSection = computed(() =>
-    actionTimelineItems.value.length > 0 || !!params.node.value.action_details
+  const hasActionSection = computed(
+    () => actionTimelineItems.value.length > 0 || !!params.node.value.action_details,
   )
   const hasActionNestedChildren = computed(() => actionTimelineRows.value.length > 0)
 

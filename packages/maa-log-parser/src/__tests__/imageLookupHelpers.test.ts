@@ -9,9 +9,9 @@ describe('findImageByTimestampSuffix', () => {
       ['2026.04.07-10.00.00.009_Node', '/images/last.png'],
     ])
 
-    expect(
-      findImageByTimestampSuffix(images, '2026-04-07 10:00:00.007', '_Node'),
-    ).toBe('/images/exact.png')
+    expect(findImageByTimestampSuffix(images, '2026-04-07 10:00:00.007', '_Node')).toBe(
+      '/images/exact.png',
+    )
   })
 
   it('falls back to the nearest image in the same second deterministically', () => {
@@ -20,9 +20,9 @@ describe('findImageByTimestampSuffix', () => {
       ['2026.04.07-10.00.00.005_Node', '/images/earlier.png'],
     ])
 
-    expect(
-      findImageByTimestampSuffix(images, '2026-04-07 10:00:00.007', '_Node'),
-    ).toBe('/images/earlier.png')
+    expect(findImageByTimestampSuffix(images, '2026-04-07 10:00:00.007', '_Node')).toBe(
+      '/images/earlier.png',
+    )
   })
 
   it('does not match images from a different second or suffix', () => {
@@ -31,8 +31,6 @@ describe('findImageByTimestampSuffix', () => {
       ['2026.04.07-10.00.00.007_Other', '/images/other-node.png'],
     ])
 
-    expect(
-      findImageByTimestampSuffix(images, '2026-04-07 10:00:00.007', '_Node'),
-    ).toBeUndefined()
+    expect(findImageByTimestampSuffix(images, '2026-04-07 10:00:00.007', '_Node')).toBeUndefined()
   })
 })

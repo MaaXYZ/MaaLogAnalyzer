@@ -35,7 +35,8 @@ const getBridgeThemeDarkFlag = (): boolean | null => {
   const classList = document.body?.classList
   if (!classList) return null
 
-  if (classList.contains('vscode-light') || classList.contains('vscode-high-contrast-light')) return false
+  if (classList.contains('vscode-light') || classList.contains('vscode-high-contrast-light'))
+    return false
   if (classList.contains('vscode-dark') || classList.contains('vscode-high-contrast')) return true
   return null
 }
@@ -58,16 +59,17 @@ const isVscodeThemeContext = computed(() => {
   const classList = document.body?.classList
   if (!classList) return false
   return (
-    classList.contains('vscode-light')
-    || classList.contains('vscode-high-contrast-light')
-    || classList.contains('vscode-dark')
-    || classList.contains('vscode-high-contrast')
+    classList.contains('vscode-light') ||
+    classList.contains('vscode-high-contrast-light') ||
+    classList.contains('vscode-dark') ||
+    classList.contains('vscode-high-contrast')
   )
 })
 
 const hasCssSupportsApi = typeof CSS !== 'undefined' && typeof CSS.supports === 'function'
 const cssColorValidationCache = new Map<string, boolean>()
-const cssColorCandidatePattern = /^(#|[a-z]+|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\()/i
+const cssColorCandidatePattern =
+  /^(#|[a-z]+|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\()/i
 
 const isValidCssColor = (value: string): boolean => {
   const normalized = value.trim()
@@ -93,7 +95,11 @@ const isValidCssColor = (value: string): boolean => {
   return valid
 }
 
-const pickCssVarColor = (styleDecl: CSSStyleDeclaration | null, names: string[], fallback: string): string => {
+const pickCssVarColor = (
+  styleDecl: CSSStyleDeclaration | null,
+  names: string[],
+  fallback: string,
+): string => {
   if (!styleDecl) return fallback
   for (const name of names) {
     const value = styleDecl.getPropertyValue(name).trim()
@@ -111,7 +117,7 @@ const handleSystemThemeChange = (e: MediaQueryListEvent) => {
 }
 
 const handleVSCodeThemeMessage = (event: MessageEvent) => {
-  const payload = event.data as { type?: unknown, kind?: unknown } | null
+  const payload = event.data as { type?: unknown; kind?: unknown } | null
   if (!payload || typeof payload !== 'object') return
   if (payload.type !== 'vscodeThemeChanged') return
   if (typeof payload.kind === 'number') {
@@ -162,14 +168,10 @@ const updateThemeColor = (dark: boolean) => {
     if (metaThemeColor) {
       const styleDecl = getComputedStyle(document.documentElement)
       const fallback = dark ? '#18181c' : '#ffffff'
-      const resolvedThemeColor = pickCssVarColor(
-        styleDecl,
-        ['--vscode-panel-background'],
-        fallback,
-      )
+      const resolvedThemeColor = pickCssVarColor(styleDecl, ['--vscode-panel-background'], fallback)
       metaThemeColor.setAttribute('content', resolvedThemeColor)
     }
-    
+
     // 添加/移除 body 类
     document.body.classList.remove('force-light', 'force-dark')
     if (!isVscodeThemeContext.value && readThemePreference() !== null) {
@@ -207,7 +209,7 @@ watch(effectiveIsDark, (dark) => {
 })
 
 // 主题配置
-const theme = computed(() => effectiveIsDark.value ? darkTheme : null)
+const theme = computed(() => (effectiveIsDark.value ? darkTheme : null))
 const themeOverrides = computed<GlobalThemeOverrides>(() => {
   // 让 bridge 主题更新事件触发重算
   void vscodeThemeVersion.value
@@ -215,18 +217,31 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   const fallbackBg = effectiveIsDark.value ? '#18181c' : '#ffffff'
   const fallbackText = effectiveIsDark.value ? 'rgba(255, 255, 255, 0.82)' : 'rgba(0, 0, 0, 0.82)'
   const fallbackBorder = effectiveIsDark.value ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'
-  const styleDecl = typeof window !== 'undefined' ? getComputedStyle(document.documentElement) : null
+  const styleDecl =
+    typeof window !== 'undefined' ? getComputedStyle(document.documentElement) : null
 
   const primaryColor = pickCssVarColor(styleDecl, ['--vscode-button-background'], '#63e2b7')
-  const primaryColorHover = pickCssVarColor(styleDecl, ['--vscode-button-hoverBackground'], '#7fe7c4')
-  const primaryTextColor = pickCssVarColor(styleDecl, ['--vscode-button-foreground', '--vscode-editor-foreground'], fallbackText)
+  const primaryColorHover = pickCssVarColor(
+    styleDecl,
+    ['--vscode-button-hoverBackground'],
+    '#7fe7c4',
+  )
+  const primaryTextColor = pickCssVarColor(
+    styleDecl,
+    ['--vscode-button-foreground', '--vscode-editor-foreground'],
+    fallbackText,
+  )
   const bodyColor = pickCssVarColor(styleDecl, ['--vscode-panel-background'], fallbackBg)
   const widgetColor = pickCssVarColor(
     styleDecl,
     ['--vscode-panel-background', '--vscode-editorWidget-background'],
     bodyColor,
   )
-  const inputColor = pickCssVarColor(styleDecl, ['--vscode-input-background', '--vscode-editor-background'], bodyColor)
+  const inputColor = pickCssVarColor(
+    styleDecl,
+    ['--vscode-input-background', '--vscode-editor-background'],
+    bodyColor,
+  )
   const inputBorderColor = pickCssVarColor(
     styleDecl,
     ['--vscode-input-border', '--vscode-panel-border', '--vscode-widget-border'],
@@ -239,7 +254,11 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   )
   const buttonSecondaryColor = pickCssVarColor(
     styleDecl,
-    ['--vscode-button-secondaryBackground', '--vscode-input-background', '--vscode-editor-background'],
+    [
+      '--vscode-button-secondaryBackground',
+      '--vscode-input-background',
+      '--vscode-editor-background',
+    ],
     inputColor,
   )
   const buttonSecondaryTextColor = pickCssVarColor(
@@ -259,32 +278,57 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   )
   const warningColor = pickCssVarColor(
     styleDecl,
-    ['--vscode-editorWarning-foreground', '--vscode-testing-iconQueued', '--vscode-terminal-ansiYellow'],
+    [
+      '--vscode-editorWarning-foreground',
+      '--vscode-testing-iconQueued',
+      '--vscode-terminal-ansiYellow',
+    ],
     '#f0a020',
   )
   const errorColor = pickCssVarColor(
     styleDecl,
-    ['--vscode-errorForeground', '--vscode-editorError-foreground', '--vscode-testing-iconFailed', '--vscode-terminal-ansiRed'],
+    [
+      '--vscode-errorForeground',
+      '--vscode-editorError-foreground',
+      '--vscode-testing-iconFailed',
+      '--vscode-terminal-ansiRed',
+    ],
     '#d03050',
   )
   const listHoverColor = pickCssVarColor(
     styleDecl,
-    ['--vscode-list-hoverBackground', '--vscode-list-inactiveSelectionBackground', '--vscode-editor-inactiveSelectionBackground'],
+    [
+      '--vscode-list-hoverBackground',
+      '--vscode-list-inactiveSelectionBackground',
+      '--vscode-editor-inactiveSelectionBackground',
+    ],
     buttonSecondaryColor,
   )
   const dataTableHeaderColor = pickCssVarColor(
     styleDecl,
-    ['--vscode-sideBarSectionHeader-background', '--vscode-editorGroupHeader-tabsBackground', '--vscode-editor-background'],
+    [
+      '--vscode-sideBarSectionHeader-background',
+      '--vscode-editorGroupHeader-tabsBackground',
+      '--vscode-editor-background',
+    ],
     widgetColor,
   )
   const dataTableHeaderHoverColor = pickCssVarColor(
     styleDecl,
-    ['--vscode-list-hoverBackground', '--vscode-list-inactiveSelectionBackground', '--vscode-editor-inactiveSelectionBackground'],
+    [
+      '--vscode-list-hoverBackground',
+      '--vscode-list-inactiveSelectionBackground',
+      '--vscode-editor-inactiveSelectionBackground',
+    ],
     listHoverColor,
   )
   const dataTableHeaderSortingColor = pickCssVarColor(
     styleDecl,
-    ['--vscode-list-activeSelectionBackground', '--vscode-list-hoverBackground', '--vscode-list-inactiveSelectionBackground'],
+    [
+      '--vscode-list-activeSelectionBackground',
+      '--vscode-list-hoverBackground',
+      '--vscode-list-inactiveSelectionBackground',
+    ],
     dataTableHeaderHoverColor,
   )
   const dataTableHeaderTextColor = pickCssVarColor(
@@ -299,17 +343,41 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   )
   const dataTableStripedColor = pickCssVarColor(
     styleDecl,
-    ['--vscode-list-inactiveSelectionBackground', '--vscode-list-hoverBackground', '--vscode-editor-inactiveSelectionBackground'],
+    [
+      '--vscode-list-inactiveSelectionBackground',
+      '--vscode-list-hoverBackground',
+      '--vscode-editor-inactiveSelectionBackground',
+    ],
     widgetColor,
   )
-  const borderColor = pickCssVarColor(styleDecl, ['--vscode-panel-border', '--vscode-widget-border'], fallbackBorder)
+  const borderColor = pickCssVarColor(
+    styleDecl,
+    ['--vscode-panel-border', '--vscode-widget-border'],
+    fallbackBorder,
+  )
   const textColor = pickCssVarColor(styleDecl, ['--vscode-editor-foreground'], fallbackText)
-  const subTextColor = pickCssVarColor(styleDecl, ['--vscode-descriptionForeground', '--vscode-editor-foreground'], textColor)
-  const inputTextColor = pickCssVarColor(styleDecl, ['--vscode-input-foreground', '--vscode-editor-foreground'], textColor)
-  const placeholderColor = pickCssVarColor(styleDecl, ['--vscode-input-placeholderForeground', '--vscode-descriptionForeground'], subTextColor)
+  const subTextColor = pickCssVarColor(
+    styleDecl,
+    ['--vscode-descriptionForeground', '--vscode-editor-foreground'],
+    textColor,
+  )
+  const inputTextColor = pickCssVarColor(
+    styleDecl,
+    ['--vscode-input-foreground', '--vscode-editor-foreground'],
+    textColor,
+  )
+  const placeholderColor = pickCssVarColor(
+    styleDecl,
+    ['--vscode-input-placeholderForeground', '--vscode-descriptionForeground'],
+    subTextColor,
+  )
   const codeInlineBg = pickCssVarColor(
     styleDecl,
-    ['--vscode-textCodeBlock-background', '--vscode-textPreformat-background', '--vscode-editor-background'],
+    [
+      '--vscode-textCodeBlock-background',
+      '--vscode-textPreformat-background',
+      '--vscode-editor-background',
+    ],
     buttonSecondaryColor,
   )
   const codeInlineText = pickCssVarColor(
@@ -458,7 +526,6 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   }
 })
 </script>
-
 
 <template>
   <n-config-provider :theme="theme" :theme-overrides="themeOverrides" :hljs="hljs">

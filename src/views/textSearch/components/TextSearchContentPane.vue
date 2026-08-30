@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import {
-  NCard,
-  NButton,
-  NEmpty,
-  NText,
-} from 'naive-ui'
+import { NCard, NButton, NEmpty, NText } from 'naive-ui'
 import TextSearchLargeFileContext from './TextSearchLargeFileContext.vue'
 import TextSearchLargeFileEmpty from './TextSearchLargeFileEmpty.vue'
 import TextSearchVirtualFileContent from './TextSearchVirtualFileContent.vue'
@@ -70,7 +65,10 @@ defineExpose({
         <n-empty description="请先加载文件" />
       </div>
 
-      <div v-else-if="props.isLargeFile" style="height: 100%; display: flex; flex-direction: column">
+      <div
+        v-else-if="props.isLargeFile"
+        style="height: 100%; display: flex; flex-direction: column"
+      >
         <text-search-large-file-context
           v-if="props.contextLines.length > 0"
           :is-dark="props.isDark"
@@ -88,7 +86,10 @@ defineExpose({
         />
       </div>
 
-      <div v-else-if="!props.showFileContent" style="padding: 40px 20px; text-align: center; flex: 1">
+      <div
+        v-else-if="!props.showFileContent"
+        style="padding: 40px 20px; text-align: center; flex: 1"
+      >
         <n-empty description="点击右上角显示文件内容">
           <template #extra>
             <n-text depth="3" style="font-size: 12px">

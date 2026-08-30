@@ -16,7 +16,10 @@ describe('persisted layout reset', () => {
   beforeEach(() => {
     values = new Map([
       [APP_LAYOUT_STORAGE_KEY, JSON.stringify({ analysisSplitSize: 0.8, splitVerticalSize: 0.7 })],
-      [PROCESS_LAYOUT_STORAGE_KEY, JSON.stringify({ taskListCollapsed: true, nodeNavCollapsed: true })],
+      [
+        PROCESS_LAYOUT_STORAGE_KEY,
+        JSON.stringify({ taskListCollapsed: true, nodeNavCollapsed: true }),
+      ],
       [TEXT_SEARCH_LAYOUT_STORAGE_KEY, JSON.stringify({ splitSize: 0.7 })],
     ])
     vi.stubGlobal('localStorage', {

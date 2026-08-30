@@ -7,38 +7,28 @@ import {
 
 const encodePath = (targetPath: string, withBom = false): string => {
   const content = Buffer.from(targetPath, 'utf8')
-  const bytes = withBom
-    ? Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), content])
-    : content
+  const bytes = withBom ? Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), content]) : content
   return bytes.toString('base64')
 }
 
-const makeUri = (
-  route: ExternalAnalysisRoute,
-  targetPath: string,
-  withBom = false,
-) => ({
+const makeUri = (route: ExternalAnalysisRoute, targetPath: string, withBom = false) => ({
   path: `/open/${route}/${encodePath(targetPath, withBom)}`,
 })
 
 describe('parseExternalAnalysisUri', () => {
   it('accepts exact routes and canonical UTF-8 Base64 paths', () => {
-    expect(parseExternalAnalysisUri(
-      makeUri('analyze-file', 'C:\\logs\\maa.log'),
-      'win32',
-    )).toEqual({
-      ok: true,
-      request: {
-        route: 'analyze-file',
-        targetPath: 'C:\\logs\\maa.log',
-        isUnc: false,
+    expect(parseExternalAnalysisUri(makeUri('analyze-file', 'C:\\logs\\maa.log'), 'win32')).toEqual(
+      {
+        ok: true,
+        request: {
+          route: 'analyze-file',
+          targetPath: 'C:\\logs\\maa.log',
+          isUnc: false,
+        },
       },
-    })
+    )
 
-    expect(parseExternalAnalysisUri(
-      makeUri('analyze-folder', '/var/log/maa'),
-      'linux',
-    )).toEqual({
+    expect(parseExternalAnalysisUri(makeUri('analyze-folder', '/var/log/maa'), 'linux')).toEqual({
       ok: true,
       request: {
         route: 'analyze-folder',
@@ -63,32 +53,62 @@ describe('parseExternalAnalysisUri', () => {
   it('rejects query fallback, fuzzy routes, queries, and fragments', () => {
     const encoded = encodePath('C:\\logs\\maa.log')
 
-    expect(parseExternalAnalysisUri({
-      path: '/anything',
-      query: `route=analyze-file&path=${encoded}`,
-    }, 'win32')).toEqual({ ok: false, kind: 'unrelated' })
-    expect(parseExternalAnalysisUri({
-      path: `/open/analyze/${encoded}`,
-    }, 'win32')).toEqual({ ok: false, kind: 'invalid' })
-    expect(parseExternalAnalysisUri({
-      path: `/open/analyze-file/${encoded}`,
-      query: 'ignored=true',
-    }, 'win32')).toEqual({ ok: false, kind: 'invalid' })
-    expect(parseExternalAnalysisUri({
-      path: `/open/analyze-file/${encoded}`,
-      fragment: 'ignored',
-    }, 'win32')).toEqual({ ok: false, kind: 'invalid' })
+    expect(
+      parseExternalAnalysisUri(
+        {
+          path: '/anything',
+          query: `route=analyze-file&path=${encoded}`,
+        },
+        'win32',
+      ),
+    ).toEqual({ ok: false, kind: 'unrelated' })
+    expect(
+      parseExternalAnalysisUri(
+        {
+          path: `/open/analyze/${encoded}`,
+        },
+        'win32',
+      ),
+    ).toEqual({ ok: false, kind: 'invalid' })
+    expect(
+      parseExternalAnalysisUri(
+        {
+          path: `/open/analyze-file/${encoded}`,
+          query: 'ignored=true',
+        },
+        'win32',
+      ),
+    ).toEqual({ ok: false, kind: 'invalid' })
+    expect(
+      parseExternalAnalysisUri(
+        {
+          path: `/open/analyze-file/${encoded}`,
+          fragment: 'ignored',
+        },
+        'win32',
+      ),
+    ).toEqual({ ok: false, kind: 'invalid' })
   })
 
   it('rejects non-canonical Base64 and malformed UTF-8', () => {
     const malformedUtf8 = Buffer.from([0xc3, 0x28]).toString('base64')
 
-    expect(parseExternalAnalysisUri({
-      path: '/open/analyze-file/not_base64',
-    }, 'win32')).toEqual({ ok: false, kind: 'invalid' })
-    expect(parseExternalAnalysisUri({
-      path: `/open/analyze-file/${malformedUtf8}`,
-    }, 'win32')).toEqual({ ok: false, kind: 'invalid' })
+    expect(
+      parseExternalAnalysisUri(
+        {
+          path: '/open/analyze-file/not_base64',
+        },
+        'win32',
+      ),
+    ).toEqual({ ok: false, kind: 'invalid' })
+    expect(
+      parseExternalAnalysisUri(
+        {
+          path: `/open/analyze-file/${malformedUtf8}`,
+        },
+        'win32',
+      ),
+    ).toEqual({ ok: false, kind: 'invalid' })
   })
 
   it.each([
@@ -106,17 +126,16 @@ describe('parseExternalAnalysisUri', () => {
     ['alternate data stream', 'C:\\logs\\maa.log:payload'],
     ['embedded BOM', 'C:\\logs\\\ufeffmaa.log'],
   ])('rejects unsafe Windows %s', (_label, targetPath) => {
-    expect(parseExternalAnalysisUri(
-      makeUri('analyze-file', targetPath),
-      'win32',
-    )).toEqual({ ok: false, kind: 'invalid' })
+    expect(parseExternalAnalysisUri(makeUri('analyze-file', targetPath), 'win32')).toEqual({
+      ok: false,
+      kind: 'invalid',
+    })
   })
 
   it('marks UNC targets for an explicit network warning', () => {
-    expect(parseExternalAnalysisUri(
-      makeUri('analyze-folder', '\\\\server\\share\\debug'),
-      'win32',
-    )).toEqual({
+    expect(
+      parseExternalAnalysisUri(makeUri('analyze-folder', '\\\\server\\share\\debug'), 'win32'),
+    ).toEqual({
       ok: true,
       request: {
         route: 'analyze-folder',
@@ -127,10 +146,9 @@ describe('parseExternalAnalysisUri', () => {
   })
 
   it('rejects POSIX path aliases that obscure the approved target', () => {
-    expect(parseExternalAnalysisUri(
-      makeUri('analyze-file', '/var/log/../maa.log'),
-      'linux',
-    )).toEqual({ ok: false, kind: 'invalid' })
+    expect(
+      parseExternalAnalysisUri(makeUri('analyze-file', '/var/log/../maa.log'), 'linux'),
+    ).toEqual({ ok: false, kind: 'invalid' })
   })
 })
 
@@ -139,15 +157,17 @@ describe('gateExternalAnalysisUri', () => {
     const inspectPath = vi.fn(async () => 'file' as const)
     const open = vi.fn(async () => undefined)
 
-    await expect(gateExternalAnalysisUri(
-      makeUri('analyze-file', 'C:\\logs\\maa.log'),
-      {
-        confirm: vi.fn(async () => false),
-        inspectPath,
-        open,
-      },
-      'win32',
-    )).resolves.toEqual({ status: 'cancelled' })
+    await expect(
+      gateExternalAnalysisUri(
+        makeUri('analyze-file', 'C:\\logs\\maa.log'),
+        {
+          confirm: vi.fn(async () => false),
+          inspectPath,
+          open,
+        },
+        'win32',
+      ),
+    ).resolves.toEqual({ status: 'cancelled' })
 
     expect(inspectPath).not.toHaveBeenCalled()
     expect(open).not.toHaveBeenCalled()
@@ -158,11 +178,13 @@ describe('gateExternalAnalysisUri', () => {
     const inspectPath = vi.fn(async () => 'file' as const)
     const open = vi.fn(async () => undefined)
 
-    await expect(gateExternalAnalysisUri(
-      { path: '/unrelated', query: 'path=C%3A%5Clogs%5Cmaa.log' },
-      { confirm, inspectPath, open },
-      'win32',
-    )).resolves.toEqual({ status: 'unrelated' })
+    await expect(
+      gateExternalAnalysisUri(
+        { path: '/unrelated', query: 'path=C%3A%5Clogs%5Cmaa.log' },
+        { confirm, inspectPath, open },
+        'win32',
+      ),
+    ).resolves.toEqual({ status: 'unrelated' })
 
     expect(confirm).not.toHaveBeenCalled()
     expect(inspectPath).not.toHaveBeenCalled()

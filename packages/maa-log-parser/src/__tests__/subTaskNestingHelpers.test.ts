@@ -11,39 +11,40 @@ const toTimestampMs = (value?: string): number => {
   return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY
 }
 
-const createGroup = (
-  taskId: number,
-  ts: string,
-  actionType = 'Click'
-): NestedActionGroup => {
+const createGroup = (taskId: number, ts: string, actionType = 'Click'): NestedActionGroup => {
   return {
     task_id: taskId,
     name: `Task-${taskId}`,
     ts,
     status: 'success',
-    nested_actions: [{
-      node_id: taskId * 10 + 1,
-      name: `Action-${taskId}`,
-      ts,
-      end_ts: ts,
-      status: 'success',
-      action_details: {
-        action_id: taskId * 100 + 1,
-        action: actionType,
-        box: [0, 0, 1, 1],
-        detail: {},
+    nested_actions: [
+      {
+        node_id: taskId * 10 + 1,
         name: `Action-${taskId}`,
-        success: true,
         ts,
         end_ts: ts,
+        status: 'success',
+        action_details: {
+          action_id: taskId * 100 + 1,
+          action: actionType,
+          box: [0, 0, 1, 1],
+          detail: {},
+          name: `Action-${taskId}`,
+          success: true,
+          ts,
+          end_ts: ts,
+        },
       },
-    }],
+    ],
   }
 }
 
 describe('SubTaskNestingHelpers', () => {
   it('nests sub task into explicit parent task and prefers Custom action node', () => {
-    const recognitionOrderMeta = new WeakMap<RecognitionAttempt, { startSeq: number; endSeq: number }>()
+    const recognitionOrderMeta = new WeakMap<
+      RecognitionAttempt,
+      { startSeq: number; endSeq: number }
+    >()
     const { cloneRecognitionAttempt } = createRecognitionAttemptHelpers(recognitionOrderMeta)
 
     const parent: NestedActionGroup = {
@@ -104,7 +105,10 @@ describe('SubTaskNestingHelpers', () => {
   })
 
   it('falls back to timeline nesting when explicit parent is missing', () => {
-    const recognitionOrderMeta = new WeakMap<RecognitionAttempt, { startSeq: number; endSeq: number }>()
+    const recognitionOrderMeta = new WeakMap<
+      RecognitionAttempt,
+      { startSeq: number; endSeq: number }
+    >()
     const { cloneRecognitionAttempt } = createRecognitionAttemptHelpers(recognitionOrderMeta)
 
     const groupA = createGroup(10, '2026-04-08 00:00:00.000', 'Custom')
@@ -126,7 +130,10 @@ describe('SubTaskNestingHelpers', () => {
   })
 
   it('treats running parent action as open-ended for explicit parent nesting', () => {
-    const recognitionOrderMeta = new WeakMap<RecognitionAttempt, { startSeq: number; endSeq: number }>()
+    const recognitionOrderMeta = new WeakMap<
+      RecognitionAttempt,
+      { startSeq: number; endSeq: number }
+    >()
     const { cloneRecognitionAttempt } = createRecognitionAttemptHelpers(recognitionOrderMeta)
 
     const parent = createGroup(50, '2026-04-08 00:00:00.000', 'Custom')
@@ -151,7 +158,10 @@ describe('SubTaskNestingHelpers', () => {
   })
 
   it('treats running parent action as open-ended for timeline fallback nesting', () => {
-    const recognitionOrderMeta = new WeakMap<RecognitionAttempt, { startSeq: number; endSeq: number }>()
+    const recognitionOrderMeta = new WeakMap<
+      RecognitionAttempt,
+      { startSeq: number; endSeq: number }
+    >()
     const { cloneRecognitionAttempt } = createRecognitionAttemptHelpers(recognitionOrderMeta)
 
     const parent = createGroup(60, '2026-04-08 00:00:00.000', 'Custom')
@@ -176,7 +186,10 @@ describe('SubTaskNestingHelpers', () => {
   })
 
   it('keeps unnestable groups as roots and sorts root order by timestamp', () => {
-    const recognitionOrderMeta = new WeakMap<RecognitionAttempt, { startSeq: number; endSeq: number }>()
+    const recognitionOrderMeta = new WeakMap<
+      RecognitionAttempt,
+      { startSeq: number; endSeq: number }
+    >()
     const { cloneRecognitionAttempt } = createRecognitionAttemptHelpers(recognitionOrderMeta)
 
     const early = createGroup(31, '2026-04-08 00:00:01.000')

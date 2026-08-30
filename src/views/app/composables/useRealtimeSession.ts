@@ -5,10 +5,7 @@ import { parseRealtimeEvents } from './realtimeSession/eventParser'
 import { createRealtimeParseScheduler } from './realtimeSession/parseScheduler'
 import { createRealtimeSessionLifecycle } from './realtimeSession/sessionLifecycle'
 import { createRealtimeSnapshotRequester } from './realtimeSession/snapshot'
-import type {
-  RealtimeSessionState,
-  UseRealtimeSessionOptions,
-} from './realtimeSession/types'
+import type { RealtimeSessionState, UseRealtimeSessionOptions } from './realtimeSession/types'
 
 export type { RealtimeSessionState } from './realtimeSession/types'
 
@@ -19,19 +16,15 @@ export const useRealtimeSession = (options: UseRealtimeSessionOptions) => {
   const realtimeSnapshotRequesting = ref(false)
   const realtimeSnapshotReplaying = ref(false)
   const { toSyntheticEventLine, clearUnknownMessages } = createRealtimeEventLineBuilder()
-  const {
-    scheduleRealtimeParse,
-    clearRealtimeParseTimer,
-    resetParseState,
-    realtimeParseFailed,
-  } = createRealtimeParseScheduler({
-    parseIntervalMs: options.parseIntervalMs,
-    realtimeSession,
-    appendRealtimeLines: options.appendRealtimeLines,
-    getTasksSnapshot: options.getTasksSnapshot,
-    applyParsedTasks: options.applyParsedTasks,
-    syncRealtimeLoadedTarget: options.syncRealtimeLoadedTarget,
-  })
+  const { scheduleRealtimeParse, clearRealtimeParseTimer, resetParseState, realtimeParseFailed } =
+    createRealtimeParseScheduler({
+      parseIntervalMs: options.parseIntervalMs,
+      realtimeSession,
+      appendRealtimeLines: options.appendRealtimeLines,
+      getTasksSnapshot: options.getTasksSnapshot,
+      applyParsedTasks: options.applyParsedTasks,
+      syncRealtimeLoadedTarget: options.syncRealtimeLoadedTarget,
+    })
   const requestRealtimeSnapshot = createRealtimeSnapshotRequester({
     getBridge: options.getBridge,
     snapshotTimeoutMs: options.snapshotTimeoutMs,

@@ -40,36 +40,42 @@ export const useLoadedTargetSource = (options: UseLoadedTargetSourceOptions) => 
     resetSearchResultsOnly: options.resetSearchResultsOnly,
   })
 
-  const {
-    applyLoadedTarget,
-    ensureLoadedTargetReady,
-    ensureDeferredLoadedTargetsReady,
-  } = createLoadedSourceActions({
-    sourceMode,
-    selectedLoadedTargetId,
-    prepareLoadedTarget,
-    ...options,
-  })
+  const { applyLoadedTarget, ensureLoadedTargetReady, ensureDeferredLoadedTargetsReady } =
+    createLoadedSourceActions({
+      sourceMode,
+      selectedLoadedTargetId,
+      prepareLoadedTarget,
+      ...options,
+    })
 
-  setupLoadedTargetSourceSync(createLoadedSourceSyncOptions({
-    options,
-    sourceMode,
-    selectedLoadedTargetId,
-    applyLoadedTarget,
-    prepareSourceMode,
-    prepareLoadedTarget,
-  }))
+  setupLoadedTargetSourceSync(
+    createLoadedSourceSyncOptions({
+      options,
+      sourceMode,
+      selectedLoadedTargetId,
+      applyLoadedTarget,
+      prepareSourceMode,
+      prepareLoadedTarget,
+    }),
+  )
 
   // 目标到达（文件/zip 加载完成、实时快照建立）时自动进入“已加载目标”模式。
   // 共享模型在应用启动时就创建，目标晚于创建到达，因此必须是响应式 watcher 而不是一次性判断。
   // 内容仍是懒加载：真正物化由 ensureTargetContentLoaded / ensureLoadedTargets 按需触发。
   watch(
-    () => [
-      options.hasDeferredLoadedTargets?.value ?? false,
-      (options.loadedTargets.value?.length ?? 0) > 0,
-    ] as const,
+    () =>
+      [
+        options.hasDeferredLoadedTargets?.value ?? false,
+        (options.loadedTargets.value?.length ?? 0) > 0,
+      ] as const,
     ([hasDeferred, hasLoaded]) => {
-      console.log('[text-search][debug] targets watcher fired:', { hasDeferred, hasLoaded, mode: sourceMode.value, deferredCount: options.hasDeferredLoadedTargets?.value, loadedCount: options.loadedTargets.value?.length })
+      console.log('[text-search][debug] targets watcher fired:', {
+        hasDeferred,
+        hasLoaded,
+        mode: sourceMode.value,
+        deferredCount: options.hasDeferredLoadedTargets?.value,
+        loadedCount: options.loadedTargets.value?.length,
+      })
       if (!hasDeferred && !hasLoaded) return
       if (sourceMode.value === 'manual') {
         prepareSourceMode('loaded')

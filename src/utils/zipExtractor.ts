@@ -118,7 +118,7 @@ async function unzipNeededFiles(
     unzip(
       zipData,
       {
-        filter: entry => shouldExtractEntry(entry.name, includeAuxiliaryFiles, selectedPaths),
+        filter: (entry) => shouldExtractEntry(entry.name, includeAuxiliaryFiles, selectedPaths),
       },
       (err, unzipped) => {
         if (err) reject(err)
@@ -133,14 +133,10 @@ async function unzipSelectedPaths(
   selectedPaths: ReadonlySet<string>,
 ): Promise<Unzipped> {
   return new Promise<Unzipped>((resolve, reject) => {
-    unzip(
-      zipData,
-      { filter: entry => selectedPaths.has(entry.name) },
-      (err, unzipped) => {
-        if (err) reject(err)
-        else resolve(unzipped)
-      },
-    )
+    unzip(zipData, { filter: (entry) => selectedPaths.has(entry.name) }, (err, unzipped) => {
+      if (err) reject(err)
+      else resolve(unzipped)
+    })
   })
 }
 
@@ -204,7 +200,9 @@ const createDeferredSearchTextFiles = (
  */
 export async function extractZipContents(
   archiveFiles: readonly File[],
-  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+  selectPrimaryLogs?: (
+    options: PrimaryLogSelectionOption[],
+  ) => Promise<PrimaryLogSelectionOption[] | null>,
   options: ExtractZipContentOptions = {},
 ): Promise<{
   content: string
@@ -215,9 +213,7 @@ export async function extractZipContents(
   primaryLogFiles: PrimaryLogFile[]
 } | null> {
   const includeAuxiliaryFiles = options.includeAuxiliaryFiles !== false
-  const limits = options.archiveLimits == null
-    ? null
-    : resolveArchiveLimits(options.archiveLimits)
+  const limits = options.archiveLimits == null ? null : resolveArchiveLimits(options.archiveLimits)
 
   // Explicit callers can still opt into resource budgets; normal user loads
   // skip them and proceed directly to reading the selected archives.
@@ -238,30 +234,36 @@ export async function extractZipContents(
     archives.push({ data: inspected.data, entries: inspected.entries })
   }
 
-  const archivePaths = Array.from(new Set(archives.flatMap(
-    archive => archive.entries.map(entry => entry.name),
-  )))
+  const archivePaths = Array.from(
+    new Set(archives.flatMap((archive) => archive.entries.map((entry) => entry.name))),
+  )
 
-  const selectedLogs = selectPrimaryLogGroup(archivePaths.map((path) => ({
-    path,
-    name: path.replace(/\\/g, '/').split('/').pop() || path,
-  })))
+  const selectedLogs = selectPrimaryLogGroup(
+    archivePaths.map((path) => ({
+      path,
+      name: path.replace(/\\/g, '/').split('/').pop() || path,
+    })),
+  )
   if (selectedLogs.length === 0) {
     return null
   }
 
   const selectedOptions = selectPrimaryLogs
-    ? await selectPrimaryLogs(createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item)))
+    ? await selectPrimaryLogs(
+        createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item)),
+      )
     : createPrimaryLogSelectionOptions(selectedLogs.map(({ item }) => item))
   if (!selectedOptions || selectedOptions.length === 0) {
     return null
   }
-  const selectedPaths = new Set(selectedOptions.map(option => option.path))
+  const selectedPaths = new Set(selectedOptions.map((option) => option.path))
 
   // Apply selected-entry budgets only when an explicit caller supplied them.
-  const selectedEntries = archives.flatMap(archive => archive.entries.filter(
-    entry => shouldExtractEntry(entry.name, includeAuxiliaryFiles, selectedPaths),
-  ))
+  const selectedEntries = archives.flatMap((archive) =>
+    archive.entries.filter((entry) =>
+      shouldExtractEntry(entry.name, includeAuxiliaryFiles, selectedPaths),
+    ),
+  )
   if (limits) assertSelectedArchiveEntriesWithinLimits(selectedEntries, limits)
 
   const files = Object.create(null) as Unzipped
@@ -276,7 +278,7 @@ export async function extractZipContents(
   const paths = Object.keys(files)
 
   const basePath = selectedLogs[0].candidate.dirPath
-  const searchablePaths = paths.filter(path => isSearchTextFile(path))
+  const searchablePaths = paths.filter((path) => isSearchTextFile(path))
   const loadDeferredText = createDeferredZipTextLoader(archiveFiles, searchablePaths)
   const selectedOrder = new Map(selectedOptions.map((option, index) => [option.path, index]))
   const selectedPrimaryLogs = selectedLogs
@@ -299,9 +301,15 @@ export async function extractZipContents(
     return null
   }
 
-  const errorImages = includeAuxiliaryFiles ? extractErrorImages(fileMap, paths, basePath) : new Map<string, string>()
-  const visionImages = includeAuxiliaryFiles ? extractVisionImages(fileMap, paths, basePath) : new Map<string, string>()
-  const waitFreezesImages = includeAuxiliaryFiles ? extractWaitFreezesImages(fileMap, paths, basePath) : new Map<string, string>()
+  const errorImages = includeAuxiliaryFiles
+    ? extractErrorImages(fileMap, paths, basePath)
+    : new Map<string, string>()
+  const visionImages = includeAuxiliaryFiles
+    ? extractVisionImages(fileMap, paths, basePath)
+    : new Map<string, string>()
+  const waitFreezesImages = includeAuxiliaryFiles
+    ? extractWaitFreezesImages(fileMap, paths, basePath)
+    : new Map<string, string>()
   const textFiles = includeAuxiliaryFiles
     ? createDeferredSearchTextFiles(paths, basePath, loadDeferredText)
     : []
@@ -314,7 +322,9 @@ export async function extractZipContents(
  */
 export async function extractZipContent(
   file: File,
-  selectPrimaryLogs?: (options: PrimaryLogSelectionOption[]) => Promise<PrimaryLogSelectionOption[] | null>,
+  selectPrimaryLogs?: (
+    options: PrimaryLogSelectionOption[],
+  ) => Promise<PrimaryLogSelectionOption[] | null>,
   options: ExtractZipContentOptions = {},
 ) {
   return extractZipContents([file], selectPrimaryLogs, options)

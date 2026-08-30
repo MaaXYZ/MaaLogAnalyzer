@@ -11,9 +11,7 @@ import {
   type ArchiveLimitCode,
 } from '../archiveLimits'
 
-const entry = (
-  overrides: Partial<ArchiveEntryMetadata> = {},
-): ArchiveEntryMetadata => ({
+const entry = (overrides: Partial<ArchiveEntryMetadata> = {}): ArchiveEntryMetadata => ({
   name: 'entry.log',
   size: 1,
   originalSize: 1,
@@ -58,76 +56,85 @@ describe('archive limits', () => {
       'volume-count',
     )
     captureLimitError(
-      () => assertArchiveInputsWithinLimits([{ size: 3 }, { size: 3 }], {
-        ...limits,
-        maxVolumes: 2,
-      }),
+      () =>
+        assertArchiveInputsWithinLimits([{ size: 3 }, { size: 3 }], {
+          ...limits,
+          maxVolumes: 2,
+        }),
       'compressed-size',
     )
   })
 
   it('applies UTF-8 path budgets', () => {
     captureLimitError(
-      () => addArchiveDirectoryEntries(
-        EMPTY_ARCHIVE_DIRECTORY_BUDGET,
-        [entry({ name: '\u4e2d' })],
-        resolveArchiveLimits({ maxPathBytes: 2 }),
-      ),
+      () =>
+        addArchiveDirectoryEntries(
+          EMPTY_ARCHIVE_DIRECTORY_BUDGET,
+          [entry({ name: '\u4e2d' })],
+          resolveArchiveLimits({ maxPathBytes: 2 }),
+        ),
       'path-size',
     )
     captureLimitError(
-      () => addArchiveDirectoryEntries(
-        EMPTY_ARCHIVE_DIRECTORY_BUDGET,
-        [entry({ name: 'ab' }), entry({ name: 'cd' })],
-        resolveArchiveLimits({ maxTotalPathBytes: 3 }),
-      ),
+      () =>
+        addArchiveDirectoryEntries(
+          EMPTY_ARCHIVE_DIRECTORY_BUDGET,
+          [entry({ name: 'ab' }), entry({ name: 'cd' })],
+          resolveArchiveLimits({ maxTotalPathBytes: 3 }),
+        ),
       'total-path-size',
     )
   })
 
   it('applies selected file, image, total expansion, and ratio budgets', () => {
     captureLimitError(
-      () => assertSelectedArchiveEntriesWithinLimits(
-        [entry({ originalSize: 6 })],
-        resolveArchiveLimits({ maxFileBytes: 5 }),
-      ),
+      () =>
+        assertSelectedArchiveEntriesWithinLimits(
+          [entry({ originalSize: 6 })],
+          resolveArchiveLimits({ maxFileBytes: 5 }),
+        ),
       'file-size',
     )
     captureLimitError(
-      () => assertSelectedArchiveEntriesWithinLimits(
-        [entry({ name: 'image.png', originalSize: 4 })],
-        resolveArchiveLimits({ maxFileBytes: 10, maxImageBytes: 3 }),
-      ),
+      () =>
+        assertSelectedArchiveEntriesWithinLimits(
+          [entry({ name: 'image.png', originalSize: 4 })],
+          resolveArchiveLimits({ maxFileBytes: 10, maxImageBytes: 3 }),
+        ),
       'image-size',
     )
     captureLimitError(
-      () => assertSelectedArchiveEntriesWithinLimits(
-        [entry({ originalSize: 4 }), entry({ originalSize: 3 })],
-        resolveArchiveLimits({ maxFileBytes: 10, maxExtractedBytes: 6 }),
-      ),
+      () =>
+        assertSelectedArchiveEntriesWithinLimits(
+          [entry({ originalSize: 4 }), entry({ originalSize: 3 })],
+          resolveArchiveLimits({ maxFileBytes: 10, maxExtractedBytes: 6 }),
+        ),
       'extracted-size',
     )
     captureLimitError(
-      () => assertSelectedArchiveEntriesWithinLimits(
-        [entry({ size: 1, originalSize: 10 })],
-        resolveArchiveLimits({
-          maxFileBytes: 10,
-          maxExtractedBytes: 10,
-          maxCompressionRatio: 9,
-          compressionRatioMinBytes: 10,
-        }),
-      ),
+      () =>
+        assertSelectedArchiveEntriesWithinLimits(
+          [entry({ size: 1, originalSize: 10 })],
+          resolveArchiveLimits({
+            maxFileBytes: 10,
+            maxExtractedBytes: 10,
+            maxCompressionRatio: 9,
+            compressionRatioMinBytes: 10,
+          }),
+        ),
       'compression-ratio',
     )
 
-    expect(() => assertSelectedArchiveEntriesWithinLimits(
-      [entry({ size: 0, originalSize: 9 })],
-      resolveArchiveLimits({
-        maxFileBytes: 10,
-        maxExtractedBytes: 10,
-        maxCompressionRatio: 1,
-        compressionRatioMinBytes: 10,
-      }),
-    )).not.toThrow()
+    expect(() =>
+      assertSelectedArchiveEntriesWithinLimits(
+        [entry({ size: 0, originalSize: 9 })],
+        resolveArchiveLimits({
+          maxFileBytes: 10,
+          maxExtractedBytes: 10,
+          maxCompressionRatio: 1,
+          compressionRatioMinBytes: 10,
+        }),
+      ),
+    ).not.toThrow()
   })
 })

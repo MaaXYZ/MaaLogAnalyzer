@@ -29,11 +29,9 @@ export const createFileRuntimeActions = (
 
   const loadContextLines = async (targetLine: number) => {
     const requestId = ++contextRequestId
-    await loadContext(
-      buildLoadContextLinesOptions(options),
-      targetLine,
-      { shouldApply: () => requestId === contextRequestId },
-    )
+    await loadContext(buildLoadContextLinesOptions(options), targetLine, {
+      shouldApply: () => requestId === contextRequestId,
+    })
   }
 
   const jumpToLine = async (lineNumber: number) => {

@@ -35,7 +35,7 @@ const recognitionAttempts: RecognitionAttempt[] = [
 describe('nextListPresentation', () => {
   it('maps anchor candidates to the resolved recognition target name', () => {
     const targetByNextName = buildRecognitionTargetByNextName(recognitionAttempts, nextList)
-    const nextListNames = new Set(nextList.map(item => item.name))
+    const nextListNames = new Set(nextList.map((item) => item.name))
 
     expect(resolveRecognitionNextListName(recognitionAttempts[0], nextListNames)).toBe('X')
     expect(targetByNextName.get('X')).toBe('b')

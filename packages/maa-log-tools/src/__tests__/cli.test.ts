@@ -1,23 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import type { KernelOutput } from '@windsland52/maa-log-kernel/protocol'
-import {
-  buildPreflightOutput,
-  MLA_PREFLIGHT_SCHEMA_VERSION,
-} from '../cli'
+import { buildPreflightOutput, MLA_PREFLIGHT_SCHEMA_VERSION } from '../cli'
 
-const output = (
-  eventCount: number,
-  taskCount: number,
-  warnings: string[] = [],
-): KernelOutput => ({
+const output = (eventCount: number, taskCount: number, warnings: string[] = []): KernelOutput => ({
   meta: {
     schemaVersion: '1.0.0',
     parserVersion: 'test-parser/1.0.0',
     generatedAt: '2026-07-19T00:00:00Z',
   },
-  tasks: Array.from({ length: taskCount }, (_, index) => ({
-    uuid: `task-${index + 1}`,
-  }) as KernelOutput['tasks'][number]),
+  tasks: Array.from(
+    { length: taskCount },
+    (_, index) =>
+      ({
+        uuid: `task-${index + 1}`,
+      }) as KernelOutput['tasks'][number],
+  ),
   events: Array.from({ length: eventCount }, () => ({}) as KernelOutput['events'][number]),
   stats: {
     nodes: [],
@@ -44,7 +41,8 @@ describe('buildPreflightOutput', () => {
   })
 
   it('includes framework sessions and their warnings', () => {
-    const frameworkWarning = 'Multiple MaaFramework versions found in selected logs: v5.10.4, v5.11.1.'
+    const frameworkWarning =
+      'Multiple MaaFramework versions found in selected logs: v5.10.4, v5.11.1.'
     const result = buildPreflightOutput(output(8, 2), {
       sessions: [],
       summary: { status: 'multiple', versions: ['v5.10.4', 'v5.11.1'] },

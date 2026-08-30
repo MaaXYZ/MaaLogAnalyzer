@@ -9,7 +9,7 @@ describe('useFlowchartPopover', () => {
 
   it('clamps popover inside the canvas when the node is near the right edge', () => {
     const nodeElement = {
-      getAttribute: (name: string) => name === 'data-id' ? 'NearRight' : null,
+      getAttribute: (name: string) => (name === 'data-id' ? 'NearRight' : null),
       getBoundingClientRect: () => ({
         left: 190,
         right: 290,
@@ -45,7 +45,7 @@ describe('useFlowchartPopover', () => {
   it('finds node IDs containing CSS selector syntax without interpolation', () => {
     const unsafeId = 'node"\\]#target'
     const nodeElement = {
-      getAttribute: (name: string) => name === 'data-id' ? unsafeId : null,
+      getAttribute: (name: string) => (name === 'data-id' ? unsafeId : null),
       getBoundingClientRect: () => ({
         left: 10,
         right: 110,

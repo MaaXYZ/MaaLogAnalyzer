@@ -11,14 +11,14 @@ export const useTextSearchViewActions = (
 ) => {
   const performSearch = createPerformSearchAction(buildSearchExecutorOptions(context, options))
 
-  const {
-    handleFileUpload,
-    clearContent,
-    jumpToLine,
-    fileLines,
-  } = useTextSearchFileRuntime(buildFileRuntimeOptions(context))
+  const { handleFileUpload, clearContent, jumpToLine, fileLines } = useTextSearchFileRuntime(
+    buildFileRuntimeOptions(context),
+  )
 
-  const { highlightMatch } = useTextSearchHighlighter(context.hideDebugInfo, context.filterDebugInfo)
+  const { highlightMatch } = useTextSearchHighlighter(
+    context.hideDebugInfo,
+    context.filterDebugInfo,
+  )
 
   const useHistoryItem = (text: string) => {
     context.searchText.value = text

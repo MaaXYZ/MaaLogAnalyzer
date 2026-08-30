@@ -3,21 +3,13 @@ import type { FocusCardData, FocusCardEntry, FocusSourceKind } from './types'
 
 const DEFAULT_FOCUS_DISPLAY = ['log']
 
-const isRecord = (
-  value: unknown,
-): value is Record<string, unknown> => {
+const isRecord = (value: unknown): value is Record<string, unknown> => {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
-const stringifyFocusValue = (
-  value: unknown,
-): string => {
+const stringifyFocusValue = (value: unknown): string => {
   if (typeof value === 'string') return value
-  if (
-    typeof value === 'number'
-    || typeof value === 'boolean'
-    || typeof value === 'bigint'
-  ) {
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
     return String(value)
   }
   if (value == null) return 'null'
@@ -29,9 +21,7 @@ const stringifyFocusValue = (
   }
 }
 
-const normalizeDisplay = (
-  value: unknown,
-): string[] => {
+const normalizeDisplay = (value: unknown): string[] => {
   if (typeof value === 'string' && value.trim()) {
     return [value]
   }
@@ -46,15 +36,14 @@ const normalizeDisplay = (
   return DEFAULT_FOCUS_DISPLAY
 }
 
-const readTemplateEntry = (
-  value: unknown,
-): { content: unknown; display: string[] } | null => {
+const readTemplateEntry = (value: unknown): { content: unknown; display: string[] } | null => {
   if (value == null) return null
 
-  if (isRecord(value) && (
-    Object.prototype.hasOwnProperty.call(value, 'content')
-    || Object.prototype.hasOwnProperty.call(value, 'display')
-  )) {
+  if (
+    isRecord(value) &&
+    (Object.prototype.hasOwnProperty.call(value, 'content') ||
+      Object.prototype.hasOwnProperty.call(value, 'display'))
+  ) {
     if (!Object.prototype.hasOwnProperty.call(value, 'content')) return null
     return {
       content: value.content,
@@ -68,10 +57,7 @@ const readTemplateEntry = (
   }
 }
 
-const getValueByPath = (
-  details: Record<string, unknown>,
-  path: string,
-): unknown => {
+const getValueByPath = (details: Record<string, unknown>, path: string): unknown => {
   if (Object.prototype.hasOwnProperty.call(details, path)) {
     return details[path]
   }
@@ -98,10 +84,7 @@ const getValueByPath = (
   return current
 }
 
-const resolveContent = (
-  content: unknown,
-  details: Record<string, unknown>,
-): string => {
+const resolveContent = (content: unknown, details: Record<string, unknown>): string => {
   if (typeof content !== 'string') {
     return stringifyFocusValue(content)
   }
@@ -143,14 +126,12 @@ const createMappedEntries = (
   }>,
 ): FocusCardEntry[] => {
   return candidates
-    .map((candidate) => createEntry(
-      readTemplateEntry(focus[candidate.message]),
-      candidate.details,
-      {
+    .map((candidate) =>
+      createEntry(readTemplateEntry(focus[candidate.message]), candidate.details, {
         message: candidate.message,
         phase: candidate.phase,
-      },
-    ))
+      }),
+    )
     .filter((entry): entry is FocusCardEntry => !!entry)
 }
 
@@ -167,31 +148,25 @@ const resolveFocusCardData = (
 
   if (isRecord(focus)) {
     if (
-      Object.prototype.hasOwnProperty.call(focus, 'content')
-      || Object.prototype.hasOwnProperty.call(focus, 'display')
+      Object.prototype.hasOwnProperty.call(focus, 'content') ||
+      Object.prototype.hasOwnProperty.call(focus, 'display')
     ) {
       const genericEntry = createEntry(
         readTemplateEntry(focus),
         candidates[candidates.length - 1]?.details ?? candidates[0]?.details ?? {},
       )
-      return genericEntry
-        ? { sourceKind, entries: [genericEntry], rawFocus: focus }
-        : null
+      return genericEntry ? { sourceKind, entries: [genericEntry], rawFocus: focus } : null
     }
 
     const mappedEntries = createMappedEntries(focus, candidates)
-    return mappedEntries.length > 0
-      ? { sourceKind, entries: mappedEntries, rawFocus: focus }
-      : null
+    return mappedEntries.length > 0 ? { sourceKind, entries: mappedEntries, rawFocus: focus } : null
   }
 
   const genericEntry = createEntry(
     readTemplateEntry(focus),
     candidates[candidates.length - 1]?.details ?? candidates[0]?.details ?? {},
   )
-  return genericEntry
-    ? { sourceKind, entries: [genericEntry], rawFocus: focus }
-    : null
+  return genericEntry ? { sourceKind, entries: [genericEntry], rawFocus: focus } : null
 }
 
 const buildTerminalPhase = (
@@ -218,11 +193,13 @@ const buildMessageCandidates = (
     message: string
     phase: FocusCardEntry['phase']
     details: Record<string, unknown>
-  }> = [{
-    message: `${messageBase}.Starting`,
-    phase: 'starting',
-    details: details.starting,
-  }]
+  }> = [
+    {
+      message: `${messageBase}.Starting`,
+      phase: 'starting',
+      details: details.starting,
+    },
+  ]
 
   const terminalPhase = buildTerminalPhase(status)
   if (!terminalPhase) return candidates
@@ -237,9 +214,7 @@ const buildMessageCandidates = (
   return candidates
 }
 
-export const buildNodeFocusCardData = (
-  node: NodeInfo,
-): FocusCardData | null => {
+export const buildNodeFocusCardData = (node: NodeInfo): FocusCardData | null => {
   return resolveFocusCardData(
     'node',
     node.focus,
@@ -267,9 +242,7 @@ export const buildRecognitionFocusCardData = (
   item: UnifiedFlowItem,
   selectedNode?: NodeInfo | null,
 ): FocusCardData | null => {
-  const messageBase = item.type === 'recognition_node'
-    ? 'Node.RecognitionNode'
-    : 'Node.Recognition'
+  const messageBase = item.type === 'recognition_node' ? 'Node.RecognitionNode' : 'Node.Recognition'
   const recoDetails = item.reco_details ?? selectedNode?.reco_details
   const name = item.name || recoDetails?.name || selectedNode?.name || ''
   const focus = item.focus
@@ -299,9 +272,7 @@ export const buildActionFocusCardData = (
   item: UnifiedFlowItem,
   selectedNode?: NodeInfo | null,
 ): FocusCardData | null => {
-  const messageBase = item.type === 'action_node'
-    ? 'Node.ActionNode'
-    : 'Node.Action'
+  const messageBase = item.type === 'action_node' ? 'Node.ActionNode' : 'Node.Action'
   const actionDetails = item.action_details ?? selectedNode?.action_details
   const name = item.name || actionDetails?.name || selectedNode?.name || ''
   const focus = item.focus

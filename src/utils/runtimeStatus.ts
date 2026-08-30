@@ -17,7 +17,7 @@ export const getRuntimeStatusText = (status: RuntimeStatus): string => {
 
 export const getRuntimeStatusTagType = (
   status: RuntimeStatus,
-  options: RuntimeStatusTagTypeOptions = {}
+  options: RuntimeStatusTagTypeOptions = {},
 ): RuntimeStatusTagType => {
   if (status === 'success') return options.successType ?? 'success'
   if (status === 'running') return options.runningType ?? 'warning'

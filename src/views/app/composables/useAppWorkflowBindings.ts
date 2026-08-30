@@ -24,7 +24,9 @@ interface UseAppWorkflowBindingsOptions {
     }>,
     defaultId?: string,
   ) => void
-  pickPreferredLogTargetId: (targets: Array<{ id: string; label: string; fileName: string; content: string }>) => string
+  pickPreferredLogTargetId: (
+    targets: Array<{ id: string; label: string; fileName: string; content: string }>,
+  ) => string
   applyParsedTasks: (tasks: TaskInfo[], preserveSelection: boolean) => void
   handleFileLoadingStart: () => void
   handleFileLoadingEnd: () => void
@@ -42,11 +44,7 @@ interface UseAppWorkflowBindingsOptions {
 export const useAppWorkflowBindings = (options: UseAppWorkflowBindingsOptions) => {
   const message = useMessage()
 
-  const {
-    processLogContent,
-    handleFileUpload,
-    handleContentUpload,
-  } = useLogLoadingPipeline({
+  const { processLogContent, handleFileUpload, handleContentUpload } = useLogLoadingPipeline({
     parser: options.parser,
     loading: options.loading,
     showParsingModal: options.showParsingModal,
@@ -77,7 +75,7 @@ export const useAppWorkflowBindings = (options: UseAppWorkflowBindingsOptions) =
     getTasksLength: options.getTasksLength,
     activateTour: tutorialTour.activateTour,
     stopTour: tutorialTour.stopTour,
-    currentTourStepIds: () => tutorialTour.currentTourSteps.value.map(step => step.id),
+    currentTourStepIds: () => tutorialTour.currentTourSteps.value.map((step) => step.id),
     tutorialSteps: options.steps,
     loadTutorialSampleLog: options.loadTutorialSampleLog,
     tutorialStorageKey: options.tutorialStorageKey,

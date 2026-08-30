@@ -15,27 +15,37 @@ describe('ActionHelpers', () => {
   })
 
   it('resolves action ids from details payload by priority', () => {
-    expect(resolveActionDetailsActionId({
-      action_details: { action_id: 101 },
-      node_details: { action_id: 202 },
-    })).toBe(101)
-    expect(resolveActionDetailsActionId({
-      node_details: { action_id: 202 },
-    })).toBe(202)
+    expect(
+      resolveActionDetailsActionId({
+        action_details: { action_id: 101 },
+        node_details: { action_id: 202 },
+      }),
+    ).toBe(101)
+    expect(
+      resolveActionDetailsActionId({
+        node_details: { action_id: 202 },
+      }),
+    ).toBe(202)
     expect(resolveActionDetailsActionId({})).toBeUndefined()
 
-    expect(resolveActionNodeEventId({
-      action_details: { action_id: 303 },
-      action_id: 404,
-      node_id: 505,
-    })).toBe(303)
-    expect(resolveActionNodeEventId({
-      action_id: 404,
-      node_id: 505,
-    })).toBe(404)
-    expect(resolveActionNodeEventId({
-      node_id: 505,
-    })).toBe(505)
+    expect(
+      resolveActionNodeEventId({
+        action_details: { action_id: 303 },
+        action_id: 404,
+        node_id: 505,
+      }),
+    ).toBe(303)
+    expect(
+      resolveActionNodeEventId({
+        action_id: 404,
+        node_id: 505,
+      }),
+    ).toBe(404)
+    expect(
+      resolveActionNodeEventId({
+        node_id: 505,
+      }),
+    ).toBe(505)
   })
 
   it('builds sub-task action key only when action id exists', () => {
@@ -50,7 +60,7 @@ describe('ActionHelpers', () => {
       {
         fallbackName: 'Fallback',
         intern: (name) => `intern:${name}`,
-      }
+      },
     )
     expect(interned).toBe('intern:ActionFromDetails')
 

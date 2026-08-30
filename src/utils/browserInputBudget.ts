@@ -120,11 +120,7 @@ export const chargeInputResourceBytes = (
   budget.selectedBytes = nextSelectedBytes
 }
 
-export const registerBrowserInputFile = (
-  budget: BrowserInputBudget,
-  file: File,
-  path: string,
-) => {
+export const registerBrowserInputFile = (budget: BrowserInputBudget, file: File, path: string) => {
   if (budget.registeredFiles.has(file)) return
   const depth = path.replace(/\\/g, '/').split('/').filter(Boolean).length - 1
   registerInputResourceEntry(budget, path, Math.max(0, depth))

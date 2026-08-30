@@ -5,7 +5,11 @@ interface MatchRange {
   end: number
 }
 
-export const compileSearchPattern = (keyword: string, useRegex: boolean, caseSensitive: boolean) => {
+export const compileSearchPattern = (
+  keyword: string,
+  useRegex: boolean,
+  caseSensitive: boolean,
+) => {
   if (!useRegex) return null
   try {
     return new RegExp(keyword, caseSensitive ? '' : 'i')

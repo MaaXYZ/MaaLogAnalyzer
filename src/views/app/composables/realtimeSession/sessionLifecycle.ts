@@ -19,9 +19,7 @@ interface CreateRealtimeSessionLifecycleOptions {
   scheduleRealtimeParse: () => void
 }
 
-export const createRealtimeSessionLifecycle = (
-  options: CreateRealtimeSessionLifecycleOptions,
-) => {
+export const createRealtimeSessionLifecycle = (options: CreateRealtimeSessionLifecycleOptions) => {
   const stopRealtimeSession = () => {
     options.realtimeSession.value = null
     options.resetParseState()
@@ -67,7 +65,12 @@ export const createRealtimeSessionLifecycle = (
     if (!payload) return
 
     const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId.trim() : ''
-    if (!sessionId || !options.realtimeSession.value || options.realtimeSession.value.sessionId !== sessionId) return
+    if (
+      !sessionId ||
+      !options.realtimeSession.value ||
+      options.realtimeSession.value.sessionId !== sessionId
+    )
+      return
 
     options.realtimeStreaming.value = false
     options.scheduleRealtimeParse()
@@ -78,7 +81,12 @@ export const createRealtimeSessionLifecycle = (
     if (!payload) return
 
     const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId.trim() : ''
-    if (!sessionId || !options.realtimeSession.value || options.realtimeSession.value.sessionId !== sessionId) return
+    if (
+      !sessionId ||
+      !options.realtimeSession.value ||
+      options.realtimeSession.value.sessionId !== sessionId
+    )
+      return
 
     options.realtimeSnapshotReplaying.value = false
     options.realtimeSnapshotRequestedFromSeq.value = null

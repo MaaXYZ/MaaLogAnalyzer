@@ -16,7 +16,7 @@ export const TOUR_STEPS: TourStep[] = [
     view: 'analysis',
     placement: 'bottom',
     nextLabel: '下一步',
-    sinceVersion: 1
+    sinceVersion: 1,
   },
   {
     id: 'settings-entry',
@@ -29,7 +29,7 @@ export const TOUR_STEPS: TourStep[] = [
     view: 'analysis',
     placement: 'bottom',
     nextLabel: '下一步',
-    sinceVersion: 1
+    sinceVersion: 1,
   },
   {
     id: 'theme-toggle',
@@ -42,7 +42,7 @@ export const TOUR_STEPS: TourStep[] = [
     view: 'analysis',
     placement: 'bottom',
     nextLabel: '进入日志分析板块',
-    sinceVersion: 1
+    sinceVersion: 1,
   },
   {
     id: 'analysis-main',
@@ -54,7 +54,7 @@ export const TOUR_STEPS: TourStep[] = [
     view: 'analysis',
     placement: 'right',
     nextLabel: '进入流程图板块',
-    sinceVersion: 1
+    sinceVersion: 1,
   },
   {
     id: 'flowchart-main',
@@ -66,7 +66,7 @@ export const TOUR_STEPS: TourStep[] = [
     view: 'flowchart',
     placement: 'left',
     nextLabel: '下一步',
-    sinceVersion: 1
+    sinceVersion: 1,
   },
   {
     id: 'flowchart-playback',
@@ -78,7 +78,7 @@ export const TOUR_STEPS: TourStep[] = [
     view: 'flowchart',
     placement: 'bottom',
     nextLabel: '进入文本搜索板块',
-    sinceVersion: 1
+    sinceVersion: 1,
   },
   {
     id: 'search-main',
@@ -90,19 +90,20 @@ export const TOUR_STEPS: TourStep[] = [
     view: 'search',
     placement: 'left',
     nextLabel: '进入运行统计板块',
-    sinceVersion: 1
+    sinceVersion: 1,
   },
   {
     id: 'statistics-main',
     sectionId: 'statistics',
     sectionTitle: '运行统计',
     title: '运行统计视图',
-    content: '这里用于查看节点、识别/动作和 Wait Freezes 的耗时、成功率与重试分布，适合做整体健康度分析。',
+    content:
+      '这里用于查看节点、识别/动作和 Wait Freezes 的耗时、成功率与重试分布，适合做整体健康度分析。',
     target: '[data-tour="statistics-main"]',
     view: 'statistics',
     placement: 'left',
     nextLabel: '看分屏模式',
-      sinceVersion: 1
+    sinceVersion: 1,
   },
   {
     id: 'split-main',
@@ -114,7 +115,7 @@ export const TOUR_STEPS: TourStep[] = [
     view: 'split',
     placement: 'left',
     nextLabel: '下一步',
-    sinceVersion: 1
+    sinceVersion: 1,
   },
   {
     id: 'tutorial-replay-entry',
@@ -126,6 +127,6 @@ export const TOUR_STEPS: TourStep[] = [
     view: 'split',
     placement: 'left',
     nextLabel: '完成教程',
-    sinceVersion: 2
-  }
+    sinceVersion: 2,
+  },
 ]

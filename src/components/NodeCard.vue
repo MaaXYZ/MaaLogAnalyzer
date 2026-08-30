@@ -37,8 +37,12 @@ const recognitionExpanded = ref(!settings.defaultCollapseRecognition)
 const actionExpanded = ref(!settings.defaultCollapseRootActionList)
 
 const forceExpandRelatedWhileRunning = computed(() => props.node.status === 'running')
-const effectiveRecognitionExpanded = computed(() => forceExpandRelatedWhileRunning.value || recognitionExpanded.value)
-const effectiveActionExpanded = computed(() => forceExpandRelatedWhileRunning.value || actionExpanded.value)
+const effectiveRecognitionExpanded = computed(
+  () => forceExpandRelatedWhileRunning.value || recognitionExpanded.value,
+)
+const effectiveActionExpanded = computed(
+  () => forceExpandRelatedWhileRunning.value || actionExpanded.value,
+)
 
 // 监听node变化，清空展开状态
 const syncSectionExpandStateFromSettings = () => {
@@ -46,19 +50,20 @@ const syncSectionExpandStateFromSettings = () => {
   actionExpanded.value = !settings.defaultCollapseRootActionList
 }
 
-watch(() => props.node?.node_id, () => {
-  expandedAttempts.value.clear()
-  syncSectionExpandStateFromSettings()
-}, { flush: 'sync' })
+watch(
+  () => props.node?.node_id,
+  () => {
+    expandedAttempts.value.clear()
+    syncSectionExpandStateFromSettings()
+  },
+  { flush: 'sync' },
+)
 
 // 设置变化时同步默认折叠状态（无需切换节点）
 watch(
-  [
-    () => settings.defaultCollapseRecognition,
-    () => settings.defaultCollapseRootActionList,
-  ],
+  [() => settings.defaultCollapseRecognition, () => settings.defaultCollapseRootActionList],
   syncSectionExpandStateFromSettings,
-  { flush: 'sync' }
+  { flush: 'sync' },
 )
 
 // 节点状态样式
@@ -138,18 +143,14 @@ const toggleRecognitionSection = () => {
 const toggleActionSection = () => {
   actionExpanded.value = !actionExpanded.value
 }
-
 </script>
 
 <template>
   <div :class="cardClass">
-    <n-card
-      size="small"
-      :bordered="true"
-    >
+    <n-card size="small" :bordered="true">
       <!-- Header: 节点名称按钮 + 时间 -->
       <template #header>
-        <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px">
           <n-popover
             v-if="taskDocText"
             trigger="manual"
@@ -159,10 +160,7 @@ const toggleActionSection = () => {
           >
             <template #trigger>
               <span @mouseenter="handleTaskDocHoverEnter" @mouseleave="handleTaskDocHoverLeave">
-                <n-button
-                  size="small"
-                  @click="handleNodeClick"
-                >
+                <n-button size="small" @click="handleNodeClick">
                   {{ node.name }}
                 </n-button>
               </span>
@@ -172,14 +170,11 @@ const toggleActionSection = () => {
             </n-text>
           </n-popover>
           <span v-else @mouseenter="handleTaskDocHoverEnter" @mouseleave="handleTaskDocHoverLeave">
-            <n-button
-              size="small"
-              @click="handleNodeClick"
-            >
+            <n-button size="small" @click="handleNodeClick">
               {{ node.name }}
             </n-button>
           </span>
-          
+
           <n-button
             v-if="isVscodeLaunchEmbed"
             size="small"
@@ -195,7 +190,7 @@ const toggleActionSection = () => {
       </template>
 
       <!-- Content: 根据显示模式切换 -->
-      <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; flex-direction: column; gap: 12px">
         <node-card-detailed
           v-if="settings.displayMode === 'detailed'"
           v-bind="sharedExpandableViewProps"
@@ -267,7 +262,12 @@ const toggleActionSection = () => {
 }
 
 @media (max-width: 768px) {
-  .node-card { padding-left: 12px; }
-  .node-card::before { width: 8px; height: 8px; }
+  .node-card {
+    padding-left: 12px;
+  }
+  .node-card::before {
+    width: 8px;
+    height: 8px;
+  }
 }
 </style>

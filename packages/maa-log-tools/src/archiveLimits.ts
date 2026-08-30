@@ -119,10 +119,11 @@ const validateLimits = (limits: ArchiveLimits): Readonly<ArchiveLimits> => {
 
 export const resolveArchiveLimits = (
   overrides: Partial<ArchiveLimits> = {},
-): Readonly<ArchiveLimits> => validateLimits({
-  ...DEFAULT_ARCHIVE_LIMITS,
-  ...overrides,
-})
+): Readonly<ArchiveLimits> =>
+  validateLimits({
+    ...DEFAULT_ARCHIVE_LIMITS,
+    ...overrides,
+  })
 
 export const EMPTY_ARCHIVE_DIRECTORY_BUDGET: Readonly<ArchiveDirectoryBudget> = Object.freeze({
   totalPathBytes: 0,
@@ -148,11 +149,7 @@ const addSize = (total: number, value: number, label: string): number => {
   return next
 }
 
-const throwLimitError = (
-  code: ArchiveLimitCode,
-  actual: number,
-  limit: number,
-): never => {
+const throwLimitError = (code: ArchiveLimitCode, actual: number, limit: number): never => {
   throw new ArchiveLimitError(code, actual, limit)
 }
 
@@ -180,11 +177,7 @@ interface CanonicalArchivePath {
   identity: string
 }
 
-const throwFormatError = (
-  code: ArchiveFormatCode,
-  entryName: string,
-  message: string,
-): never => {
+const throwFormatError = (code: ArchiveFormatCode, entryName: string, message: string): never => {
   throw new ArchiveFormatError(code, entryName, message)
 }
 
@@ -205,13 +198,13 @@ const canonicalizeArchivePath = (rawPath: string): CanonicalArchivePath => {
   const segments = canonical.split('/')
   for (const [index, segment] of segments.entries()) {
     if (
-      segment.length === 0
-      || segment === '.'
-      || segment === '..'
-      || segment.endsWith('.')
-      || segment.endsWith(' ')
-      || segment.includes(':')
-      || (index === 0 && /^[a-z]:$/iu.test(segment))
+      segment.length === 0 ||
+      segment === '.' ||
+      segment === '..' ||
+      segment.endsWith('.') ||
+      segment.endsWith(' ') ||
+      segment.includes(':') ||
+      (index === 0 && /^[a-z]:$/iu.test(segment))
     ) {
       throwFormatError('invalid-path', rawPath, `Archive entry uses a path alias: ${rawPath}`)
     }
@@ -276,11 +269,12 @@ const readU32 = (data: Uint8Array, offset: number): number => {
     throwFormatError('invalid-structure', '', 'ZIP record is truncated')
   }
   return (
-    data[offset]
-    | (data[offset + 1] << 8)
-    | (data[offset + 2] << 16)
-    | (data[offset + 3] << 24)
-  ) >>> 0
+    (data[offset] |
+      (data[offset + 1] << 8) |
+      (data[offset + 2] << 16) |
+      (data[offset + 3] << 24)) >>>
+    0
+  )
 }
 
 const findEndOfCentralDirectory = (data: Uint8Array): number => {
@@ -310,12 +304,12 @@ const parseAndValidateRawZipRecords = (data: Uint8Array): RawCentralEntry[] => {
   const centralSize = readU32(data, eocdOffset + 12)
   const centralOffset = readU32(data, eocdOffset + 16)
   if (
-    diskNumber !== 0
-    || centralDisk !== 0
-    || entriesOnDisk !== totalEntries
-    || totalEntries === 0xffff
-    || centralSize === 0xffff_ffff
-    || centralOffset === 0xffff_ffff
+    diskNumber !== 0 ||
+    centralDisk !== 0 ||
+    entriesOnDisk !== totalEntries ||
+    totalEntries === 0xffff ||
+    centralSize === 0xffff_ffff ||
+    centralOffset === 0xffff_ffff
   ) {
     throwFormatError('unsupported-archive', '', 'Multi-disk and ZIP64 archives are not supported')
   }
@@ -354,7 +348,11 @@ const parseAndValidateRawZipRecords = (data: Uint8Array): RawCentralEntry[] => {
     offset = recordEnd
   }
   if (offset !== eocdOffset) {
-    throwFormatError('invalid-structure', '', 'ZIP central-directory size does not match its entries')
+    throwFormatError(
+      'invalid-structure',
+      '',
+      'ZIP central-directory size does not match its entries',
+    )
   }
 
   const localRanges: Array<{ start: number; end: number }> = []
@@ -362,7 +360,11 @@ const parseAndValidateRawZipRecords = (data: Uint8Array): RawCentralEntry[] => {
   for (const entry of entries) {
     const localOffset = entry.localHeaderOffset
     if (localOffsets.has(localOffset) || readU32(data, localOffset) !== 0x0403_4b50) {
-      throwFormatError('local-entry-mismatch', '', 'ZIP local-header offsets are invalid or duplicated')
+      throwFormatError(
+        'local-entry-mismatch',
+        '',
+        'ZIP local-header offsets are invalid or duplicated',
+      )
     }
     localOffsets.add(localOffset)
     const localFlags = readU16(data, localOffset + 6)
@@ -375,31 +377,41 @@ const parseAndValidateRawZipRecords = (data: Uint8Array): RawCentralEntry[] => {
     const payloadOffset = localOffset + 30 + nameBytes + extraBytes
     const rawLocalName = data.subarray(localOffset + 30, localOffset + 30 + nameBytes)
     if (
-      payloadOffset > centralOffset
-      || localFlags !== entry.flags
-      || localCompression !== entry.compression
-      || !equalBytes(rawLocalName, entry.rawName)
+      payloadOffset > centralOffset ||
+      localFlags !== entry.flags ||
+      localCompression !== entry.compression ||
+      !equalBytes(rawLocalName, entry.rawName)
     ) {
-      throwFormatError('local-entry-mismatch', '', 'ZIP local and central entry declarations differ')
+      throwFormatError(
+        'local-entry-mismatch',
+        '',
+        'ZIP local and central entry declarations differ',
+      )
     }
     if ((localFlags & 1) !== 0) {
       throwFormatError('unsupported-archive', '', 'Encrypted ZIP entries are not supported')
     }
 
     const usesDescriptor = (localFlags & 8) !== 0
-    if (!usesDescriptor && (
-      localCrc32 !== entry.crc32
-      || localSize !== entry.size
-      || localOriginalSize !== entry.originalSize
-    )) {
+    if (
+      !usesDescriptor &&
+      (localCrc32 !== entry.crc32 ||
+        localSize !== entry.size ||
+        localOriginalSize !== entry.originalSize)
+    ) {
       throwFormatError('declared-size-mismatch', '', 'ZIP local and central sizes differ')
     }
-    if (usesDescriptor && (
-      (localCrc32 !== 0 && localCrc32 !== entry.crc32)
-      || (localSize !== 0 && localSize !== entry.size)
-      || (localOriginalSize !== 0 && localOriginalSize !== entry.originalSize)
-    )) {
-      throwFormatError('declared-size-mismatch', '', 'ZIP streaming local sizes conflict with the central directory')
+    if (
+      usesDescriptor &&
+      ((localCrc32 !== 0 && localCrc32 !== entry.crc32) ||
+        (localSize !== 0 && localSize !== entry.size) ||
+        (localOriginalSize !== 0 && localOriginalSize !== entry.originalSize))
+    ) {
+      throwFormatError(
+        'declared-size-mismatch',
+        '',
+        'ZIP streaming local sizes conflict with the central directory',
+      )
     }
 
     const payloadEnd = payloadOffset + entry.size
@@ -415,11 +427,15 @@ const parseAndValidateRawZipRecords = (data: Uint8Array): RawCentralEntry[] => {
       const descriptorOriginalSize = readU32(data, recordEnd + 8)
       recordEnd += 12
       if (
-        descriptorCrc32 !== entry.crc32
-        || descriptorSize !== entry.size
-        || descriptorOriginalSize !== entry.originalSize
+        descriptorCrc32 !== entry.crc32 ||
+        descriptorSize !== entry.size ||
+        descriptorOriginalSize !== entry.originalSize
       ) {
-        throwFormatError('declared-size-mismatch', '', 'ZIP data descriptor conflicts with the central directory')
+        throwFormatError(
+          'declared-size-mismatch',
+          '',
+          'ZIP data descriptor conflicts with the central directory',
+        )
       }
     }
     if (recordEnd > centralOffset) {
@@ -453,10 +469,10 @@ export const inspectZipDirectory = (
       const metadata = copyEntryMetadata(entry)
       const rawEntry = rawEntries[entries.length]
       if (
-        !rawEntry
-        || rawEntry.size !== metadata.size
-        || rawEntry.originalSize !== metadata.originalSize
-        || rawEntry.compression !== metadata.compression
+        !rawEntry ||
+        rawEntry.size !== metadata.size ||
+        rawEntry.originalSize !== metadata.originalSize ||
+        rawEntry.compression !== metadata.compression
       ) {
         throwFormatError(
           'local-entry-mismatch',
@@ -510,9 +526,9 @@ export const addSelectedEntry = (
   }
 
   if (
-    checkCompressionRatio
-    && entry.originalSize >= limits.compressionRatioMinBytes
-    && entry.originalSize > 0
+    checkCompressionRatio &&
+    entry.originalSize >= limits.compressionRatioMinBytes &&
+    entry.originalSize > 0
   ) {
     const ratio = entry.size === 0 ? Number.POSITIVE_INFINITY : entry.originalSize / entry.size
     if (ratio > limits.maxCompressionRatio) {
@@ -540,10 +556,7 @@ export interface ExtractedZipEntries {
 
 const STREAM_INPUT_CHUNK_BYTES = 16 * 1024
 
-const assertLocalEntryMatchesCentral = (
-  file: UnzipFile,
-  central: ArchiveEntryMetadata,
-): void => {
+const assertLocalEntryMatchesCentral = (file: UnzipFile, central: ArchiveEntryMetadata): void => {
   if (file.compression !== central.compression) {
     throwFormatError(
       'local-entry-mismatch',
@@ -587,22 +600,26 @@ const extractSelectedEntriesStreaming = (
   const unzipper = new Unzip((file) => {
     if (fatalError != null) return
     if (seenLocalNames.has(file.name)) {
-      fail(new ArchiveFormatError(
-        'duplicate-path',
-        file.name,
-        `ZIP local headers contain a duplicate entry: ${file.name}`,
-      ))
+      fail(
+        new ArchiveFormatError(
+          'duplicate-path',
+          file.name,
+          `ZIP local headers contain a duplicate entry: ${file.name}`,
+        ),
+      )
       return
     }
     seenLocalNames.add(file.name)
 
     const central = centralByName.get(file.name)
     if (!central) {
-      fail(new ArchiveFormatError(
-        'local-entry-mismatch',
-        file.name,
-        `ZIP local entry is missing from the central directory: ${file.name}`,
-      ))
+      fail(
+        new ArchiveFormatError(
+          'local-entry-mismatch',
+          file.name,
+          `ZIP local entry is missing from the central directory: ${file.name}`,
+        ),
+      )
       return
     }
 
@@ -616,11 +633,13 @@ const extractSelectedEntriesStreaming = (
 
     if (!selectedNames.has(file.name)) return
     if (central.compression !== 0 && central.compression !== 8) {
-      fail(new ArchiveFormatError(
-        'unsupported-compression',
-        file.name,
-        `Unsupported ZIP compression method ${central.compression} for ${file.name}`,
-      ))
+      fail(
+        new ArchiveFormatError(
+          'unsupported-compression',
+          file.name,
+          `Unsupported ZIP compression method ${central.compression} for ${file.name}`,
+        ),
+      )
       return
     }
 
@@ -641,11 +660,13 @@ const extractSelectedEntriesStreaming = (
       const nextFileSize = outputOffset + chunk.byteLength
       const nextTotalSize = actualExtractedBytes + chunk.byteLength
       if (!Number.isSafeInteger(nextFileSize) || nextFileSize > central.originalSize) {
-        abortOutput(new ArchiveFormatError(
-          'actual-size-mismatch',
-          file.name,
-          `ZIP entry output exceeds its declared original size: ${file.name}`,
-        ))
+        abortOutput(
+          new ArchiveFormatError(
+            'actual-size-mismatch',
+            file.name,
+            `ZIP entry output exceeds its declared original size: ${file.name}`,
+          ),
+        )
       }
       if (nextFileSize > limits.maxFileBytes) {
         abortOutput(new ArchiveLimitError('file-size', nextFileSize, limits.maxFileBytes))
@@ -654,14 +675,17 @@ const extractSelectedEntriesStreaming = (
         abortOutput(new ArchiveLimitError('image-size', nextFileSize, limits.maxImageBytes))
       }
       if (!Number.isSafeInteger(nextTotalSize) || nextTotalSize > limits.maxExtractedBytes) {
-        abortOutput(new ArchiveLimitError('extracted-size', nextTotalSize, limits.maxExtractedBytes))
+        abortOutput(
+          new ArchiveLimitError('extracted-size', nextTotalSize, limits.maxExtractedBytes),
+        )
       }
       if (nextFileSize >= limits.compressionRatioMinBytes && nextFileSize > 0) {
-        const actualRatio = central.size === 0
-          ? Number.POSITIVE_INFINITY
-          : nextFileSize / central.size
+        const actualRatio =
+          central.size === 0 ? Number.POSITIVE_INFINITY : nextFileSize / central.size
         if (actualRatio > limits.maxCompressionRatio) {
-          abortOutput(new ArchiveLimitError('compression-ratio', actualRatio, limits.maxCompressionRatio))
+          abortOutput(
+            new ArchiveLimitError('compression-ratio', actualRatio, limits.maxCompressionRatio),
+          )
         }
       }
 
@@ -671,18 +695,22 @@ const extractSelectedEntriesStreaming = (
 
       if (!final) return
       if (outputOffset !== central.originalSize) {
-        abortOutput(new ArchiveFormatError(
-          'actual-size-mismatch',
-          file.name,
-          `ZIP entry output does not match its declared original size: ${file.name}`,
-        ))
+        abortOutput(
+          new ArchiveFormatError(
+            'actual-size-mismatch',
+            file.name,
+            `ZIP entry output does not match its declared original size: ${file.name}`,
+          ),
+        )
       }
       if (file.originalSize !== undefined && outputOffset !== file.originalSize) {
-        abortOutput(new ArchiveFormatError(
-          'actual-size-mismatch',
-          file.name,
-          `ZIP entry output does not match its local declared size: ${file.name}`,
-        ))
+        abortOutput(
+          new ArchiveFormatError(
+            'actual-size-mismatch',
+            file.name,
+            `ZIP entry output does not match its local declared size: ${file.name}`,
+          ),
+        )
       }
       files[file.name] = output
       completedNames.add(file.name)
@@ -751,10 +779,7 @@ export const extractZipEntriesWithinLimits = (
   return extractInspectedZipEntriesWithinLimits(data, entries, shouldExtract, limits)
 }
 
-export const createStoredFileMetadata = (
-  name: string,
-  size: number,
-): ArchiveEntryMetadata => ({
+export const createStoredFileMetadata = (name: string, size: number): ArchiveEntryMetadata => ({
   name,
   size,
   originalSize: size,

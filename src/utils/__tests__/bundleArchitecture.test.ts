@@ -1,9 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const readRepositoryFile = (relativePath: string) => (
+const readRepositoryFile = (relativePath: string) =>
   readFileSync(new URL(`../../../${relativePath}`, import.meta.url), 'utf8')
-)
 
 describe('large browser dependency loading', () => {
   it('runs ELK in a separately loaded web worker outside SSR tests', () => {

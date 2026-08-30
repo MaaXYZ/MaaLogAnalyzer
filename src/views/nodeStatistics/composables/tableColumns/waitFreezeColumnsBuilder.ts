@@ -3,7 +3,9 @@ import type { WaitFreezeStatistics } from '@windsland52/maa-log-parser/node-stat
 import { formatDuration } from '../../../../utils/formatDuration'
 import { renderSuccessRateProgress } from './renderers'
 
-export const buildWaitFreezeColumns = (isMobile: boolean): DataTableColumns<WaitFreezeStatistics> => {
+export const buildWaitFreezeColumns = (
+  isMobile: boolean,
+): DataTableColumns<WaitFreezeStatistics> => {
   if (isMobile) {
     return [
       {

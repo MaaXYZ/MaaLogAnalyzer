@@ -10,9 +10,7 @@ interface SourceSelectionActionOptions {
   resetSearchResultsOnly: () => void
 }
 
-export const createSourceSelectionActions = (
-  options: SourceSelectionActionOptions,
-) => {
+export const createSourceSelectionActions = (options: SourceSelectionActionOptions) => {
   const invalidateCurrentSource = (trackUserIntent: boolean) => {
     if (trackUserIntent) {
       options.sourceIntentGeneration.value += 1

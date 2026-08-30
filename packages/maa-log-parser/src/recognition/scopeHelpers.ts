@@ -8,7 +8,7 @@ import type {
 
 const cloneUnifiedFlowItem = (
   item: UnifiedFlowItem,
-  cloneRecognitionAttempt: (attempt: RecognitionAttempt) => RecognitionAttempt
+  cloneRecognitionAttempt: (attempt: RecognitionAttempt) => RecognitionAttempt,
 ): UnifiedFlowItem => {
   return {
     ...item,
@@ -18,7 +18,7 @@ const cloneUnifiedFlowItem = (
 
 export const cloneNestedActionGroup = (
   group: NestedActionGroup,
-  cloneRecognitionAttempt: (attempt: RecognitionAttempt) => RecognitionAttempt
+  cloneRecognitionAttempt: (attempt: RecognitionAttempt) => RecognitionAttempt,
 ): NestedActionGroup => {
   return {
     ...group,
@@ -29,14 +29,16 @@ export const cloneNestedActionGroup = (
         ? action.node_flow.map((item) => cloneUnifiedFlowItem(item, cloneRecognitionAttempt))
         : undefined,
       recognitions: (action.recognitions ?? []).map(cloneRecognitionAttempt),
-      child_tasks: action.child_tasks?.map((child) => cloneNestedActionGroup(child, cloneRecognitionAttempt)),
+      child_tasks: action.child_tasks?.map((child) =>
+        cloneNestedActionGroup(child, cloneRecognitionAttempt),
+      ),
     })),
   }
 }
 
 const traverseNestedActionNodes = (
   groups: NestedActionGroup[],
-  visitor: (action: NestedActionNode) => boolean
+  visitor: (action: NestedActionNode) => boolean,
 ): boolean => {
   for (const group of groups) {
     for (const action of group.nested_actions ?? []) {
@@ -70,7 +72,7 @@ interface AttachAcrossScopesParams {
 export const attachActionLevelRecognitionAcrossScopes = (params: AttachAcrossScopesParams) => {
   const mergedTopLevelAttempts = params.topLevelAttempts.map(params.cloneRecognitionAttempt)
   const mergedNestedGroups = params.nestedActionGroups.map((group) =>
-    cloneNestedActionGroup(group, params.cloneRecognitionAttempt)
+    cloneNestedActionGroup(group, params.cloneRecognitionAttempt),
   )
   const remaining: RecognitionAttempt[] = []
   const orderedNodes = params.sortByParseOrderThenRecoId(params.actionLevelNodes)
@@ -87,10 +89,10 @@ export const attachActionLevelRecognitionAcrossScopes = (params: AttachAcrossSco
     if (attached) continue
 
     const nodeMeta = params.recognitionOrderMeta.get(node)
-    const canAttachToTopLevel = mergedTopLevelAttempts.length > 0 && (
-      params.actionStartOrder == null ||
-      (nodeMeta != null && nodeMeta.startSeq < params.actionStartOrder)
-    )
+    const canAttachToTopLevel =
+      mergedTopLevelAttempts.length > 0 &&
+      (params.actionStartOrder == null ||
+        (nodeMeta != null && nodeMeta.startSeq < params.actionStartOrder))
     if (canAttachToTopLevel) {
       const idx = params.pickBestAttemptIndex(mergedTopLevelAttempts, node)
       if (idx >= 0) {
@@ -115,18 +117,17 @@ export const splitRecognitionAttemptsByActionWindow = (
   attempts: RecognitionAttempt[],
   recognitionOrderMeta: WeakMap<RecognitionAttempt, RecognitionOrderMeta>,
   actionStartOrder?: number,
-  actionEndOrder?: number
+  actionEndOrder?: number,
 ) => {
   const topLevel: RecognitionAttempt[] = []
   const actionLevel: RecognitionAttempt[] = []
   for (const attempt of attempts) {
     const attemptMeta = recognitionOrderMeta.get(attempt)
-    const inActionWindow = (
+    const inActionWindow =
       actionStartOrder != null &&
       attemptMeta != null &&
       attemptMeta.endSeq >= actionStartOrder &&
       (actionEndOrder == null || attemptMeta.startSeq <= actionEndOrder)
-    )
     if (inActionWindow) {
       actionLevel.push(attempt)
     } else {
@@ -138,10 +139,8 @@ export const splitRecognitionAttemptsByActionWindow = (
 
 export const resolveFallbackRecoDetails = (
   details: Record<string, any>,
-  recognitions: RecognitionAttempt[]
+  recognitions: RecognitionAttempt[],
 ): NodeInfo['reco_details'] => {
   if (details.reco_details) return details.reco_details
-  return recognitions.length > 0
-    ? recognitions[recognitions.length - 1].reco_details
-    : undefined
+  return recognitions.length > 0 ? recognitions[recognitions.length - 1].reco_details : undefined
 }

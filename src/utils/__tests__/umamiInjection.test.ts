@@ -16,21 +16,28 @@ describe('Umami analytics injection', () => {
   })
 
   it('never injects a remote script into Tauri builds', () => {
-    expect(resolveUmamiWebsiteId({
-      MLA_UMAMI_WEBSITE_ID: WEBSITE_ID,
-      TAURI_ENV_PLATFORM: 'windows',
-    })).toBeNull()
-    expect(resolveUmamiWebsiteId({
-      MLA_UMAMI_WEBSITE_ID: WEBSITE_ID,
-      TAURI_DEV_HOST: '127.0.0.1',
-    })).toBeNull()
+    expect(
+      resolveUmamiWebsiteId({
+        MLA_UMAMI_WEBSITE_ID: WEBSITE_ID,
+        TAURI_ENV_PLATFORM: 'windows',
+      }),
+    ).toBeNull()
+    expect(
+      resolveUmamiWebsiteId({
+        MLA_UMAMI_WEBSITE_ID: WEBSITE_ID,
+        TAURI_DEV_HOST: '127.0.0.1',
+      }),
+    ).toBeNull()
   })
 
   it('rejects a website id that is not a UUID', () => {
-    expect(() => resolveUmamiWebsiteId({ MLA_UMAMI_WEBSITE_ID: 'not-a-uuid' }))
-      .toThrow(/must be a UUID/)
-    expect(() => resolveUmamiWebsiteId({
-      MLA_UMAMI_WEBSITE_ID: `${WEBSITE_ID}" onload="alert(1)`,
-    })).toThrow(/must be a UUID/)
+    expect(() => resolveUmamiWebsiteId({ MLA_UMAMI_WEBSITE_ID: 'not-a-uuid' })).toThrow(
+      /must be a UUID/,
+    )
+    expect(() =>
+      resolveUmamiWebsiteId({
+        MLA_UMAMI_WEBSITE_ID: `${WEBSITE_ID}" onload="alert(1)`,
+      }),
+    ).toThrow(/must be a UUID/)
   })
 })

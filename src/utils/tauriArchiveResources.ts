@@ -6,9 +6,7 @@ export interface TauriArchiveResourceOwner {
   dispose: () => Promise<void>
 }
 
-export const releaseTauriArchiveResource = async (
-  token?: string | null,
-): Promise<void> => {
+export const releaseTauriArchiveResource = async (token?: string | null): Promise<void> => {
   if (!token) return
   await invoke('release_archive_resource', { token })
 }

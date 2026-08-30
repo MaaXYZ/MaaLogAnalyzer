@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import {
-  NCard, NDescriptions, NDescriptionsItem, NTag, NFlex, NButton,
-  NText, NCollapse,
+  NCard,
+  NDescriptions,
+  NDescriptionsItem,
+  NTag,
+  NFlex,
+  NButton,
+  NText,
+  NCollapse,
 } from 'naive-ui'
 import type { NodeInfo } from '../../../types'
 import { getRuntimeStatusTagType, getRuntimeStatusText } from '../../../utils/runtimeStatus'
@@ -34,7 +40,9 @@ watch(
   },
 )
 
-const actionDetailRows = computed(() => buildActionDetailRows(props.currentActionDetails, props.descriptionColumns))
+const actionDetailRows = computed(() =>
+  buildActionDetailRows(props.currentActionDetails, props.descriptionColumns),
+)
 
 // 动作原文定位：用节点名检索更可靠（动作类型如 click 太泛），时间戳优先用动作自身的
 const handleSearchInSource = () => {
@@ -66,7 +74,10 @@ const handleSearchInSource = () => {
       </n-descriptions-item>
 
       <n-descriptions-item label="动作类型">
-        <n-tag size="small" :type="props.currentActionDetails?.action === 'DoNothing' ? 'default' : 'primary'">
+        <n-tag
+          size="small"
+          :type="props.currentActionDetails?.action === 'DoNothing' ? 'default' : 'primary'"
+        >
           {{ props.currentActionDetails?.action || 'Unknown' }}
         </n-tag>
       </n-descriptions-item>
@@ -76,7 +87,14 @@ const handleSearchInSource = () => {
       </n-descriptions-item>
 
       <n-descriptions-item label="执行结果">
-        <n-tag :type="props.currentActionStatus ? getRuntimeStatusTagType(props.currentActionStatus) : 'default'" size="small">
+        <n-tag
+          :type="
+            props.currentActionStatus
+              ? getRuntimeStatusTagType(props.currentActionStatus)
+              : 'default'
+          "
+          size="small"
+        >
           {{ props.currentActionStatus ? getRuntimeStatusText(props.currentActionStatus) : '-' }}
         </n-tag>
       </n-descriptions-item>
@@ -85,10 +103,12 @@ const handleSearchInSource = () => {
         {{ props.actionExecutionTime }}
       </n-descriptions-item>
 
-      <n-descriptions-item label="目标位置" :span="props.descriptionColumns" v-if="props.currentActionDetails?.box">
-        <n-text code>
-          [{{ props.currentActionDetails.box.join(', ') }}]
-        </n-text>
+      <n-descriptions-item
+        label="目标位置"
+        :span="props.descriptionColumns"
+        v-if="props.currentActionDetails?.box"
+      >
+        <n-text code> [{{ props.currentActionDetails.box.join(', ') }}] </n-text>
       </n-descriptions-item>
 
       <n-descriptions-item
@@ -103,7 +123,10 @@ const handleSearchInSource = () => {
       </n-descriptions-item>
     </n-descriptions>
 
-    <div v-if="props.currentActionStatus === 'failed' && props.actionErrorImage" style="margin-top: 12px">
+    <div
+      v-if="props.currentActionStatus === 'failed' && props.actionErrorImage"
+      style="margin-top: 12px"
+    >
       <n-flex align="center" justify="space-between" style="margin-bottom: 8px">
         <n-text depth="3" style="font-size: 13px">失败截图</n-text>
         <n-button

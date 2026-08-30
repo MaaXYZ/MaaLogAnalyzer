@@ -1,13 +1,4 @@
-import {
-  appendFile,
-  mkdtemp,
-  open,
-  rename,
-  rm,
-  symlink,
-  utimes,
-  writeFile,
-} from 'node:fs/promises'
+import { appendFile, mkdtemp, open, rename, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -17,10 +8,14 @@ import { InputFileError, readBoundedRegularFile } from '../boundedFileReader'
 const tempRoots: string[] = []
 
 afterEach(async () => {
-  await Promise.all(tempRoots.splice(0, tempRoots.length).map((root) => rm(root, {
-    recursive: true,
-    force: true,
-  })))
+  await Promise.all(
+    tempRoots.splice(0, tempRoots.length).map((root) =>
+      rm(root, {
+        recursive: true,
+        force: true,
+      }),
+    ),
+  )
 })
 
 const makeTempRoot = async (): Promise<string> => {
@@ -36,18 +31,20 @@ describe('bounded regular-file reader', () => {
     await writeFile(filePath, new Uint8Array(70 * 1024))
     let appended = false
 
-    await expect(readBoundedRegularFile(
-      filePath,
-      75 * 1024,
-      (actual) => new ArchiveLimitError('file-size', actual, 75 * 1024),
-      {
-        onChunkRead: async () => {
-          if (appended) return
-          appended = true
-          await appendFile(filePath, new Uint8Array(10 * 1024))
+    await expect(
+      readBoundedRegularFile(
+        filePath,
+        75 * 1024,
+        (actual) => new ArchiveLimitError('file-size', actual, 75 * 1024),
+        {
+          onChunkRead: async () => {
+            if (appended) return
+            appended = true
+            await appendFile(filePath, new Uint8Array(10 * 1024))
+          },
         },
-      },
-    )).rejects.toMatchObject({
+      ),
+    ).rejects.toMatchObject({
       name: 'ArchiveLimitError',
       code: 'file-size',
     })
@@ -60,19 +57,21 @@ describe('bounded regular-file reader', () => {
     await writeFile(filePath, new Uint8Array(70 * 1024))
     let swapped = false
 
-    await expect(readBoundedRegularFile(
-      filePath,
-      128 * 1024,
-      (actual) => new ArchiveLimitError('file-size', actual, 128 * 1024),
-      {
-        onChunkRead: async () => {
-          if (swapped) return
-          swapped = true
-          await rename(filePath, movedPath)
-          await writeFile(filePath, 'replacement')
+    await expect(
+      readBoundedRegularFile(
+        filePath,
+        128 * 1024,
+        (actual) => new ArchiveLimitError('file-size', actual, 128 * 1024),
+        {
+          onChunkRead: async () => {
+            if (swapped) return
+            swapped = true
+            await rename(filePath, movedPath)
+            await writeFile(filePath, 'replacement')
+          },
         },
-      },
-    )).rejects.toMatchObject({
+      ),
+    ).rejects.toMatchObject({
       name: 'InputFileError',
       code: 'identity-changed',
     })
@@ -84,25 +83,27 @@ describe('bounded regular-file reader', () => {
     await writeFile(filePath, new Uint8Array(128 * 1024))
     let mutated = false
 
-    await expect(readBoundedRegularFile(
-      filePath,
-      128 * 1024,
-      (actual) => new ArchiveLimitError('file-size', actual, 128 * 1024),
-      {
-        onChunkRead: async () => {
-          if (mutated) return
-          mutated = true
-          const writer = await open(filePath, 'r+')
-          try {
-            await writer.write(new Uint8Array([1]), 0, 1, 70 * 1024)
-          } finally {
-            await writer.close()
-          }
-          const changedTime = new Date('2000-01-01T00:00:00.000Z')
-          await utimes(filePath, changedTime, changedTime)
+    await expect(
+      readBoundedRegularFile(
+        filePath,
+        128 * 1024,
+        (actual) => new ArchiveLimitError('file-size', actual, 128 * 1024),
+        {
+          onChunkRead: async () => {
+            if (mutated) return
+            mutated = true
+            const writer = await open(filePath, 'r+')
+            try {
+              await writer.write(new Uint8Array([1]), 0, 1, 70 * 1024)
+            } finally {
+              await writer.close()
+            }
+            const changedTime = new Date('2000-01-01T00:00:00.000Z')
+            await utimes(filePath, changedTime, changedTime)
+          },
         },
-      },
-    )).rejects.toMatchObject({
+      ),
+    ).rejects.toMatchObject({
       name: 'InputFileError',
       code: 'content-changed',
     })
@@ -120,10 +121,12 @@ describe('bounded regular-file reader', () => {
       throw error
     }
 
-    await expect(readBoundedRegularFile(
-      linkPath,
-      1024,
-      (actual) => new ArchiveLimitError('file-size', actual, 1024),
-    )).rejects.toBeInstanceOf(InputFileError)
+    await expect(
+      readBoundedRegularFile(
+        linkPath,
+        1024,
+        (actual) => new ArchiveLimitError('file-size', actual, 1024),
+      ),
+    ).rejects.toBeInstanceOf(InputFileError)
   })
 })

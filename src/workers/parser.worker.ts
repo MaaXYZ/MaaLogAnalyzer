@@ -13,13 +13,10 @@ const post = (message: LogParserWorkerResponse): void => {
   self.postMessage(message)
 }
 
-const toParseSourceInput = (
-  input: LogParserWorkerInput,
-  index: number,
-): ParseSourceInput => {
+const toParseSourceInput = (input: LogParserWorkerInput, index: number): ParseSourceInput => {
   const content = input.bytes
     ? decodeFileContent(new Uint8Array(input.bytes))
-    : input.content ?? ''
+    : (input.content ?? '')
   // The transferred backing store is otherwise retained by request.inputs for
   // the whole parse. Drop it as soon as its string has been materialized.
   input.bytes = undefined
@@ -54,12 +51,9 @@ self.onmessage = async (event: MessageEvent<LogParserWorkerRequest>) => {
       ? sortPrimaryLogParseInputs(decodedInputs)
       : decodedInputs
 
-    await parser.parseInputs(
-      parseInputs,
-      (progress) => {
-        post({ type: 'progress', requestId, percentage: progress.percentage })
-      },
-    )
+    await parser.parseInputs(parseInputs, (progress) => {
+      post({ type: 'progress', requestId, percentage: progress.percentage })
+    })
 
     post({ type: 'result', requestId, tasks: parser.consumeTasks() })
   } catch (error) {

@@ -12,11 +12,11 @@ export const getErrorMessage = (err: unknown): string => {
   if (err instanceof Error) {
     return err.message
   }
-  
+
   if (typeof err === 'string') {
     return err
   }
-  
+
   // 尝试转换为字符串
   try {
     return String(err)
@@ -34,6 +34,6 @@ export const getDetailedErrorMessage = (err: unknown): string => {
   if (err instanceof Error) {
     return err.stack || err.message
   }
-  
+
   return getErrorMessage(err)
 }

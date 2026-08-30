@@ -18,14 +18,18 @@ const source = (content: string): FrameworkLogSource => ({
 
 describe('extractFrameworkSessions', () => {
   it('keeps two framework versions in one file as separate runtime sessions', () => {
-    const extraction = extractFrameworkSessions([source([
-      line('2026-07-01 10:00:00.000', 'Logger', 'MAA Process Start'),
-      line('2026-07-01 10:00:00.010', 'Logger', 'Version v5.10.4'),
-      line('2026-07-01 10:05:00.000', 'Tasker', 'first run'),
-      line('2026-07-02 09:00:00.000', 'Logger', 'MAA Process Start'),
-      line('2026-07-02 09:00:00.010', 'Logger', 'Version v5.11.1'),
-      line('2026-07-02 09:05:00.000', 'Tasker', 'second run'),
-    ].join('\n'))])
+    const extraction = extractFrameworkSessions([
+      source(
+        [
+          line('2026-07-01 10:00:00.000', 'Logger', 'MAA Process Start'),
+          line('2026-07-01 10:00:00.010', 'Logger', 'Version v5.10.4'),
+          line('2026-07-01 10:05:00.000', 'Tasker', 'first run'),
+          line('2026-07-02 09:00:00.000', 'Logger', 'MAA Process Start'),
+          line('2026-07-02 09:00:00.010', 'Logger', 'Version v5.11.1'),
+          line('2026-07-02 09:05:00.000', 'Tasker', 'second run'),
+        ].join('\n'),
+      ),
+    ])
 
     expect(extraction.summary).toEqual({
       status: 'multiple',
@@ -45,17 +49,20 @@ describe('extractFrameworkSessions', () => {
       start: { line: 4 },
       end: { line: 6 },
     })
-    expect(resolveFrameworkSessionForTimestamp(
-      extraction,
-      '2026-07-02 09:04:00.000',
-    )?.version).toBe('v5.11.1')
+    expect(
+      resolveFrameworkSessionForTimestamp(extraction, '2026-07-02 09:04:00.000')?.version,
+    ).toBe('v5.11.1')
   })
 
   it('does not treat non-Logger version text as framework evidence', () => {
-    const extraction = extractFrameworkSessions([source([
-      line('2026-07-01 10:00:00.000', 'Logger', 'MAA Process Start'),
-      line('2026-07-01 10:00:00.010', 'GUI', 'MaaFramework Version v9.9.9'),
-    ].join('\n'))])
+    const extraction = extractFrameworkSessions([
+      source(
+        [
+          line('2026-07-01 10:00:00.000', 'Logger', 'MAA Process Start'),
+          line('2026-07-01 10:00:00.010', 'GUI', 'MaaFramework Version v9.9.9'),
+        ].join('\n'),
+      ),
+    ])
 
     expect(extraction.summary).toEqual({ status: 'none', versions: [] })
     expect(extraction.sessions[0]).toMatchObject({
@@ -65,11 +72,15 @@ describe('extractFrameworkSessions', () => {
   })
 
   it('reports conflicting Logger version headers in the same runtime session', () => {
-    const extraction = extractFrameworkSessions([source([
-      line('2026-07-01 10:00:00.000', 'Logger', 'MAA Process Start'),
-      line('2026-07-01 10:00:00.010', 'Logger', 'Version v5.10.4'),
-      line('2026-07-01 10:00:00.020', 'Logger', 'Version v5.11.1'),
-    ].join('\n'))])
+    const extraction = extractFrameworkSessions([
+      source(
+        [
+          line('2026-07-01 10:00:00.000', 'Logger', 'MAA Process Start'),
+          line('2026-07-01 10:00:00.010', 'Logger', 'Version v5.10.4'),
+          line('2026-07-01 10:00:00.020', 'Logger', 'Version v5.11.1'),
+        ].join('\n'),
+      ),
+    ])
 
     expect(extraction.summary.status).toBe('conflict')
     expect(extraction.sessions[0]).toMatchObject({
@@ -80,15 +91,16 @@ describe('extractFrameworkSessions', () => {
   })
 
   it('does not resolve timestamps against a partial file segment', () => {
-    const extraction = extractFrameworkSessions([source([
-      line('2026-07-01 10:00:00.010', 'Logger', 'Version v5.10.4'),
-      line('2026-07-01 10:05:00.000', 'Tasker', 'continued run'),
-    ].join('\n'))])
+    const extraction = extractFrameworkSessions([
+      source(
+        [
+          line('2026-07-01 10:00:00.010', 'Logger', 'Version v5.10.4'),
+          line('2026-07-01 10:05:00.000', 'Tasker', 'continued run'),
+        ].join('\n'),
+      ),
+    ])
 
     expect(extraction.sessions[0]?.startKind).toBe('partial_file')
-    expect(resolveFrameworkSessionForTimestamp(
-      extraction,
-      '2026-07-01 10:04:00.000',
-    )).toBeNull()
+    expect(resolveFrameworkSessionForTimestamp(extraction, '2026-07-01 10:04:00.000')).toBeNull()
   })
 })

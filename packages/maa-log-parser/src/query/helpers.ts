@@ -25,17 +25,11 @@ const fail = <T>(error: QueryErrorCode, message: string): QueryResult<T> => ({
   message,
 })
 
-export const findScopeById = (
-  index: TraceIndex,
-  scopeId: string,
-): ScopeNode | null => {
+export const findScopeById = (index: TraceIndex, scopeId: string): ScopeNode | null => {
   return index.scopeById.get(scopeId) ?? null
 }
 
-export const findScopesByLocator = (
-  index: TraceIndex,
-  locator: ScopeLocator,
-): ScopeNode[] => {
+export const findScopesByLocator = (index: TraceIndex, locator: ScopeLocator): ScopeNode[] => {
   if (hasScopeId(locator)) {
     const scope = findScopeById(index, locator.scopeId)
     return scope ? [scope] : []
@@ -130,9 +124,7 @@ const readScopeName = (scope: ScopeNode): string | undefined => {
   return typeof payload.name === 'string' ? payload.name : undefined
 }
 
-const readScopeStartSource = (
-  scope: ScopeNode,
-): ProtocolEvent['source'] | undefined => {
+const readScopeStartSource = (scope: ScopeNode): ProtocolEvent['source'] | undefined => {
   const payload = scope.payload as Record<string, unknown> | null | undefined
   if (!payload) return undefined
   const startEvent = payload.startEvent
@@ -193,10 +185,7 @@ const collectScopeEventEntries = (
   return ok([...entriesBySeq.values()].sort((left, right) => left.event.seq - right.event.seq))
 }
 
-const toTimelineItems = (
-  index: TraceIndex,
-  execution: NodeExecutionRef,
-): ScopeTimeline[] => {
+const toTimelineItems = (index: TraceIndex, execution: NodeExecutionRef): ScopeTimeline[] => {
   const eventsResult = collectScopeEventEntries(index, execution.pipelineScopeId)
   if (!eventsResult.ok) return []
 
@@ -235,9 +224,8 @@ const toNextListHistoryItems = (
     const payload = scope.payload as Record<string, unknown> | null | undefined
     const rawCandidates = Array.isArray(payload?.list) ? payload.list : []
     const source = readScopeStartSource(scope)
-    const outcome: NextListHistoryItem['outcome'] = scope.status === 'running'
-      ? 'unknown'
-      : scope.status
+    const outcome: NextListHistoryItem['outcome'] =
+      scope.status === 'running' ? 'unknown' : scope.status
     return {
       scopeId: scope.id,
       occurrenceIndex: execution.occurrenceIndex,
@@ -258,10 +246,7 @@ const toNextListHistoryItems = (
   return items
 }
 
-const applyQueryLimit = <T>(
-  items: T[],
-  limit?: number,
-): QueryResult<T[]> => {
+const applyQueryLimit = <T>(items: T[], limit?: number): QueryResult<T[]> => {
   if (limit == null) return ok(items)
   if (!Number.isSafeInteger(limit) || limit < 0) {
     return fail('invalid_locator', 'limit must be a non-negative safe integer')
@@ -295,9 +280,7 @@ export const getScopeEvents = (
   scopeId: string,
 ): QueryResult<ProtocolEvent[]> => {
   const entries = collectScopeEventEntries(index, scopeId)
-  return entries.ok
-    ? ok(entries.value.map(({ event }) => event))
-    : entries
+  return entries.ok ? ok(entries.value.map(({ event }) => event)) : entries
 }
 
 export const getNodeTimeline = (
@@ -334,7 +317,9 @@ export const createQueryHelpers = (index: TraceIndex) => ({
   findNodeExecutions: (taskId: number, nodeId: number) => findNodeExecutions(index, taskId, nodeId),
   findNodeExecution: (locator: UniqueScopeLocator) => findNodeExecution(index, locator),
   getParentChain: (locator: UniqueScopeLocator) => getParentChain(index, locator),
-  getNodeTimeline: (locator: NodeExecutionLocator, limit?: number) => getNodeTimeline(index, locator, limit),
-  getNextListHistory: (locator: NodeExecutionLocator, limit?: number) => getNextListHistory(index, locator, limit),
+  getNodeTimeline: (locator: NodeExecutionLocator, limit?: number) =>
+    getNodeTimeline(index, locator, limit),
+  getNextListHistory: (locator: NodeExecutionLocator, limit?: number) =>
+    getNextListHistory(index, locator, limit),
   getScopeEvents: (scopeId: string) => getScopeEvents(index, scopeId),
 })

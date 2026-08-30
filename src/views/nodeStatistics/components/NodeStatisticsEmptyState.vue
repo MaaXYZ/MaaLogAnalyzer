@@ -1,13 +1,6 @@
 <script setup lang="ts">
 import type { UploadFileInfo } from 'naive-ui'
-import {
-  NButton,
-  NEmpty,
-  NIcon,
-  NText,
-  NUpload,
-  NUploadDragger,
-} from 'naive-ui'
+import { NButton, NEmpty, NIcon, NText, NUpload, NUploadDragger } from 'naive-ui'
 import { CloudUploadOutlined, FolderOpenOutlined } from '@vicons/antd'
 
 const props = defineProps<{
@@ -25,10 +18,7 @@ const emit = defineEmits<{
 
 <template>
   <div style="padding: 40px">
-    <n-empty
-      v-if="props.isVscodeLaunchEmbed"
-      description="请先在分析视图中加载日志"
-    >
+    <n-empty v-if="props.isVscodeLaunchEmbed" description="请先在分析视图中加载日志">
       <template #extra>
         <n-text depth="3">
           VS Code iframe 中的运行统计会复用当前已加载的日志数据，不单独提供导入入口。
@@ -68,9 +58,7 @@ const emit = defineEmits<{
             <cloud-upload-outlined />
           </n-icon>
         </div>
-        <n-text style="font-size: 16px">
-          点击或拖拽日志文件到此区域上传
-        </n-text>
+        <n-text style="font-size: 16px"> 点击或拖拽日志文件到此区域上传 </n-text>
         <n-text depth="3" style="margin-top: 8px">
           支持 .log、.txt 和 .zip 格式的 MAA 日志文件
         </n-text>

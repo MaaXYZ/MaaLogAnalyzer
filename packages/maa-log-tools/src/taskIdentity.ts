@@ -32,8 +32,10 @@ export const isSameTask = (
   if (left === right) return true
 
   if (
-    typeof left._startEventIndex === 'number' && left._startEventIndex >= 0
-    && typeof right._startEventIndex === 'number' && right._startEventIndex >= 0
+    typeof left._startEventIndex === 'number' &&
+    left._startEventIndex >= 0 &&
+    typeof right._startEventIndex === 'number' &&
+    right._startEventIndex >= 0
   ) {
     return left._startEventIndex === right._startEventIndex
   }
@@ -47,12 +49,12 @@ export const isSameTask = (
 }
 
 export const findTaskIndex = (tasks: TaskInfo[], target: TaskInfo): number => {
-  const byRef = tasks.findIndex(task => task === target)
+  const byRef = tasks.findIndex((task) => task === target)
   if (byRef >= 0) return byRef
 
-  const byIdentity = tasks.findIndex(task => isSameTask(task, target))
+  const byIdentity = tasks.findIndex((task) => isSameTask(task, target))
   if (byIdentity >= 0) return byIdentity
 
   const targetIdentity = buildTaskIdentity(target)
-  return tasks.findIndex(task => buildTaskIdentity(task) === targetIdentity)
+  return tasks.findIndex((task) => buildTaskIdentity(task) === targetIdentity)
 }

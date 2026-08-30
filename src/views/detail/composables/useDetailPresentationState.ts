@@ -67,20 +67,31 @@ export const useDetailPresentationState = (options: UseDetailPresentationStateOp
   })
 
   const showFlowFallback = computed(() => {
-    return !!options.selectedFlowItem.value && !options.hasRecognition.value && !options.hasAction.value
+    return (
+      !!options.selectedFlowItem.value && !options.hasRecognition.value && !options.hasAction.value
+    )
   })
 
   const getFlowTypeLabel = (type: UnifiedFlowItem['type']) => {
     switch (type) {
-      case 'task': return 'Task'
-      case 'pipeline_node': return 'PipelineNode'
-      case 'resource_loading': return 'Resource.Loading'
-      case 'recognition': return 'Recognition'
-      case 'recognition_node': return 'RecognitionNode'
-      case 'wait_freezes': return 'WaitFreezes'
-      case 'action': return 'Action'
-      case 'action_node': return 'ActionNode'
-      default: return type
+      case 'task':
+        return 'Task'
+      case 'pipeline_node':
+        return 'PipelineNode'
+      case 'resource_loading':
+        return 'Resource.Loading'
+      case 'recognition':
+        return 'Recognition'
+      case 'recognition_node':
+        return 'RecognitionNode'
+      case 'wait_freezes':
+        return 'WaitFreezes'
+      case 'action':
+        return 'Action'
+      case 'action_node':
+        return 'ActionNode'
+      default:
+        return type
     }
   }
 
@@ -92,7 +103,9 @@ export const useDetailPresentationState = (options: UseDetailPresentationStateOp
     return true
   })
 
-  const nodeCompletedValue = computed(() => options.selectedNode.value?.node_details?.completed ?? false)
+  const nodeCompletedValue = computed(
+    () => options.selectedNode.value?.node_details?.completed ?? false,
+  )
 
   const descriptionColumns = computed(() => (options.isMobile.value ? 1 : 2))
 

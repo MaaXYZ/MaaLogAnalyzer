@@ -28,5 +28,5 @@ export const sortNodesByGlobalExecutionOrder = (nodes: readonly NodeInfo[]): Nod
       }
       return left.index - right.index
     })
-    .map(item => item.node)
+    .map((item) => item.node)
 }

@@ -20,9 +20,7 @@ export interface ParseInWorkerParams {
   onProgress?: (percentage: number) => void
 }
 
-export const isLogParserWorkerSupported = (): boolean => (
-  typeof Worker !== 'undefined'
-)
+export const isLogParserWorkerSupported = (): boolean => typeof Worker !== 'undefined'
 
 /**
  * 在 Worker 中解析日志。
@@ -48,9 +46,7 @@ export const parseLogsInWorker = ({
     worker = new LogParserWorker()
   } catch (error) {
     return Promise.reject(
-      new LogParserWorkerUnavailableError(
-        error instanceof Error ? error.message : String(error),
-      ),
+      new LogParserWorkerUnavailableError(error instanceof Error ? error.message : String(error)),
     )
   }
 

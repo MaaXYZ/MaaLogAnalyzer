@@ -2,7 +2,8 @@
 import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from '@vicons/antd'
 import type { MergedRecognitionItem, NodeInfo, UnifiedFlowItem } from '../types'
 
-type StatusIconState = NodeInfo['status'] | UnifiedFlowItem['status'] | MergedRecognitionItem['status']
+type StatusIconState =
+  NodeInfo['status'] | UnifiedFlowItem['status'] | MergedRecognitionItem['status']
 
 defineProps<{
   status: StatusIconState

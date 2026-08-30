@@ -82,7 +82,7 @@ export interface RecognitionOccurrenceSample {
   attemptCount: number
   unsuccessfulAttempts: number
   terminalMatch: string | null
-  evidence: { start: RuntimeEvidencePosition, end: RuntimeEvidencePosition }
+  evidence: { start: RuntimeEvidencePosition; end: RuntimeEvidencePosition }
 }
 
 export interface RepeatedNodeOccurrenceSample {
@@ -99,11 +99,11 @@ export interface RecognitionActivitySignal extends RuntimeScope {
   signalId: string
   kind: 'recognition_activity'
   pipelineNodeName: string
-  nextList: { name: string, anchor: boolean, jumpBack: boolean }[]
+  nextList: { name: string; anchor: boolean; jumpBack: boolean }[]
   occurrenceCount: number
   occurrencesWithMixedResults: number
-  terminalOutcomes: { matched: number, timeout: number, running: number, unmatched: number }
-  terminalMatches: { name: string, count: number }[]
+  terminalOutcomes: { matched: number; timeout: number; running: number; unmatched: number }
+  terminalMatches: { name: string; count: number }[]
   candidateStatistics: {
     name: string
     evaluationCount: number
@@ -133,7 +133,7 @@ export interface RepeatedNodeSequenceSignal extends RuntimeScope {
   totalRepeatCount: number
   maximumRepeatCount: number
   durationMs: RuntimeMetricDistribution
-  terminations: { leftPattern: number, taskEnded: number, stillRepeatingAtLogEnd: number }
+  terminations: { leftPattern: number; taskEnded: number; stillRepeatingAtLogEnd: number }
   representatives: {
     first: RepeatedNodeOccurrenceSample
     longest: RepeatedNodeOccurrenceSample
@@ -193,7 +193,7 @@ export interface RuntimeTaskExecution {
     recognitionActivity: string[]
     repetitions: string[]
   }
-  evidence: { start: RuntimeEvidencePosition, end: RuntimeEvidencePosition }
+  evidence: { start: RuntimeEvidencePosition; end: RuntimeEvidencePosition }
 }
 
 export interface RuntimeSession {
@@ -241,7 +241,7 @@ const elapsed = (start: string, end?: string): number | null => {
 
 interface RuntimeEvidenceIndex {
   exactLines: Map<string, number>
-  ordered: { timestamp: number, line: number }[]
+  ordered: { timestamp: number; line: number }[]
 }
 
 const buildEvidenceIndex = (task: TaskInfo): RuntimeEvidenceIndex => {
@@ -275,101 +275,113 @@ const evidence = (index: RuntimeEvidenceIndex, timestamp?: string): InternalEvid
   }
   const before = index.ordered[low - 1]
   const after = index.ordered[low]
-  const nearest = before == null
-    ? after
-    : after == null || target - before.timestamp <= after.timestamp - target ? before : after
+  const nearest =
+    before == null
+      ? after
+      : after == null || target - before.timestamp <= after.timestamp - target
+        ? before
+        : after
   return { timestamp: timestamp ?? null, mergedLine: nearest?.line ?? null }
 }
 
-const recognitionItems = (items?: readonly UnifiedFlowItem[]): UnifiedFlowItem[] => (
-  (items ?? []).flatMap(item => [
+const recognitionItems = (items?: readonly UnifiedFlowItem[]): UnifiedFlowItem[] =>
+  (items ?? []).flatMap((item) => [
     ...(item.type === 'recognition' || item.type === 'recognition_node' ? [item] : []),
     ...recognitionItems(item.children),
   ])
-)
 
-const imagesFor = (node: NodeInfo): { error: string[], vision: string[] } => {
+const imagesFor = (node: NodeInfo): { error: string[]; vision: string[] } => {
   const attempts = recognitionItems(node.node_flow)
   return {
-    error: [node.error_image, ...attempts.map(item => item.error_image)]
+    error: [node.error_image, ...attempts.map((item) => item.error_image)].filter(
+      (item): item is string => Boolean(item),
+    ),
+    vision: attempts
+      .map((item) => item.vision_image)
       .filter((item): item is string => Boolean(item)),
-    vision: attempts.map(item => item.vision_image).filter((item): item is string => Boolean(item)),
   }
 }
 
-const ownedRecognitionItems = (items?: readonly UnifiedFlowItem[]): UnifiedFlowItem[] => (
-  (items ?? []).flatMap(item => {
+const ownedRecognitionItems = (items?: readonly UnifiedFlowItem[]): UnifiedFlowItem[] =>
+  (items ?? []).flatMap((item) => {
     if (item.type === 'task' || item.type === 'pipeline_node') return []
     return [
       ...(item.type === 'recognition' || item.type === 'recognition_node' ? [item] : []),
       ...ownedRecognitionItems(item.children),
     ]
   })
-)
 
-const imagesForFlowItem = (item: UnifiedFlowItem): { error: string[], vision: string[] } => {
+const imagesForFlowItem = (item: UnifiedFlowItem): { error: string[]; vision: string[] } => {
   const attempts = ownedRecognitionItems(item.children)
   return {
-    error: [item.error_image, ...attempts.map(attempt => attempt.error_image)]
-      .filter((image): image is string => Boolean(image)),
-    vision: [item.vision_image, ...attempts.map(attempt => attempt.vision_image)]
-      .filter((image): image is string => Boolean(image)),
+    error: [item.error_image, ...attempts.map((attempt) => attempt.error_image)].filter(
+      (image): image is string => Boolean(image),
+    ),
+    vision: [item.vision_image, ...attempts.map((attempt) => attempt.vision_image)].filter(
+      (image): image is string => Boolean(image),
+    ),
   }
 }
 
-const hasFailedOwnedAction = (items?: readonly UnifiedFlowItem[]): boolean => (
-  (items ?? []).some(item => {
+const hasFailedOwnedAction = (items?: readonly UnifiedFlowItem[]): boolean =>
+  (items ?? []).some((item) => {
     if (item.type === 'task' || item.type === 'pipeline_node') return false
     if (
-      (item.type === 'action' || item.type === 'action_node')
-      && (item.status === 'failed' || item.action_details?.success === false)
-    ) return true
+      (item.type === 'action' || item.type === 'action_node') &&
+      (item.status === 'failed' || item.action_details?.success === false)
+    )
+      return true
     return hasFailedOwnedAction(item.children)
   })
-)
 
-const hasFailedNestedTask = (items?: readonly UnifiedFlowItem[]): boolean => (
-  (items ?? []).some(item => (
-    item.type === 'task' ? item.status === 'failed' : hasFailedNestedTask(item.children)
-  ))
-)
+const hasFailedNestedTask = (items?: readonly UnifiedFlowItem[]): boolean =>
+  (items ?? []).some((item) =>
+    item.type === 'task' ? item.status === 'failed' : hasFailedNestedTask(item.children),
+  )
 
 const nestedPipelineFailureKind = (item: UnifiedFlowItem): RuntimeFailure['kind'] | null => {
   if (item.status !== 'failed') return null
-  if (item.action_details?.success === false || hasFailedOwnedAction(item.children)) return 'action_failed'
+  if (item.action_details?.success === false || hasFailedOwnedAction(item.children))
+    return 'action_failed'
   return hasFailedNestedTask(item.children) ? null : 'next_list_timeout'
 }
 
-const scopeFor = (
-  task: TaskInfo,
-  sessionId: string | null,
-  executionId: string,
-): RuntimeScope => ({
+const scopeFor = (task: TaskInfo, sessionId: string | null, executionId: string): RuntimeScope => ({
   sessionId,
   executionId,
   taskId: task.task_id,
   taskName: task.entry,
 })
 
-const sessionFor = (task: TaskInfo, sessions: readonly FrameworkSession[]): FrameworkSession | null => {
-  const candidates = sessions.filter(session => session.start.timestamp != null
-    && session.end.timestamp != null
-    && task.start_time >= session.start.timestamp
-    && task.start_time <= session.end.timestamp)
-  const complete = candidates.filter(session => session.startKind === 'process_start')
+const sessionFor = (
+  task: TaskInfo,
+  sessions: readonly FrameworkSession[],
+): FrameworkSession | null => {
+  const candidates = sessions.filter(
+    (session) =>
+      session.start.timestamp != null &&
+      session.end.timestamp != null &&
+      task.start_time >= session.start.timestamp &&
+      task.start_time <= session.end.timestamp,
+  )
+  const complete = candidates.filter((session) => session.startKind === 'process_start')
   if (complete.length === 1) return complete[0] ?? null
-  const partial = candidates.filter(session => session.startKind === 'partial_file')
+  const partial = candidates.filter((session) => session.startKind === 'partial_file')
   return complete.length === 0 && partial.length === 1 ? (partial[0] ?? null) : null
 }
 
-interface Repetition { start: number, length: number, count: number }
+interface Repetition {
+  start: number
+  length: number
+  count: number
+}
 
 type RecognitionTerminalOutcome = 'matched' | 'timeout' | 'running' | 'unmatched'
 
 interface RecognitionOccurrence {
   nodeId: number
   pipelineNodeName: string
-  nextList: { name: string, anchor: boolean, jumpBack: boolean }[]
+  nextList: { name: string; anchor: boolean; jumpBack: boolean }[]
   attempts: UnifiedFlowItem[]
   terminalMatch: string | null
   terminalOutcome: RecognitionTerminalOutcome
@@ -382,9 +394,8 @@ const metricDistribution = (values: readonly number[]): RuntimeMetricDistributio
     return { count: 0, minimum: 0, p50: 0, p95: 0, maximum: 0, average: 0 }
   }
   const sorted = [...values].sort((left, right) => left - right)
-  const percentile = (ratio: number): number => (
+  const percentile = (ratio: number): number =>
     sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * ratio) - 1)] ?? 0
-  )
   const total = sorted.reduce((sum, value) => sum + value, 0)
   return {
     count: sorted.length,
@@ -412,23 +423,23 @@ const increment = (map: Map<string, number>, key: string): void => {
 
 const prioritize = (
   reasons: RuntimeSignalPriorityReason[],
-): { priority: RuntimeSignalPriority, priorityReasons: RuntimeSignalPriorityReason[] } => {
+): { priority: RuntimeSignalPriority; priorityReasons: RuntimeSignalPriorityReason[] } => {
   if (reasons.length === 0) return { priority: 'low', priorityReasons: [] }
   if (
-    reasons.includes('timeout')
-    || reasons.includes('unmatched_terminal')
-    || reasons.includes('still_repeating_at_log_end')
-    || reasons.includes('related_to_direct_failure')
-    || reasons.includes('incomplete_repetition')
+    reasons.includes('timeout') ||
+    reasons.includes('unmatched_terminal') ||
+    reasons.includes('still_repeating_at_log_end') ||
+    reasons.includes('related_to_direct_failure') ||
+    reasons.includes('incomplete_repetition')
   ) {
     return { priority: 'high', priorityReasons: reasons }
   }
   if (
-    reasons.includes('high_mixed_results')
-    || reasons.includes('high_unsuccessful_attempts')
-    || reasons.includes('high_occurrence_count')
-    || reasons.includes('high_repeat_count')
-    || reasons.includes('long_duration')
+    reasons.includes('high_mixed_results') ||
+    reasons.includes('high_unsuccessful_attempts') ||
+    reasons.includes('high_occurrence_count') ||
+    reasons.includes('high_repeat_count') ||
+    reasons.includes('long_duration')
   ) {
     return { priority: 'normal', priorityReasons: reasons }
   }
@@ -440,12 +451,16 @@ const repetitions = (nodes: readonly NodeInfo[]): Repetition[] => {
   let start = 0
   while (start < nodes.length) {
     let best: Repetition | null = null
-    for (let length = 1; length <= Math.min(8, Math.floor((nodes.length - start) / 2)); length += 1) {
+    for (
+      let length = 1;
+      length <= Math.min(8, Math.floor((nodes.length - start) / 2));
+      length += 1
+    ) {
       let count = 1
       while (start + (count + 1) * length <= nodes.length) {
-        const same = nodes.slice(start, start + length).every(
-          (node, offset) => node.name === nodes[start + count * length + offset]?.name,
-        )
+        const same = nodes
+          .slice(start, start + length)
+          .every((node, offset) => node.name === nodes[start + count * length + offset]?.name)
         if (!same) break
         count += 1
       }
@@ -499,7 +514,8 @@ const enrichWithSource = (
   }
 }
 
-const createEvidenceFn = (segments: readonly SourceSegment[]) =>
+const createEvidenceFn =
+  (segments: readonly SourceSegment[]) =>
   (index: RuntimeEvidenceIndex, timestamp?: string): RuntimeEvidencePosition =>
     enrichWithSource(evidence(index, timestamp), segments)
 
@@ -632,11 +648,12 @@ export const buildRuntimeInspection = (
 
     for (const item of timeline) {
       inspectNestedTasks(item.nodeInfo.node_flow)
-      const failureKind = item.navStatus === 'action-failed'
-        ? 'action_failed'
-        : item.navStatus === 'timeout' && item.nodeInfo.next_list.length > 0
-          ? 'next_list_timeout'
-          : null
+      const failureKind =
+        item.navStatus === 'action-failed'
+          ? 'action_failed'
+          : item.navStatus === 'timeout' && item.nodeInfo.next_list.length > 0
+            ? 'next_list_timeout'
+            : null
       let nodeFailureId: string | null = null
       if (failureKind) {
         nodeFailureId = `failure-${failures.length + 1}`
@@ -670,17 +687,20 @@ export const buildRuntimeInspection = (
         outcomeIds.push(outcomeId)
       }
       const attempts = recognitionItems(item.nodeInfo.node_flow)
-      const missed = attempts.filter(attempt => attempt.status === 'failed')
+      const missed = attempts.filter((attempt) => attempt.status === 'failed')
       if (item.nodeInfo.next_list.length > 0) {
-        const terminalOutcome: RecognitionTerminalOutcome = item.navStatus === 'timeout'
-          ? 'timeout'
-          : item.nodeInfo.status === 'running'
-            ? 'running'
-            : item.matchedRecognitionName ? 'matched' : 'unmatched'
+        const terminalOutcome: RecognitionTerminalOutcome =
+          item.navStatus === 'timeout'
+            ? 'timeout'
+            : item.nodeInfo.status === 'running'
+              ? 'running'
+              : item.matchedRecognitionName
+                ? 'matched'
+                : 'unmatched'
         recognitionOccurrences.push({
           nodeId: item.nodeInfo.node_id,
           pipelineNodeName: item.nodeInfo.name,
-          nextList: item.nodeInfo.next_list.map(next => ({
+          nextList: item.nodeInfo.next_list.map((next) => ({
             name: next.name,
             anchor: next.anchor,
             jumpBack: next.jump_back,
@@ -719,14 +739,19 @@ export const buildRuntimeInspection = (
       const signalId = `signal-${signals.length + 1}`
       const terminalMatches = new Map<string, number>()
       const terminalOutcomes = { matched: 0, timeout: 0, running: 0, unmatched: 0 }
-      const candidates = new Map(firstOccurrence.nextList.map(next => [next.name, {
-        name: next.name,
-        evaluationCount: 0,
-        matchedAttemptCount: 0,
-        unsuccessfulAttemptCount: 0,
-        runningAttemptCount: 0,
-        terminalMatchCount: 0,
-      }]))
+      const candidates = new Map(
+        firstOccurrence.nextList.map((next) => [
+          next.name,
+          {
+            name: next.name,
+            evaluationCount: 0,
+            matchedAttemptCount: 0,
+            unsuccessfulAttemptCount: 0,
+            runningAttemptCount: 0,
+            terminalMatchCount: 0,
+          },
+        ]),
+      )
       let unmappedAttemptCount = 0
       let occurrencesWithMixedResults = 0
       for (const occurrence of group) {
@@ -736,7 +761,7 @@ export const buildRuntimeInspection = (
           const candidate = candidates.get(occurrence.terminalMatch)
           if (candidate) candidate.terminalMatchCount += 1
         }
-        const statuses = new Set(occurrence.attempts.map(attempt => attempt.status))
+        const statuses = new Set(occurrence.attempts.map((attempt) => attempt.status))
         if (statuses.has('failed') && statuses.has('success')) occurrencesWithMixedResults += 1
         const nextNames = new Set(candidates.keys())
         for (const attempt of occurrence.attempts) {
@@ -752,20 +777,37 @@ export const buildRuntimeInspection = (
           else candidate.runningAttemptCount += 1
         }
       }
-      const worstOccurrence = [...group].sort((left, right) => (
-        right.sample.unsuccessfulAttempts - left.sample.unsuccessfulAttempts
-        || right.sample.attemptCount - left.sample.attemptCount
-      ))[0] ?? firstOccurrence
-      const attemptsDist = metricDistribution(group.map(item => item.sample.attemptCount))
-      const unsuccessfulDist = metricDistribution(group.map(item => item.sample.unsuccessfulAttempts))
-      const durationDist = metricDistribution(group.flatMap(item => item.durationMs == null ? [] : [item.durationMs]))
+      const worstOccurrence =
+        [...group].sort(
+          (left, right) =>
+            right.sample.unsuccessfulAttempts - left.sample.unsuccessfulAttempts ||
+            right.sample.attemptCount - left.sample.attemptCount,
+        )[0] ?? firstOccurrence
+      const attemptsDist = metricDistribution(group.map((item) => item.sample.attemptCount))
+      const unsuccessfulDist = metricDistribution(
+        group.map((item) => item.sample.unsuccessfulAttempts),
+      )
+      const durationDist = metricDistribution(
+        group.flatMap((item) => (item.durationMs == null ? [] : [item.durationMs])),
+      )
       const reasons: RuntimeSignalPriorityReason[] = []
       if (terminalOutcomes.timeout > 0) reasons.push('timeout')
       if (terminalOutcomes.unmatched > 0) reasons.push('unmatched_terminal')
-      if (group.length > 0 && occurrencesWithMixedResults / group.length >= 0.3) reasons.push('high_mixed_results')
-      if (unsuccessfulDist.maximum >= 5 || unsuccessfulDist.p95 >= 3) reasons.push('high_unsuccessful_attempts')
+      if (group.length > 0 && occurrencesWithMixedResults / group.length >= 0.3)
+        reasons.push('high_mixed_results')
+      if (unsuccessfulDist.maximum >= 5 || unsuccessfulDist.p95 >= 3)
+        reasons.push('high_unsuccessful_attempts')
       if (group.length >= 20) reasons.push('high_occurrence_count')
-      if (group.some(item => item.sample.nodeId && failures.some(failure => failure.nodeId === item.sample.nodeId && failure.executionId === scope.executionId))) {
+      if (
+        group.some(
+          (item) =>
+            item.sample.nodeId &&
+            failures.some(
+              (failure) =>
+                failure.nodeId === item.sample.nodeId && failure.executionId === scope.executionId,
+            ),
+        )
+      ) {
         reasons.push('related_to_direct_failure')
       }
       const ranking = prioritize(reasons)
@@ -778,7 +820,8 @@ export const buildRuntimeInspection = (
         occurrenceCount: group.length,
         occurrencesWithMixedResults,
         terminalOutcomes,
-        terminalMatches: [...terminalMatches].map(([name, count]) => ({ name, count }))
+        terminalMatches: [...terminalMatches]
+          .map(([name, count]) => ({ name, count }))
           .sort((left, right) => right.count - left.count),
         candidateStatistics: [...candidates.values()],
         unmappedAttemptCount,
@@ -796,30 +839,37 @@ export const buildRuntimeInspection = (
       signalIds.push(signalId)
     }
 
-    const completed = timeline.map(item => item.nodeInfo).filter(node => node.status !== 'running')
+    const completed = timeline
+      .map((item) => item.nodeInfo)
+      .filter((node) => node.status !== 'running')
     const repetitionGroups = new Map<string, RepeatedNodeOccurrenceSample[]>()
     for (const repeated of repetitions(completed)) {
       const first = completed[repeated.start]
       const lastIndex = repeated.start + repeated.length * repeated.count - 1
       const last = completed[lastIndex]
       if (!first || !last) continue
-      const rawPattern = completed.slice(repeated.start, repeated.start + repeated.length).map(node => node.name)
+      const rawPattern = completed
+        .slice(repeated.start, repeated.start + repeated.length)
+        .map((node) => node.name)
       const pattern = repeated.length === 1 ? rawPattern : canonicalCycle(rawPattern)
       const kind = repeated.length === 1 ? 'repeated_node' : 'repeated_node_cycle'
       const key = JSON.stringify([kind, pattern])
       const group = repetitionGroups.get(key) ?? []
-      const timelineLastIndex = timeline.findIndex(item => item.nodeInfo === last)
+      const timelineLastIndex = timeline.findIndex((item) => item.nodeInfo === last)
       const trailing = timelineLastIndex < 0 ? [] : timeline.slice(timelineLastIndex + 1)
       const reachesCompletedEnd = lastIndex === completed.length - 1
-      const continuesAtLogEnd = reachesCompletedEnd
-        && task.status === 'running'
-        && trailing.every((item, offset) => (
-          item.nodeInfo.status === 'running'
-          && item.nodeInfo.name === rawPattern[offset % rawPattern.length]
-        ))
-      const taskEndedAtPattern = reachesCompletedEnd
-        && timelineLastIndex === timeline.length - 1
-        && task.status !== 'running'
+      const continuesAtLogEnd =
+        reachesCompletedEnd &&
+        task.status === 'running' &&
+        trailing.every(
+          (item, offset) =>
+            item.nodeInfo.status === 'running' &&
+            item.nodeInfo.name === rawPattern[offset % rawPattern.length],
+        )
+      const taskEndedAtPattern =
+        reachesCompletedEnd &&
+        timelineLastIndex === timeline.length - 1 &&
+        task.status !== 'running'
       group.push({
         pattern,
         repeatCount: repeated.count,
@@ -828,7 +878,9 @@ export const buildRuntimeInspection = (
         lastSeenAt: last.end_ts ?? last.ts,
         termination: continuesAtLogEnd
           ? 'still_repeating_at_log_end'
-          : taskEndedAtPattern ? 'task_ended' : 'left_pattern',
+          : taskEndedAtPattern
+            ? 'task_ended'
+            : 'left_pattern',
         evidence: evidenceAt(evidenceIndex, first.ts),
       })
       repetitionGroups.set(key, group)
@@ -837,18 +889,23 @@ export const buildRuntimeInspection = (
       const first = group[0]
       const last = group[group.length - 1]
       if (!first || !last) continue
-      const longest = [...group].sort((left, right) => right.durationMs - left.durationMs)[0] ?? first
+      const longest =
+        [...group].sort((left, right) => right.durationMs - left.durationMs)[0] ?? first
       const signalId = `signal-${signals.length + 1}`
       const terminations = {
-        leftPattern: group.filter(item => item.termination === 'left_pattern').length,
-        taskEnded: group.filter(item => item.termination === 'task_ended').length,
-        stillRepeatingAtLogEnd: group.filter(item => item.termination === 'still_repeating_at_log_end').length,
+        leftPattern: group.filter((item) => item.termination === 'left_pattern').length,
+        taskEnded: group.filter((item) => item.termination === 'task_ended').length,
+        stillRepeatingAtLogEnd: group.filter(
+          (item) => item.termination === 'still_repeating_at_log_end',
+        ).length,
       }
       const totalRepeatCount = group.reduce((sum, item) => sum + item.repeatCount, 0)
-      const maximumRepeatCount = Math.max(...group.map(item => item.repeatCount))
+      const maximumRepeatCount = Math.max(...group.map((item) => item.repeatCount))
       const repetitionReasons: RuntimeSignalPriorityReason[] = []
-      if (terminations.stillRepeatingAtLogEnd > 0) repetitionReasons.push('still_repeating_at_log_end')
-      if (maximumRepeatCount >= 10 || totalRepeatCount >= 20) repetitionReasons.push('high_repeat_count')
+      if (terminations.stillRepeatingAtLogEnd > 0)
+        repetitionReasons.push('still_repeating_at_log_end')
+      if (maximumRepeatCount >= 10 || totalRepeatCount >= 20)
+        repetitionReasons.push('high_repeat_count')
       const repetitionRanking = prioritize(repetitionReasons)
       signals.push({
         ...scope,
@@ -858,7 +915,7 @@ export const buildRuntimeInspection = (
         segmentCount: group.length,
         totalRepeatCount,
         maximumRepeatCount,
-        durationMs: metricDistribution(group.map(item => item.durationMs)),
+        durationMs: metricDistribution(group.map((item) => item.durationMs)),
         terminations,
         representatives: {
           first: first,
@@ -886,36 +943,43 @@ export const buildRuntimeInspection = (
         nodeId: null,
         nodeName: null,
         directFailureIds: [...directFailureIds],
-        evidence: evidenceAt(evidenceIndex, task.end_time ?? task.events[task.events.length - 1]?.timestamp),
+        evidence: evidenceAt(
+          evidenceIndex,
+          task.end_time ?? task.events[task.events.length - 1]?.timestamp,
+        ),
       })
       outcomeIds.push(outcomeId)
     }
 
-    const attemptsByNode = timeline.map(item => recognitionItems(item.nodeInfo.node_flow))
+    const attemptsByNode = timeline.map((item) => recognitionItems(item.nodeInfo.node_flow))
     const allAttempts = attemptsByNode.flat()
-    const imageSets = timeline.map(item => imagesFor(item.nodeInfo))
-    const errorImages = imageSets.flatMap(set => set.error)
-    const visionImages = imageSets.flatMap(set => set.vision)
-    const ownFailures = failures.filter(failure => directFailureIds.includes(failure.failureId))
-    const ownSignals = signals.filter(signal => signalIds.includes(signal.signalId))
-    const recognitionSignals = ownSignals
-      .filter((signal): signal is RecognitionActivitySignal => (
-        signal.kind === 'recognition_activity'
-      ))
+    const imageSets = timeline.map((item) => imagesFor(item.nodeInfo))
+    const errorImages = imageSets.flatMap((set) => set.error)
+    const visionImages = imageSets.flatMap((set) => set.vision)
+    const ownFailures = failures.filter((failure) => directFailureIds.includes(failure.failureId))
+    const ownSignals = signals.filter((signal) => signalIds.includes(signal.signalId))
+    const recognitionSignals = ownSignals.filter(
+      (signal): signal is RecognitionActivitySignal => signal.kind === 'recognition_activity',
+    )
     const recognitionActivity = [...recognitionSignals]
-      .sort((left, right) => (
-        right.unsuccessfulAttempts.maximum - left.unsuccessfulAttempts.maximum
-        || right.occurrenceCount - left.occurrenceCount
-      ))
+      .sort(
+        (left, right) =>
+          right.unsuccessfulAttempts.maximum - left.unsuccessfulAttempts.maximum ||
+          right.occurrenceCount - left.occurrenceCount,
+      )
       .slice(0, 5)
-      .map(signal => signal.signalId)
+      .map((signal) => signal.signalId)
     const repetitionSignals = ownSignals
-      .filter((signal): signal is RepeatedNodeSequenceSignal => signal.kind !== 'recognition_activity')
-      .sort((left, right) => (
-        right.totalRepeatCount * right.pattern.length - left.totalRepeatCount * left.pattern.length
-      ))
+      .filter(
+        (signal): signal is RepeatedNodeSequenceSignal => signal.kind !== 'recognition_activity',
+      )
+      .sort(
+        (left, right) =>
+          right.totalRepeatCount * right.pattern.length -
+          left.totalRepeatCount * left.pattern.length,
+      )
       .slice(0, 5)
-      .map(signal => signal.signalId)
+      .map((signal) => signal.signalId)
     return {
       executionId: scope.executionId,
       taskId: task.task_id,
@@ -931,25 +995,34 @@ export const buildRuntimeInspection = (
       lastNode: timeline[timeline.length - 1]?.executionName ?? null,
       statistics: {
         nodeExecutions: timeline.length,
-        succeededNodes: timeline.filter(item => item.nodeInfo.status === 'success').length,
-        failedNodes: timeline.filter(item => item.nodeInfo.status === 'failed').length,
-        runningNodes: timeline.filter(item => item.nodeInfo.status === 'running').length,
+        succeededNodes: timeline.filter((item) => item.nodeInfo.status === 'success').length,
+        failedNodes: timeline.filter((item) => item.nodeInfo.status === 'failed').length,
+        runningNodes: timeline.filter((item) => item.nodeInfo.status === 'running').length,
         recognitionAttempts: allAttempts.length,
-        unsuccessfulRecognitionAttempts: allAttempts.filter(attempt => attempt.status === 'failed').length,
-        nodeExecutionsWithRecognition: attemptsByNode.filter(attempts => attempts.length > 0).length,
-        nodeExecutionsWithMixedRecognitionResults: attemptsByNode.filter(attempts => {
-          const statuses = new Set(attempts.map(attempt => attempt.status))
+        unsuccessfulRecognitionAttempts: allAttempts.filter(
+          (attempt) => attempt.status === 'failed',
+        ).length,
+        nodeExecutionsWithRecognition: attemptsByNode.filter((attempts) => attempts.length > 0)
+          .length,
+        nodeExecutionsWithMixedRecognitionResults: attemptsByNode.filter((attempts) => {
+          const statuses = new Set(attempts.map((attempt) => attempt.status))
           return statuses.has('failed') && statuses.has('success')
         }).length,
         recognitionActivityGroups: recognitionSignals.length,
-        maximumRecognitionAttemptsPerNode: Math.max(0, ...attemptsByNode.map(attempts => attempts.length)),
+        maximumRecognitionAttemptsPerNode: Math.max(
+          0,
+          ...attemptsByNode.map((attempts) => attempts.length),
+        ),
         maximumUnsuccessfulRecognitionAttemptsPerNode: Math.max(
           0,
-          ...attemptsByNode.map(attempts => attempts.filter(attempt => attempt.status === 'failed').length),
+          ...attemptsByNode.map(
+            (attempts) => attempts.filter((attempt) => attempt.status === 'failed').length,
+          ),
         ),
-        actionAttempts: timeline.filter(item => item.nodeInfo.action_details != null).length,
-        actionFailures: ownFailures.filter(failure => failure.kind === 'action_failed').length,
-        nextListTimeouts: ownFailures.filter(failure => failure.kind === 'next_list_timeout').length,
+        actionAttempts: timeline.filter((item) => item.nodeInfo.action_details != null).length,
+        actionFailures: ownFailures.filter((failure) => failure.kind === 'action_failed').length,
+        nextListTimeouts: ownFailures.filter((failure) => failure.kind === 'next_list_timeout')
+          .length,
         errorImageReferences: errorImages.length,
         uniqueErrorImages: new Set(errorImages).size,
         visionImageReferences: visionImages.length,
@@ -961,16 +1034,21 @@ export const buildRuntimeInspection = (
       signalHighlights: { recognitionActivity, repetitions: repetitionSignals },
       evidence: {
         start: evidenceAt(evidenceIndex, task.start_time),
-        end: evidenceAt(evidenceIndex, task.end_time ?? task.events[task.events.length - 1]?.timestamp),
+        end: evidenceAt(
+          evidenceIndex,
+          task.end_time ?? task.events[task.events.length - 1]?.timestamp,
+        ),
       },
     }
   }
 
   const tasks = output.tasks.map(buildTask)
   const sessions = framework.sessions.map((session): RuntimeSession => {
-    const scoped = tasks.filter(task => executionSessionIds.get(task.executionId) === session.sessionId)
-    const ids = new Set(scoped.flatMap(task => task.directFailureIds))
-    const scopedFailures = failures.filter(failure => ids.has(failure.failureId))
+    const scoped = tasks.filter(
+      (task) => executionSessionIds.get(task.executionId) === session.sessionId,
+    )
+    const ids = new Set(scoped.flatMap((task) => task.directFailureIds))
+    const scopedFailures = failures.filter((failure) => ids.has(failure.failureId))
     return {
       sessionId: session.sessionId,
       startKind: session.startKind,
@@ -982,17 +1060,18 @@ export const buildRuntimeInspection = (
       tasks: scoped,
       summary: {
         taskExecutions: scoped.length,
-        succeededTasks: scoped.filter(task => task.status === 'succeeded').length,
-        failedTasks: scoped.filter(task => task.status === 'failed').length,
-        runningTasks: scoped.filter(task => task.status === 'running').length,
+        succeededTasks: scoped.filter((task) => task.status === 'succeeded').length,
+        failedTasks: scoped.filter((task) => task.status === 'failed').length,
+        runningTasks: scoped.filter((task) => task.status === 'running').length,
         directFailures: scopedFailures.length,
-        nextListTimeouts: scopedFailures.filter(failure => failure.kind === 'next_list_timeout').length,
-        actionFailures: scopedFailures.filter(failure => failure.kind === 'action_failed').length,
+        nextListTimeouts: scopedFailures.filter((failure) => failure.kind === 'next_list_timeout')
+          .length,
+        actionFailures: scopedFailures.filter((failure) => failure.kind === 'action_failed').length,
         signals: scoped.reduce((count, task) => count + task.signalIds.length, 0),
       },
     }
   })
-  const unscopedTasks = tasks.filter(task => executionSessionIds.get(task.executionId) == null)
+  const unscopedTasks = tasks.filter((task) => executionSessionIds.get(task.executionId) == null)
   return {
     schemaVersion: MLA_RUNTIME_INSPECTION_SCHEMA_VERSION,
     sessions,
@@ -1003,7 +1082,9 @@ export const buildRuntimeInspection = (
     warnings: [
       ...framework.warnings,
       ...(unscopedTasks.length
-        ? [`${unscopedTasks.length} task execution(s) could not be assigned to one runtime session.`]
+        ? [
+            `${unscopedTasks.length} task execution(s) could not be assigned to one runtime session.`,
+          ]
         : []),
     ],
   }

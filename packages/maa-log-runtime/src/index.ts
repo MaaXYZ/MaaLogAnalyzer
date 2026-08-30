@@ -5,9 +5,7 @@ import type {
   ParseFileOptions,
   TaskInfo,
 } from '@windsland52/maa-log-kernel'
-import {
-  buildKernelOutput,
-} from '@windsland52/maa-log-kernel'
+import { buildKernelOutput } from '@windsland52/maa-log-kernel'
 
 export interface AnalyzeLogContentInput {
   content: string

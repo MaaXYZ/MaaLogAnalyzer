@@ -5,33 +5,36 @@ import type { DynamicScrollerInstance } from '../../../types/virtualScroller'
 
 type NodeTimelineItem = NodeInfo & { _uniqueKey: string }
 
-const props = withDefaults(defineProps<{
-  currentNodes: NodeTimelineItem[]
-  selectedTaskKey?: string | null
-  displayMode: string
-  isVscodeLaunchEmbed?: boolean
-  bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
-  bridgeRevealTask?: ((task: string) => Promise<void>) | null
-  itemPadding?: string
-  scrollerStyle?: string
-  wrapperStyle?: string
-  captureWheelUp?: boolean
-  selectedNodeId?: number | null
-  safeScrollToItem?: (index: number) => Promise<boolean>
-  preserveScrollOnActivate?: boolean
-}>(), {
-  selectedTaskKey: null,
-  isVscodeLaunchEmbed: false,
-  bridgeRequestTaskDoc: null,
-  bridgeRevealTask: null,
-  itemPadding: '12px',
-  scrollerStyle: 'height: 100%',
-  wrapperStyle: 'height: 100%; display: flex; flex-direction: column; position: relative',
-  captureWheelUp: true,
-  selectedNodeId: null,
-  safeScrollToItem: undefined,
-  preserveScrollOnActivate: true,
-})
+const props = withDefaults(
+  defineProps<{
+    currentNodes: NodeTimelineItem[]
+    selectedTaskKey?: string | null
+    displayMode: string
+    isVscodeLaunchEmbed?: boolean
+    bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
+    bridgeRevealTask?: ((task: string) => Promise<void>) | null
+    itemPadding?: string
+    scrollerStyle?: string
+    wrapperStyle?: string
+    captureWheelUp?: boolean
+    selectedNodeId?: number | null
+    safeScrollToItem?: (index: number) => Promise<boolean>
+    preserveScrollOnActivate?: boolean
+  }>(),
+  {
+    selectedTaskKey: null,
+    isVscodeLaunchEmbed: false,
+    bridgeRequestTaskDoc: null,
+    bridgeRevealTask: null,
+    itemPadding: '12px',
+    scrollerStyle: 'height: 100%',
+    wrapperStyle: 'height: 100%; display: flex; flex-direction: column; position: relative',
+    captureWheelUp: true,
+    selectedNodeId: null,
+    safeScrollToItem: undefined,
+    preserveScrollOnActivate: true,
+  },
+)
 
 const emit = defineEmits<{
   'scroller-mounted': [scroller: DynamicScrollerInstance | null]

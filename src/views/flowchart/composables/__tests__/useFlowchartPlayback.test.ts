@@ -16,10 +16,7 @@ describe('useFlowchartPlayback', () => {
   it('restarts from the first item after playback reaches the end', () => {
     const selectedTimelineIndex = ref<number | null>(null)
     const playback = useFlowchartPlayback({
-      executionTimeline: ref([
-        { name: 'First' },
-        { name: 'Last' },
-      ]),
+      executionTimeline: ref([{ name: 'First' }, { name: 'Last' }]),
       selectedTimelineIndex,
       focusedNodeId: ref<string | null>(null),
       showNavDrawer: ref(false),

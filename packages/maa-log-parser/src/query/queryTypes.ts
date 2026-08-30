@@ -48,5 +48,4 @@ export interface QueryRawLine {
 export type QueryErrorCode = 'not_found' | 'ambiguous' | 'invalid_locator'
 
 export type QueryResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: QueryErrorCode; message: string }
+  { ok: true; value: T } | { ok: false; error: QueryErrorCode; message: string }

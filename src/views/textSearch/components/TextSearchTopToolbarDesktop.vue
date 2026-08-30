@@ -44,11 +44,7 @@ const emit = defineEmits<{
         :disabled="props.loadedTargetOptions.length === 0"
         @update:value="emit('update:selectedLoadedTargetId', $event)"
       />
-      <n-button
-        size="small"
-        type="primary"
-        @click="emit('select-file')"
-      >
+      <n-button size="small" type="primary" @click="emit('select-file')">
         <template #icon>
           <file-text-outlined />
         </template>
@@ -79,7 +75,11 @@ const emit = defineEmits<{
       <n-tag v-if="props.totalLines > 0 && !props.isLoadingFile" size="small" type="info">
         {{ props.totalLines }} 行
       </n-tag>
-      <n-tag v-if="props.fileSizeInMB > 0 && !props.isLoadingFile" size="small" :type="props.isLargeFile ? 'error' : 'warning'">
+      <n-tag
+        v-if="props.fileSizeInMB > 0 && !props.isLoadingFile"
+        size="small"
+        :type="props.isLargeFile ? 'error' : 'warning'"
+      >
         {{ props.fileSizeInMB.toFixed(2) }} MB
         <span v-if="props.isLargeFile"> (流式模式)</span>
       </n-tag>

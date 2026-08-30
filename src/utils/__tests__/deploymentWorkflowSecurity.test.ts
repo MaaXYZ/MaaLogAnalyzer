@@ -9,8 +9,6 @@ const deploymentWorkflow = readFileSync(
 describe('deployment workflow security', () => {
   it('pins the SSH deployment action to an immutable commit', () => {
     expect(deploymentWorkflow).not.toContain('easingthemes/ssh-deploy@main')
-    expect(deploymentWorkflow).toMatch(
-      /uses: easingthemes\/ssh-deploy@[0-9a-f]{40}(?:\s+#.*)?$/m,
-    )
+    expect(deploymentWorkflow).toMatch(/uses: easingthemes\/ssh-deploy@[0-9a-f]{40}(?:\s+#.*)?$/m)
   })
 })

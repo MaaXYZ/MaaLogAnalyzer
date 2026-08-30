@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import {
-  normalizeEditorUriScheme,
-  WINDOWS_CONTEXT_MENU_KEYS,
-} from '../src/windowsContextMenu'
+import { normalizeEditorUriScheme, WINDOWS_CONTEXT_MENU_KEYS } from '../src/windowsContextMenu'
 
 describe('Windows context menu integration', () => {
   it.each(['vscode', 'vscode-insiders', 'code-oss', 'cursor+preview'])(

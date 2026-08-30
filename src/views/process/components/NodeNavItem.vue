@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { NFlex, NText, NTag } from 'naive-ui'
-import type {
-  NodeNavMode,
-  NodeNavStatus,
-  NodeNavViewItem,
-} from '../composables/useNodeNavSearch'
+import type { NodeNavMode, NodeNavStatus, NodeNavViewItem } from '../composables/useNodeNavSearch'
 import { extractTime } from '../../../utils/formatDuration'
 import { getRuntimeStatusTagType, getRuntimeStatusText } from '../../../utils/runtimeStatus'
 
@@ -60,36 +56,18 @@ const focusKindLabelMap = {
       <n-tag size="small" :type="getNodeNavStatusTagType(item.navStatus)">
         {{ getNodeNavStatusText(item.navStatus) }}
       </n-tag>
-      <n-tag
-        v-if="mode === 'focus' && item.focusKind"
-        size="small"
-        type="warning"
-      >
+      <n-tag v-if="mode === 'focus' && item.focusKind" size="small" type="warning">
         {{ focusKindLabelMap[item.focusKind] }}
       </n-tag>
-      <n-tag
-        v-if="mode === 'focus' && item.focusDisplay"
-        size="small"
-        type="primary"
-      >
+      <n-tag v-if="mode === 'focus' && item.focusDisplay" size="small" type="primary">
         {{ item.focusDisplay }}
       </n-tag>
-      <n-tag
-        v-if="showMatchDetails"
-        size="small"
-        type="info"
-      >
+      <n-tag v-if="showMatchDetails" size="small" type="info">
         {{ item.matchHint }}
       </n-tag>
-      <n-text depth="3" style="font-size: 11px">
-        #{{ item.originalIndex + 1 }}
-      </n-text>
+      <n-text depth="3" style="font-size: 11px"> #{{ item.originalIndex + 1 }} </n-text>
     </n-flex>
-    <n-text
-      v-if="showMatchDetails"
-      depth="3"
-      class="node-nav-match-preview"
-    >
+    <n-text v-if="showMatchDetails" depth="3" class="node-nav-match-preview">
       {{ item.matchPreview }}
     </n-text>
   </n-flex>
@@ -97,30 +75,28 @@ const focusKindLabelMap = {
   <n-flex v-else vertical :style="{ gap: displayMode === 'compact' ? '2px' : '2px' }">
     <n-flex align="center" :style="{ gap: displayMode === 'compact' ? '6px' : '4px' }">
       <span class="nav-status-dot" :class="getNodeNavDotClass(item.navStatus)" />
-      <n-text style="font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+      <n-text
+        style="
+          font-size: 12px;
+          flex: 1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        "
+      >
         {{ item.primaryText || '未命名节点' }}
       </n-text>
-      <n-tag
-        v-if="mode === 'focus' && item.focusKind"
-        size="tiny"
-        type="warning"
-      >
+      <n-tag v-if="mode === 'focus' && item.focusKind" size="tiny" type="warning">
         {{ focusKindLabelMap[item.focusKind] }}
       </n-tag>
-      <n-tag
-        v-if="showMatchDetails"
-        size="tiny"
-        type="info"
-      >
+      <n-tag v-if="showMatchDetails" size="tiny" type="info">
         {{ item.matchHint }}
       </n-tag>
-      <n-text depth="3" style="font-size: 10px; flex-shrink: 0">{{ extractTime(item.node.ts) }}</n-text>
+      <n-text depth="3" style="font-size: 10px; flex-shrink: 0">{{
+        extractTime(item.node.ts)
+      }}</n-text>
     </n-flex>
-    <n-text
-      v-if="showMatchDetails"
-      depth="3"
-      class="node-nav-match-preview"
-    >
+    <n-text v-if="showMatchDetails" depth="3" class="node-nav-match-preview">
       {{ item.matchPreview }}
     </n-text>
   </n-flex>
