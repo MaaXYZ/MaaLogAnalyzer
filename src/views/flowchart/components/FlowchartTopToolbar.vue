@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NSelect, NCard, NFlex, NText, NButton, NDropdown } from 'naive-ui'
+import { NSelect, NCard, NFlex, NText, NButton, NDropdown, NSwitch } from 'naive-ui'
 import type { VNodeChild } from 'vue'
 
 defineProps<{
@@ -9,12 +9,14 @@ defineProps<{
   executionTimelineLength: number
   isPlaying: boolean
   uploadOptions: any[]
+  ignoreUnexecutedNodes: boolean
 }>()
 
 const emit = defineEmits<{
   'update:selected-task-index': [value: number | null]
   'toggle-playback': []
   'upload-select': [key: string]
+  'update:ignore-unexecuted-nodes': [value: boolean]
 }>()
 </script>
 
@@ -34,6 +36,14 @@ const emit = defineEmits<{
       <n-button size="small" secondary :disabled="executionTimelineLength === 0" @click="emit('toggle-playback')">
         {{ isPlaying ? '\u6682\u505c\u56de\u653e' : '\u987a\u5e8f\u56de\u653e' }}
       </n-button>
+      <n-flex align="center" style="gap: 6px">
+        <n-text depth="3" style="font-size: 12px; white-space: nowrap" title="开启后仅保留本次执行过的节点，隐藏流水线中未经过的节点">忽略未经过节点</n-text>
+        <n-switch
+          size="small"
+          :value="ignoreUnexecutedNodes"
+          @update:value="emit('update:ignore-unexecuted-nodes', $event)"
+        />
+      </n-flex>
       <n-dropdown :options="uploadOptions" @select="emit('upload-select', String($event))" trigger="click">
         <n-button size="small" secondary>打开</n-button>
       </n-dropdown>

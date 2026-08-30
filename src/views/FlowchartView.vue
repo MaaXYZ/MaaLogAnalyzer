@@ -9,6 +9,7 @@ import FlowchartOrthogonalEdge from '../components/FlowchartOrthogonalEdge.vue'
 import FlowchartTopToolbar from './flowchart/components/FlowchartTopToolbar.vue'
 import FlowchartTimelineNavList from './flowchart/components/FlowchartTimelineNavList.vue'
 import FlowchartNodePopover from './flowchart/components/FlowchartNodePopover.vue'
+import FlowchartLegend from './flowchart/components/FlowchartLegend.vue'
 import type { TaskInfo, NodeInfo } from '../types'
 import { useIsMobile } from '../composables/useIsMobile'
 import { getSettings, saveSettings } from '../utils/settings'
@@ -84,7 +85,13 @@ const flowEdges = ref<any[]>([])
 const focusedNodeId = ref<string | null>(null)
 const edgeStyle = computed(() => settings.flowchartEdgeStyle)
 const edgeFlowEnabled = computed(() => settings.flowchartEdgeFlowEnabled)
-const ignoreUnexecutedNodes = computed(() => settings.flowchartIgnoreUnexecutedNodes)
+const ignoreUnexecutedNodes = computed<boolean>({
+  get: () => settings.flowchartIgnoreUnexecutedNodes,
+  set: (v) => {
+    settings.flowchartIgnoreUnexecutedNodes = v
+    saveSettings(settings)
+  },
+})
 const relayoutAfterDrag = computed(() => settings.flowchartRelayoutAfterDrag)
 const playbackIntervalMs = computed<number>({
   get: () => (typeof settings.flowchartPlaybackIntervalMs === 'number' && settings.flowchartPlaybackIntervalMs > 0 ? settings.flowchartPlaybackIntervalMs : 900),
@@ -232,9 +239,11 @@ const { onNodeClick, onPaneClick } = useFlowchartNodeInteraction({
       :execution-timeline-length="executionTimeline.length"
       :is-playing="isPlaying"
       :upload-options="uploadOptions"
+      :ignore-unexecuted-nodes="ignoreUnexecutedNodes"
       @update:selected-task-index="handleUserTaskSelect"
       @toggle-playback="togglePlayback"
       @upload-select="handleUploadSelect"
+      @update:ignore-unexecuted-nodes="ignoreUnexecutedNodes = $event"
     />
 
     <!-- Hidden file inputs -->
@@ -305,6 +314,8 @@ const { onNodeClick, onPaneClick } = useFlowchartNodeInteraction({
           @close="closePopover"
           @navigate-to-node="navigateToNode"
         />
+
+        <flowchart-legend />
       </div>
 
       <!-- Mobile left drawer for navigation -->
