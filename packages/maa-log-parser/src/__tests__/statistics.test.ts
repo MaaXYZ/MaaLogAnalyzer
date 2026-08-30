@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TaskInfo } from '../shared/types'
-import { NodeStatisticsAnalyzer, summarizeDurations } from '../node/statistics'
+import { NodeStatisticsAnalyzer, percentile, summarizeDurations } from '../node/statistics'
 
 describe('NodeStatisticsAnalyzer', () => {
   it('includes a single recognition attempt in duration statistics', () => {
@@ -116,6 +116,12 @@ describe('NodeStatisticsAnalyzer', () => {
     expect(statistics.successRate).toBeCloseTo(66.7, 1)
     expect(statistics.totalRecoIds).toBe(3)
     expect(statistics.imageCount).toBe(1)
+  })
+
+  it('computes duration percentiles', () => {
+    expect(percentile([1, 2, 3, 4, 5], 50)).toBe(3)
+    expect(percentile([1, 2, 3, 4, 5], 95)).toBe(4.8)
+    expect(percentile([], 95)).toBe(0)
   })
 
   it('summarizes arrays larger than the JavaScript argument limit', () => {

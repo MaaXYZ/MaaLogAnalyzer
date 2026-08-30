@@ -83,6 +83,14 @@ export const buildNodeColumns = (isMobile: boolean): DataTableColumns<NodeStatis
       render: (row) => formatDuration(row.maxDuration),
     },
     {
+      title: 'P95 耗时',
+      key: 'p95Duration',
+      width: 100,
+      align: 'right',
+      sorter: (a, b) => a.p95Duration - b.p95Duration,
+      render: (row) => formatDuration(row.p95Duration),
+    },
+    {
       title: '总耗时',
       key: 'totalDuration',
       width: 100,
@@ -97,6 +105,14 @@ export const buildNodeColumns = (isMobile: boolean): DataTableColumns<NodeStatis
       align: 'center',
       sorter: (a, b) => a.successRate - b.successRate,
       render: (row) => renderSuccessRateProgress(row.successRate),
+    },
+    {
+      title: '失败占比',
+      key: 'failContribution',
+      width: 100,
+      align: 'center',
+      sorter: (a, b) => a.failContribution - b.failContribution,
+      render: (row) => `${row.failContribution.toFixed(1)}%`,
     },
     {
       title: '成功/失败',

@@ -9,9 +9,13 @@ export interface NodeStatistics {
   avgDuration: number
   minDuration: number
   maxDuration: number
+  p50Duration: number
+  p95Duration: number
+  p99Duration: number
   successCount: number
   failCount: number
   successRate: number
+  failContribution: number
   durations: number[]
 }
 
@@ -21,18 +25,29 @@ export interface RecognitionActionStatistics {
   avgRecognitionDuration: number
   minRecognitionDuration: number
   maxRecognitionDuration: number
+  p50RecognitionDuration: number
+  p95RecognitionDuration: number
+  p99RecognitionDuration: number
   totalRecognitionDuration: number
   recognitionCount: number
   avgActionDuration: number
   minActionDuration: number
   maxActionDuration: number
+  p50ActionDuration: number
+  p95ActionDuration: number
+  p99ActionDuration: number
   totalActionDuration: number
   actionCount: number
   avgRecognitionAttempts: number
   totalRecognitionAttempts: number
+  singleAttemptCount: number
+  multiAttemptCount: number
+  firstTrySuccessCount: number
+  firstTrySuccessRate: number
   successCount: number
   failCount: number
   successRate: number
+  failContribution: number
 }
 
 export interface WaitFreezeStatistics {
@@ -79,6 +94,16 @@ export const summarizeDurations = (durations: number[]) => {
     min,
     max,
   }
+}
+
+export const percentile = (values: number[], p: number): number => {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const rank = (sorted.length - 1) * (p / 100)
+  const lower = Math.floor(rank)
+  const upper = Math.ceil(rank)
+  if (lower === upper) return sorted[lower]
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (rank - lower)
 }
 
 export class NodeStatisticsAnalyzer {
@@ -153,11 +178,20 @@ export class NodeStatisticsAnalyzer {
         avgDuration: durationSummary.average,
         minDuration: durationSummary.min,
         maxDuration: durationSummary.max,
+        p50Duration: percentile(durations, 50),
+        p95Duration: percentile(durations, 95),
+        p99Duration: percentile(durations, 99),
         successCount: stats.successCount,
         failCount: stats.failCount,
         successRate,
+        failContribution: 0,
         durations,
       })
+    }
+
+    const totalFailCount = result.reduce((sum, item) => sum + item.failCount, 0)
+    for (const item of result) {
+      item.failContribution = totalFailCount > 0 ? (item.failCount / totalFailCount) * 100 : 0
     }
 
     result.sort((a, b) => b.avgDuration - a.avgDuration)
@@ -189,6 +223,9 @@ export class NodeStatisticsAnalyzer {
       recognitionAttempts: number[]
       successCount: number
       failCount: number
+      singleAttemptCount: number
+      multiAttemptCount: number
+      firstTrySuccessCount: number
     }>()
 
     for (const task of tasks) {
@@ -205,11 +242,22 @@ export class NodeStatisticsAnalyzer {
             recognitionAttempts: [],
             successCount: 0,
             failCount: 0,
+            singleAttemptCount: 0,
+            multiAttemptCount: 0,
+            firstTrySuccessCount: 0,
           })
         }
 
         const stats = statsMap.get(node.name)!
         stats.recognitionAttempts.push(attempts.length)
+        if (attempts.length === 1) {
+          stats.singleAttemptCount++
+        } else {
+          stats.multiAttemptCount++
+        }
+        if (attempts[0]?.status === 'success') {
+          stats.firstTrySuccessCount++
+        }
 
         if (attempts.length > 0) {
           const firstAttemptTs = toTimestampMs(attempts[0].ts)
@@ -262,19 +310,37 @@ export class NodeStatisticsAnalyzer {
         avgRecognitionDuration: recognitionSummary.average,
         minRecognitionDuration: recognitionSummary.min,
         maxRecognitionDuration: recognitionSummary.max,
+        p50RecognitionDuration: percentile(recognitionDurations, 50),
+        p95RecognitionDuration: percentile(recognitionDurations, 95),
+        p99RecognitionDuration: percentile(recognitionDurations, 99),
         totalRecognitionDuration: recognitionSummary.total,
         recognitionCount,
         avgActionDuration: actionSummary.average,
         minActionDuration: actionSummary.min,
         maxActionDuration: actionSummary.max,
+        p50ActionDuration: percentile(actionDurations, 50),
+        p95ActionDuration: percentile(actionDurations, 95),
+        p99ActionDuration: percentile(actionDurations, 99),
         totalActionDuration: actionSummary.total,
         actionCount,
         avgRecognitionAttempts,
         totalRecognitionAttempts,
+        singleAttemptCount: stats.singleAttemptCount,
+        multiAttemptCount: stats.multiAttemptCount,
+        firstTrySuccessCount: stats.firstTrySuccessCount,
+        firstTrySuccessRate: stats.firstTrySuccessCount > 0
+          ? (stats.firstTrySuccessCount / count) * 100
+          : 0,
         successCount: stats.successCount,
         failCount: stats.failCount,
         successRate,
+        failContribution: 0,
       })
+    }
+
+    const totalFailCount = result.reduce((sum, item) => sum + item.failCount, 0)
+    for (const item of result) {
+      item.failContribution = totalFailCount > 0 ? (item.failCount / totalFailCount) * 100 : 0
     }
 
     result.sort((a, b) => b.avgActionDuration - a.avgActionDuration)

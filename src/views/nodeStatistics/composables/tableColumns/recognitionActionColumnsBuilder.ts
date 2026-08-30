@@ -84,6 +84,14 @@ export const buildRecognitionActionColumns = (
       render: (row) => row.recognitionCount > 0 ? formatDuration(row.maxRecognitionDuration) : '-',
     },
     {
+      title: 'P95 识别耗时',
+      key: 'p95RecognitionDuration',
+      width: 120,
+      align: 'right',
+      sorter: (a, b) => a.p95RecognitionDuration - b.p95RecognitionDuration,
+      render: (row) => row.recognitionCount > 0 ? formatDuration(row.p95RecognitionDuration) : '-',
+    },
+    {
       title: '平均动作耗时',
       key: 'avgActionDuration',
       width: 120,
@@ -101,12 +109,36 @@ export const buildRecognitionActionColumns = (
       render: (row) => row.actionCount > 0 ? formatDuration(row.maxActionDuration) : '-',
     },
     {
+      title: 'P95 动作耗时',
+      key: 'p95ActionDuration',
+      width: 120,
+      align: 'right',
+      sorter: (a, b) => a.p95ActionDuration - b.p95ActionDuration,
+      render: (row) => row.actionCount > 0 ? formatDuration(row.p95ActionDuration) : '-',
+    },
+    {
       title: '成功率',
       key: 'successRate',
       width: 130,
       align: 'center',
       sorter: (a, b) => a.successRate - b.successRate,
       render: (row) => renderSuccessRateProgress(row.successRate),
+    },
+    {
+      title: '首次通过率',
+      key: 'firstTrySuccessRate',
+      width: 110,
+      align: 'center',
+      sorter: (a, b) => a.firstTrySuccessRate - b.firstTrySuccessRate,
+      render: (row) => `${row.firstTrySuccessRate.toFixed(1)}%`,
+    },
+    {
+      title: '失败占比',
+      key: 'failContribution',
+      width: 100,
+      align: 'center',
+      sorter: (a, b) => a.failContribution - b.failContribution,
+      render: (row) => `${row.failContribution.toFixed(1)}%`,
     },
   ]
 }
