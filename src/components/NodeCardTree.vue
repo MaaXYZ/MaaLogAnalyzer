@@ -310,6 +310,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
 }
 
 .tree-row-line :deep(.task-doc-hover-trigger) {
