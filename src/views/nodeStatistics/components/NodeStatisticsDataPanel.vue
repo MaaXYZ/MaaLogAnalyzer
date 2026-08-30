@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { UploadFileInfo, DataTableColumns } from 'naive-ui'
 import {
   NCard,
@@ -23,6 +24,15 @@ const props = defineProps<{
 const emit = defineEmits<{
   tauriUploadClick: []
 }>()
+
+// 让表格按列宽总宽度开启横向滚动，避免右侧列溢出卡片/面板边界。
+const tableScrollX = computed(() => {
+  const total = props.columns.reduce((sum, column) => {
+    const width = typeof column.width === 'number' ? column.width : 0
+    return sum + width
+  }, 0)
+  return total > 0 ? total : undefined
+})
 </script>
 
 <template>
@@ -46,6 +56,7 @@ const emit = defineEmits<{
         v-if="props.statistics.length > 0"
         :columns="props.columns"
         :data="props.statistics"
+        :scroll-x="tableScrollX"
         :bordered="false"
         :single-line="false"
         size="small"
