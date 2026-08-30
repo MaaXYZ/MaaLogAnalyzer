@@ -29,7 +29,7 @@ const modeOptions: Array<{ label: string; value: NodeNavMode }> = [
 </script>
 
 <template>
-  <n-flex align="center" style="padding-right: 6px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden">
+  <n-flex align="center" style="padding-right: 6px; flex-wrap: wrap; overflow: hidden; row-gap: 4px">
     <n-flex align="center" style="gap: 4px; flex-wrap: nowrap; flex-shrink: 0">
       <n-text style="font-size: 14px; font-weight: 500; white-space: nowrap">节点导航</n-text>
       <n-select
