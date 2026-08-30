@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   vue-virtual-scroller@2.0.0-beta.8:
-    hash: c58381ac4d85097be5476877b99226369c438a3da54ee1bf860f9cf624f3313b
+    hash: 3865205603edae174c3c00b07bc13c1db2c35639d9cd32667c4d68b3f1dd19b9
     path: patches/vue-virtual-scroller@2.0.0-beta.8.patch
 
 importers:
@@ -66,7 +66,7 @@ importers:
         version: 8.0.1(echarts@6.1.0)(vue@3.5.40(typescript@5.9.3))
       vue-virtual-scroller:
         specifier: 2.0.0-beta.8
-        version: 2.0.0-beta.8(patch_hash=c58381ac4d85097be5476877b99226369c438a3da54ee1bf860f9cf624f3313b)(vue@3.5.40(typescript@5.9.3))
+        version: 2.0.0-beta.8(patch_hash=3865205603edae174c3c00b07bc13c1db2c35639d9cd32667c4d68b3f1dd19b9)(vue@3.5.40(typescript@5.9.3))
     devDependencies:
       '@eslint/js':
         specifier: 10.0.1
@@ -2767,7 +2767,7 @@ snapshots:
       '@vue/language-core': 3.3.8
       typescript: 5.9.3
 
-  vue-virtual-scroller@2.0.0-beta.8(patch_hash=c58381ac4d85097be5476877b99226369c438a3da54ee1bf860f9cf624f3313b)(vue@3.5.40(typescript@5.9.3)):
+  vue-virtual-scroller@2.0.0-beta.8(patch_hash=3865205603edae174c3c00b07bc13c1db2c35639d9cd32667c4d68b3f1dd19b9)(vue@3.5.40(typescript@5.9.3)):
     dependencies:
       mitt: 2.1.0
       vue: 3.5.40(typescript@5.9.3)
