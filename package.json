@@ -30,7 +30,9 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "version": "node scripts/sync-version.mjs",
-    "version:check": "node scripts/sync-version.mjs --check"
+    "version:check": "node scripts/sync-version.mjs --check",
+    "changelog:draft": "git-cliff -o CHANGELOG.draft.md",
+    "changelog:draft:unreleased": "git-cliff --unreleased"
   },
   "dependencies": {
     "7z-wasm": "^1.2.0",

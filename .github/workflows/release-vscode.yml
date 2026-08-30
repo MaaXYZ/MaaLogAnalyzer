@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -95,3 +95,21 @@ jobs:
         env:
           VSCE_PAT: ${{ secrets.VSCE_TOKEN }}
         run: npm exec -- vsce publish --packagePath ../assets/maa-log-analyzer-extension/*.vsix
+
+      - name: Extract release notes
+        run: |
+          node scripts/changelog-notes.mjs "$GITHUB_REF_NAME" > "${RUNNER_TEMP}/release-notes.md"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists, skipping."
+            exit 0
+          fi
+          notes="${RUNNER_TEMP}/release-notes.md"
+          gh release create "$GITHUB_REF_NAME" \
+            assets/maa-log-analyzer-extension/*.vsix \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file "$notes"

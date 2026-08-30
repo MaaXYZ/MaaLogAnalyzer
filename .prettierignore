@@ -8,3 +8,9 @@ src-vscode/vsix
 packages/*/dist
 pnpm-lock.yaml
 src-vscode/package-lock.json
+# Release docs: CHANGELOG.draft.md regenerates from git history (git-cliff template
+# controls its layout), CHANGELOG.md is human-curated, RELEASING.md documents the
+# release process. Keep them out of prettier to avoid format-noise diffs.
+CHANGELOG.md
+CHANGELOG.draft.md
+RELEASING.md
