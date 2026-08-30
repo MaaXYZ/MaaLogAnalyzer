@@ -1,4 +1,4 @@
-import { computed, ref, type Ref } from 'vue'
+import { computed, getCurrentInstance, onUnmounted, ref, type Ref } from 'vue'
 import type { FlowNodeData } from '../../../utils/flowchartBuilder'
 
 interface FlowNodeLike {
@@ -13,6 +13,18 @@ interface UseFlowchartPopoverOptions {
 export const useFlowchartPopover = (options: UseFlowchartPopoverOptions) => {
   const popoverNodeId = ref<string | null>(null)
   const popoverPos = ref({ x: 0, y: 0 })
+  let popoverResizeObserver: ResizeObserver | null = null
+  let observedPopoverEl: HTMLElement | null = null
+
+  const disconnectPopoverObserver = () => {
+    popoverResizeObserver?.disconnect()
+    popoverResizeObserver = null
+    observedPopoverEl = null
+  }
+
+  if (getCurrentInstance()) {
+    onUnmounted(disconnectPopoverObserver)
+  }
 
   const popoverNodeData = computed(() => {
     if (!popoverNodeId.value) return null
@@ -51,7 +63,20 @@ export const useFlowchartPopover = (options: UseFlowchartPopoverOptions) => {
 
     // Clamp vertical: use actual popover height when available.
     const popoverEl = document.querySelector('.node-popover') as HTMLElement | null
-    const popoverHeight = popoverEl?.offsetHeight || POPOVER_MAX_HEIGHT
+    const availableHeight = Math.max(120, canvasRect.height - 2 * MARGIN)
+    if (popoverEl) {
+      const maxHeight = `${Math.min(POPOVER_MAX_HEIGHT, availableHeight)}px`
+      if (popoverEl.style.maxHeight !== maxHeight) {
+        popoverEl.style.maxHeight = maxHeight
+      }
+      if (typeof ResizeObserver !== 'undefined' && observedPopoverEl !== popoverEl) {
+        disconnectPopoverObserver()
+        observedPopoverEl = popoverEl
+        popoverResizeObserver = new ResizeObserver(() => updatePopoverPosition())
+        popoverResizeObserver.observe(popoverEl)
+      }
+    }
+    const popoverHeight = popoverEl?.offsetHeight || Math.min(POPOVER_MAX_HEIGHT, availableHeight)
     if (y < MARGIN) y = MARGIN
     if (y + popoverHeight > canvasRect.height) {
       y = Math.max(MARGIN, canvasRect.height - popoverHeight - MARGIN)
