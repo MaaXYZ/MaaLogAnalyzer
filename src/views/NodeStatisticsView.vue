@@ -92,9 +92,9 @@ const hasSummaryContent = computed(() => {
       <div class="statistics-header">
         <div class="statistics-title-block">
           <div class="statistics-title-row">
-            <div class="statistics-title">节点性能统计</div>
+            <div class="statistics-title">运行性能统计</div>
             <n-tag size="small" round :type="statMode === 'node' ? 'info' : statMode === 'recognition-action' ? 'warning' : 'success'">
-              {{ statMode === 'node' ? '节点统计' : statMode === 'recognition-action' ? '识别 / 动作' : 'Wait Freezes' }}
+              {{ statMode === 'node' ? '节点' : statMode === 'recognition-action' ? '识别 / 动作' : 'Wait Freezes' }}
             </n-tag>
           </div>
           <div class="statistics-subtitle">

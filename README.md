@@ -38,7 +38,7 @@ _✨ 可视化分析基于 MaaFramework 开发应用的用户日志 ✨_</br>
 | 日志分析 | 按任务展示执行过程<br>支持识别/动作详情查看<br>支持节点导航快速定位<br>支持虚拟滚动<br>支持布局比例保存 |
 | 文本搜索 | 支持关键字/正则搜索<br>支持搜索历史与快捷检索<br>支持大文件流式搜索<br>支持结果跳转上下文<br>支持布局比例保存 |
 | 流程图 | 基于 ELK 的节点关系可视化<br>支持执行顺序导航与回放<br>支持回放速度与聚焦缩放持久化<br>点击节点可高亮关联节点与连线 |
-| 节点统计 | 展示节点成功/失败、耗时等统计信息<br>适合做整体运行质量观察 |
+| 运行统计 | 展示节点、识别/动作、Wait Freezes 的成功/失败、耗时与重试统计<br>适合做整体运行质量观察 |
 | 分屏模式 | 上半区日志分析 + 下半区文本搜索<br>便于结构与原文对照排查<br>支持布局比例保存 |
 | 新手教程 | 首次加载样例数据后自动引导<br>按板块讲解主要功能<br>支持按教程版本增量引导<br>可在“关于 -> 快速开始”再次启动 |
 
@@ -98,7 +98,7 @@ _✨ 可视化分析基于 MaaFramework 开发应用的用户日志 ✨_</br>
     <source media="(prefers-color-scheme: dark)" srcset="img/README-statistics.png">
     <source media="(prefers-color-scheme: light)" type="image/webp" srcset="img/README-statistics-light.webp">
     <source media="(prefers-color-scheme: light)" srcset="img/README-statistics-light.png">
-    <img src="img/README-statistics.png" alt="节点统计界面" width="900" loading="lazy"/>
+    <img src="img/README-statistics.png" alt="运行统计界面" width="900" loading="lazy"/>
   </picture>
 </div>
 

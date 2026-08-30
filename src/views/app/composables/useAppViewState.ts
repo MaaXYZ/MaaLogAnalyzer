@@ -68,7 +68,7 @@ export const useAppViewState = () => {
       icon: () => h(FileSearchOutlined),
     },
     {
-      label: '节点统计',
+      label: '运行统计',
       key: 'statistics' as ViewMode,
       icon: () => h(DashboardOutlined),
     },

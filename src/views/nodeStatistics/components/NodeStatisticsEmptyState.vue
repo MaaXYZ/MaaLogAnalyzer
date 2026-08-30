@@ -31,7 +31,7 @@ const emit = defineEmits<{
     >
       <template #extra>
         <n-text depth="3">
-          VS Code iframe 中的节点统计会复用当前已加载的日志数据，不单独提供导入入口。
+          VS Code iframe 中的运行统计会复用当前已加载的日志数据，不单独提供导入入口。
         </n-text>
       </template>
     </n-empty>
