@@ -288,6 +288,7 @@ const waitFreezesShortLabel = getFlowItemShortLabel('wait_freezes')
 .tree-row-line {
   width: 100%;
   min-width: 0;
+  flex-wrap: nowrap !important;
 }
 
 .tree-row-line > .tree-toggle,
