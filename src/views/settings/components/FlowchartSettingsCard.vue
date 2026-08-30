@@ -56,7 +56,7 @@ const props = defineProps<{
             <n-select
               v-model:value="props.settings.flowchartPlaybackIntervalMs"
               :options="props.playbackSpeedOptions"
-              style="width: 180px; margin: 0 auto"
+              class="settings-control"
             />
           </td>
         </tr>
@@ -67,7 +67,7 @@ const props = defineProps<{
             <n-select
               v-model:value="props.settings.flowchartFocusZoom"
               :options="props.focusZoomOptions"
-              style="width: 180px; margin: 0 auto"
+              class="settings-control"
             />
           </td>
         </tr>
