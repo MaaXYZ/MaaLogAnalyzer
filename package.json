@@ -42,14 +42,12 @@
     "@windsland52/maa-log-kernel": "workspace:*",
     "@windsland52/maa-log-parser": "workspace:*",
     "@windsland52/maa-log-tools": "workspace:*",
-    "echarts": "^6.1.0",
     "elkjs": "^0.11.1",
     "fflate": "^0.8.2",
     "highlight.js": "^11.11.1",
     "marked": "^18.0.7",
     "naive-ui": "^2.44.1",
     "vue": "^3.5.40",
-    "vue-echarts": "^8.0.1",
     "vue-virtual-scroller": "3.0.5"
   },
   "devDependencies": {

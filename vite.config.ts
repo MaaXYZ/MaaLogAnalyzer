@@ -85,7 +85,6 @@ export default defineConfig({
 
           if (normalizedId.includes('/node_modules/vue/')) return 'vue-vendor'
           if (normalizedId.includes('/node_modules/naive-ui/')) return 'naive-ui'
-          if (normalizedId.includes('/node_modules/echarts/') || normalizedId.includes('/node_modules/vue-echarts/')) return 'echarts'
           if (normalizedId.includes('/node_modules/elkjs/')) return 'elkjs'
           if (normalizedId.includes('/node_modules/highlight.js/') || normalizedId.includes('/node_modules/vue-virtual-scroller/')) {
             return 'vendor'

@@ -6,20 +6,6 @@ const readRepositoryFile = (relativePath: string) => (
 )
 
 describe('large browser dependency loading', () => {
-  it('registers only the ECharts features used by node statistics', () => {
-    const runtime = readRepositoryFile(
-      'src/views/nodeStatistics/components/chartRuntime.ts',
-    )
-    const card = readRepositoryFile(
-      'src/views/nodeStatistics/components/NodeStatisticsChartCard.vue',
-    )
-
-    expect(runtime).toContain("import { BarChart } from 'echarts/charts'")
-    expect(runtime).toContain("import { CanvasRenderer } from 'echarts/renderers'")
-    expect(runtime).not.toMatch(/import \* as|await import\('echarts\/(?:charts|components|renderers)'\)/)
-    expect(card).toContain("defineAsyncComponent(() => import('./chartRuntime'))")
-  })
-
   it('runs ELK in a separately loaded web worker outside SSR tests', () => {
     const builder = readRepositoryFile('src/utils/flowchartBuilder.ts')
     const extension = readRepositoryFile('src-vscode/src/extension.ts')

@@ -2,8 +2,6 @@
 import {
   ref,
   computed,
-  onMounted,
-  onBeforeUnmount,
 } from 'vue'
 import {
   NCard, NTag, useMessage,
@@ -18,20 +16,10 @@ import {
 import {
   useNodeStatisticsTableColumns,
 } from './nodeStatistics/composables/useNodeStatisticsTableColumns'
-import {
-  useNodeStatisticsChartOptions,
-  type NodeChartDimension,
-  type RecognitionActionChartDimension,
-  type WaitFreezeChartDimension,
-  nodeChartDimensionOptions,
-  recognitionActionChartDimensionOptions,
-  waitFreezeChartDimensionOptions,
-} from './nodeStatistics/composables/useNodeStatisticsChartOptions'
 import NodeStatisticsHeaderControls from './nodeStatistics/components/NodeStatisticsHeaderControls.vue'
 import NodeStatisticsSummarySection from './nodeStatistics/components/NodeStatisticsSummarySection.vue'
 import NodeStatisticsDataPanel from './nodeStatistics/components/NodeStatisticsDataPanel.vue'
 import NodeStatisticsLoadingModals from './nodeStatistics/components/NodeStatisticsLoadingModals.vue'
-import NodeStatisticsChartCard from './nodeStatistics/components/NodeStatisticsChartCard.vue'
 
 
 const { isMobile } = useIsMobile()
@@ -61,17 +49,9 @@ const {
 
 const statMode = ref<StatMode>('node')
 
-// 饼图维度选择
-const nodeChartDimension = ref<NodeChartDimension>('count')
-const recognitionActionChartDimension = ref<RecognitionActionChartDimension>('avgActionDuration')
-const waitFreezeChartDimension = ref<WaitFreezeChartDimension>('repeatCount')
-
 // 搜索关键词
 const searchKeyword = ref('')
 const {
-  nodeStatistics,
-  recognitionActionStatistics,
-  waitFreezeStatistics,
   statistics,
   nodeSummary,
   recognitionActionSummary,
@@ -85,19 +65,6 @@ const { columns } = useNodeStatisticsTableColumns({
   isMobile,
   statMode,
 })
-const {
-  mobileNodeChartOption,
-  mobileRecognitionActionChartOption,
-  mobileWaitFreezeChartOption,
-} = useNodeStatisticsChartOptions({
-  isMobile,
-  nodeStatistics,
-  recognitionActionStatistics,
-  waitFreezeStatistics,
-  nodeChartDimension,
-  recognitionActionChartDimension,
-  waitFreezeChartDimension,
-})
 
 const statisticsPanelTitle = computed(() => {
   if (statMode.value === 'node') return '节点明细'
@@ -105,62 +72,10 @@ const statisticsPanelTitle = computed(() => {
   return 'Wait Freezes 明细'
 })
 
-const activeChartOption = computed(() => {
-  if (statMode.value === 'node') return mobileNodeChartOption.value
-  if (statMode.value === 'recognition-action') return mobileRecognitionActionChartOption.value
-  return mobileWaitFreezeChartOption.value
-})
-
 const hasSummaryContent = computed(() => {
   if (statMode.value === 'node') return nodeSummary.value !== null
   if (statMode.value === 'recognition-action') return recognitionActionSummary.value !== null
   return waitFreezeSummary.value !== null
-})
-
-const hasChartContent = computed(() => activeChartOption.value !== null)
-
-const layoutHostRef = ref<HTMLElement | null>(null)
-const layoutHostWidth = ref(0)
-let layoutResizeObserver: ResizeObserver | null = null
-
-const useSingleColumnLayout = computed(() => (
-  props.isVscodeLaunchEmbed === true
-  || isMobile.value
-  || !hasChartContent.value
-  || layoutHostWidth.value < 980
-))
-
-const updateLayoutHostWidth = () => {
-  const host = layoutHostRef.value
-  if (!host) {
-    layoutHostWidth.value = 0
-    return
-  }
-  layoutHostWidth.value = host.getBoundingClientRect().width
-}
-
-onMounted(() => {
-  const host = layoutHostRef.value
-  if (!host) {
-    return
-  }
-  updateLayoutHostWidth()
-  if (typeof ResizeObserver === 'undefined') {
-    window.addEventListener('resize', updateLayoutHostWidth)
-    return
-  }
-  layoutResizeObserver = new ResizeObserver(() => {
-    updateLayoutHostWidth()
-  })
-  layoutResizeObserver.observe(host)
-})
-
-onBeforeUnmount(() => {
-  if (layoutResizeObserver) {
-    layoutResizeObserver.disconnect()
-    layoutResizeObserver = null
-  }
-  window.removeEventListener('resize', updateLayoutHostWidth)
 })
 </script>
 
@@ -195,12 +110,6 @@ onBeforeUnmount(() => {
           <node-statistics-header-controls
             :is-mobile="isMobile"
             :stat-mode="statMode"
-            :node-chart-dimension="nodeChartDimension"
-            :recognition-action-chart-dimension="recognitionActionChartDimension"
-            :wait-freeze-chart-dimension="waitFreezeChartDimension"
-            :node-chart-dimension-options="nodeChartDimensionOptions"
-            :recognition-action-chart-dimension-options="recognitionActionChartDimensionOptions"
-            :wait-freeze-chart-dimension-options="waitFreezeChartDimensionOptions"
             :search-keyword="searchKeyword"
             :is-in-tauri="isInTauri"
             :is-vscode-launch-embed="props.isVscodeLaunchEmbed === true"
@@ -208,9 +117,6 @@ onBeforeUnmount(() => {
             :upload-key="uploadKey"
             :handle-naive-upload="handleNaiveUpload"
             @update:stat-mode="statMode = $event"
-            @update:node-chart-dimension="nodeChartDimension = $event"
-            @update:recognition-action-chart-dimension="recognitionActionChartDimension = $event"
-            @update:wait-freeze-chart-dimension="waitFreezeChartDimension = $event"
             @update:search-keyword="searchKeyword = $event"
             @tauri-upload-click="handleTauriFileSelect"
           />
@@ -218,44 +124,19 @@ onBeforeUnmount(() => {
       </div>
     </template>
 
-    <div ref="layoutHostRef" class="statistics-layout-host">
+    <div class="statistics-layout-host">
       <div class="statistics-body-scroll">
-      <div class="statistics-body-content">
-        <node-statistics-summary-section
-          v-if="hasSummaryContent"
-          :stat-mode="statMode"
-          :is-mobile="isMobile"
-          :search-keyword="searchKeyword"
-          :node-summary="nodeSummary"
-          :recognition-action-summary="recognitionActionSummary"
-          :wait-freeze-summary="waitFreezeSummary"
-          @update:search-keyword="searchKeyword = $event"
-        />
-
-        <div
-          class="statistics-main-layout"
-          :class="{
-            mobile: isMobile,
-            'statistics-main-layout--single': useSingleColumnLayout,
-          }"
-        >
-          <div v-if="hasChartContent" class="statistics-chart-panel">
-            <node-statistics-chart-card
-              :visible="statMode === 'node'"
-              :option="mobileNodeChartOption"
-              :is-mobile="isMobile"
-            />
-            <node-statistics-chart-card
-              :visible="statMode === 'recognition-action'"
-              :option="mobileRecognitionActionChartOption"
-              :is-mobile="isMobile"
-            />
-            <node-statistics-chart-card
-              :visible="statMode === 'wait-freezes'"
-              :option="mobileWaitFreezeChartOption"
-              :is-mobile="isMobile"
-            />
-          </div>
+        <div class="statistics-body-content">
+          <node-statistics-summary-section
+            v-if="hasSummaryContent"
+            :stat-mode="statMode"
+            :is-mobile="isMobile"
+            :search-keyword="searchKeyword"
+            :node-summary="nodeSummary"
+            :recognition-action-summary="recognitionActionSummary"
+            :wait-freeze-summary="waitFreezeSummary"
+            @update:search-keyword="searchKeyword = $event"
+          />
 
           <div class="statistics-table-panel">
             <node-statistics-data-panel
@@ -272,7 +153,6 @@ onBeforeUnmount(() => {
             />
           </div>
         </div>
-      </div>
       </div>
     </div>
 
@@ -357,30 +237,12 @@ onBeforeUnmount(() => {
   padding-right: 2px;
 }
 
-.statistics-main-layout {
-  display: grid;
-  grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
-  width: 100%;
-  gap: 16px;
-  align-items: start;
-  padding-bottom: 2px;
-}
-
-.statistics-main-layout.mobile {
-  grid-template-columns: 1fr;
-}
-
-.statistics-main-layout--single {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.statistics-chart-panel,
 .statistics-table-panel {
   display: flex;
+  width: 100%;
   min-width: 0;
 }
 
-.statistics-chart-panel > *,
 .statistics-table-panel > * {
   width: 100%;
   min-width: 0;
@@ -394,10 +256,6 @@ onBeforeUnmount(() => {
 
   .statistics-controls-wrap {
     width: 100%;
-  }
-
-  .statistics-main-layout {
-    grid-template-columns: 1fr;
   }
 }
 </style>

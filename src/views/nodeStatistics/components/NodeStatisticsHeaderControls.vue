@@ -7,27 +7,14 @@ import {
   NInput,
   NRadioButton,
   NRadioGroup,
-  NSelect,
   NUpload,
 } from 'naive-ui'
 import { CloudUploadOutlined, FolderOpenOutlined } from '@vicons/antd'
-import type { SelectMixedOption } from 'naive-ui/es/select/src/interface'
 import type { StatMode } from '../composables/useNodeStatisticsMetrics'
-import type {
-  NodeChartDimension,
-  RecognitionActionChartDimension,
-  WaitFreezeChartDimension,
-} from '../composables/useNodeStatisticsChartOptions'
 
 const props = defineProps<{
   isMobile: boolean
   statMode: StatMode
-  nodeChartDimension: NodeChartDimension
-  recognitionActionChartDimension: RecognitionActionChartDimension
-  waitFreezeChartDimension: WaitFreezeChartDimension
-  nodeChartDimensionOptions: SelectMixedOption[]
-  recognitionActionChartDimensionOptions: SelectMixedOption[]
-  waitFreezeChartDimensionOptions: SelectMixedOption[]
   searchKeyword: string
   isInTauri: boolean
   isVscodeLaunchEmbed: boolean
@@ -38,9 +25,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:statMode': [value: StatMode]
-  'update:nodeChartDimension': [value: NodeChartDimension]
-  'update:recognitionActionChartDimension': [value: RecognitionActionChartDimension]
-  'update:waitFreezeChartDimension': [value: WaitFreezeChartDimension]
   'update:searchKeyword': [value: string]
   tauriUploadClick: []
 }>()
@@ -53,33 +37,6 @@ const emit = defineEmits<{
       <n-radio-button value="recognition-action">识别/动作</n-radio-button>
       <n-radio-button value="wait-freezes">Wait Freezes</n-radio-button>
     </n-radio-group>
-
-    <n-select
-      v-if="props.statMode === 'node'"
-      :value="props.nodeChartDimension"
-      :options="props.nodeChartDimensionOptions"
-      size="small"
-      :style="props.isMobile ? 'width: 100px' : 'width: 120px'"
-      @update:value="emit('update:nodeChartDimension', $event)"
-    />
-
-    <n-select
-      v-if="props.statMode === 'recognition-action'"
-      :value="props.recognitionActionChartDimension"
-      :options="props.recognitionActionChartDimensionOptions"
-      size="small"
-      :style="props.isMobile ? 'width: 120px' : 'width: 140px'"
-      @update:value="emit('update:recognitionActionChartDimension', $event)"
-    />
-
-    <n-select
-      v-if="props.statMode === 'wait-freezes'"
-      :value="props.waitFreezeChartDimension"
-      :options="props.waitFreezeChartDimensionOptions"
-      size="small"
-      :style="props.isMobile ? 'width: 120px' : 'width: 140px'"
-      @update:value="emit('update:waitFreezeChartDimension', $event)"
-    />
 
     <n-input
       v-if="!props.isMobile"
