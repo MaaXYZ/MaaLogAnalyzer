@@ -9,8 +9,6 @@ import {
   ColumnHeightOutlined,
   SettingOutlined,
   InfoCircleOutlined,
-  BulbFilled,
-  BulbOutlined,
 } from '@vicons/antd'
 import { isVSCode } from '../../../../utils/platform'
 
@@ -90,6 +88,8 @@ const isNativeVSCodeHost = isVSCode()
       <n-button
         text
         style="font-size: 20px"
+        title="设置"
+        aria-label="打开设置"
         data-tour="header-settings-button"
         @click="emit('open-settings')"
       >
@@ -101,6 +101,8 @@ const isNativeVSCodeHost = isVSCode()
       <n-button
         text
         style="font-size: 20px"
+        title="关于"
+        aria-label="打开关于对话框"
         @click="emit('open-about')"
       >
         <n-icon>
@@ -112,12 +114,19 @@ const isNativeVSCodeHost = isVSCode()
         v-if="!isVscodeLaunchEmbed && !isNativeVSCodeHost"
         text
         style="font-size: 20px"
+        :title="isDark ? '切换到浅色主题' : '切换到深色主题'"
+        :aria-label="isDark ? '切换到浅色主题' : '切换到深色主题'"
         data-tour="header-theme-button"
         @click="emit('toggle-theme')"
       >
         <n-icon>
-          <bulb-filled v-if="isDark" />
-          <bulb-outlined v-else />
+          <!-- 深色主题显示太阳（点击切浅色），浅色主题显示月亮（点击切深色） -->
+          <svg v-if="isDark" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M12 17.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zm0-15a1 1 0 0 1-1-1V1a1 1 0 0 1 2 0v.5a1 1 0 0 1-1 1zm0 20.5a1 1 0 0 1-1-1v-.5a1 1 0 0 1 2 0v.5a1 1 0 0 1-1 1zM3.6 5a1 1 0 0 1 .7-1.7c.27 0 .53.1.71.29l.35.35a1 1 0 1 1-1.41 1.41L3.6 5zM19.28 19.7a1 1 0 0 1 1.42 0l.35.35a1 1 0 1 1-1.41 1.41l-.36-.35a1 1 0 0 1 0-1.41zM1 11.25h.5a1 1 0 0 1 0 2H1a1 1 0 0 1 0-2zm21.5 0H23a1 1 0 0 1 0 2h-.5a1 1 0 0 1 0-2zM3.6 20.4a1 1 0 0 1 0-1.41l.35-.36a1 1 0 1 1 1.41 1.42l-.35.35a1 1 0 0 1-1.41 0zM19.28 5.7a1 1 0 0 1 0-1.41l.36-.35a1 1 0 1 1 1.41 1.41l-.35.35a1 1 0 0 1-1.42 0z"/>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a.75.75 0 0 1 .93.9 7.5 7.5 0 0 0 8.97 8.97.75.75 0 0 1 .9.93z"/>
+          </svg>
         </n-icon>
       </n-button>
     </n-flex>
