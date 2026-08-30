@@ -25,7 +25,8 @@ const searchTextModel = computed({
         :bordered="false"
         clearable
         size="small"
-        placeholder="搜索节点 / 识别 / Next"
+        placeholder="搜索节点 / 识别"
+        title="支持节点名与识别项搜索，Enter 跳转下一处（Next）"
       />
     </div>
   </div>

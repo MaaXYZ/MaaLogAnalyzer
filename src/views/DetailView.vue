@@ -94,7 +94,7 @@ watch(
     <div class="detail-inspector-container">
       <n-flex vertical style="gap: 12px">
         <n-card v-if="!selectedNode" title="节点详情" size="small">
-          <n-empty description="请点击左侧时间轴元素查看详情" />
+          <n-empty description="请在时间线或节点导航中选择节点查看详情" />
         </n-card>
 
       <template v-else>

@@ -198,6 +198,7 @@ defineExpose({
             ]"
           >
             <div
+              :title="item.node.name"
               class="node-nav-row"
               :class="{
                 'node-nav-row-detailed': props.displayMode === 'detailed',
