@@ -1,6 +1,6 @@
 {
   "name": "@windsland52/maa-log-tools",
-  "version": "1.3.1",
+  "version": "2.0.0",
   "type": "module",
   "private": false,
   "scripts": {
