@@ -70,19 +70,19 @@
         {
           "command": "maaLogAnalyzer.analyzeFolder",
           "when": "explorerResourceIsFolder",
-          "group": "navigation"
+          "group": "8_maa@1"
         },
         {
           "command": "maaLogAnalyzer.analyzeFile",
           "when": "resourceExtname == .log || resourceExtname == .zip || resourceFilename =~ /maa.*\\.log/i",
-          "group": "navigation"
+          "group": "8_maa@1"
         }
       ],
       "editor/context": [
         {
           "command": "maaLogAnalyzer.analyzeFile",
           "when": "resourceExtname == .log",
-          "group": "navigation"
+          "group": "8_maa@1"
         }
       ],
       "view/item/context": [
