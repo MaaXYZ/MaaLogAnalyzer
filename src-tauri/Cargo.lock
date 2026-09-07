@@ -1696,7 +1696,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "maa-log-analyzer"
-version = "0.0.1"
+version = "3.7.0"
 dependencies = [
  "libc",
  "serde",

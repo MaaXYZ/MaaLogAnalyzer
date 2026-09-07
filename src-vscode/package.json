@@ -2,7 +2,7 @@
   "name": "maa-log-analyzer",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.0.1",
+  "version": "3.7.0",
   "publisher": "Windsland52",
   "icon": "icon.png",
   "repository": {

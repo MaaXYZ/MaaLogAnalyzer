@@ -3,6 +3,31 @@
 （这是 git-cliff 自动生成的草稿，请人工合并同类项并改为用户视角后
 写入正式的 CHANGELOG.md。）
 
+## [3.7.0] - 2026-09-07
+
+### 修复问题
+
+- (vscode) Keep analyze-file fallback assertion in sync with prettier formatting
+- (detail) Hide source search button in VSCode iframe embed
+- (vscode) Move analysis commands below common context menu actions
+- (vscode) Wait for image resource reload before transferring logs
+
+### 新增功能
+
+- (node-card) Default collapse fully unrecognized recognition rounds
+- (node-card) Show collapse hint on first tree node per task
+
+### 杂项
+
+- (vscode) Add extension debug launch and build task
+
+### 样式调整
+
+- Format
+
+
+[3.7.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.6.0...v3.7.0
+
 ## [3.6.0] - 2026-08-30
 
 ### 代码重构
