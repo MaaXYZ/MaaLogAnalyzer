@@ -180,32 +180,10 @@ jobs:
           name: linux-x86_64-artifacts
           path: src-tauri/target/release/bundle/
 
-  # 生成 changelog
-  changelog:
-    name: Generate changelog
-    runs-on: ubuntu-latest
-    outputs:
-      release_body: ${{ steps.git-cliff.outputs.content }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-
-      - name: Generate a changelog
-        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4
-        id: git-cliff
-        with:
-          config: .github/cliff.toml
-          args: -vv --latest --strip header
-        env:
-          OUTPUT: CHANGES.md
-          GITHUB_REPO: ${{ github.repository }}
-
   # 创建 GitHub Release
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-windows, build-macos, build-linux, changelog]
+    needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -225,31 +203,17 @@ jobs:
       - name: 显示发布文件
         run: find release-assets/ -maxdepth 1 -type f -print
 
+      - name: 生成发布说明
+        run: |
+          node scripts/changelog-notes.mjs "$GITHUB_REF_NAME" > "${RUNNER_TEMP}/release-body.md"
+          printf '\n---\n\n构建于: %s\n' "${{ github.event.head_commit.timestamp }}" >> "${RUNNER_TEMP}/release-body.md"
+
       - name: 创建 Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: 'MaaLogAnalyzer-${{ github.ref_name }}'
-          body: |
-            ## 📦 下载说明
-
-            ### Web
-            - 在线使用: [mla.maafw.com](https://mla.maafw.com)
-
-            ### VSCode 插件
-            - Visual Studio Marketplace: [Windsland52.maa-log-analyzer](https://marketplace.visualstudio.com/items?itemName=Windsland52.maa-log-analyzer)
-
-            ### 桌面端安装包
-            - Windows (.msi)、macOS (.dmg) 与 Linux (.deb) 安装包见本页附件
-            - Windows 与 macOS 安装包未进行代码签名，系统可能显示安全提示
-            - 可使用附件中的 SHA256SUMS 校验下载完整性
-
-            ## 📝 更新内容
-            ${{ needs.changelog.outputs.release_body }}
-
-            ---
-
-            构建于: ${{ github.event.head_commit.timestamp }}
+          name: ${{ github.ref_name }}
+          body_path: ${{ runner.temp }}/release-body.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: release-assets/*
