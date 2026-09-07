@@ -488,6 +488,7 @@ export const useHostFileMessageReceiver = (
   onMounted(() => {
     if (isInVSCode()) {
       window.addEventListener('message', handleVSCodeMessage)
+      window.vscodeApi?.postMessage({ type: 'fileReceiverReady' })
     }
   })
 

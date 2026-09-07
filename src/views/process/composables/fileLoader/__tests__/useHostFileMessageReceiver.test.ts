@@ -55,6 +55,11 @@ describe('root-owned host file receiver', () => {
     lifecycle.mounted.forEach((callback) => callback())
 
     expect(listeners).toHaveLength(1)
+    expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'fileReceiverReady' })
+    expect(fakeWindow.addEventListener.mock.invocationCallOrder[0]).toBeLessThan(
+      postMessage.mock.invocationCallOrder[0],
+    )
+    postMessage.mockClear()
     const deliver = (data: Record<string, unknown>) => {
       for (const listener of listeners) listener({ data } as MessageEvent)
     }

@@ -21,9 +21,11 @@ import {
 } from './externalUriGate'
 import { normalizeEditorUriScheme, WINDOWS_CONTEXT_MENU_KEYS } from './windowsContextMenu'
 import { WebviewByteTransferAckBroker, WebviewByteTransferSender } from './webviewByteTransfer'
+import { WebviewReadiness } from './webviewReadiness'
 
 let currentPanel: vscode.WebviewPanel | undefined = undefined
 let webviewAssetRoot: vscode.Uri | undefined
+let webviewReadiness: WebviewReadiness | undefined
 const loadOperationCoordinator = new LoadOperationCoordinator()
 const byteTransferAcknowledgements = new WebviewByteTransferAckBroker()
 const execFileAsync = promisify(execFile)
@@ -36,13 +38,19 @@ const BAK_LOG_RE =
   /^(maa|maafw)\.bak(?:\.(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3}))?\.log$/i
 
 const beginLoadOperation = (): LoadOperation => {
+  webviewReadiness?.cancelPending(new Error('Load operation was superseded'))
   byteTransferAcknowledgements.cancelAll(new Error('Load operation was superseded'))
   return loadOperationCoordinator.begin()
 }
 
-const createByteTransfer = (operation: LoadOperation): WebviewByteTransferSender => {
+const createByteTransfer = async (operation: LoadOperation): Promise<WebviewByteTransferSender> => {
+  operation.throwIfCancelled()
   const webview = currentPanel?.webview
-  if (!webview) throw new Error(t('The analyzer panel is not available'))
+  const readiness = webviewReadiness
+  if (!webview || !readiness) throw new Error(t('The analyzer panel is not available'))
+  await readiness.wait()
+  operation.throwIfCancelled()
+  if (currentPanel?.webview !== webview) throw new Error(t('The analyzer panel is not available'))
   return new WebviewByteTransferSender(webview, operation, byteTransferAcknowledgements)
 }
 
@@ -396,8 +404,10 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
     },
   )
 
-  // 设置 HTML 内容
-  currentPanel.webview.html = getWebviewContent(currentPanel.webview, context.extensionUri)
+  // Keep readiness scoped to this panel.
+  const panel = currentPanel
+  const readiness = new WebviewReadiness()
+  webviewReadiness = readiness
 
   const themeChangeDisposable = vscode.window.onDidChangeActiveColorTheme(() => {
     postThemeChangedToWebview(currentPanel)
@@ -410,6 +420,11 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
   currentPanel.webview.onDidReceiveMessage(
     async (message: any) => {
       switch (message.type) {
+        case 'fileReceiverReady': {
+          readiness.markReady()
+          break
+        }
+
         case 'loadBytesAck': {
           if (typeof message.transferId === 'string' && Number.isSafeInteger(message.sequence)) {
             byteTransferAcknowledgements.acknowledge(
@@ -513,15 +528,20 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
   currentPanel.onDidDispose(
     () => {
       themeChangeDisposable.dispose()
+      readiness.dispose()
+      if (currentPanel !== panel) return
       loadOperationCoordinator.cancelCurrent()
       byteTransferAcknowledgements.cancelAll(new Error('The analyzer panel was closed'))
       currentPanel = undefined
+      webviewReadiness = undefined
     },
     undefined,
     context.subscriptions,
   )
 
-  return currentPanel
+  // Register the readiness listener before starting the Webview application.
+  panel.webview.html = getWebviewContent(panel.webview, context.extensionUri)
+  return panel
 }
 
 async function analyzeFileUri(
@@ -545,7 +565,7 @@ async function analyzeFileUri(
     )
     operation.throwIfCancelled()
 
-    transfer = createByteTransfer(operation)
+    transfer = await createByteTransfer(operation)
     await transfer.start({
       fileName,
       errorImages: debugAssets.errorImages,
@@ -725,7 +745,11 @@ async function analyzeFolderUri(
       : path.posix.basename(selectedBaseDir.path || folderUri.path)
     const contentBaseDir = targetMain ? getParentUri(targetMain) : selectedBaseDir
 
-    transfer = createByteTransfer(operation)
+    // Updating image roots reloads the Webview, so finish it before sending any bytes.
+    const debugAssets = await collectDebugAssetsForBaseDirectory(contentBaseDir, operation)
+    operation.throwIfCancelled()
+
+    transfer = await createByteTransfer(operation)
     await transfer.start({ fileName: sourceName })
 
     for (const { item } of selectedLogEntries) {
@@ -739,9 +763,6 @@ async function analyzeFolderUri(
         bytes,
       })
     }
-
-    const debugAssets = await collectDebugAssetsForBaseDirectory(contentBaseDir, operation)
-    operation.throwIfCancelled()
 
     await transfer.complete({
       errorImages: debugAssets.errorImages,
@@ -779,16 +800,34 @@ interface DebugImageResource {
   url: string
 }
 
-const configureWebviewImageRoot = (imageRoot?: vscode.Uri): vscode.Webview => {
+const configureWebviewImageRoot = async (
+  operation: LoadOperation,
+  imageRoot?: vscode.Uri,
+): Promise<vscode.Webview> => {
+  operation.throwIfCancelled()
   const webview = currentPanel?.webview
-  if (!webview) throw new Error(t('The analyzer panel is not available'))
+  const readiness = webviewReadiness
+  if (!webview || !readiness) throw new Error(t('The analyzer panel is not available'))
+  // Consume the initial ready event before requesting a reload. Otherwise it
+  // could be mistaken for readiness of the replacement document.
+  await readiness.wait()
+  operation.throwIfCancelled()
   const localResourceRoots = [
     ...(webviewAssetRoot ? [webviewAssetRoot] : []),
     ...(imageRoot ? [imageRoot] : []),
   ]
-  webview.options = {
-    ...webview.options,
-    localResourceRoots,
+  const previousRoots = webview.options.localResourceRoots
+  if (
+    previousRoots?.length !== localResourceRoots.length ||
+    previousRoots.some((root, index) => root.toString() !== localResourceRoots[index].toString())
+  ) {
+    readiness.reset()
+    webview.options = {
+      ...webview.options,
+      localResourceRoots,
+    }
+    await readiness.wait()
+    operation.throwIfCancelled()
   }
   return webview
 }
@@ -841,7 +880,7 @@ async function collectDebugAssetsForBaseDirectory(
   }
 
   if (!debugDirUri) {
-    configureWebviewImageRoot()
+    await configureWebviewImageRoot(operation)
     return { errorImages: [], visionImages: [], waitFreezesImages: [] }
   }
 
@@ -869,7 +908,7 @@ async function collectDebugAssetsForBaseDirectory(
   )
   operation.throwIfCancelled()
 
-  const webview = configureWebviewImageRoot(debugDirUri)
+  const webview = await configureWebviewImageRoot(operation, debugDirUri)
   const errorImages: DebugImageResource[] = []
   const visionImages: DebugImageResource[] = []
   const waitFreezesImages: DebugImageResource[] = []
@@ -1182,7 +1221,7 @@ async function handleZipFile(uri: vscode.Uri, operation: LoadOperation): Promise
     operation.throwIfCancelled()
     if (!selectedPaths) return
 
-    transfer = createByteTransfer(operation)
+    transfer = await createByteTransfer(operation)
     await transfer.start({
       fileName: path.posix.basename(uri.path),
     })
@@ -1357,4 +1396,6 @@ function getNonce(): string {
 
 export function deactivate() {
   loadOperationCoordinator.cancelCurrent()
+  webviewReadiness?.dispose()
+  byteTransferAcknowledgements.cancelAll(new Error('The analyzer extension was deactivated'))
 }
