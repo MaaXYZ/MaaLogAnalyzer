@@ -197,6 +197,7 @@ MaaLogAnalyzer 的重要更改记录。格式参考 [Keep a Changelog](https://k
 - **v1.1.0** - 2025-12-11：便携式 exe 与 deb 包；格式错误提示
 - **v1.0.0** - 2025-12-11：初版发布
 
+[3.7.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.6.0...v3.7.0
 [3.6.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.5.0...v3.6.0
 [3.5.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.4.0...v3.5.0
 [3.4.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.3.0...v3.4.0
