@@ -90,7 +90,8 @@ prerelease tag（如 `v3.7.0-beta.1`）会被 `release-vscode.yml` 跳过（buil
 
 - 触发：push 到 `main` 且变更涉及 `packages/**`、`pnpm-lock.yaml` 或该 workflow 自身。
 - 版本来源：各包自己 `package.json` 的 `version`，与主项目 tag **无关**。
-- 行为：逐个检查 npm 上是否已存在同版本号，不存在才 `npm publish`（`--access public --provenance`，已存在则跳过）。
+- 行为：构建后逐个检查 npm 上是否已存在同版本号，不存在才 `npm publish`（`--access public --provenance`，已存在则跳过）。
+- 认证：npm trusted publishing（OIDC），不需要 `NPM_TOKEN`。
 - 因此发布某个包：手动 bump `packages/<pkg>/package.json` 的版本 → 提交到 main → CI 自动发布。重复提交同一版本不会重复发布。
 
 ### 3. Web 版
@@ -106,7 +107,8 @@ prerelease tag（如 `v3.7.0-beta.1`）会被 `release-vscode.yml` 跳过（buil
 ## 注意事项
 
 - CI 版本派生依赖 tag 历史：`deploy.yml` 配置了 `fetch-depth: 0` + `fetch-tags: true`，`release-vscode.yml` 依赖 `fetch-depth: 0`（会一起拉取全部 tag）；如果在 tag 之前推送了 commit，tag 推送会再触发一轮带正确版本的流程。
-- `release-vscode.yml` 的 publish 使用 `VSCE_PAT`，`release-npm.yml` 使用 `NPM_TOKEN`，两者缺失时对应 CI 会失败（preflight 阶段即报错）；发布前确认 secret 存在。
+- `release-vscode.yml` 的 publish 使用 `VSCE_PAT`；`release-npm.yml` 使用 npm trusted publishing（OIDC），不需要 `NPM_TOKEN`。
+- npm 侧的 trusted publisher 已为这 5 个包配置好；新增包或重命名 `release-npm.yml` 后要重新配置（`npm trust github <pkg> --repo MaaXYZ/MaaLogAnalyzer --file release-npm.yml --allow-publish`），否则发布只会返回掩码 `E404`。
 - GitHub Release 的 notes 由 `scripts/changelog-notes.mjs` 从 CHANGELOG.md 提取对应版本段落，因此 CHANGELOG.md 必须先提交（见发布流程第 1 步），否则 tag 推送后 Release notes 为空、工作流报错。
 - `CHANGELOG.draft.md` 是草稿，可随时用 `pnpm run changelog:draft` 重跑刷新；正式的 `CHANGELOG.md` 只能人工编辑，任何脚本都不会碰它（`changelog-notes.mjs` 只读）。
 - 桌面端（Tauri）目前没有自动发布安装包的 workflow；如新增，参考本仓库历史（曾有校验资产与 checksum 的 release 流程被移除）。

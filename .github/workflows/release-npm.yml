@@ -12,16 +12,19 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: npm-publish-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish:
-    if: ${{ github.repository_owner == 'MaaXYZ' }}
+  pack:
+    if: ${{ github.repository == 'MaaXYZ/MaaLogAnalyzer' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      tarball_count: ${{ steps.pack.outputs.tarball_count }}
+
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -32,11 +35,13 @@ jobs:
           version: 10.34.5
           run_install: false
 
+      # No registry-url on purpose: publishing authenticates through npm trusted publishing (OIDC),
+      # and setup-node's registry-url writes an .npmrc whose placeholder token shadows the OIDC
+      # exchange, which npm reports as a masked E404 on PUT.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: 'pnpm'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -44,30 +49,12 @@ jobs:
       - name: Build packages
         run: pnpm build:packages
 
-      - name: Preflight package release
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Pack release tarballs
+        id: pack
+        shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "NPM_TOKEN is not set."
-            exit 1
-          fi
-          npm whoami >/dev/null
-
-          package_exists() {
-            local package_ref="$1"
-            local output
-            if output=$(npm view "${package_ref}" version 2>&1); then
-              return 0
-            fi
-            if grep -q 'E404' <<< "${output}"; then
-              return 1
-            fi
-            echo "${output}" >&2
-            exit 1
-          }
-
+          # Update this list (and the docs in RELEASING.md) when a package is added or renamed.
           packages=(
             "packages/maa-log-kernel"
             "packages/maa-log-parser"
@@ -76,42 +63,91 @@ jobs:
             "packages/maa-log-tools"
           )
           pack_root="${RUNNER_TEMP}/mla-npm-packages"
-          plan_file="${RUNNER_TEMP}/mla-npm-publish-plan.tsv"
+          rm -rf "${pack_root}"
           mkdir -p "${pack_root}"
-          : > "${plan_file}"
 
-          for index in "${!packages[@]}"; do
-            pkg_dir="${packages[$index]}"
+          for pkg_dir in "${packages[@]}"; do
             echo "==== ${pkg_dir} ===="
-            pkg_name=$(node -p "require('./${pkg_dir}/package.json').name")
-            pkg_ver=$(node -p "require('./${pkg_dir}/package.json').version")
-            package_ref="${pkg_name}@${pkg_ver}"
-
-            if package_exists "${package_ref}"; then
-              echo "Skip existing: ${package_ref}"
-              continue
-            fi
-
-            pack_dir="${pack_root}/${index}"
-            mkdir -p "${pack_dir}"
-            pnpm --dir "${pkg_dir}" pack --pack-destination "${pack_dir}"
-            mapfile -t tarballs < <(find "${pack_dir}" -maxdepth 1 -type f -name '*.tgz')
-            if [ "${#tarballs[@]}" -ne 1 ]; then
-              echo "Expected one tarball for ${package_ref}, found ${#tarballs[@]}." >&2
-              exit 1
-            fi
-            printf '%s\t%s\n' "${tarballs[0]}" "${package_ref}" >> "${plan_file}"
+            pnpm --dir "${pkg_dir}" pack --pack-destination "${pack_root}"
           done
 
-      - name: Publish preflighted packages
+          mapfile -t tarballs < <(find "${pack_root}" -maxdepth 1 -type f -name '*.tgz' -print | sort)
+          if [ "${#tarballs[@]}" -ne "${#packages[@]}" ]; then
+            echo "Expected one tarball per package (${#packages[@]}), found ${#tarballs[@]}." >&2
+            exit 1
+          fi
+
+          printf 'pack_dir=%s\n' "${pack_root}" >> "${GITHUB_OUTPUT}"
+          printf 'tarball_count=%s\n' "${#tarballs[@]}" >> "${GITHUB_OUTPUT}"
+
+      # The pack directory is uploaded through a wildcard on purpose: a wildcard makes the artifact
+      # root the directory itself, so the tarballs land at the artifact root instead of nested under
+      # their parent directory name.
+      - name: Upload release tarballs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: npm-packages
+          path: ${{ steps.pack.outputs.pack_dir }}/*.tgz
+          if-no-files-found: error
+
+  publish:
+    needs: pack
+    if: ${{ github.repository == 'MaaXYZ/MaaLogAnalyzer' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download release tarballs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: npm-packages
+          path: dist/npm
+
+      # No install, no build and no checkout here: the tarballs are published exactly as the pack job
+      # produced them, and an OIDC credential is the only authentication involved.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Publish release tarballs
+        shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          EXPECTED_TARBALLS: ${{ needs.pack.outputs.tarball_count }}
         run: |
           set -euo pipefail
-          plan_file="${RUNNER_TEMP}/mla-npm-publish-plan.tsv"
-          if [ ! -s "${plan_file}" ]; then
-            echo "All package versions already exist."
-            exit 0
+          npm_version="$(npm --version)"
+          echo "npm ${npm_version}"
+          # Trusted publishing requires npm >= 11.5.1. Fail loudly here rather than letting it
+          # surface later as the masked E404 that npm returns for any authentication failure.
+          node -e '
+            const [major, minor, patch] = process.argv[1].split(".").map(Number);
+            const supported = major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1)));
+            if (!supported) {
+              console.error(`npm ${process.argv[1]} does not support trusted publishing (need >= 11.5.1)`);
+              process.exit(1);
+            }
+          ' "$npm_version"
+
+          # Trusted publishing must not ride on a long-lived token: a token left in the environment
+          # would silently replace the OIDC credential this workflow exists to use.
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "NODE_AUTH_TOKEN is set; trusted publishing expects no npm token." >&2
+            exit 1
+          fi
+          # A stale token in any npmrc would shadow the OIDC exchange, so drop it explicitly.
+          npm config delete "//registry.npmjs.org/:_authToken" >/dev/null 2>&1 || true
+
+          if ! [[ "${EXPECTED_TARBALLS}" =~ ^[0-9]+$ ]]; then
+            echo "Expected tarball count from the pack job is missing: '${EXPECTED_TARBALLS}'." >&2
+            exit 1
+          fi
+          mapfile -t tarballs < <(find dist/npm -maxdepth 1 -type f -name '*.tgz' -print | sort)
+          if [ "${#tarballs[@]}" -ne "${EXPECTED_TARBALLS}" ]; then
+            echo "Expected ${EXPECTED_TARBALLS} tarballs in the artifact, found ${#tarballs[@]}." >&2
+            exit 1
           fi
 
           package_exists() {
@@ -123,15 +159,35 @@ jobs:
             if grep -q 'E404' <<< "${output}"; then
               return 1
             fi
+            echo "Unable to query ${package_ref} on npm:" >&2
             echo "${output}" >&2
             exit 1
           }
 
-          while IFS=$'\t' read -r tarball package_ref; do
+          metadata_root="${RUNNER_TEMP}/mla-npm-package-metadata"
+          published=0
+          for tarball in "${tarballs[@]}"; do
+            # Read the identity from the artifact itself: the already-published check must describe
+            # what would actually be uploaded, not what some other checkout claims.
+            rm -rf "${metadata_root}"
+            mkdir -p "${metadata_root}"
+            tar -xzf "${tarball}" -C "${metadata_root}" package/package.json
+            package_name="$(node -e 'process.stdout.write(require(process.argv[1]).name)' "${metadata_root}/package/package.json")"
+            package_version="$(node -e 'process.stdout.write(require(process.argv[1]).version)' "${metadata_root}/package/package.json")"
+            package_ref="${package_name}@${package_version}"
+
             if package_exists "${package_ref}"; then
-              echo "Skip concurrently published package: ${package_ref}"
+              echo "Skip existing: ${package_ref}"
               continue
             fi
+
             echo "Publish ${package_ref}"
+            # Provenance is kept explicit: it is generated from the same OIDC identity, and losing it
+            # silently would be a supply-chain regression.
             npm publish "${tarball}" --access public --provenance
-          done < "${plan_file}"
+            published=$((published + 1))
+          done
+
+          if [ "${published}" -eq 0 ]; then
+            echo "All package versions already exist."
+          fi
