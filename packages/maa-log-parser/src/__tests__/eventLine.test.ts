@@ -79,12 +79,17 @@ describe('EventLine', () => {
 })
 
 describe('realtime dedup retention', () => {
-  const getDedupSize = (parser: LogParser): number => {
-    return (
-      parser as unknown as {
-        lastEventBySignature: Map<string, unknown>
-      }
-    ).lastEventBySignature.size
+  type BucketProbe = {
+    recentEventsBySignature: Map<string, Map<string, { timestamps: number[]; head: number }>>
+  }
+
+  /** 历史里仍然存活的**出现次数**（不是签名个数）——封顶的是它。 */
+  const getRetainedOccurrences = (parser: LogParser): number => {
+    let total = 0
+    for (const bucket of (parser as unknown as BucketProbe).recentEventsBySignature.values()) {
+      for (const log of bucket.values()) total += log.timestamps.length - log.head
+    }
+    return total
   }
 
   it('does not retain signatures that have no finite timestamp', () => {
@@ -98,10 +103,10 @@ describe('realtime dedup retention', () => {
     )
 
     expect(parser.getEventsSnapshot()).toHaveLength(100)
-    expect(getDedupSize(parser)).toBe(0)
+    expect(getRetainedOccurrences(parser)).toBe(0)
   })
 
-  it('bounds signatures even when timestamps do not advance', () => {
+  it('bounds retained occurrences even when timestamps do not advance', () => {
     const parser = new LogParser()
     parser.appendRealtimeLines(
       Array.from(
@@ -111,6 +116,30 @@ describe('realtime dedup retention', () => {
       ),
     )
 
-    expect(getDedupSize(parser)).toBeLessThanOrEqual(16_384)
+    expect(getRetainedOccurrences(parser)).toBeLessThanOrEqual(16_384)
+  })
+
+  it('keeps the cross-source lookup bounded for a hot repeated signature', () => {
+    // 单来源下桶里只有自己一个来源，查找必须直接跳过 ——
+    // 早期实现每行扫全桶，40 批 × 1000 行的实时追加实测从 ~0.2s 退化到 ~16s。
+    // 预算按「固定路径 ~0.3s、退回到逐条扫描 ~16s」定，只用来拦住那一类改动。
+    const parser = new LogParser()
+    const batches: string[][] = []
+    for (let batch = 0; batch < 40; batch += 1) {
+      batches.push(
+        Array.from(
+          { length: 1000 },
+          (_, index) =>
+            `[2026-07-26 12:00:${String(batch).padStart(2, '0')}.${String(index % 1000).padStart(3, '0')}][INF][Px1][Tx1][test] !!!OnEventNotify!!! [handle=1] [msg=Node.NextList.Starting] [details={"task_id":1,"name":"Loop"}]`,
+        ),
+      )
+    }
+
+    const startedAt = performance.now()
+    for (const batch of batches) parser.appendRealtimeLines(batch)
+    const elapsed = performance.now() - startedAt
+
+    expect(parser.getEventsSnapshot()).toHaveLength(40_000)
+    expect(elapsed).toBeLessThan(4000)
   })
 })

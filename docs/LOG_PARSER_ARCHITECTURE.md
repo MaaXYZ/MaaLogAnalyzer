@@ -297,12 +297,47 @@ type ProtocolEvent =
 
 - 解决同一通知被不同线程或来源镜像写出
 
+实现说明：
+
+- 实际窗口见 `core/logParser.ts` 的 `CROSS_SOURCE_DUPLICATE_WINDOW_MS`（1s）。
+  AgentServer 会把客户端发来的通知重新 `notify` 一遍（`MaaAgentServer/Server/AgentServer.cpp`，
+  控制器那一路用 `EventDispatcher(false)` 关掉了日志），所以客户端与 agent 各写一份 `debug/maafw.log`
+  和 `debug/agent/maafw.log`，两份一起加载时同一通知会出现两次，时间差实测 p50 = 1ms、max ≈ 58ms。
+- **时间窗只在 lookup 处按两份事件的真实时间差判断，不按流的先后剪历史。** 多个输入是逐个文件
+  串行解析的，后一份文件的时间戳往往早于前一份末尾的 watermark；若按 watermark 剪裁，跨文件镜像
+  会整体漏掉（实测 2628 对镜像只去掉 4 条）。历史只按出现次数封顶（`MAX_DEDUP_OCCURRENCES`）。
+- **每个签名要保留近窗内的*全部*出现，而不是只有最后一次。** 同一签名会反复出现
+  （`Node.NextList.*` 在循环里尤其明显）；只留"最后一次"时，先解析那份文件里与镜像成对的那一次
+  早已被后续覆盖，后解析的文件永远配不上。
+  为此 `recentEventsBySignature` 是 `签名 → (来源 → 有序时间戳数组)`；查找只看**别的来源**
+  并做二分，单来源时直接跳过，所以不随历史长度退化（早期实现每行扫全桶，实时路径实测慢 73 倍）。
+- **这是存在性判断，不做 1:1 配对。** 窗口内存在任一异源同签名出现即判重，不记录"和哪一条配上"。
+  当同一签名以接近窗口边界（≈1s）的间隔从两个来源反复出现时，理论上可能跨迭代匹配。
+  由于两侧签名逐字节相同，**被丢掉的集合不变**，唯一影响是留下的那份的 `seq` / `_startEventIndex`。
+  已观测语料（真实 client + agent 日志）里所有配对都是 Δ = 0 / −1ms，未出现该情形；
+  若将来要固定事件序号做 golden 测试，需注意这一点。
+- **两侧必须都命中这个窗口，合并才会发生。** 该去重是镜像合并的**唯一机制** ——
+  ScopeTree 层已不再按 key 复用（见下条），所以一旦镜像的 `Starting` 没被去掉
+  （延迟超过 1s、时间戳偏移、或 `details` 文本不完全相同），你得到的就是两个任务而不是一个。
+  实测镜像延迟 p50 = 1ms / max ≈ 58ms，余量足够，但这是单点，改动时必须重新评估。
+- 该去重**只发生在输入层**。ScopeTree 层（第二段）不得再按 `buildScopeKey` 复用已打开的 scope：
+  那等于把去重窗口放大到无限大。一旦上一轮进程被杀掉、作用域永远收不到终止事件，
+  后续会话里同 key 的 `Tasker.Task.Starting` 就会被并进上一轮的作用域，把一份日志里的
+  多次运行拼成同一个任务。进程重启后 `task_id` / `res_id` / `node_id` 都从固定基数
+  重新分配（`MaaFramework/source/include/Common/Conf.h` 的 `kTaskIdBase` 等），
+  仅凭 `buildScopeKey` 无法区分「镜像」与「新一轮运行」。
+- 去重抹掉的是「这一侧重复的那份」。镜像两侧里先到的那份被保留，所以**终止事件仍可能与它配对不上**：
+  例如 agent 进程被杀掉、没写出 `Tasker.Task.Failed`，而客户端的同名终止事件没有镜像对手、
+  不会被去掉，此时 ScopeTree 需要认领同 taskId 那个仍打开的任务作用域（见 §6）。
+
 ### 5.4 规则三：业务语义重复不在输入层处理
 
 例如：
 
 - 相同 `task_id + uuid` 的二次 `Tasker.Task.Starting`
 - 相同 `node_id` 的上游异常重发
+- 同一份 `maafw.log` 被多次启动的进程追加写入（MaaFramework 日志未到 16MiB 不轮转）后，
+  来自不同 `Px`/`Tx` 的二次 `Tasker.Task.Starting`
 
 这些不能简单按输入去重抹掉，否则容易误伤真实执行事件。
 
@@ -349,19 +384,60 @@ type ScopeNode = {
 2. `children` 只保存直接语义子节点，不平铺整棵子树；更深层级继续递归存放在子节点自己的 `children` 中
 3. `seq/endSeq` 用于后续稳定排序和调试
 4. `taskId` 作为快速索引字段，不代表所有 scope 都一定有 task
+5. **scope 身份必须带 `processId`。** MaaFramework 的 id 分配器都是进程级计数器
+   （`MaaFramework/source/MaaFramework/Task/TaskBase.h` 的 `s_global_task_id`、
+   `source/include/Common/Conf.h` 的 `kTaskIdBase` / `kNodeIdBase` / `kRecoIdBase` …），
+   只在单个进程内唯一：进程重启后从基数重新开始，多个实例同时写同一份日志时还会并发撞号。
+   因此 `buildScopeKey` 的键一律是 `` `${processId}|...` ``，按 taskId 建索引的三个栈
+   （task / pipeline / next_list）也用 `` `${processId}|${taskId}` ``。
+   只用裸 id 会让两个会话共用一条 scope 栈：后开的任务顶掉先开的，先开的终止事件又会去关掉
+   后开的 scope，最终节点与状态互相错挂。这与 MaaFramework 自身的任务身份「(进程, task_id)」一致。
+6. **任务级终止事件允许认领同 taskId 的未关闭作用域。** 因为身份带了 `processId`，
+   §5.3 那种「镜像两侧里先到的那份被保留、后到那侧的 `Tasker.Task.Starting` 被去重掉」的情况下，
+   后到那侧的终止事件会找不到自己的 scope。此时认领同 `taskId` 且仍打开的任务作用域：
+   `task_id` 在单个进程内唯一，跨进程同号只可能是同一次运行的镜像，或两个实例并发。
+   **并发时的保障是有条件的**：只有当两侧都写出了自己的 `Tasker.Task.Starting`（各自的 scope 都在）
+   才会先命中正常路径；若某一侧本身就是缺 Starting 的片段，它的节点会被并进另一侧的任务。
+   这是刻意的取舍 —— 否则会多出一个 0 节点的空任务。
+7. **节点作用域找不到自己的任务时，先认领同 taskId 的已打开任务，再考虑补建。**
+   跨源去重是「谁先出现谁留下」，因此可能出现「一侧的 `Tasker.Task.Starting` 留下、
+   另一侧的节点事件留下」的混搭；后者按 `(processId, taskId)` 找不到自己的作用域。
+   `resolveOrCreateParent` 的兜底顺序是：
+   1. **认领** —— `findOpenTaskScopeByTaskId`，同 `taskId` 且仍打开的任务作用域（不限进程）。
+      与第 6 条同源：两侧都有 Starting 时正常路径已命中，不会走到这里。
+   2. **补建** —— 都没有时才造隐式任务作用域（见下条），且只对 `pipeline_node` 生效。
+8. **缺 `Tasker.Task.Starting` 的任务要补建作用域。** MaaFramework 在**跑任务途中**日志超过 16MiB
+   就轮转（`Logger::flush()` → `rotate()` → 截断重开），因此 `maa.log` 天然可能从任务中间开始：
+   有节点事件和 `Tasker.Task.Succeeded`，却没有对应的 `Tasker.Task.Starting`（在 `maa.bak.*.log` 里）。
+   只打开主日志、或在浏览器端打开单个文件时，这些节点原本会全部掉到 trace 根节点上，
+   界面上只剩一个 0 节点的空任务。补建的作用域键与 `Tasker.Task.Starting` 建立的完全一致，
+   所以真正的 Starting 到了会在 `openScope` 里**就地转正**（不叠第二层，起始时间保留更早的那个），
+   日志完整时行为不变；payload 上打 `implicitTask: true` 供上层区分。
+   **只对 `pipeline_node` 生效**：只有它能确定归属；`recognition` / `action` / `next_list` 等
+   在完整日志里都挂在某个 pipeline_node 之下，片段开头先出现时无从判断，保持挂到根上，
+   好过凭空造出 0 节点的任务。
+9. **`payload.processId` 是「谁把它关掉的」，不是「谁拥有它的节点」—— 事件归属要按子树取。**
+   `finalizeScope` 会用关闭事件重写 payload；而第 6 条的认领会让关闭事件来自**另一个进程**。
+   所以在 `sample/focus/maa.bak.log` 里，`task:200002641` 的 payload.processId 是 Px11700
+   （认领它的那一侧），它的 88 个子节点却几乎都是 Px11964。
+   因此 `TaskInfo.events` 的归属用 `collectTaskOwnerProcessIds`：**该作用域自身的进程
+   ∪ 子树里出现过的全部进程**。并发两个实例各自的子树只含自己那个进程，仍然分得开；
+   只按 payload 过滤会把创建者的事件全部滤掉，连带丢掉那些节点自己的 timestamp→行号 证据
+   （`maa-log-tools/runtimeInspection.ts` 的 `buildEvidenceIndex` 会用错行）。
 
 ### 6.3 Reducer 核心状态
 
-建议最小状态集：
+概念性最小状态集（**不是** `reducer.ts` 里的实际字段名，实际见 `ReducerState`）：
 
 ```ts
 type ReducerState = {
   root: ScopeNode
   openScopes: ScopeNode[]
   scopeIndexByKey: Map<string, ScopeNode>
-  taskRootsById: Map<number, ScopeNode>
-  currentPipelineNodeByTaskId: Map<number, ScopeNode>
-  currentNextListByTaskId: Map<number, ScopeNode>
+  // 键是 `${processId}|${taskId}`，不是裸 taskId —— 见 6.2 说明 5
+  taskRootsById: Map<string, ScopeNode>
+  currentPipelineNodeByTaskId: Map<string, ScopeNode>
+  currentNextListByTaskId: Map<string, ScopeNode>
 }
 ```
 
@@ -389,34 +465,41 @@ type ReducerState = {
 
 ### 6.4 Scope key 规则
 
-建议统一 key 规则：
+实现里的 key 规则（见 `trace/reducer.ts` 的 `buildScopeKey`）。**所有 key 都以 `` `${processId}|` `` 开头** ——
+原因见 6.2 说明 5：MaaFramework 的 id 都是进程级计数器，不带 processId 就无法区分镜像与新一轮运行。
 
 1. `ResourceLoading`
-   - `resource:${resId}`
+   - `${processId}|resource:${resId}`
 
 2. `ControllerAction`
-   - `controller:${ctrlId}`
+   - `${processId}|controller:${ctrlId}`
 
 3. `Task`
-   - `task:${taskId}`
+   - `${processId}|task:${taskId}`（`buildTaskScopeKey`）
 
 4. `PipelineNode`
-   - `task:${taskId}:pipeline:${nodeId}`
+   - `${processId}|task:${taskId}:pipeline:${nodeId}`
 
 5. `RecognitionNode`
-   - `task:${taskId}:reco-node:${nodeId}`
+   - `${processId}|task:${taskId}:recognition-node:${nodeId}`
 
 6. `ActionNode`
-   - `task:${taskId}:action-node:${nodeId}`
+   - `${processId}|task:${taskId}:action-node:${nodeId}`
 
 7. `Recognition`
-   - `task:${taskId}:reco:${recoId}`
+   - `${processId}|task:${taskId}:recognition:${recoId}`
 
 8. `Action`
-   - `task:${taskId}:action:${actionId}`
+   - `${processId}|task:${taskId}:action:${actionId}`
 
 9. `WaitFreezes`
-   - `task:${taskId}:wf:${wfId}`
+   - `${processId}|task:${taskId}:wait_freezes:${wfId}`
+
+另外两个「不是 scope key」但容易混淆的键：
+
+- `buildTaskIndexKey(processId, taskId)` → `${processId}|${taskId}`：
+  按 taskId 索引的三个栈（task / pipeline / next_list）的键。
+- `buildTaskScopeKey(processId, taskId)` → `${processId}|task:${taskId}`：第 3 条那个作用域自身的键。
 
 说明：
 
@@ -443,7 +526,8 @@ type ReducerState = {
    - 永远挂在 `TraceRoot`
 
 2. `PipelineNode`
-   - 挂在对应 `taskId` 的 `Task`
+   - 挂在同 `processId` 下对应 `taskId` 的 `Task`；找不到自己的那个时，
+     先认领同 `taskId` 的其他进程任务（§6.2 说明 7），再退化为补建（§6.2 说明 8）
 
 3. `NextList`
    - 挂在当前 `PipelineNode`
@@ -1074,6 +1158,21 @@ type AnalyzerSessionStore = Map<string, AnalyzerSession>
 12. `scopeId` 确定性生成测试
 13. `(taskId, nodeId) -> occurrenceIndex` 排序测试
 14. `UniqueScopeLocator` 歧义错误测试
+
+### 13.1 语料级不变量的敏感性（来自真实语料实测）
+
+想在 `sample/` 这类真实语料上做回归检查时，注意三项不变量里**只有一项是敏感的**：
+
+- **节点-事件覆盖**（每个 node 在自己的 `task.events` 里能找到同 `node_id` 的事件）—— **敏感**。
+  把 `TaskInfo.events` 的归属退回「只看 `payload.processId`」，`sample/focus/maa.bak.log` 立刻报出
+  1 个孤儿（`200002641/RealTimeTaskMain#300004800`）。基线是合成节点 `task0/Resource.Loading#0`。
+- **多归属行**（同一行日志归属到 >1 个任务）与 **同 `task_id` 任务间行集相交** —— 均是 0，
+  但在这份语料上**不敏感**：把进程过滤完全去掉也照样是 0。原因是语料里同 `task_id` 的分组要么是
+  合成的 `task0/Resource.Loading`，要么是跨天会话，`seq` 区间本就不重叠，`occurrenceEndSeq` 已把彼此切开。
+  泄漏形状（两个同号任务且区间交叠）只存在于单测夹具里。
+
+所以 **第 2/3 项的真正守卫是 `parser.subTaskScope.test.ts` 的并发用例** ——
+它要求两个同号任务的事件行号集合精确相等且互不相交。语料级检查只是回归网，替代不了它。
 
 ## 14. 当前结论
 

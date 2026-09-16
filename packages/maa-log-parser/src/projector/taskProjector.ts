@@ -39,6 +39,8 @@ export interface ProjectedTaskCacheEntry {
 export interface SequencedTaskEvent {
   seq: number
   sourceKey?: string
+  /** 产生该事件的进程。同一个 `task_id` 被多个进程复用时，靠它把事件归到正确的任务上。 */
+  processId?: string
   event: EventNotification
 }
 
@@ -435,6 +437,8 @@ const collectTaskScopes = (scope: ScopeNode, output: ScopeNode[]): void => {
 
 const buildNextTaskOccurrenceSeq = (scopes: ScopeNode[]): Map<ScopeNode, number> => {
   const nextSeqByScope = new Map<ScopeNode, number>()
+  // 键要带 processId：同一个 task_id 被两个并发进程复用时，它们是两个独立的任务，
+  // 不能把先出现那个的"下一次出现"设成对方（那会让先出现那个的事件列表一直吃到对方的事件）。
   const nextSeqByTaskAndSource = new Map<string, number>()
 
   for (let index = scopes.length - 1; index >= 0; index -= 1) {
@@ -442,7 +446,7 @@ const buildNextTaskOccurrenceSeq = (scopes: ScopeNode[]): Map<ScopeNode, number>
     if (!scope) continue
     const taskId = readScopeTaskId(scope)
     if (taskId == null) continue
-    const key = `${taskId}\u0000${readScopeSourceKey(scope) ?? ''}`
+    const key = `${taskId}\u0000${readScopeSourceKey(scope) ?? ''}\u0000${readScopeProcessId(scope) ?? ''}`
     const nextSeq = nextSeqByTaskAndSource.get(key)
     if (nextSeq != null) {
       nextSeqByScope.set(scope, nextSeq)
@@ -472,6 +476,36 @@ const getEventTimestampMs = (event: EventNotification): number => {
 const readScopeSourceKey = (scope: ScopeNode): string | undefined => {
   const source = readRecord(readScopePayload(scope).source)
   return source ? readStringField(source, 'sourceKey') : undefined
+}
+
+/** 作用域所属进程；同一 `task_id` 被多进程复用时用它区分任务。 */
+const readScopeProcessId = (scope: ScopeNode): string | undefined =>
+  readStringField(readScopePayload(scope), 'processId')
+
+const collectSubtreeProcessIds = (scope: ScopeNode, output: Set<string>): void => {
+  for (const child of scope.children) {
+    const processId = readScopeProcessId(child)
+    if (processId) output.add(processId)
+    collectSubtreeProcessIds(child, output)
+  }
+}
+
+/**
+ * 一个任务的事件归属哪些进程。
+ *
+ * **不能只看 `payload.processId`**：`finalizeScope` 会用关闭事件重写 payload 里的该字段，
+ * 而关闭事件常常来自被认领的另一进程（`adoptOpenTaskScope`）—— 那时 payload 记的是"谁把它关掉的"，
+ * 不是"谁拥有它的节点"。镜像混搭（客户端 + agent）下这会把创建者的事件全部滤掉，
+ * 连带丢掉那些节点自己的 timestamp→行号 证据。
+ *
+ * 所以取**子树里出现过的全部进程**：并发两个实例各自的子树只含自己那个进程，仍然分得开。
+ */
+const collectTaskOwnerProcessIds = (scope: ScopeNode): Set<string> => {
+  const owners = new Set<string>()
+  const ownProcessId = readScopeProcessId(scope)
+  if (ownProcessId) owners.add(ownProcessId)
+  collectSubtreeProcessIds(scope, owners)
+  return owners
 }
 
 const copyTaskEvent = (event: EventNotification): EventNotification => ({
@@ -507,6 +541,10 @@ const projectTaskEvents = (
 
   if (taskId != null && sequencedEvents) {
     const sourceKey = readScopeSourceKey(scope)
+    // 同一 task_id 被多进程复用时，两边的任务共用同一份事件序列 —— 必须按进程过滤，
+    // 否则每个任务的事件列表都会吃到对方的（进而污染证据的 timestamp→行号 索引）。
+    // 归属取子树进程集合，理由见 collectTaskOwnerProcessIds。
+    const ownerProcessIds = collectTaskOwnerProcessIds(scope)
     const scopeEndSeq = scope.endSeq ?? Number.POSITIVE_INFINITY
     const occurrenceEndSeq =
       nextOccurrenceSeq == null ? scopeEndSeq : Math.min(scopeEndSeq, nextOccurrenceSeq - 1)
@@ -517,6 +555,13 @@ const projectTaskEvents = (
       const item = sequencedEvents[index]
       if (!item || item.seq > occurrenceEndSeq) break
       if (sourceKey != null && item.sourceKey !== sourceKey) continue
+      if (
+        ownerProcessIds.size > 0 &&
+        item.processId != null &&
+        !ownerProcessIds.has(item.processId)
+      ) {
+        continue
+      }
       projectedEvents.push(copyTaskEvent(item.event))
     }
     return projectedEvents
@@ -875,7 +920,9 @@ const projectTaskScope = (
 
   return {
     task_id: readScopeTaskId(scope) ?? 0,
-    entry: readStringField(payload, 'entry') ?? readScopeName(scope),
+    // 没有 entry 的任务（隐式补建、且还没收到终止事件）不要显示成 "task"：
+    // 拿第一个节点的名字当线索，比 scope.kind 有用得多。
+    entry: readStringField(payload, 'entry') ?? nodes[0]?.name ?? readScopeName(scope),
     hash: readStringField(payload, 'hash') ?? '',
     uuid: readStringField(payload, 'uuid') ?? '',
     _startEventIndex: scope.seq,

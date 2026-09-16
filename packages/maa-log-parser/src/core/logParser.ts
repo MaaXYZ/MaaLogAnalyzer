@@ -126,7 +126,44 @@ const forceCopyString = (value: string): string => {
 // wide enough so delayed mirrored terminal events do not create synthetic
 // empty scopes after the real scope has already been closed.
 const CROSS_SOURCE_DUPLICATE_WINDOW_MS = 1000
-const MAX_DEDUP_SIGNATURES = 16_384
+/** 去重历史按**出现次数**封顶（不是按签名个数）。 */
+const MAX_DEDUP_OCCURRENCES = 16_384
+
+/**
+ * 某个签名下、**单个来源**出现过的全部时间戳。
+ *
+ * 拆到「按来源」这一层是为了让查找不随历史长度退化：
+ * `[head, timestamps.length)` 是仍然存活的部分，升序；`head` 之前是已淘汰的前缀（O(1) 摊还）。
+ * 单来源是绝大多数情况，查找时整桶直接跳过，连二分都不用做。
+ */
+interface DedupSourceLog {
+  timestamps: number[]
+  head: number
+}
+
+type DedupBucket = Map<string, DedupSourceLog>
+
+const dedupSourceKey = (processId: string, threadId: string): string =>
+  `${processId}\u0000${threadId}`
+
+/** 在 [from, arr.length) 内找第一个 >= value 的下标；找不到返回 arr.length。 */
+const lowerBoundTimestamp = (arr: number[], value: number, from: number): number => {
+  let low = from
+  let high = arr.length
+  while (low < high) {
+    const mid = (low + high) >>> 1
+    if ((arr[mid] as number) < value) low = mid + 1
+    else high = mid
+  }
+  return low
+}
+
+/** 该来源在 ±窗口内是否有出现。 */
+const sourceLogHasWithin = (log: DedupSourceLog, eventMs: number): boolean => {
+  const arr = log.timestamps
+  const index = lowerBoundTimestamp(arr, eventMs - CROSS_SOURCE_DUPLICATE_WINDOW_MS, log.head)
+  return index < arr.length && (arr[index] as number) <= eventMs + CROSS_SOURCE_DUPLICATE_WINDOW_MS
+}
 
 export class LogParser {
   private events: EventNotification[] = []
@@ -136,16 +173,20 @@ export class LogParser {
   private completedTaskCache = new Map<string, ProjectedTaskCacheEntry>()
   private rawLines: RawLineStore | null = null
   private eventTokenPool = new Map<string, string>()
-  private lastEventBySignature = new Map<
-    string,
-    {
-      timestampMs: number
-      processId: string
-      threadId: string
-    }
-  >()
-  private dedupSignatureTimeline: Array<{ signature: string; timestampMs: number }> = []
-  private dedupSignatureTimelineHead = 0
+  /**
+   * 每个签名保留**近窗内的全部出现**，而不是只有最后一次。
+   *
+   * 签名相同的通知会反复出现（`Node.NextList.*` 在循环里、同一节点反复命中时尤其明显）。
+   * 多个输入是逐个文件串行解析的，如果只留"最后一次"，先解析的那份文件里跟镜像成对的那一次
+   * 早已被后续同样的通知覆盖掉，后解析的文件就永远配不上。
+   */
+  private recentEventsBySignature = new Map<string, DedupBucket>()
+  private dedupOccurrenceTimeline: Array<{
+    signature: string
+    sourceKey: string
+    timestampMs: number
+  }> = []
+  private dedupOccurrenceTimelineHead = 0
   private syntheticLineNumber = 1
   private errorImages = new Map<string, string>()
   private visionImages = new Map<string, string>()
@@ -185,53 +226,88 @@ export class LogParser {
     this.sequencedEventsByTaskId.clear()
     this.completedTaskCache.clear()
     this.rawLines = null
-    this.lastEventBySignature.clear()
-    this.dedupSignatureTimeline = []
-    this.dedupSignatureTimelineHead = 0
+    this.recentEventsBySignature.clear()
+    this.dedupOccurrenceTimeline = []
+    this.dedupOccurrenceTimelineHead = 0
     this.eventTokenPool.clear()
     this.syntheticLineNumber = 1
   }
 
-  private pruneDedupSignatures(currentTimestampMs: number): void {
-    if (!Number.isFinite(currentTimestampMs)) return
-    const pruneBefore = currentTimestampMs - CROSS_SOURCE_DUPLICATE_WINDOW_MS
-    while (this.dedupSignatureTimelineHead < this.dedupSignatureTimeline.length) {
-      const item = this.dedupSignatureTimeline[this.dedupSignatureTimelineHead]
-      if (!item || !Number.isFinite(item.timestampMs) || item.timestampMs >= pruneBefore) {
-        break
-      }
-      const mapped = this.lastEventBySignature.get(item.signature)
-      if (mapped && mapped.timestampMs === item.timestampMs) {
-        this.lastEventBySignature.delete(item.signature)
-      }
-      this.dedupSignatureTimelineHead += 1
+  /**
+   * 去重历史只按**条数**封顶（时间窗在 lookup 处判断，见 appendEvent 的说明）。
+   *
+   * 这里同时负责压实数组，否则 head 一直右移、数组本身会无限增长。
+   */
+  private pruneDedupOccurrenceCapacity(): void {
+    while (
+      this.dedupOccurrenceTimeline.length - this.dedupOccurrenceTimelineHead >
+      MAX_DEDUP_OCCURRENCES
+    ) {
+      const item = this.dedupOccurrenceTimeline[this.dedupOccurrenceTimelineHead]
+      if (item) this.evictDedupOccurrence(item.signature, item.sourceKey, item.timestampMs)
+      this.dedupOccurrenceTimelineHead += 1
     }
 
     if (
-      this.dedupSignatureTimelineHead > 4096 &&
-      this.dedupSignatureTimelineHead * 2 >= this.dedupSignatureTimeline.length
+      this.dedupOccurrenceTimelineHead > 4096 &&
+      this.dedupOccurrenceTimelineHead * 2 >= this.dedupOccurrenceTimeline.length
     ) {
-      this.dedupSignatureTimeline = this.dedupSignatureTimeline.slice(
-        this.dedupSignatureTimelineHead,
+      this.dedupOccurrenceTimeline = this.dedupOccurrenceTimeline.slice(
+        this.dedupOccurrenceTimelineHead,
       )
-      this.dedupSignatureTimelineHead = 0
+      this.dedupOccurrenceTimelineHead = 0
     }
   }
 
-  private pruneDedupSignatureCapacity(): void {
-    while (
-      this.dedupSignatureTimeline.length - this.dedupSignatureTimelineHead >
-      MAX_DEDUP_SIGNATURES
-    ) {
-      const item = this.dedupSignatureTimeline[this.dedupSignatureTimelineHead]
-      if (item) {
-        const mapped = this.lastEventBySignature.get(item.signature)
-        if (mapped?.timestampMs === item.timestampMs) {
-          this.lastEventBySignature.delete(item.signature)
-        }
-      }
-      this.dedupSignatureTimelineHead += 1
+  /** 记一次出现（同源内时间基本递增，乱序只会在跨输入时发生）。 */
+  private recordDedupOccurrence(signature: string, sourceKey: string, timestampMs: number): void {
+    let bucket = this.recentEventsBySignature.get(signature)
+    if (!bucket) {
+      bucket = new Map()
+      this.recentEventsBySignature.set(signature, bucket)
     }
+    let log = bucket.get(sourceKey)
+    if (!log) {
+      log = { timestamps: [], head: 0 }
+      bucket.set(sourceKey, log)
+    }
+
+    const timestamps = log.timestamps
+    if (log.head >= timestamps.length) {
+      // 该来源的条目已全部淘汰，直接复用数组
+      timestamps.length = 0
+      log.head = 0
+      timestamps.push(timestampMs)
+    } else if (timestampMs >= (timestamps[timestamps.length - 1] as number)) {
+      timestamps.push(timestampMs)
+    } else {
+      timestamps.splice(lowerBoundTimestamp(timestamps, timestampMs, log.head), 0, timestampMs)
+    }
+
+    this.dedupOccurrenceTimeline.push({ signature, sourceKey, timestampMs })
+  }
+
+  /** 淘汰一条历史出现。正常情况下它就在该来源数组的头部，O(1)。 */
+  private evictDedupOccurrence(signature: string, sourceKey: string, timestampMs: number): void {
+    const bucket = this.recentEventsBySignature.get(signature)
+    const log = bucket?.get(sourceKey)
+    if (!bucket || !log) return
+
+    const timestamps = log.timestamps
+    if (log.head < timestamps.length && timestamps[log.head] === timestampMs) {
+      log.head += 1
+    } else {
+      const index = timestamps.indexOf(timestampMs, log.head)
+      if (index >= 0) timestamps.splice(index, 1)
+    }
+
+    if (log.head >= timestamps.length) {
+      bucket.delete(sourceKey)
+    } else if (log.head > 64 && log.head * 2 >= timestamps.length) {
+      log.timestamps = timestamps.slice(log.head)
+      log.head = 0
+    }
+    if (bucket.size === 0) this.recentEventsBySignature.delete(signature)
   }
 
   private internEventToken(raw: string): string {
@@ -262,17 +338,15 @@ export class LogParser {
       inputIndex?: number
     },
   ): void {
-    this.pruneDedupSignatures(event._timestampMs)
-    const previous = this.lastEventBySignature.get(event._dedupSignature)
+    // 这里**不能**按「当前事件时间 - 窗口」去剪裁历史：多个输入是逐个文件串行解析的
+    // （客户端 debug/maafw.log + agent debug/agent/maafw.log 就是典型场景），后一份文件的时间戳
+    // 往往早于前一份文件末尾的 watermark，一旦剪掉就再也匹配不上，跨文件镜像去重会整体失效。
+    // 时间窗口的判断放在 `isMirroredEvent` 里 —— 它按两份事件的真实时间差算，与流的先后无关；
+    // 内存则由 pruneDedupOccurrenceCapacity() 按出现次数封顶。
     const eventMs = event._timestampMs
-    const nearInTime =
-      previous && Number.isFinite(previous.timestampMs) && Number.isFinite(eventMs)
-        ? Math.abs(eventMs - previous.timestampMs) <= CROSS_SOURCE_DUPLICATE_WINDOW_MS
-        : false
-    const fromDifferentSource = previous
-      ? previous.processId !== event.processId || previous.threadId !== event.threadId
-      : false
-    if (previous && nearInTime && fromDifferentSource) {
+    const sourceKey = dedupSourceKey(event.processId, event.threadId)
+    const duplicated = Number.isFinite(eventMs) ? this.isMirroredEvent(event, sourceKey) : false
+    if (duplicated) {
       return
     }
 
@@ -297,6 +371,7 @@ export class LogParser {
         const sequencedEvent: SequencedTaskEvent = {
           seq: protocolEvent.seq,
           sourceKey: protocolEvent.source.sourceKey,
+          processId: protocolEvent.processId,
           event: storedEvent,
         }
         const taskEvents = this.sequencedEventsByTaskId.get(protocolEvent.taskId)
@@ -308,17 +383,32 @@ export class LogParser {
       }
     }
     if (Number.isFinite(eventMs)) {
-      this.lastEventBySignature.set(event._dedupSignature, {
-        timestampMs: eventMs,
-        processId: event.processId,
-        threadId: event.threadId,
-      })
-      this.dedupSignatureTimeline.push({
-        signature: event._dedupSignature,
-        timestampMs: eventMs,
-      })
-      this.pruneDedupSignatureCapacity()
+      this.recordDedupOccurrence(event._dedupSignature, sourceKey, eventMs)
+      this.pruneDedupOccurrenceCapacity()
     }
+  }
+
+  /**
+   * 该事件是不是「另一个来源已经写过一遍」的镜像。
+   *
+   * 只看**别的来源**：单来源是绝大多数情况，整桶直接跳过，不随历史长度退化；
+   * 多来源时对每个来源做一次二分，不扫描条目。
+   */
+  private isMirroredEvent(
+    event: { _dedupSignature: string; _timestampMs: number },
+    sourceKey: string,
+  ): boolean {
+    const bucket = this.recentEventsBySignature.get(event._dedupSignature)
+    if (!bucket) return false
+    // 桶里只有自己这一个来源 → 不可能有跨源重复
+    if (bucket.size === 1 && bucket.has(sourceKey)) return false
+
+    const eventMs = event._timestampMs
+    for (const [otherSourceKey, log] of bucket) {
+      if (otherSourceKey === sourceKey) continue
+      if (sourceLogHasWithin(log, eventMs)) return true
+    }
+    return false
   }
 
   appendRealtimeLines(lines: string[]): void {
@@ -544,9 +634,9 @@ export class LogParser {
     this.sequencedEventsByTaskId.clear()
     this.completedTaskCache.clear()
     this.rawLines = null
-    this.lastEventBySignature.clear()
-    this.dedupSignatureTimeline = []
-    this.dedupSignatureTimelineHead = 0
+    this.recentEventsBySignature.clear()
+    this.dedupOccurrenceTimeline = []
+    this.dedupOccurrenceTimelineHead = 0
     console.log(`事件令牌池统计: ${this.eventTokenPool.size} 个唯一字符串`)
     this.eventTokenPool.clear()
     this.syntheticLineNumber = 1
