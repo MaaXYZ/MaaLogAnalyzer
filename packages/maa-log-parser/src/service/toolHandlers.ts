@@ -175,14 +175,17 @@ const collectScopesWithinTaskExecution = (
   predicate: (scope: ScopeNode) => boolean,
 ): ScopeNode[] => {
   const result: ScopeNode[] = []
-  const visit = (scope: ScopeNode) => {
+  // 显式栈：任务内部的节点链同样可能上万层（成批缺失终止事件），递归会 RangeError。
+  // 末尾按 seq 排序，访问顺序不影响输出。
+  const stack: ScopeNode[] = [taskScope]
+  while (stack.length > 0) {
+    const scope = stack.pop() as ScopeNode
     for (const child of scope.children) {
       if (child.kind === 'task') continue
       if (predicate(child)) result.push(child)
-      visit(child)
+      stack.push(child)
     }
   }
-  visit(taskScope)
   return result.sort((left, right) => left.seq - right.seq)
 }
 

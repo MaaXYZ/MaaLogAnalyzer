@@ -161,7 +161,10 @@ const collectScopeEventEntries = (
   }
 
   const entriesBySeq = new Map<number, ScopeEventEntry>()
-  const visit = (current: ScopeNode): void => {
+  // 显式栈：深链输入（作用域树上万层）下递归会 RangeError。结果按 seq 收集，访问顺序不影响输出。
+  const stack: ScopeNode[] = [scope]
+  while (stack.length > 0) {
+    const current = stack.pop() as ScopeNode
     if (current.kind !== 'trace_root') {
       const startEvent = index.eventBySeq.get(current.seq)
       if (startEvent) {
@@ -170,7 +173,7 @@ const collectScopeEventEntries = (
     }
 
     for (const child of current.children) {
-      visit(child)
+      stack.push(child)
     }
 
     if (current.kind !== 'trace_root' && current.endSeq != null && current.endSeq !== current.seq) {
@@ -180,8 +183,6 @@ const collectScopeEventEntries = (
       }
     }
   }
-
-  visit(scope)
   return ok([...entriesBySeq.values()].sort((left, right) => left.event.seq - right.event.seq))
 }
 

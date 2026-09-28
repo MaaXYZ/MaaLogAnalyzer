@@ -122,19 +122,32 @@ const indexScopeNode = (node: ScopeNode, index: TraceIndex): void => {
   }
 }
 
-const walkScopeTree = (node: ScopeNode, parentScopeId: string | null, index: TraceIndex): void => {
-  index.scopeById.set(node.id, node)
-  index.parentScopeIdByScopeId.set(node.id, parentScopeId)
+const walkScopeTree = (root: ScopeNode, index: TraceIndex): void => {
+  // 显式栈：作用域树会退化成上万层的链（成批缺失终止事件），递归版在这里直接 RangeError。
+  // 先序访问顺序与递归版逐条一致（逆序入栈）。
+  const stack: Array<{ node: ScopeNode; parentScopeId: string | null }> = [
+    { node: root, parentScopeId: null },
+  ]
 
-  const sortedChildren = [...node.children].sort((left, right) => left.seq - right.seq)
-  index.childScopeIdsByScopeId.set(
-    node.id,
-    sortedChildren.map((child) => child.id),
-  )
-  indexScopeNode(node, index)
+  while (stack.length > 0) {
+    const { node, parentScopeId } = stack.pop() as {
+      node: ScopeNode
+      parentScopeId: string | null
+    }
+    index.scopeById.set(node.id, node)
+    index.parentScopeIdByScopeId.set(node.id, parentScopeId)
 
-  for (const child of sortedChildren) {
-    walkScopeTree(child, node.id, index)
+    const sortedChildren = [...node.children].sort((left, right) => left.seq - right.seq)
+    index.childScopeIdsByScopeId.set(
+      node.id,
+      sortedChildren.map((child) => child.id),
+    )
+    indexScopeNode(node, index)
+
+    for (let childIndex = sortedChildren.length - 1; childIndex >= 0; childIndex -= 1) {
+      const child = sortedChildren[childIndex]
+      if (child) stack.push({ node: child, parentScopeId: node.id })
+    }
   }
 }
 
@@ -174,7 +187,7 @@ export const buildTraceIndex = (root: ScopeNode, events: ProtocolEvent[] = []): 
     index.eventBySeq.set(event.seq, event)
   }
 
-  walkScopeTree(root, null, index)
+  walkScopeTree(root, index)
   finalizeNodeExecutions(index)
   return index
 }
