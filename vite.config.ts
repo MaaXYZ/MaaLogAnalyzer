@@ -41,17 +41,6 @@ export default defineConfig({
         ]
       },
     },
-    // 自定义插件：强制忽略 "pkgs copy" 目录下的模块
-    {
-      name: 'ignore-pkgs-copy',
-      resolveId(source, importer) {
-        // 如果导入来源（importer）位于 "pkgs copy" 目录内，直接返回 false 表示外部
-        if (importer && importer.replace(/\\/g, '/').includes('pkgs copy')) {
-          return { id: source, external: true }
-        }
-        return null
-      },
-    },
   ],
   base: '/',
   server: {
@@ -63,7 +52,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    // 限制依赖预构建的入口范围，避免 Vite 扫描到那个目录
+    // 限制依赖预构建的入口范围，避免 Vite 扫描无关目录
     entries: [
       'src/**/*.{js,ts,jsx,tsx,vue}',
       'index.html',
