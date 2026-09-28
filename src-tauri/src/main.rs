@@ -12,6 +12,8 @@ use tauri_plugin_fs::FsExt;
 
 use serde::Serialize;
 
+use encoding_rs::{Encoding, UTF_8};
+
 mod archive_safety;
 
 use archive_safety::{
@@ -871,15 +873,39 @@ fn parse_vision_image_key(file_name: &str) -> Option<String> {
     Some(format!("{base_ts}.{padded_ms}{rest}"))
 }
 
-/// Decode file content, trying UTF-8 first
-fn decode_content(bytes: &[u8]) -> String {
-    match std::str::from_utf8(bytes) {
-        Ok(s) => s.to_string(),
-        Err(_) => {
-            // Fallback: try to decode as lossy UTF-8
-            String::from_utf8_lossy(bytes).into_owned()
+// 与 Web 端 src/utils/textEncoding.ts 的解码链保持一致：UTF-8 优先，再回退 GBK/GB18030 系列。
+const DECODE_CANDIDATE_ENCODINGS: [&Encoding; 3] = [UTF_8, encoding_rs::GBK, encoding_rs::GB18030];
+
+/// 在指定编码下进行严格解码（不插入替换字符），失败返回 None
+fn decode_strictly(bytes: &[u8], encoding: &'static Encoding) -> Option<String> {
+    encoding
+        .decode_without_bom_handling_and_without_replacement(bytes)
+        .map(|decoded| decoded.into_owned())
+}
+
+/// 尝试用指定编码严格解码，容忍样本边界处被截断的多字节序列
+fn sample_matches_encoding(bytes: &[u8], encoding: &'static Encoding) -> bool {
+    for trim in 0..=3 {
+        let Some(end) = bytes.len().checked_sub(trim) else {
+            return false;
+        };
+        if decode_strictly(&bytes[..end], encoding).is_some() {
+            return true;
         }
     }
+    false
+}
+
+/// Decode file content, trying UTF-8 first
+fn decode_content(bytes: &[u8]) -> String {
+    let encoding = DECODE_CANDIDATE_ENCODINGS
+        .iter()
+        .find(|encoding| sample_matches_encoding(bytes, encoding))
+        .copied()
+        .unwrap_or(UTF_8);
+    // 与 TextDecoder 一致：丢弃解码结果开头的 U+FEFF（UTF-8 BOM）
+    let (decoded, _) = encoding.decode_with_bom_removal(bytes);
+    decoded.trim_start_matches('\u{FEFF}').to_string()
 }
 
 fn main() {
@@ -911,9 +937,9 @@ mod tests {
     use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
     use super::{
-        create_private_child_directory, create_private_temp_directory, parse_mxu_zip_volume_name,
-        register_archive_entry_path, resolve_archive_paths, validate_zip_entry,
-        ArchiveExtractionState, PendingArchiveResource,
+        create_private_child_directory, create_private_temp_directory, decode_content,
+        parse_mxu_zip_volume_name, register_archive_entry_path, resolve_archive_paths,
+        validate_zip_entry, ArchiveExtractionState, PendingArchiveResource,
     };
 
     fn archive_with_file(name: &str) -> ZipArchive<Cursor<Vec<u8>>> {
@@ -922,6 +948,24 @@ mod tests {
         writer.start_file(name, options).unwrap();
         writer.write_all(b"content").unwrap();
         ZipArchive::new(writer.finish().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn decodes_utf8_content() {
+        assert_eq!(decode_content("utf-8 log".as_bytes()), "utf-8 log");
+    }
+
+    #[test]
+    fn strips_utf8_bom() {
+        let mut bytes = vec![0xEF, 0xBB, 0xBF];
+        bytes.extend_from_slice("测试".as_bytes());
+        assert_eq!(decode_content(&bytes), "测试");
+    }
+
+    #[test]
+    fn falls_back_to_gbk_for_non_utf8_content() {
+        // GBK bytes for U+6D4B U+8BD5.
+        assert_eq!(decode_content(&[0xb2, 0xe2, 0xca, 0xd4]), "测试");
     }
 
     #[test]
