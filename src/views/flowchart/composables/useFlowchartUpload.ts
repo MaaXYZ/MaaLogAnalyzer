@@ -1,5 +1,5 @@
 import { onUnmounted, ref } from 'vue'
-import { toastWarning } from '../../../utils/toast'
+import { toastError, toastWarning } from '../../../utils/toast'
 import { isTauri } from '../../../utils/platform'
 import { decodeFileContent } from '../../../utils/textEncoding'
 import { replaceBlobUrl, revokeBlobUrlMap } from '../../../utils/blobUrlMap'
@@ -262,7 +262,10 @@ export const useFlowchartUpload = ({
         )
       }
     } catch (error) {
-      if (isCurrentUpload(generation)) console.error('Tauri open failed:', error)
+      if (isCurrentUpload(generation)) {
+        console.error('Tauri open failed:', error)
+        toastError('打开失败: ' + error)
+      }
     }
   }
 
@@ -340,6 +343,12 @@ export const useFlowchartUpload = ({
           throw error
         }
       })
+    } catch (error) {
+      // 少了这个 catch，读取失败 / 预算超限会变成 unhandled rejection，界面上一点提示都没有
+      if (isCurrentUpload(generation)) {
+        console.error('Folder open failed:', error)
+        toastError('打开文件夹失败: ' + error)
+      }
     } finally {
       input.value = ''
     }
