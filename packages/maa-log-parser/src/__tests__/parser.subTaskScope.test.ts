@@ -1156,6 +1156,40 @@ describe('LogParser sub task scoped node aggregation', () => {
     expect(nextLists.every((event) => event.processId === 'Px1')).toBe(true)
   })
 
+
+  it('keeps cross-input mirror dedup past the realtime retention cap', async () => {
+    // 整批 parseInputs 不做容量淘汰，只有实时追加才封顶。全局 FIFO 会先丢掉先解析那份文件的**开头**，
+    // 后一份文件一开始解析，它的每一条镜像就已经配不上对手 —— 实测 17,000 条事件时 17,000 对全部漏掉。
+    const count = 16_385 // > MAX_DEDUP_OCCURRENCES(16,384)
+    const primary: string[] = []
+    const mirrored: string[] = []
+    for (let index = 1; index <= count; index += 1) {
+      const details = {
+        task_id: index,
+        entry: `Task${index}`,
+        hash: `h-${index}`,
+        uuid: `u-${index}`,
+      }
+      primary.push(makeEventLine(index, 'Tasker.Task.Starting', details))
+      mirrored.push(
+        makeEventLine(index + 500, 'Tasker.Task.Starting', details, {
+          processId: 'Px2',
+          threadId: 'Tx2',
+        }),
+      )
+    }
+
+    const parser = new LogParser()
+    await parser.parseInputs([
+      { content: primary.join('\n'), sourceKey: 'agent', inputIndex: 0 },
+      { content: mirrored.join('\n'), sourceKey: 'client', inputIndex: 1 },
+    ])
+
+    const kept = parser.getProtocolEventsSnapshot()
+    expect(kept).toHaveLength(count)
+    expect(kept.every((event) => event.processId === 'Px1')).toBe(true)
+  })
+
   it('adopts the still-open task scope when a mirrored run leaves an orphan terminal event', async () => {
     // 客户端 + agent 两份日志一起加载时，先到那份文件的 Tasker.Task.Starting 会被当成镜像去掉，
     // 于是这一侧的终止事件找不到自己的 scope。若不管，就会多出一个 0 节点的空任务。

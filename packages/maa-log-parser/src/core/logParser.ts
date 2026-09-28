@@ -126,7 +126,11 @@ const forceCopyString = (value: string): string => {
 // wide enough so delayed mirrored terminal events do not create synthetic
 // empty scopes after the real scope has already been closed.
 const CROSS_SOURCE_DUPLICATE_WINDOW_MS = 1000
-/** 去重历史按**出现次数**封顶（不是按签名个数）。 */
+/**
+ * 实时追加路径的去重历史按**出现次数**封顶（不是按签名个数）。
+ *
+ * 整批 `parseInputs` 不做这个淘汰，原因见 `LogParser.boundDedupOccurrences`。
+ */
 const MAX_DEDUP_OCCURRENCES = 16_384
 
 /**
@@ -192,6 +196,17 @@ export class LogParser {
   private visionImages = new Map<string, string>()
   private waitFreezesImages = new Map<string, string>()
   private fullParseInProgress = false
+  /**
+   * 整批 parseInputs 期间保留全部出现记录，不做容量淘汰。
+   *
+   * 跨文件镜像要求先解析那份文件的出现一直留到后一份文件解析到它为止。容量淘汰是全局 FIFO，
+   * 后一份文件一开始解析，先解析那份文件的**开头**就已经被它的尾部挤出历史，
+   * 于是后一份文件从头到尾都配不上镜像（实测 17,000 条事件时 17,000 对镜像全部漏掉）。
+   * 实时追加是单来源，跨源查找本来就不会命中，封顶只在那条路径上做内存兜底。
+   *
+   * 整批解析的内存因此与这一批保留下来的事件同阶（出现记录比事件本身小得多）。
+   */
+  private boundDedupOccurrences = true
 
   /**
    * 设置错误截图映射
@@ -236,7 +251,8 @@ export class LogParser {
   /**
    * 去重历史只按**条数**封顶（时间窗在 lookup 处判断，见 appendEvent 的说明）。
    *
-   * 这里同时负责压实数组，否则 head 一直右移、数组本身会无限增长。
+   * 只对实时追加生效：整批 parseInputs 期间历史就是这一批事件本身，淘汰它必然破坏跨文件镜像
+   * （见 boundDedupOccurrences）。这里同时负责压实数组，否则 head 一直右移、数组本身会无限增长。
    */
   private pruneDedupOccurrenceCapacity(): void {
     while (
@@ -342,7 +358,8 @@ export class LogParser {
     // （客户端 debug/maafw.log + agent debug/agent/maafw.log 就是典型场景），后一份文件的时间戳
     // 往往早于前一份文件末尾的 watermark，一旦剪掉就再也匹配不上，跨文件镜像去重会整体失效。
     // 时间窗口的判断放在 `isMirroredEvent` 里 —— 它按两份事件的真实时间差算，与流的先后无关；
-    // 内存则由 pruneDedupOccurrenceCapacity() 按出现次数封顶。
+    // 内存则由 pruneDedupOccurrenceCapacity() 在实时追加路径上按出现次数封顶；
+    // 整批解析期间不淘汰（boundDedupOccurrences），否则跨文件镜像同样会失效。
     const eventMs = event._timestampMs
     const sourceKey = dedupSourceKey(event.processId, event.threadId)
     const duplicated = Number.isFinite(eventMs) ? this.isMirroredEvent(event, sourceKey) : false
@@ -384,7 +401,7 @@ export class LogParser {
     }
     if (Number.isFinite(eventMs)) {
       this.recordDedupOccurrence(event._dedupSignature, sourceKey, eventMs)
-      this.pruneDedupOccurrenceCapacity()
+      if (this.boundDedupOccurrences) this.pruneDedupOccurrenceCapacity()
     }
   }
 
@@ -548,6 +565,8 @@ export class LogParser {
     }
 
     this.fullParseInProgress = true
+    // 整批解析期间不做去重容量淘汰：后一份输入要配的镜像可能落在先解析那份文件的开头。
+    this.boundDedupOccurrences = false
     try {
       this.resetParsedEvents()
 
@@ -590,6 +609,7 @@ export class LogParser {
       }
     } finally {
       this.fullParseInProgress = false
+      this.boundDedupOccurrences = true
     }
   }
 
