@@ -83,6 +83,7 @@ describe('extension loading across image-resource permission changes', () => {
   let makeUri: (path: string) => unknown
   let onUploadContent: ReturnType<typeof vi.fn>
   let events: string[]
+  let webviewHtml = ''
 
   beforeEach(async () => {
     vi.resetModules()
@@ -127,7 +128,8 @@ describe('extension loading across image-resource permission changes', () => {
             options = value
             ready()
           },
-          set html(_value: string) {
+          set html(value: string) {
+            webviewHtml = value
             ready()
           },
           asWebviewUri(uri: unknown) {
@@ -185,6 +187,18 @@ describe('extension loading across image-resource permission changes', () => {
     expect(events.filter((event) => event === 'reload')).toHaveLength(3)
     expect(onUploadContent).toHaveBeenCalledTimes(4)
     expect(host.showErrorMessage).not.toHaveBeenCalled()
+  })
+
+  it('allows the 7z wasm extractor inside the webview CSP', async () => {
+    await analyzeFolder(makeUri('/debug'))
+
+    // 打包产物里有 7z-wasm（7zz.es6.js + 7zz.wasm），拖入 .7z/.rar 时会 import('7z-wasm')
+    // 并 WebAssembly.instantiate。script-src 少了 'wasm-unsafe-eval' 时这条路径被 CSP 拦掉，
+    // 同一个文件网页版 / 桌面版能开、面板里开不了（src-tauri/tauri.conf.json 里有这一项）。
+    const scriptSrc = /script-src ([^;]+);/.exec(webviewHtml)?.[1] ?? ''
+    expect(scriptSrc).toContain("'wasm-unsafe-eval'")
+    expect(scriptSrc).toContain('nonce-')
+    expect(webviewHtml).toContain("default-src 'none'")
   })
 
   it('also waits for updated image permissions when opening a log file directly', async () => {
