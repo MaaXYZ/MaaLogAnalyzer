@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - 'packages/**'
+      # 这两个脚本直接决定打包进 tarball 的产物内容，改了必须重跑发布流程
+      - 'scripts/fix-esm-imports.mjs'
+      - 'scripts/check-esm-output.mjs'
       - 'pnpm-lock.yaml'
       - '.github/workflows/release-npm.yml'
   workflow_dispatch:
