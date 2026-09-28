@@ -375,7 +375,8 @@ fn register_archive_entry_path(
     Ok(name)
 }
 
-#[tauri::command]
+// 大体积 ZIP 的快照与解压在同步命令中会阻塞主线程，因此交给工作线程执行。
+#[tauri::command(async)]
 fn extract_zip_log(
     app: tauri::AppHandle,
     resources: tauri::State<'_, ArchiveExtractionState>,
