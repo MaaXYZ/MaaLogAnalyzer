@@ -325,12 +325,13 @@ async function findDebugFolder(
     registerInputResourceEntry(budget, basePath, depth)
     await assertTauriDirectory(basePath)
 
-    // 检查当前路径下是否有debug文件夹
+    // 检查当前路径下是否有debug文件夹。只认目录名的话，一个空的 / 过期的 debug 目录会挡住
+    // 更深处的真日志；Web 版（findDebugFolderWeb）同样要求该目录里有主日志才返回。
     const debugPath = joinNativePath(basePath, 'debug')
     if (await exists(debugPath)) {
       registerInputResourceEntry(budget, debugPath, depth + 1)
       await assertTauriDirectory(debugPath)
-      return debugPath
+      if (await hasPrimaryLogInTauri(debugPath, budget)) return debugPath
     }
 
     // 递归查找子文件夹
