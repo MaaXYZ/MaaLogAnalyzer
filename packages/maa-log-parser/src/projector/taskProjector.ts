@@ -56,6 +56,11 @@ export interface ProjectTasksFromTraceOptions {
 
 interface InternalProjectTasksFromTraceOptions extends ProjectTasksFromTraceOptions {
   waitFreezesImagesByScopeId: ReadonlyMap<string, readonly string[]>
+  /**
+   * scope → 该 scope 子树里出现过的进程集合（含自己）。懒加载：第一次真的要用时才全量算一遍。
+   * 见 buildScopeProcessIdSets。
+   */
+  getScopeProcessIds: (scope: ScopeNode) => ReadonlySet<string>
 }
 
 const EMPTY_IMAGE_MAP = new Map<string, string>()
@@ -522,7 +527,55 @@ const collectSubtreeProcessIds = (root: ScopeNode, output: Set<string>): void =>
  *
  * 所以取**子树里出现过的全部进程**：并发两个实例各自的子树只含自己那个进程，仍然分得开。
  */
-const collectTaskOwnerProcessIds = (scope: ScopeNode): Set<string> => {
+/**
+ * 一次后序遍历算出每个 scope 的「子树进程集合」（含自己）。
+ *
+ * 原来每个任务各走一遍自己的子树：作用域退化成链时（成批缺失终止事件）第 i 个任务的子树
+ * 含后面所有任务，Σ(n-i) 是 O(节点数²) —— 17,000 层的链实测 19s。这里一趟 O(节点数)，
+ * 每个集合的大小只取决于日志里出现过的进程数（通常 1~2 个）。
+ *
+ * 索引只在单次投影内有效：作用域树是增量长出来的，跨调用缓存会漏掉后来挂上来的子节点。
+ */
+const buildScopeProcessIdSets = (
+  root: ScopeNode,
+  output: Map<ScopeNode, ReadonlySet<string>>,
+): void => {
+  const stack: Array<{ scope: ScopeNode; expanded: boolean }> = [
+    { scope: root, expanded: false },
+  ]
+
+  while (stack.length > 0) {
+    const entry = stack.pop() as { scope: ScopeNode; expanded: boolean }
+    if (!entry.expanded) {
+      stack.push({ scope: entry.scope, expanded: true })
+      for (const child of entry.scope.children) {
+        stack.push({ scope: child, expanded: false })
+      }
+      continue
+    }
+
+    const processIds = new Set<string>()
+    const ownProcessId = readScopeProcessId(entry.scope)
+    if (ownProcessId) processIds.add(ownProcessId)
+    for (const child of entry.scope.children) {
+      const childProcessIds = output.get(child)
+      if (!childProcessIds) continue
+      for (const processId of childProcessIds) processIds.add(processId)
+    }
+    output.set(entry.scope, processIds)
+  }
+}
+
+const collectTaskOwnerProcessIds = (
+  scope: ScopeNode,
+  options: ProjectTasksFromTraceOptions = {},
+): ReadonlySet<string> => {
+  const indexed = (
+    options as Partial<InternalProjectTasksFromTraceOptions>
+  ).getScopeProcessIds?.(scope)
+  if (indexed) return indexed
+
+  // 兜底：调用方没带索引（第三方直接用 projector）时仍旧自己走一遍子树。
   const owners = new Set<string>()
   const ownProcessId = readScopeProcessId(scope)
   if (ownProcessId) owners.add(ownProcessId)
@@ -566,7 +619,7 @@ const projectTaskEvents = (
     // 同一 task_id 被多进程复用时，两边的任务共用同一份事件序列 —— 必须按进程过滤，
     // 否则每个任务的事件列表都会吃到对方的（进而污染证据的 timestamp→行号 索引）。
     // 归属取子树进程集合，理由见 collectTaskOwnerProcessIds。
-    const ownerProcessIds = collectTaskOwnerProcessIds(scope)
+    const ownerProcessIds = collectTaskOwnerProcessIds(scope, options)
     const scopeEndSeq = scope.endSeq ?? Number.POSITIVE_INFINITY
     const occurrenceEndSeq =
       nextOccurrenceSeq == null ? scopeEndSeq : Math.min(scopeEndSeq, nextOccurrenceSeq - 1)
@@ -1055,12 +1108,22 @@ export const projectTasksFromTrace = (
   root: ScopeNode,
   options: ProjectTasksFromTraceOptions = {},
 ): TaskInfo[] => {
+  const scopeProcessIdsByScope = new Map<ScopeNode, ReadonlySet<string>>()
+  let scopeProcessIdsBuilt = false
   const projectionOptions: InternalProjectTasksFromTraceOptions = {
     ...options,
     waitFreezesImagesByScopeId: buildWaitFreezesImageAssignments(
       root,
       options.waitFreezesImages ?? EMPTY_IMAGE_MAP,
     ),
+    // 懒加载：全部命中 completedTaskCache 的增量投影不该为这个索引买单。
+    getScopeProcessIds: (scope) => {
+      if (!scopeProcessIdsBuilt) {
+        buildScopeProcessIdSets(root, scopeProcessIdsByScope)
+        scopeProcessIdsBuilt = true
+      }
+      return scopeProcessIdsByScope.get(scope) ?? new Set<string>()
+    },
   }
   const taskScopes: ScopeNode[] = []
   collectTaskScopes(root, taskScopes)
