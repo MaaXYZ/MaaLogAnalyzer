@@ -327,9 +327,10 @@ export class LogParser {
   }
 
   private internEventToken(raw: string): string {
-    const copied = forceCopyString(raw)
-    const pooled = this.eventTokenPool.get(copied)
+    // 先查池再复制：池里命中的绝大多数串（msg / level / Px / Tx）都不必走 forceCopyString 的拷贝。
+    const pooled = this.eventTokenPool.get(raw)
     if (pooled) return pooled
+    const copied = forceCopyString(raw)
     this.eventTokenPool.set(copied, copied)
     return copied
   }
