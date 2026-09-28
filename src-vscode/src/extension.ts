@@ -988,6 +988,7 @@ async function installWindowsContextMenu(context: vscode.ExtensionContext): Prom
     { menuKey: WINDOWS_CONTEXT_MENU_KEYS[3], arg: '%1' },
   ]
 
+  const installedMenuKeys: string[] = []
   try {
     const wscriptExe = (process.env.WINDIR || 'C:\\Windows') + '\\System32\\wscript.exe'
     const { helperScript, iconPath } = await prepareContextMenuAssets(context)
@@ -999,12 +1000,21 @@ async function installWindowsContextMenu(context: vscode.ExtensionContext): Prom
       const command = `"${wscriptExe}" "${helperScript}" "${entry.arg}" "${uriScheme}"`
 
       await execReg(['add', entry.menuKey, '/ve', '/d', menuLabel, '/f'])
+      installedMenuKeys.push(entry.menuKey)
       await execReg(['add', entry.menuKey, '/v', 'Icon', '/d', iconPath, '/f'])
       await execReg(['add', commandKey, '/ve', '/d', command, '/f'])
     }
 
     vscode.window.showInformationMessage(t('Windows context menu entries were installed'))
   } catch (error) {
+    // 中途失败不回滚的话，界面提示"安装失败"，注册表里却留着前几个菜单项。
+    for (const key of installedMenuKeys) {
+      try {
+        await execReg(['delete', key, '/f'])
+      } catch {
+        // 回滚尽力而为：删不掉也要把原始错误报出去
+      }
+    }
     vscode.window.showErrorMessage(
       t('Failed to install Windows context menu entries: {0}', String(error)),
     )
