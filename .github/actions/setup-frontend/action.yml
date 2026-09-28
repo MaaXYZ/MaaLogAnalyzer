@@ -1,5 +1,10 @@
 name: Setup Frontend Toolchain
 description: Setup Node.js and pnpm with dependency cache, then install dependencies.
+inputs:
+  node-version:
+    description: Node.js version to install
+    required: false
+    default: '24'
 runs:
   using: composite
   steps:
@@ -12,7 +17,7 @@ runs:
     - name: 安装 Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
-        node-version: 24
+        node-version: ${{ inputs.node-version }}
         cache: pnpm
         cache-dependency-path: pnpm-lock.yaml
 

@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: pr-check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-build:
     strategy:
@@ -56,6 +60,10 @@ jobs:
       - name: 代码规范检查
         if: matrix.platform == 'linux'
         run: pnpm run lint
+
+      - name: 版本一致性检查
+        if: matrix.platform == 'linux'
+        run: pnpm run version:check
 
       - name: 核心回归测试
         if: matrix.platform == 'linux'
@@ -102,3 +110,22 @@ jobs:
           path: src-tauri/target/release/bundle/
           if-no-files-found: warn
           retention-days: 7
+
+  # 发布包在 package.json 里声明 engines >=20.18.0，但全仓库其他 job 都跑在 Node 24 上。
+  # 这里在最低支持版本上再构建一次发布包并跑它们的单测，声明才有人守。
+  packages-node20:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: 初始化前端工具链（Node 20）
+        uses: ./.github/actions/setup-frontend
+        with:
+          node-version: '20'
+
+      - name: 构建发布包
+        run: pnpm run build:packages
+
+      - name: 发布包单元测试
+        run: pnpm --filter @windsland52/maa-log-parser run test
