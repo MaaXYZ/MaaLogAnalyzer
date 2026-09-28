@@ -138,7 +138,12 @@ export const useTextSearchTargets = () => {
     if (entry && entry.content) return
     const deferred = deferredTextSearchTargets.value.find((target) => target.id === targetId)
     if (!deferred) return
+    // 载入是异步的，期间可能已经换了一份日志（setDeferredTextSearchTargets / 会话重置）。
+    // 不校验代次和存在性的话，旧文件的目标会像鬼影一样被塞进新列表。
+    const token = hydrateTextSearchTargetsToken
     const content = await deferred.loadContent()
+    if (token !== hydrateTextSearchTargetsToken) return
+    if (!deferredTextSearchTargets.value.some((target) => target.id === targetId)) return
     const updated = textSearchLoadedTargets.value.map((target) =>
       target.id === targetId ? { ...target, content } : target,
     )
@@ -156,9 +161,11 @@ export const useTextSearchTargets = () => {
   // 原文定位探测：逐个瞬时加载检查是否包含目标行，只保留命中者的内容
   const findDeferredTargetWithContent = async (needle: string): Promise<string | null> => {
     if (!needle) return null
+    const token = hydrateTextSearchTargetsToken
     for (const target of deferredTextSearchTargets.value) {
       try {
         const content = await target.loadContent()
+        if (token !== hydrateTextSearchTargetsToken) return null
         if (!content.includes(needle)) continue
         await ensureDeferredTargetContent(target.id)
         return target.id
