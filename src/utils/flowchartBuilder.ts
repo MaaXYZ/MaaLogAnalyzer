@@ -55,7 +55,7 @@ let elkPromise: Promise<ElkLayoutEngine> | null = null
 
 const getElk = async (): Promise<ElkLayoutEngine> => {
   if (!elkPromise) {
-    elkPromise = import.meta.env.SSR
+    const pending: Promise<ElkLayoutEngine> = import.meta.env.SSR
       ? import('elkjs/lib/elk.bundled.js').then(
           ({ default: ElkConstructor }) => new ElkConstructor(),
         )
@@ -66,6 +66,12 @@ const getElk = async (): Promise<ElkLayoutEngine> => {
           ([{ default: ElkConstructor }, { default: ElkWorker }]) =>
             new ElkConstructor({ workerFactory: () => new ElkWorker() }),
         )
+    // 失败不留缓存：chunk / worker 起不来通常是一次性的，缓存了失败的 promise
+    // 等于整个会话再也画不出流程图，连重试的机会都没有。
+    elkPromise = pending.catch((error) => {
+      elkPromise = null
+      throw error
+    })
   }
 
   return elkPromise
