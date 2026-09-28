@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -73,6 +73,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
     runs-on: ubuntu-latest
     needs: [build]
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -104,12 +106,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists, skipping."
-            exit 0
+          # build.yml 也会给同一个 tag 建 release，两个 workflow 谁先跑完没有保证。
+          # 原来的「release 已存在就直接退出」会让 GitHub Release 上有没有 .vsix 变成掷骰子
+          # （桌面产物那一步会把 body 覆盖成完整变更日志，这里不再抢 body，只负责把 vsix 挂上去）。
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            notes="${RUNNER_TEMP}/release-notes.md"
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file "$notes" \
+              || echo "Release 已由其他 workflow 创建，继续补挂产物"
           fi
-          notes="${RUNNER_TEMP}/release-notes.md"
-          gh release create "$GITHUB_REF_NAME" \
+          gh release upload "$GITHUB_REF_NAME" \
             assets/maa-log-analyzer-extension/*.vsix \
-            --title "$GITHUB_REF_NAME" \
-            --notes-file "$notes"
+            --clobber
