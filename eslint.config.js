@@ -9,6 +9,7 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
+      '.codex/**',
       'src-vscode/webview/**',
       'src-vscode/vsix/**',
       'src-tauri/target/**',
