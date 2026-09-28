@@ -426,12 +426,31 @@ const projectSyntheticTaskFlowItem = (
   }
 }
 
-const collectTaskScopes = (scope: ScopeNode, output: ScopeNode[]): void => {
-  for (const child of scope.children) {
-    if (child.kind === 'task') {
-      output.push(child)
+/**
+ * 收集子树里的全部任务作用域（先序）。
+ *
+ * 用显式栈而不是递归：轮转片段丢失、`Tasker.Task.Failed/Succeeded` 成批缺失时，
+ * 每个新任务都会挂在还开着的那一个下面，作用域树会退化成上万层的链
+ * （实测 17,000 个连续未闭合任务 = 深度 17,000），递归版本直接 RangeError。
+ * 解析器不应该因为输入退化而崩掉。
+ */
+const collectTaskScopes = (root: ScopeNode, output: ScopeNode[]): void => {
+  const stack: ScopeNode[] = []
+  for (let index = root.children.length - 1; index >= 0; index -= 1) {
+    const child = root.children[index]
+    if (child) stack.push(child)
+  }
+
+  while (stack.length > 0) {
+    const scope = stack.pop() as ScopeNode
+    if (scope.kind === 'task') {
+      output.push(scope)
     }
-    collectTaskScopes(child, output)
+    const children = scope.children
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const child = children[index]
+      if (child) stack.push(child)
+    }
   }
 }
 
@@ -482,11 +501,14 @@ const readScopeSourceKey = (scope: ScopeNode): string | undefined => {
 const readScopeProcessId = (scope: ScopeNode): string | undefined =>
   readStringField(readScopePayload(scope), 'processId')
 
-const collectSubtreeProcessIds = (scope: ScopeNode, output: Set<string>): void => {
-  for (const child of scope.children) {
-    const processId = readScopeProcessId(child)
+const collectSubtreeProcessIds = (root: ScopeNode, output: Set<string>): void => {
+  // 同 collectTaskScopes：深度不设上限的输入不允许把调用栈打爆。
+  const stack: ScopeNode[] = [...root.children]
+  while (stack.length > 0) {
+    const scope = stack.pop() as ScopeNode
+    const processId = readScopeProcessId(scope)
     if (processId) output.add(processId)
-    collectSubtreeProcessIds(child, output)
+    for (const child of scope.children) stack.push(child)
   }
 }
 
