@@ -51,6 +51,50 @@ describe('loadFrameworkLogSources', () => {
     })
   })
 
+  it('includes rotated segments next to the main log and accepts a rotated-only bundle', async () => {
+    // 版本探测的「一个备份 + 一个主日志」规则保留，但备份侧现在也认 *.bak.<时间戳>.log，
+    // 并且只有轮转片段的包 / 目录不再被当成空输入。
+    const root = await mkdtemp(path.join(os.tmpdir(), 'mla-framework-input-'))
+    tempRoots.push(root)
+    const zipPath = path.join(root, 'logs.zip')
+    await writeFile(
+      zipPath,
+      zipSync({
+        'debug/maafw.log': strToU8(log('v5.11.1')),
+        'debug/maafw.bak.2026.04.14-04.11.31.124.log': strToU8(log('v5.10.4')),
+      }),
+    )
+
+    const sources = await loadFrameworkLogSources(zipPath)
+    expect(sources.map((source) => source.name)).toEqual([
+      'maafw.bak.2026.04.14-04.11.31.124.log',
+      'maafw.log',
+    ])
+
+    const rotatedOnlyZipPath = path.join(root, 'rotated-only.zip')
+    await writeFile(
+      rotatedOnlyZipPath,
+      zipSync({
+        'debug/maafw.bak.2026.04.14-04.11.31.124.log': strToU8(log('v5.10.4')),
+      }),
+    )
+    const rotatedOnlyZip = await loadFrameworkLogSources(rotatedOnlyZipPath)
+    expect(rotatedOnlyZip.map((source) => source.name)).toEqual([
+      'maafw.bak.2026.04.14-04.11.31.124.log',
+    ])
+
+    const rotatedOnlyDebug = path.join(root, 'dir', 'debug')
+    await mkdir(rotatedOnlyDebug, { recursive: true })
+    await writeFile(
+      path.join(rotatedOnlyDebug, 'maafw.bak.2026.04.14-04.11.31.124.log'),
+      log('v5.10.4'),
+    )
+    const rotatedOnlyDirectory = await loadFrameworkLogSources(path.join(root, 'dir'))
+    expect(rotatedOnlyDirectory.map((source) => source.name)).toEqual([
+      'maafw.bak.2026.04.14-04.11.31.124.log',
+    ])
+  })
+
   it('retains physical file references for directory logs', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'mla-framework-input-'))
     tempRoots.push(root)

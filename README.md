@@ -46,7 +46,7 @@ _✨ 可视化分析基于 MaaFramework 开发应用的用户日志 ✨_</br>
 
 ## 支持的输入
 
-- 单文件：`maa.log`、`maa.bak.log`、`maafw.log`、`maafw.bak.log`
+- 单文件：`maa.log` / `maafw.log`、`maa.bak.log` / `maafw.bak.log`、`*.bak.<时间戳>.log` 轮转片段
 - 文件夹：自动识别日志文件
 - 压缩包：支持从 zip 中提取日志内容
 

@@ -34,7 +34,6 @@ export { InputFileError } from './boundedFileReader'
 export type { ArchiveFormatCode, ArchiveLimitCode, ArchiveLimits } from './archiveLimits'
 
 const MAIN_LOG_NAMES = ['maa.log', 'maafw.log'] as const
-const BAK_LOG_NAMES = ['maa.bak.log', 'maafw.bak.log'] as const
 const SEARCH_TEXT_EXTENSIONS = ['.log', '.txt', '.jsonl'] as const
 
 const MAIN_LOG_NAME_SET = new Set<string>(MAIN_LOG_NAMES.map((name) => name.toLowerCase()))
@@ -115,36 +114,6 @@ const decodeNodeBytes = (bytes: Uint8Array): string => {
 
 const joinPath = (base: string, name: string): string => (base ? `${base}/${name}` : name)
 
-const findBaseDirectory = (paths: string[]): string | null => {
-  for (const p of paths) {
-    const lower = normalizeLowerPath(p)
-    if (
-      lower.endsWith('/maa.log') ||
-      lower === 'maa.log' ||
-      lower.endsWith('/maafw.log') ||
-      lower === 'maafw.log'
-    ) {
-      const normalized = toPosixPath(p)
-      const lastSlash = normalized.lastIndexOf('/')
-      return lastSlash === -1 ? '' : normalized.slice(0, lastSlash)
-    }
-  }
-  return null
-}
-
-const findZipEntry = (
-  entries: Record<string, Uint8Array>,
-  paths: string[],
-  targetPath: string,
-): Uint8Array | null => {
-  const normalizedTarget = normalizeLowerPath(targetPath)
-  for (const currentPath of paths) {
-    if (normalizeLowerPath(currentPath) === normalizedTarget) {
-      return entries[currentPath]
-    }
-  }
-  return null
-}
 
 const parseErrorImageKey = (fileName: string): string | null => {
   const match = fileName.match(/^(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2})\.(\d{1,3})_(.+)\.png$/)
@@ -328,6 +297,83 @@ const sortLogPaths = (paths: string[]): string[] => {
     if (rankDiff !== 0) return rankDiff
     return left.localeCompare(right)
   })
+}
+
+export interface PrimaryLogGroup {
+  /** 组所在目录（posix 风格；压缩包根目录为 ''）。 */
+  directory: string
+  /** 组内主日志，已按 sortLogPaths 排序：轮转片段 → 备份 → 主日志。 */
+  paths: string[]
+}
+
+export interface PrimaryLogGroupOptions {
+  /**
+   * 只保留排序最靠前的那一个主日志（maafw.log 优先于 maa.log）。
+   * 框架版本探测用这个模式：并列的 maa.log 通常是遗留文件，混进来会把版本判定搅乱。
+   */
+  singleMain?: boolean
+}
+
+const splitPosixPath = (filePath: string): { directory: string; name: string } => {
+  const normalized = toPosixPath(filePath)
+  const lastSlash = normalized.lastIndexOf('/')
+  return lastSlash === -1
+    ? { directory: '', name: normalized }
+    : { directory: normalized.slice(0, lastSlash), name: normalized.slice(lastSlash + 1) }
+}
+
+/**
+ * 按目录挑出「一组」要解析的主日志，排序规则与 Web 侧 selectPrimaryLogGroup 一致：
+ * 目录深度浅优先 → 有主日志优先 → 文件多优先 → 路径字典序。
+ *
+ * isCoreLogName 同时认主日志、*.bak.log 和 *.bak.<时间戳>.log 轮转片段，所以只有轮转片段的
+ * 目录 / 压缩包同样会被选中，而不是直接判成「找不到日志」—— 与 Web / 桌面端的行为对齐。
+ */
+export const selectPrimaryLogGroup = (
+  filePaths: readonly string[],
+  options: PrimaryLogGroupOptions = {},
+): PrimaryLogGroup | null => {
+  const groups = new Map<string, string[]>()
+  const mainPaths = new Set<string>()
+
+  for (const filePath of filePaths) {
+    const { directory, name } = splitPosixPath(filePath)
+    if (!isCoreLogName(name)) continue
+    if (MAIN_LOG_NAME_SET.has(name.toLowerCase())) mainPaths.add(filePath)
+    const bucket = groups.get(directory)
+    if (bucket) bucket.push(filePath)
+    else groups.set(directory, [filePath])
+  }
+
+  const ranked = [...groups.entries()].map(([directory, paths]) => ({
+    directory,
+    paths,
+    depth: directory === '' ? 0 : directory.split('/').filter(Boolean).length,
+    hasMain: paths.some((filePath) => mainPaths.has(filePath)),
+  }))
+  ranked.sort((left, right) => {
+    if (left.depth !== right.depth) return left.depth - right.depth
+    if (left.hasMain !== right.hasMain) return left.hasMain ? -1 : 1
+    if (left.paths.length !== right.paths.length) return right.paths.length - left.paths.length
+    return left.directory.localeCompare(right.directory)
+  })
+
+  const winner = ranked[0]
+  if (!winner) return null
+
+  const ordered = sortLogPaths(winner.paths)
+  if (options.singleMain !== true) {
+    return { directory: winner.directory, paths: ordered }
+  }
+
+  const preferredMain = ordered.find((filePath) => mainPaths.has(filePath))
+  if (!preferredMain) {
+    return { directory: winner.directory, paths: ordered }
+  }
+  return {
+    directory: winner.directory,
+    paths: [...ordered.filter((filePath) => !mainPaths.has(filePath)), preferredMain],
+  }
 }
 
 export interface NodeInputBudgetContext {
@@ -547,37 +593,19 @@ const collectFocusedZipContents = (
 
 const buildDefaultZipContent = (
   entries: Record<string, Uint8Array>,
-  paths: string[],
-  basePath: string,
+  selectedPaths: readonly string[],
   sourceRef: string,
 ): MergedContent => {
-  const bakLogName = BAK_LOG_NAMES.find((name) =>
-    findZipEntry(entries, paths, joinPath(basePath, name)),
-  )
-  const mainLogName = MAIN_LOG_NAMES.find((name) =>
-    findZipEntry(entries, paths, joinPath(basePath, name)),
-  )
-
   const chunks: TaggedChunk[] = []
-  if (bakLogName) {
-    const data = findZipEntry(entries, paths, joinPath(basePath, bakLogName))
-    if (data) {
-      chunks.push({
-        content: decodeNodeBytes(data),
-        source: toZipReference(sourceRef, joinPath(basePath, bakLogName)),
-        path: toPosixPath(joinPath(basePath, bakLogName)),
-      })
-    }
-  }
-  if (mainLogName) {
-    const data = findZipEntry(entries, paths, joinPath(basePath, mainLogName))
-    if (data) {
-      chunks.push({
-        content: decodeNodeBytes(data),
-        source: toZipReference(sourceRef, joinPath(basePath, mainLogName)),
-        path: toPosixPath(joinPath(basePath, mainLogName)),
-      })
-    }
+  for (const entryPath of selectedPaths) {
+    const data = entries[entryPath]
+    if (!data) continue
+    const normalized = toPosixPath(entryPath)
+    chunks.push({
+      content: decodeNodeBytes(data),
+      source: toZipReference(sourceRef, normalized),
+      path: normalized,
+    })
   }
   return joinMergedWithSources(chunks)
 }
@@ -615,12 +643,13 @@ export const extractZipContentFromNodeBuffer = (
   const limits = resolveArchiveLimits(options.archiveLimits)
   const { files } = extractZipEntriesWithinLimits(zipData, isNeededZipEntry, limits)
   const paths = Object.keys(files)
-  const basePath = findBaseDirectory(paths)
-  if (basePath == null) return null
+  const group = selectPrimaryLogGroup(paths)
+  if (!group) return null
+  const basePath = group.directory
 
   const merged = options.focus
     ? collectFocusedZipContents(files, paths, basePath, options.focus, sourceRef)
-    : buildDefaultZipContent(files, paths, basePath, sourceRef)
+    : buildDefaultZipContent(files, group.paths, sourceRef)
   if (!merged.content) return null
 
   const errorImages = new Map<string, string>()
@@ -807,6 +836,27 @@ export const hasNodeMainLogInDirectory = async (
   return false
 }
 
+/**
+ * 目录里是否有主日志 —— 口径与 Web 侧 isPrimaryLogFileName 对齐：maa.log / maafw.log、
+ * *.bak.log，以及 *.bak.<时间戳>.log 轮转片段都算。
+ *
+ * 只有轮转片段的目录同样是日志目录（以前只认主日志，这种目录会被判成「找不到日志」）。
+ */
+export const hasNodePrimaryLogInDirectory = async (
+  context: NodeInputBudgetContext,
+  directoryPath: string,
+): Promise<boolean> => {
+  if (!(await tryInspectDirectory(context, directoryPath))) return false
+  return await withSafeDirectory(context, directoryPath, async (directory) => {
+    for await (const entry of directory) {
+      if (!isCoreLogName(entry.name)) continue
+      const stats = await inspectDirectoryEntry(context, path.join(directoryPath, entry.name))
+      if (stats.isFile()) return true
+    }
+    return false
+  })
+}
+
 export const findExistingRegularNodeFile = async (
   context: NodeInputBudgetContext,
   directoryPath: string,
@@ -838,7 +888,7 @@ const findDebugDirectoryRecursively = async (
         const fullPath = path.join(currentPath, entry.name)
         const stats = await inspectDirectoryEntry(context, fullPath)
         if (!stats.isDirectory()) continue
-        if (await hasNodeMainLogInDirectory(context, fullPath)) return fullPath
+        if (await hasNodePrimaryLogInDirectory(context, fullPath)) return fullPath
         pending.push(fullPath)
       }
       return null
@@ -852,10 +902,10 @@ export const resolveNodeDebugDirectory = async (
   inputPath: string,
   context: NodeInputBudgetContext,
 ): Promise<string | null> => {
-  if (await hasNodeMainLogInDirectory(context, inputPath)) return inputPath
+  if (await hasNodePrimaryLogInDirectory(context, inputPath)) return inputPath
 
   const directDebugPath = path.join(inputPath, 'debug')
-  if (await hasNodeMainLogInDirectory(context, directDebugPath)) return directDebugPath
+  if (await hasNodePrimaryLogInDirectory(context, directDebugPath)) return directDebugPath
 
   return findDebugDirectoryRecursively(inputPath, context)
 }
@@ -885,25 +935,13 @@ const collectFilesRecursively = async (
   return collected
 }
 
-const pickPrimaryLogPath = async (
-  debugPath: string,
-  allFiles: string[],
-  candidates: readonly string[],
-): Promise<string | null> => {
-  for (const name of candidates) {
-    const directPath = path.join(debugPath, name)
-    const directMatch = allFiles.find((filePath) => pathKey(filePath) === pathKey(directPath))
-    if (directMatch) return directMatch
-  }
-
-  const normalizedCandidates = new Set(candidates.map((name) => name.toLowerCase()))
-  for (const filePath of allFiles) {
-    const fileName = path.basename(filePath).toLowerCase()
-    if (normalizedCandidates.has(fileName)) {
-      return filePath
-    }
-  }
-  return null
+/** 目录下全部主日志文件（含轮转片段），交给 selectPrimaryLogGroup 挑选要解析的那一组。 */
+export const collectNodeCoreLogPaths = async (
+  directoryPath: string,
+  context: NodeInputBudgetContext,
+): Promise<string[]> => {
+  const allFiles = await collectFilesRecursively(directoryPath, context)
+  return allFiles.filter((filePath) => isCoreLogName(path.basename(filePath)))
 }
 
 const buildDefaultDirectoryContent = async (
@@ -911,22 +949,15 @@ const buildDefaultDirectoryContent = async (
   allFiles: string[],
   context: NodeInputBudgetContext,
 ): Promise<MergedContent> => {
-  const bakLogPath = await pickPrimaryLogPath(debugPath, allFiles, BAK_LOG_NAMES)
-  const mainLogPath = await pickPrimaryLogPath(debugPath, allFiles, MAIN_LOG_NAMES)
+  const group = selectPrimaryLogGroup(allFiles)
+  if (!group) return { content: '', segments: [] }
 
   const chunks: TaggedChunk[] = []
-  if (bakLogPath) {
+  for (const logPath of group.paths) {
     chunks.push({
-      content: await readNodeTextFileWithinBudget(bakLogPath, context),
-      source: toFileReference(bakLogPath),
-      path: toPosixPath(path.relative(debugPath, bakLogPath)),
-    })
-  }
-  if (mainLogPath) {
-    chunks.push({
-      content: await readNodeTextFileWithinBudget(mainLogPath, context),
-      source: toFileReference(mainLogPath),
-      path: toPosixPath(path.relative(debugPath, mainLogPath)),
+      content: await readNodeTextFileWithinBudget(logPath, context),
+      source: toFileReference(logPath),
+      path: toPosixPath(path.relative(debugPath, logPath)),
     })
   }
   return joinMergedWithSources(chunks)

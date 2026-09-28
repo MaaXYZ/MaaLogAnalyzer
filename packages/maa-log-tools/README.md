@@ -45,7 +45,7 @@ The concrete adapter is provided by `@windsland52/maa-log-adapter`.
 }
 ```
 
-When `focus` is provided, the helpers scan candidate primary and history log files and only merge files whose content matches the keywords and/or timestamp boundaries. If `focus` is omitted, the previous default loading behavior is preserved.
+When `focus` is provided, the helpers scan candidate primary and history log files and only merge files whose content matches the keywords and/or timestamp boundaries. Without `focus`, the newest log group is merged in full - `maa.log` / `maafw.log`, `*.bak.log`, and `*.bak.<timestamp>.log` rotated segments, oldest first - using the same group ranking as the web app. Framework version detection keeps its older rule of one history segment plus one main log (`maafw.log` preferred).
 
 ## Input resource limits
 

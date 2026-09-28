@@ -8,17 +8,15 @@ import {
   type ArchiveLimits,
 } from './archiveLimits'
 import {
+  collectNodeCoreLogPaths,
   createNodeInputBudgetContext,
-  findExistingRegularNodeFile,
   InputFileError,
   readNodeArchiveFileBytes,
   readNodeTextFileContent,
   readNodeTextFilesContent,
   resolveNodeDebugDirectory,
+  selectPrimaryLogGroup,
 } from './nodeInput'
-
-const MAIN_LOG_NAMES = ['maafw.log', 'maa.log'] as const
-const BAK_LOG_NAMES = ['maafw.bak.log', 'maa.bak.log'] as const
 
 export interface LoadFrameworkLogSourcesOptions {
   archiveLimits?: Partial<ArchiveLimits>
@@ -37,23 +35,6 @@ const decodeBytes = (bytes: Uint8Array): string => {
   return new TextDecoder('utf-8').decode(bytes)
 }
 
-const findEntryPath = (paths: string[], target: string): string | null => {
-  const normalizedTarget = toPosixPath(target).toLowerCase()
-  return (
-    paths.find((candidate) => toPosixPath(candidate).toLowerCase() === normalizedTarget) ?? null
-  )
-}
-
-const findZipBasePath = (paths: string[]): string | null => {
-  for (const candidate of paths) {
-    const normalized = toPosixPath(candidate)
-    const lowerName = path.posix.basename(normalized).toLowerCase()
-    if (!MAIN_LOG_NAMES.includes(lowerName as (typeof MAIN_LOG_NAMES)[number])) continue
-    const parent = path.posix.dirname(normalized)
-    return parent === '.' ? '' : parent
-  }
-  return null
-}
 
 const loadZipSources = async (
   zipPath: string,
@@ -62,17 +43,12 @@ const loadZipSources = async (
   const bytes = await readNodeArchiveFileBytes(zipPath, limits)
   const entries = inspectZipDirectory(bytes, limits)
   const paths = entries.map((entry) => entry.name)
-  const basePath = findZipBasePath(paths)
-  if (basePath == null) return []
+  // 版本探测沿用「一个备份 + 一个主日志（maafw 优先）」的老规则，只是备份侧现在也包含
+  // *.bak.<时间戳>.log 轮转片段；只有轮转片段的压缩包同样能选出这一组，而不是返回空。
+  const group = selectPrimaryLogGroup(paths, { singleMain: true })
+  if (!group) return []
 
-  const selected: string[] = []
-  for (const name of [...BAK_LOG_NAMES, ...MAIN_LOG_NAMES]) {
-    const candidate = findEntryPath(paths, basePath ? `${basePath}/${name}` : name)
-    if (candidate && !selected.includes(candidate)) selected.push(candidate)
-    if (candidate && MAIN_LOG_NAMES.includes(name as (typeof MAIN_LOG_NAMES)[number])) break
-  }
-
-  const selectedPaths = new Set(selected)
+  const selectedPaths = new Set(group.paths)
   const { files } = extractInspectedZipEntriesWithinLimits(
     bytes,
     entries,
@@ -80,15 +56,15 @@ const loadZipSources = async (
     limits,
   )
 
-  return selected.flatMap((entryPath) => {
-    const bytes = files[entryPath]
-    if (!bytes) return []
+  return group.paths.flatMap((entryPath) => {
+    const data = files[entryPath]
+    if (!data) return []
     const normalized = toPosixPath(entryPath)
     return [
       {
         path: normalized,
         name: path.posix.basename(normalized),
-        content: decodeBytes(bytes),
+        content: decodeBytes(data),
         reference: `zip:${toPosixPath(zipPath)}#${normalized}`,
       },
     ]
@@ -102,10 +78,10 @@ const loadDirectorySources = async (
   const context = await createNodeInputBudgetContext(directoryPath, limits)
   const debugPath = await resolveNodeDebugDirectory(directoryPath, context)
   if (!debugPath) return []
-  const selected = [
-    await findExistingRegularNodeFile(context, debugPath, BAK_LOG_NAMES),
-    await findExistingRegularNodeFile(context, debugPath, MAIN_LOG_NAMES),
-  ].filter((candidate): candidate is string => candidate != null)
+  const selected =
+    selectPrimaryLogGroup(await collectNodeCoreLogPaths(debugPath, context), {
+      singleMain: true,
+    })?.paths ?? []
 
   const contents = await readNodeTextFilesContent(selected, {
     archiveLimits: limits,

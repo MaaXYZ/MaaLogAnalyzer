@@ -23,7 +23,9 @@ afterEach(async () => {
 })
 
 describe('node input focus selectors', () => {
-  it('keeps default directory loading behavior when focus is not provided', async () => {
+  it('loads every segment of the newest log group by default', async () => {
+    // 默认路径也要带上 *.bak.<时间戳>.log 轮转片段（与 Web / 桌面端一致）：以前只取
+    // maa.bak.log + maa.log，轮转片段里的历史被静默丢掉。
     const root = await mkdtemp(path.join(os.tmpdir(), 'mla-node-input-'))
     tempRoots.push(root)
     const debugDir = path.join(root, 'debug')
@@ -44,17 +46,39 @@ describe('node input focus selectors', () => {
 
     const extracted = await loadNodeLogDirectory(root)
     expect(extracted).not.toBeNull()
+    expect(extracted?.content).toContain('OldHistory')
     expect(extracted?.content).toContain('BaselineTask')
     expect(extracted?.content).toContain('FocusedTask')
-    expect(extracted?.content).not.toContain('OldHistory')
     expect(
       extracted?.sourceSegments.map((segment) => ({
         path: segment.path,
         startLine: segment.startLine,
       })),
     ).toEqual([
-      { path: 'maa.bak.log', startLine: 1 },
-      { path: 'maa.log', startLine: 2 },
+      { path: 'maa.bak.20260415.log', startLine: 1 },
+      { path: 'maa.bak.log', startLine: 2 },
+      { path: 'maa.log', startLine: 3 },
+    ])
+  })
+
+  it('loads a directory that only contains rotated segments', async () => {
+    // 以前 hasNodeMainLogInDirectory 只认 maa.log / maafw.log，这种目录会被判成「找不到日志」：
+    // CLI 打印 No analyzable log content found in the provided path. 之后 exit 2。
+    const root = await mkdtemp(path.join(os.tmpdir(), 'mla-node-input-'))
+    tempRoots.push(root)
+    const debugDir = path.join(root, 'debug')
+    await mkdir(debugDir, { recursive: true })
+
+    await writeFile(
+      path.join(debugDir, 'maafw.bak.2026.04.14-04.11.31.124.log'),
+      `${makeTimestampedLine('2026-04-14 04:11:31.124', 'RotatedOnly')}\n`,
+    )
+
+    const extracted = await loadNodeLogDirectory(root)
+    expect(extracted).not.toBeNull()
+    expect(extracted?.content).toContain('RotatedOnly')
+    expect(extracted?.sourceSegments.map((segment) => segment.path)).toEqual([
+      'maafw.bak.2026.04.14-04.11.31.124.log',
     ])
   })
 
@@ -138,6 +162,36 @@ describe('node input focus selectors', () => {
     expect(extracted?.content).toContain('AutoCollectStart')
     expect(extracted?.content).not.toContain('OldHistory')
     expect(extracted?.textFiles.map((file) => file.name)).toContain('notes.txt')
+  })
+
+  it('loads rotated segments from a zip, including a rotated-only archive', () => {
+    // 压缩包走同一套分组选择：轮转片段默认参与解析，只有轮转片段的包也不再被当成空包。
+    const zipData = zipSync({
+      'debug/maafw.bak.2026.04.14-04.11.31.124.log': strToU8(
+        `${makeTimestampedLine('2026-04-14 04:11:31.124', 'RotatedOnly')}\n`,
+      ),
+      'debug/maafw.log': strToU8(
+        `${makeTimestampedLine('2026-04-14 04:37:25.209', 'LatestTask')}\n`,
+      ),
+    })
+
+    const extracted = extractZipContentFromNodeBuffer(zipData, 'logs.zip')
+    expect(extracted?.content).toContain('RotatedOnly')
+    expect(extracted?.content).toContain('LatestTask')
+    expect(extracted?.sourceSegments.map((segment) => segment.path)).toEqual([
+      'debug/maafw.bak.2026.04.14-04.11.31.124.log',
+      'debug/maafw.log',
+    ])
+
+    const rotatedOnly = extractZipContentFromNodeBuffer(
+      zipSync({
+        'debug/maafw.bak.2026.04.14-04.11.31.124.log': strToU8(
+          `${makeTimestampedLine('2026-04-14 04:11:31.124', 'RotatedOnly')}\n`,
+        ),
+      }),
+      'rotated-only.zip',
+    )
+    expect(rotatedOnly?.content).toContain('RotatedOnly')
   })
 
   it('collects root-level zip screenshots for on_error and wait_freezes', () => {
