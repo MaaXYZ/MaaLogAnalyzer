@@ -103,7 +103,12 @@ const defaultParseYieldControl = async (): Promise<void> => {
   if (typeof MessageChannel !== 'undefined') {
     await new Promise<void>((resolve) => {
       const channel = new MessageChannel()
-      channel.port1.onmessage = () => resolve()
+      channel.port1.onmessage = () => {
+        // 端口是活动句柄：不关掉的话 Node 侧解析完也退不出进程（CLI / 内核服务都会挂住）
+        channel.port1.close()
+        channel.port2.close()
+        resolve()
+      }
       channel.port2.postMessage(null)
     })
   } else {
