@@ -14,10 +14,9 @@ export default defineConfig({
     outDir: path.resolve(__dirname, 'webview'),
     assetsDir: 'assets',
     sourcemap: false,
-    // 不进行代码分割，打包成单个文件
+    // 固定入口与动态 chunk 的文件名（webview 里靠相对路径加载，不能带 hash）
     rollupOptions: {
       output: {
-        // 单个 JS 文件
         manualChunks: undefined,
         entryFileNames: 'assets/index.js',
         chunkFileNames: 'assets/[name].js',
