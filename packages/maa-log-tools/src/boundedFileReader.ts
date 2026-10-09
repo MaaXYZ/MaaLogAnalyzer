@@ -45,10 +45,19 @@ export const getFileIdentity = (stats: Stats): FileIdentity => ({
   ino: stats.ino,
 })
 
+/**
+ * Whether two identities describe the same file.
+ *
+ * Windows reports the volume serial in `dev` only for handle-based stats on some Node versions: a
+ * path-based `lstat` of the same file leaves it at 0, so comparing the two literally rejects every
+ * file the reader just opened. A device of 0 means "not reported" and is skipped; the inode still
+ * has to match, and both devices are compared whenever both report one.
+ */
 export const sameFileIdentity = (
   left: Readonly<FileIdentity>,
   right: Readonly<FileIdentity>,
-): boolean => left.dev === right.dev && left.ino === right.ino
+): boolean =>
+  (left.dev === right.dev || left.dev === 0 || right.dev === 0) && left.ino === right.ino
 
 const assertRegularPath = (filePath: string, stats: Stats): void => {
   if (stats.isSymbolicLink()) {

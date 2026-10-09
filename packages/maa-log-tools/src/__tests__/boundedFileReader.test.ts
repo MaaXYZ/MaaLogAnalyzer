@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ArchiveLimitError } from '../archiveLimits'
-import { InputFileError, readBoundedRegularFile } from '../boundedFileReader'
+import { InputFileError, readBoundedRegularFile, sameFileIdentity } from '../boundedFileReader'
 
 const tempRoots: string[] = []
 
@@ -128,5 +128,34 @@ describe('bounded regular-file reader', () => {
         (actual) => new ArchiveLimitError('file-size', actual, 1024),
       ),
     ).rejects.toBeInstanceOf(InputFileError)
+  })
+
+  it('reads a regular file that stays unchanged', async () => {
+    const root = await makeTempRoot()
+    const filePath = path.join(root, 'maa.log')
+    await writeFile(filePath, 'main')
+
+    const content = await readBoundedRegularFile(
+      filePath,
+      1024,
+      (actual) => new ArchiveLimitError('file-size', actual, 1024),
+    )
+
+    expect(new TextDecoder().decode(content)).toBe('main')
+  })
+})
+
+describe('file identity comparison', () => {
+  it('accepts a device that only one side reports', () => {
+    expect(sameFileIdentity({ dev: 0, ino: 7 }, { dev: 42, ino: 7 })).toBe(true)
+    expect(sameFileIdentity({ dev: 42, ino: 7 }, { dev: 0, ino: 7 })).toBe(true)
+  })
+
+  it('rejects a different inode even when one device is unreported', () => {
+    expect(sameFileIdentity({ dev: 0, ino: 7 }, { dev: 42, ino: 8 })).toBe(false)
+  })
+
+  it('rejects two different reported devices', () => {
+    expect(sameFileIdentity({ dev: 42, ino: 7 }, { dev: 43, ino: 7 })).toBe(false)
   })
 })
