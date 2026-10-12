@@ -14,8 +14,19 @@ import {
 } from '../../../../utils/logInputSource'
 import { sortPrimaryLogParseInputs } from '../../../../utils/logFileDiscovery'
 
+// 解析很快时（内置示例日志只要几十毫秒）不要闪一个 0% 的进度弹窗：
+// 超过这个时间还没结束，才认为值得给用户进度反馈。
+const PARSING_MODAL_DELAY_MS = 300
+
 export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
   let latestRequestId = 0
+  let parsingModalTimer: ReturnType<typeof setTimeout> | null = null
+
+  const clearParsingModalTimer = () => {
+    if (parsingModalTimer === null) return
+    clearTimeout(parsingModalTimer)
+    parsingModalTimer = null
+  }
 
   return async (params: ProcessLogContentParams) => {
     const requestId = ++latestRequestId
@@ -30,8 +41,13 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
       params.loadedDefaultTargetId,
     )
 
-    options.showParsingModal.value = true
+    clearParsingModalTimer()
     options.parseProgress.value = 0
+    parsingModalTimer = setTimeout(() => {
+      parsingModalTimer = null
+      if (requestId !== latestRequestId) return
+      options.showParsingModal.value = true
+    }, PARSING_MODAL_DELAY_MS)
 
     try {
       options.resetParserDebugAssets(
@@ -98,6 +114,7 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
         options.onWarning('未能解析出有效的任务数据，请检查日志文件格式是否正确')
       }
     } finally {
+      clearParsingModalTimer()
       if (requestId === latestRequestId) {
         options.showParsingModal.value = false
         options.parseProgress.value = 0

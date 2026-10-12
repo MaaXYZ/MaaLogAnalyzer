@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import type { LogParser, ParseSourceInput } from '@windsland52/maa-log-parser'
 import { createProcessLogContent } from './contentProcessor'
@@ -21,6 +21,10 @@ const createOptions = (parser: LogParser): LogLoadingPipelineOptions => ({
 })
 
 describe('createProcessLogContent', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('routes folder parse inputs through parseInputs', async () => {
     const parser = {
       resetParsedEvents: vi.fn(),
@@ -146,5 +150,55 @@ describe('createProcessLogContent', () => {
 
     expect(options.applyParsedTasks).toHaveBeenCalledTimes(1)
     expect(options.applyParsedTasks).toHaveBeenCalledWith([{ task_id: 2 }], false)
+  })
+
+  const createParserStub = (parseFile: () => Promise<void>) =>
+    ({
+      resetParsedEvents: vi.fn(),
+      setErrorImages: vi.fn(),
+      setVisionImages: vi.fn(),
+      setWaitFreezesImages: vi.fn(),
+      parseInputs: vi.fn(async () => undefined),
+      parseFile: vi.fn(parseFile),
+      consumeTasks: vi.fn(() => []),
+    }) as unknown as LogParser
+
+  it('does not flash the parsing modal when parsing finishes quickly', async () => {
+    vi.useFakeTimers()
+    const options = createOptions(createParserStub(async () => undefined))
+    const processLogContent = createProcessLogContent(options)
+
+    await processLogContent({ content: 'sample' })
+    expect(options.showParsingModal.value).toBe(false)
+
+    vi.advanceTimersByTime(1000)
+    expect(options.showParsingModal.value).toBe(false)
+  })
+
+  it('shows the parsing modal only when parsing outlasts the delay', async () => {
+    vi.useFakeTimers()
+    let finishParse!: () => void
+    const options = createOptions(
+      createParserStub(
+        () =>
+          new Promise<void>((resolve) => {
+            finishParse = resolve
+          }),
+      ),
+    )
+    const processLogContent = createProcessLogContent(options)
+
+    const request = processLogContent({ content: 'big log' })
+    expect(options.showParsingModal.value).toBe(false)
+
+    vi.advanceTimersByTime(300)
+    expect(options.showParsingModal.value).toBe(true)
+
+    finishParse()
+    await request
+    expect(options.showParsingModal.value).toBe(false)
+
+    vi.advanceTimersByTime(1000)
+    expect(options.showParsingModal.value).toBe(false)
   })
 })
