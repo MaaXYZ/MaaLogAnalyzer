@@ -12,7 +12,7 @@ import {
   useThemeVars,
 } from 'naive-ui'
 import type { TaskInfo } from '../../../types'
-import { formatDuration } from '../../../utils/formatDuration'
+import { buildTaskMetaLine } from '../../../utils/taskMetaLine'
 import { buildTaskIdentity, isSameTask } from '@windsland52/maa-log-tools/task-identity'
 
 const props = defineProps<{
@@ -42,6 +42,14 @@ const handleSelectTask = (task: TaskInfo) => {
 const isSelectedTask = (task: TaskInfo) => {
   return props.selectedTask != null && isSameTask(props.selectedTask, task)
 }
+
+// 与桌面任务列表同一行式元信息：节点数 · 耗时 · 时间
+const taskMetaLine = (task: TaskInfo): string =>
+  buildTaskMetaLine({
+    nodeCount: task.nodes.length,
+    duration: task.duration,
+    startTime: task.start_time,
+  })
 </script>
 
 <template>
@@ -96,11 +104,8 @@ const isSelectedTask = (task: TaskInfo) => {
                     }}
                   </n-text>
                 </n-text>
-                <n-text depth="3" style="font-size: 12px">
-                  节点: {{ task.nodes.length }} 个
-                </n-text>
-                <n-text depth="3" style="font-size: 12px" v-if="task.duration">
-                  耗时: {{ formatDuration(task.duration) }}
+                <n-text depth="3" style="font-size: 12px" :title="task.start_time || undefined">
+                  {{ taskMetaLine(task) }}
                 </n-text>
               </n-flex>
             </n-flex>

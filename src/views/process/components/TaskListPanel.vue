@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { NCard, NFlex, NText, NButton, NIcon, NScrollbar, NList, NListItem, NTag } from 'naive-ui'
 import { VerticalAlignTopOutlined, VerticalAlignBottomOutlined } from '@vicons/antd'
 import type { TaskInfo } from '../../../types'
-import { formatDuration } from '../../../utils/formatDuration'
+import { buildTaskMetaLine } from '../../../utils/taskMetaLine'
 import { buildTaskIdentity } from '@windsland52/maa-log-tools/task-identity'
 
 const props = withDefaults(
@@ -64,6 +64,14 @@ const statusMeta = (
 }
 
 const taskListScrollbar = ref<InstanceType<typeof NScrollbar> | null>(null)
+
+// 节点数 / 耗时 / 时间 并成一行，任务卡从 5 行降到 3 行，一屏能多放几个任务
+const taskMetaLine = (task: TaskInfo): string =>
+  buildTaskMetaLine({
+    nodeCount: task.nodes.length,
+    duration: task.duration,
+    startTime: task.start_time,
+  })
 
 const scrollToTop = () => {
   taskListScrollbar.value?.scrollTo({ top: 0, behavior: 'smooth' })
@@ -159,12 +167,8 @@ defineExpose({
                   </n-tag>
                 </template>
               </n-text>
-              <n-text depth="3" style="font-size: 12px"> 节点: {{ task.nodes.length }} 个 </n-text>
-              <n-text depth="3" style="font-size: 12px" v-if="task.duration">
-                耗时: {{ formatDuration(task.duration) }}
-              </n-text>
-              <n-text depth="3" style="font-size: 12px" v-if="task.start_time">
-                时间: {{ task.start_time }}
+              <n-text depth="3" style="font-size: 12px" :title="task.start_time || undefined">
+                {{ taskMetaLine(task) }}
               </n-text>
             </n-flex>
           </n-flex>
