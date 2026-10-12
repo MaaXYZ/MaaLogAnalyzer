@@ -80,7 +80,7 @@ tag 推送后触发（注意 `release-vscode.yml` 的 build job 不会处理 mai
 
 | 工作流               | 触发                              | 行为                                                                                                         |
 | -------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `release-vscode.yml` | `v*` tag                          | 构建 vsix → 发布 VS Code Marketplace（`vsce publish`）→ 创建 GitHub Release（附 vsix，notes 取自 CHANGELOG） |
+| `release-vscode.yml` | `v*` tag                          | 构建 vsix → 发布 VS Code Marketplace（`vsce publish`）与 Open VSX（`ovsx publish --trusted-publishing`）→ 创建 GitHub Release（附 vsix，notes 取自 CHANGELOG） |
 | `deploy.yml`         | `v*` tag / main push              | 构建并部署 Web 版到服务器                                                                                    |
 | `release-npm.yml`    | main push（仅涉及 packages 路径） | 见下方「npm 包发布」                                                                                         |
 
@@ -107,8 +107,9 @@ prerelease tag（如 `v3.7.0-beta.1`）会被 `release-vscode.yml` 跳过（buil
 ## 注意事项
 
 - CI 版本派生依赖 tag 历史：`deploy.yml` 配置了 `fetch-depth: 0` + `fetch-tags: true`，`release-vscode.yml` 依赖 `fetch-depth: 0`（会一起拉取全部 tag）；如果在 tag 之前推送了 commit，tag 推送会再触发一轮带正确版本的流程。
-- `release-vscode.yml` 的 publish 使用 `VSCE_PAT`；`release-npm.yml` 使用 npm trusted publishing（OIDC），不需要 `NPM_TOKEN`。
+- `release-vscode.yml` 的 Marketplace publish 使用 `VSCE_PAT`，Open VSX publish 使用 trusted publishing（OIDC），不需要 `OVSX_PAT`；`release-npm.yml` 使用 npm trusted publishing（OIDC），不需要 `NPM_TOKEN`。
 - npm 侧的 trusted publisher 已为这 5 个包配置好；新增包或重命名 `release-npm.yml` 后要重新配置（`npm trust github <pkg> --repo MaaXYZ/MaaLogAnalyzer --file release-npm.yml --allow-publish`），否则发布只会返回掩码 `E404`。
+- Open VSX 侧的 trusted publisher 需在 open-vsx.org 的 _Trusted Publishers_ 页面登记（namespace、GitHub、`MaaXYZ/MaaLogAnalyzer`、workflow `release-vscode.yml`），且**只有 namespace owner 能登记**。注意 trusted publishing 对 `src-vscode/package.json` 的 `publisher` 做**大小写敏感**匹配，必须与 namespace 登记的大小写完全一致。
 - GitHub Release 的 notes 由 `scripts/changelog-notes.mjs` 从 CHANGELOG.md 提取对应版本段落，因此 CHANGELOG.md 必须先提交（见发布流程第 1 步），否则 tag 推送后 Release notes 为空、工作流报错。
 - `CHANGELOG.draft.md` 是草稿，可随时用 `pnpm run changelog:draft` 重跑刷新；正式的 `CHANGELOG.md` 只能人工编辑，任何脚本都不会碰它（`changelog-notes.mjs` 只读）。
 - 桌面端（Tauri）目前没有自动发布安装包的 workflow；如新增，参考本仓库历史（曾有校验资产与 checksum 的 release 流程被移除）。
