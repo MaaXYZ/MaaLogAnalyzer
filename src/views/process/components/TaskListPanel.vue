@@ -127,9 +127,8 @@ defineExpose({
           v-for="(task, index) in props.tasks"
           :key="`${buildTaskIdentity(task)}-${index}`"
           @click="emit('select-task', index)"
+          :class="{ 'task-list-item-selected': props.activeTaskIndex === index }"
           :style="{
-            backgroundColor:
-              props.activeTaskIndex === index ? 'var(--n-color-target)' : 'transparent',
             cursor: 'pointer',
             padding: '12px 16px',
           }"
@@ -174,3 +173,15 @@ defineExpose({
     </n-scrollbar>
   </n-card>
 </template>
+
+<style scoped>
+/* 选中态用主色浅底 + 左侧色条。
+   不要用满铺的主色：卡片内的状态文字（success 类型）用的就是同一个主色，
+   满铺后文字与底色同色，深色主题下会完全看不见。 */
+.n-list .task-list-item-selected,
+.n-list .task-list-item-selected:hover {
+  background-color: rgba(128, 128, 128, 0.16);
+  background-color: color-mix(in srgb, var(--n-color-target) 14%, transparent);
+  box-shadow: inset 3px 0 0 0 var(--n-color-target);
+}
+</style>
