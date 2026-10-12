@@ -3,7 +3,9 @@ import { computed, ref } from 'vue'
 import { NCard, NFlex, NText, NButton, NIcon, NScrollbar, NList, NListItem, NTag } from 'naive-ui'
 import { VerticalAlignTopOutlined, VerticalAlignBottomOutlined } from '@vicons/antd'
 import type { TaskInfo } from '../../../types'
-import { buildTaskMetaLine } from '../../../utils/taskMetaLine'
+import TaskDateDivider from '../../../components/TaskDateDivider.vue'
+import { buildTaskDateGroups, buildTaskMetaLine } from '../../../utils/taskListFormat'
+import { useTaskGroupCollapse } from '../../../composables/useTaskGroupCollapse'
 import { buildTaskIdentity } from '@windsland52/maa-log-tools/task-identity'
 
 const props = withDefaults(
@@ -64,6 +66,15 @@ const statusMeta = (
 }
 
 const taskListScrollbar = ref<InstanceType<typeof NScrollbar> | null>(null)
+
+// 按开始日期分组，日期用 badge 只在每组开头显示一次（跨天日志会出现多个分组）
+const taskGroups = computed(() => buildTaskDateGroups(props.tasks))
+
+// 分组可以点击折叠/展开
+const { isCollapsed, toggleGroup } = useTaskGroupCollapse({
+  groups: taskGroups,
+  activeIndex: computed(() => props.activeTaskIndex),
+})
 
 // 节点数 / 耗时 / 时间 并成一行，任务卡从 5 行降到 3 行，一屏能多放几个任务
 const taskMetaLine = (task: TaskInfo): string =>
@@ -131,48 +142,73 @@ defineExpose({
       @wheel.passive="handleWheel"
     >
       <n-list hoverable clickable>
-        <n-list-item
-          v-for="(task, index) in props.tasks"
-          :key="`${buildTaskIdentity(task)}-${index}`"
-          @click="emit('select-task', index)"
-          :class="{ 'task-list-item-selected': props.activeTaskIndex === index }"
-          :style="{
-            cursor: 'pointer',
-            padding: '12px 16px',
-          }"
-        >
-          <n-flex vertical style="gap: 8px">
-            <n-flex align="center" justify="space-between">
-              <n-text strong style="font-size: 15px">{{ task.entry }}</n-text>
-              <n-tag size="small" :type="statusMeta(task).type"> #{{ index + 1 }} </n-tag>
-            </n-flex>
+        <template v-for="group in taskGroups" :key="group.id">
+          <n-list-item class="task-date-divider-item">
+            <task-date-divider
+              :label="group.label"
+              :count="group.items.length"
+              :collapsed="isCollapsed(group)"
+              @toggle="toggleGroup(group)"
+            />
+          </n-list-item>
 
-            <n-flex vertical style="gap: 4px">
-              <n-text depth="3" style="font-size: 12px">
-                状态:
-                <n-text :type="statusMeta(task).type">
-                  {{ statusMeta(task).label }}
-                </n-text>
-                <template v-if="getFailureJump(index)">
-                  <n-text depth="3"> · 失败于 </n-text>
-                  <n-tag
-                    size="small"
-                    type="error"
-                    :bordered="false"
-                    style="cursor: pointer"
-                    title="点击定位到失败节点"
-                    @click.stop="emit('locate-failure', index, getFailureJump(index)?.nodeId ?? -1)"
-                  >
-                    {{ getFailureJump(index)?.label }}
+          <template v-if="!isCollapsed(group)">
+            <n-list-item
+              v-for="entry in group.items"
+              :key="`${buildTaskIdentity(entry.task)}-${entry.index}`"
+              @click="emit('select-task', entry.index)"
+              :class="{ 'task-list-item-selected': props.activeTaskIndex === entry.index }"
+              :style="{
+                cursor: 'pointer',
+                padding: '12px 16px',
+              }"
+            >
+              <n-flex vertical style="gap: 8px">
+                <n-flex align="center" justify="space-between">
+                  <n-text strong style="font-size: 15px">{{ entry.task.entry }}</n-text>
+                  <n-tag size="small" :type="statusMeta(entry.task).type">
+                    #{{ entry.index + 1 }}
                   </n-tag>
-                </template>
-              </n-text>
-              <n-text depth="3" style="font-size: 12px" :title="task.start_time || undefined">
-                {{ taskMetaLine(task) }}
-              </n-text>
-            </n-flex>
-          </n-flex>
-        </n-list-item>
+                </n-flex>
+
+                <n-flex vertical style="gap: 4px">
+                  <n-text depth="3" style="font-size: 12px">
+                    状态:
+                    <n-text :type="statusMeta(entry.task).type">
+                      {{ statusMeta(entry.task).label }}
+                    </n-text>
+                    <template v-if="getFailureJump(entry.index)">
+                      <n-text depth="3"> · 失败于 </n-text>
+                      <n-tag
+                        size="small"
+                        type="error"
+                        :bordered="false"
+                        style="cursor: pointer"
+                        title="点击定位到失败节点"
+                        @click.stop="
+                          emit(
+                            'locate-failure',
+                            entry.index,
+                            getFailureJump(entry.index)?.nodeId ?? -1,
+                          )
+                        "
+                      >
+                        {{ getFailureJump(entry.index)?.label }}
+                      </n-tag>
+                    </template>
+                  </n-text>
+                  <n-text
+                    depth="3"
+                    style="font-size: 12px"
+                    :title="entry.task.start_time || undefined"
+                  >
+                    {{ taskMetaLine(entry.task) }}
+                  </n-text>
+                </n-flex>
+              </n-flex>
+            </n-list-item>
+          </template>
+        </template>
       </n-list>
     </n-scrollbar>
   </n-card>
@@ -187,5 +223,15 @@ defineExpose({
   background-color: rgba(128, 128, 128, 0.16);
   background-color: color-mix(in srgb, var(--n-color-target) 14%, transparent);
   box-shadow: inset 3px 0 0 0 var(--n-color-target);
+}
+
+/* 日期分组行：横线由分隔带自己画，这里只负责去掉列表项的 hover/光标反馈 */
+.n-list .task-date-divider-item {
+  padding: 0;
+  cursor: default;
+}
+
+.n-list .task-date-divider-item:hover {
+  background-color: transparent;
 }
 </style>
