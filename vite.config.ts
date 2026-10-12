@@ -48,7 +48,14 @@ export default defineConfig({
     open: !isTauriDev,
     watch: {
       // 让文件监视器忽略该目录，避免重启和扫描
-      ignored: ['**/sample/**'],
+      ignored: [
+        '**/sample/**',
+        // 编辑器/harness 的原子写入会在源文件旁建“.<名字>.<pid>.<uuid>.tmpdir”临时目录。
+        // 里面的 .tmp 在写入期间是被占用的，Windows 上监视它会抛 EBUSY 并直接崩掉
+        // dev server（Node 的 FSWatcher 'error' 事件没有兜住）。
+        '**/*.tmpdir',
+        '**/*.tmpdir/**',
+      ],
     },
   },
   optimizeDeps: {
