@@ -110,6 +110,7 @@ const setLocalScrollerRef = (value: Element | object | null) => {
           <div :style="{ padding: itemPadding }">
             <node-card
               :node="item"
+              :selected="selectedNodeId != null && selectedNodeId === item.node_id"
               :is-vscode-launch-embed="isVscodeLaunchEmbed"
               :bridge-request-task-doc="bridgeRequestTaskDoc"
               :bridge-reveal-task="bridgeRevealTask"

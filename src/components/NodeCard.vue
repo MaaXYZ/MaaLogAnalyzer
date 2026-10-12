@@ -20,6 +20,8 @@ const props = defineProps<{
   bridgeRequestTaskDoc?: ((task: string) => Promise<string | null>) | null
   bridgeRevealTask?: ((task: string) => Promise<void>) | null
   showTreeCollapseHint?: boolean
+  // 时间线里当前选中的节点卡片，用于给出与左侧导航行一致的选中反馈
+  selected?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -73,9 +75,11 @@ watch(
 )
 
 // 节点状态样式
-const cardClass = computed(() => {
-  return `node-card node-card-${props.node.status}`
-})
+const cardClass = computed(() => [
+  'node-card',
+  `node-card-${props.node.status}`,
+  { 'node-card-selected': props.selected === true },
+])
 
 // 点击节点
 const handleNodeClick = () => {
@@ -294,6 +298,15 @@ const toggleActionSection = () => {
 
 .node-card:hover :deep(.n-card) {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 选中态：主色浅底 + 主色描边，与左侧导航行的选中样式呼应。
+   悬停时也不能被上面的 hover 阴影顶掉，否则选中反馈会闪没。 */
+.node-card-selected :deep(.n-card),
+.node-card-selected:hover :deep(.n-card) {
+  background-color: rgba(128, 128, 128, 0.16);
+  background-color: color-mix(in srgb, var(--n-color-target) 15%, transparent);
+  box-shadow: inset 0 0 0 1px var(--n-color-target);
 }
 
 @media (max-width: 768px) {
