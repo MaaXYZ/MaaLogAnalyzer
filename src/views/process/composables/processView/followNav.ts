@@ -42,6 +42,7 @@ export const useProcessFollowNav = (options: UseProcessFollowNavOptions) => {
     toggleNodeNavFailedOnly,
     nodeNavItems,
     nodeNavEmptyDescription,
+    nodeNavFailedCount,
   } = useNodeNavSearch(
     currentNodes,
     computed(() => options.props.selectedTask?.task_id ?? null),
@@ -73,6 +74,7 @@ export const useProcessFollowNav = (options: UseProcessFollowNavOptions) => {
     toggleNodeNavFailedOnly,
     nodeNavItems,
     nodeNavEmptyDescription,
+    nodeNavFailedCount,
     setTaskListPanelRef,
     setNodeNavPanelRef,
   }

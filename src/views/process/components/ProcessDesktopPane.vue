@@ -41,6 +41,7 @@ const props = defineProps<{
   nodeNavSearchText: string
   normalizedNodeNavSearchText: string
   nodeNavFailedOnly: boolean
+  nodeNavFailedCount: number
   nodeNavMode: NodeNavMode
   nodeNavEmptyDescription: string
   isVscodeLaunchEmbed?: boolean
@@ -137,6 +138,7 @@ const handleSelectNodeNavItem = (item: NodeNavViewItem) => {
         :search-text="nodeNavSearchText"
         :normalized-search-text="normalizedNodeNavSearchText"
         :failed-only="nodeNavFailedOnly"
+        :failed-count="nodeNavFailedCount"
         :mode="nodeNavMode"
         :empty-description="nodeNavEmptyDescription"
         @update:search-text="emit('update:node-nav-search-text', $event)"

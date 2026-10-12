@@ -21,6 +21,7 @@ const props = withDefaults(
     normalizedSearchText: string
     mode: NodeNavMode
     failedOnly: boolean
+    failedCount: number
     emptyDescription: string
   }>(),
   {
@@ -166,17 +167,18 @@ defineExpose({
     <template #header>
       <node-nav-header
         :failed-only="props.failedOnly"
+        :failed-count="props.failedCount"
         :mode="props.mode"
         @update:mode="emit('update:mode', $event)"
         @toggle-failed-only="emit('toggle-failed-only')"
-        @scroll-top="scrollToTop"
-        @scroll-bottom="scrollToBottom"
       />
     </template>
     <div style="display: flex; flex-direction: column; height: 100%; min-height: 0">
       <node-nav-search-input
         :search-text="props.searchText"
         @update:search-text="emit('update:search-text', $event)"
+        @scroll-top="scrollToTop"
+        @scroll-bottom="scrollToBottom"
       />
       <dynamic-scroller
         v-if="props.items.length > 0"

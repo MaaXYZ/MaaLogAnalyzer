@@ -137,6 +137,7 @@ const {
   toggleNodeNavFailedOnly,
   nodeNavItems,
   nodeNavEmptyDescription,
+  nodeNavFailedCount,
   folderInputRef,
   fileInputRef,
   reloadOptions,
@@ -253,6 +254,7 @@ void fileInputRef
       :node-nav-search-text="nodeNavSearchText"
       :normalized-node-nav-search-text="normalizedNodeNavSearchText"
       :node-nav-failed-only="nodeNavFailedOnly"
+      :node-nav-failed-count="nodeNavFailedCount"
       :node-nav-mode="nodeNavMode"
       :node-nav-empty-description="nodeNavEmptyDescription"
       :set-task-list-panel-ref="setTaskListPanelRef"

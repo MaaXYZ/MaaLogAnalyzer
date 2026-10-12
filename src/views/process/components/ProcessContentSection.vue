@@ -45,6 +45,7 @@ const props = defineProps<{
   nodeNavSearchText: string
   normalizedNodeNavSearchText: string
   nodeNavFailedOnly: boolean
+  nodeNavFailedCount: number
   nodeNavMode: NodeNavMode
   nodeNavEmptyDescription: string
   setTaskListPanelRef: (instance: unknown | null) => void
@@ -145,6 +146,7 @@ const props = defineProps<{
         :node-nav-search-text="props.nodeNavSearchText"
         :normalized-node-nav-search-text="props.normalizedNodeNavSearchText"
         :node-nav-failed-only="props.nodeNavFailedOnly"
+        :node-nav-failed-count="props.nodeNavFailedCount"
         :node-nav-mode="props.nodeNavMode"
         :node-nav-empty-description="props.nodeNavEmptyDescription"
         :is-vscode-launch-embed="props.isVscodeLaunchEmbed"

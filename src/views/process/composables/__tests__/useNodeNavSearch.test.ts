@@ -220,6 +220,27 @@ describe('useNodeNavSearch', () => {
     ])
   })
 
+  it('counts failed nodes independently of the search box and the filter switch', () => {
+    const nodes = ref<NodeInfo[]>([
+      createNode({ nodeId: 51, name: 'NodeFailedA', taskId: 100, status: 'failed' }),
+      createNode({ nodeId: 52, name: 'NodeRunning', taskId: 100, status: 'running' }),
+      createNode({ nodeId: 53, name: 'NodeFailedB', taskId: 100, status: 'failed' }),
+    ])
+
+    const rootTaskId = computed(() => 100)
+    const { nodeNavFailedCount, nodeNavFailedOnly, nodeNavSearchText, toggleNodeNavFailedOnly } =
+      useNodeNavSearch(nodes, rootTaskId)
+
+    expect(nodeNavFailedCount.value).toBe(2)
+
+    nodeNavSearchText.value = '不存在的关键字'
+    expect(nodeNavFailedCount.value).toBe(2)
+
+    toggleNodeNavFailedOnly()
+    expect(nodeNavFailedOnly.value).toBe(true)
+    expect(nodeNavFailedCount.value).toBe(2)
+  })
+
   it('returns root-layer empty description when selected root task has no nodes', () => {
     const nodes = ref<NodeInfo[]>([
       createNode({ nodeId: 11, name: 'A', taskId: 200, nextList: ['X'] }),

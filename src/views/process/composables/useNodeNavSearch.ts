@@ -226,6 +226,19 @@ export const useNodeNavSearch = (
     nodeNavFailedOnly.value = !nodeNavFailedOnly.value
   }
 
+  // 「仅失败」的判定：识别模式（next-list-hit）下超时与动作失败也算异常
+  const isFailedNodeNavStatus = (status: NodeNavStatus): boolean => {
+    if (nodeNavMode.value === 'next-list-hit') {
+      return status === 'failed' || status === 'timeout' || status === 'action-failed'
+    }
+    return status === 'failed'
+  }
+
+  // 当前模式下命中「仅失败」的节点数，用于表头徽标（不受搜索框与筛选开关影响）
+  const nodeNavFailedCount = computed(
+    () => sourceEntries.value.filter((entry) => isFailedNodeNavStatus(entry.navStatus)).length,
+  )
+
   const nodeNavItems = computed<NodeNavViewItem[]>(() => {
     const query = normalizedNodeNavSearchText.value
     return sourceEntries.value
@@ -249,20 +262,7 @@ export const useNodeNavSearch = (
           matchPreview: formatNodeNavMatchPreview(item.matchDetails),
         }
       })
-      .filter((item) => {
-        if (!nodeNavFailedOnly.value) return true
-        if (nodeNavMode.value === 'pipeline') {
-          return item.navStatus === 'failed'
-        }
-        if (nodeNavMode.value === 'focus') {
-          return item.navStatus === 'failed'
-        }
-        return (
-          item.navStatus === 'failed' ||
-          item.navStatus === 'timeout' ||
-          item.navStatus === 'action-failed'
-        )
-      })
+      .filter((item) => !nodeNavFailedOnly.value || isFailedNodeNavStatus(item.navStatus))
       .filter((item) => !query || item.matchDetails.length > 0)
   })
 
@@ -295,6 +295,7 @@ export const useNodeNavSearch = (
     toggleNodeNavFailedOnly,
     nodeNavItems,
     nodeNavEmptyDescription,
+    nodeNavFailedCount,
     formatNodeNavMatchHint,
     formatNodeNavMatchPreview,
   }
