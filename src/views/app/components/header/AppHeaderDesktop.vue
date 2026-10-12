@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, type Component } from 'vue'
+import { computed, nextTick, ref, type Component } from 'vue'
 import { NFlex, NButton, NIcon, NTabs, NTab, NText } from 'naive-ui'
 import {
   BarChartOutlined,
@@ -39,6 +39,49 @@ const handleViewModeSelect = (key: string | number) => {
 
 const typedViewModeOptions = computed(() => props.viewModeOptions as unknown as ViewModeOption[])
 
+const viewSwitchRef = ref<HTMLElement | null>(null)
+
+const viewModeKeys = computed(() => typedViewModeOptions.value.map((option) => option.key))
+
+// n-tabs 的标签是普通 div：没有 role、没有 tabindex，也不处理键盘事件。
+// 这里补 roving tabindex + 方向键切换，让键盘和读屏都能操作视图切换。
+const focusTab = (key: string) => {
+  void nextTick(() => {
+    viewSwitchRef.value?.querySelector<HTMLElement>(`[data-name="${key}"]`)?.focus()
+  })
+}
+
+const handleTabKeydown = (key: string, event: KeyboardEvent) => {
+  const keys = viewModeKeys.value
+  const current = keys.indexOf(key)
+  if (current < 0) return
+
+  let nextKey: string | undefined
+  switch (event.key) {
+    case 'ArrowRight':
+    case 'ArrowDown':
+      nextKey = keys[(current + 1) % keys.length]
+      break
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      nextKey = keys[(current - 1 + keys.length) % keys.length]
+      break
+    case 'Home':
+      nextKey = keys[0]
+      break
+    case 'End':
+      nextKey = keys[keys.length - 1]
+      break
+    default:
+      return
+  }
+
+  if (nextKey === undefined) return
+  event.preventDefault()
+  emit('select-view-mode', nextKey)
+  focusTab(nextKey)
+}
+
 const viewModeIcons: Record<string, Component> = {
   analysis: BarChartOutlined,
   search: FileSearchOutlined,
@@ -56,12 +99,23 @@ const isNativeVSCodeHost = isVSCode()
       <n-text strong style="font-size: 16px">MAA 日志工具</n-text>
 
       <div
+        ref="viewSwitchRef"
         data-tour="header-view-switch"
         class="header-view-switch"
         :class="{ 'header-view-switch--dark': isDark }"
+        role="tablist"
+        aria-label="视图切换"
       >
         <n-tabs type="segment" size="small" :value="viewMode" @update:value="handleViewModeSelect">
-          <n-tab v-for="option in typedViewModeOptions" :key="option.key" :name="option.key">
+          <n-tab
+            v-for="option in typedViewModeOptions"
+            :key="option.key"
+            :name="option.key"
+            role="tab"
+            :aria-selected="viewMode === option.key"
+            :tabindex="viewMode === option.key ? 0 : -1"
+            @keydown="handleTabKeydown(option.key, $event)"
+          >
             <span class="view-tab-content">
               <n-icon :size="14">
                 <component :is="viewModeIcons[option.key] ?? BarChartOutlined" />
@@ -129,6 +183,17 @@ const isNativeVSCodeHost = isVSCode()
 <style scoped>
 .header-view-switch {
   min-width: 0;
+}
+
+/* segment 模式的标签默认是 4px 0 内边距 + 0 间距，标签会挤在一起
+   （下一个标签的图标贴在上一个标签的文字后面），这里补回左右内边距。 */
+.header-view-switch :deep(.n-tabs-tab) {
+  padding: 4px 10px;
+}
+
+.header-view-switch :deep(.n-tabs-tab:focus-visible) {
+  outline: 2px solid var(--n-color-target);
+  outline-offset: -1px;
 }
 
 /* 暗色主题下 segment 默认底色与头部卡片背景相同，会完全隐形，这里补一层对比底色 */
