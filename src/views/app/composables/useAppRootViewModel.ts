@@ -253,6 +253,29 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
     isVSCode,
   )
 
+  // 首次解析出数据后，趁空闲预热流程图：FlowchartView 是异步组件，进去还要再等
+  // ELK 的 chunk 下载与 worker 启动，画布会空白几秒。预热把这些提前到空闲时间，
+  // 又不会给没打开过日志的首屏增加下载量。
+  let flowchartWarmedUp = false
+  const warmUpFlowchart = () => {
+    void import('../../FlowchartView.vue')
+    void import('../../../utils/flowchartBuilder').then(({ preloadFlowchartLayout }) =>
+      preloadFlowchartLayout(),
+    )
+  }
+  watch(
+    () => tasks.value.length,
+    (taskCount) => {
+      if (flowchartWarmedUp || taskCount === 0) return
+      flowchartWarmedUp = true
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(warmUpFlowchart, { timeout: 3000 })
+        return
+      }
+      window.setTimeout(warmUpFlowchart, 500)
+    },
+  )
+
   const isDark = computed(() => propsIsDark.value)
 
   // 详情面板 → 文本搜索的原文定位桥

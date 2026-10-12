@@ -1,4 +1,4 @@
-import { effectScope, nextTick, ref } from 'vue'
+import { effectScope, nextTick, ref, type Ref } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TaskInfo } from '../../../../types'
 
@@ -161,6 +161,83 @@ describe('useFlowchartGraphRuntime', () => {
 
     expect(flowNodes.value).toEqual([])
     expect(flowEdges.value).toEqual([])
+    scope.stop()
+  })
+
+  const createRuntime = (selectedTask: Ref<TaskInfo | null>) => {
+    const flowNodes = ref<any[]>([])
+    const flowEdges = ref<any[]>([])
+    const scope = effectScope()
+    const runtime = scope.run(() =>
+      useFlowchartGraphRuntime({
+        selectedTask,
+        flowNodes,
+        flowEdges,
+        focusedNodeId: ref<string | null>(null),
+        popoverNodeId: ref<string | null>(null),
+        selectedTimelineIndex: ref<number | null>(null),
+        isPlaying: ref(false),
+        playbackIntervalMs: ref(900),
+        focusZoom: ref(1),
+        edgeStyle: ref('orthogonal'),
+        edgeFlowEnabled: ref(true),
+        ignoreUnexecutedNodes: ref(false),
+        relayoutAfterDrag: ref(true),
+        stopPlayback: vi.fn(),
+        startPlayback: vi.fn(),
+        closePopover: vi.fn(),
+        fitView: vi.fn(),
+        updatePopoverPosition: vi.fn(),
+        decorateInitialEdges: (edges) => edges,
+        applyFocusStyles: vi.fn(),
+        applyEdgeRenderTypes: vi.fn(),
+        recomputeEdgeRoutesForCurrentNodes: vi.fn(),
+        persistSettings: vi.fn(),
+      }),
+    )!
+
+    return { runtime, flowNodes, scope }
+  }
+
+  it('exposes the loading state while the layout is pending', async () => {
+    let resolveLayout!: (value: { nodes: any[]; edges: any[] }) => void
+    buildFlowchartDataMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveLayout = resolve
+      }),
+    )
+    const selectedTask = ref<TaskInfo | null>(makeTask(10))
+    const { runtime, flowNodes, scope } = createRuntime(selectedTask)
+
+    await nextTick()
+    expect(runtime.isLayouting.value).toBe(true)
+    expect(runtime.layoutError.value).toBeNull()
+
+    resolveLayout({ nodes: [{ id: 'NodeA' }], edges: [] })
+    await flushWatchers()
+
+    expect(runtime.isLayouting.value).toBe(false)
+    expect(flowNodes.value).toHaveLength(1)
+    scope.stop()
+  })
+
+  it('surfaces a layout failure and clears it on retry', async () => {
+    buildFlowchartDataMock.mockRejectedValueOnce(new Error('elk chunk failed'))
+    const selectedTask = ref<TaskInfo | null>(makeTask(10))
+    const { runtime, flowNodes, scope } = createRuntime(selectedTask)
+
+    await flushWatchers()
+
+    expect(runtime.isLayouting.value).toBe(false)
+    expect(runtime.layoutError.value).toBe('elk chunk failed')
+    expect(flowNodes.value).toEqual([])
+
+    buildFlowchartDataMock.mockResolvedValueOnce({ nodes: [{ id: 'NodeA' }], edges: [] })
+    runtime.retryLayout()
+    await flushWatchers()
+
+    expect(runtime.layoutError.value).toBeNull()
+    expect(flowNodes.value).toHaveLength(1)
     scope.stop()
   })
 })

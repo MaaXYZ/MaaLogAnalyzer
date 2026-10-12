@@ -1,5 +1,6 @@
 import { nextTick, ref, watch, type Ref } from 'vue'
 import { buildFlowchartData } from '../../../utils/flowchartBuilder'
+import { getErrorMessage } from '../../../utils/errorHandler'
 import type { TaskInfo } from '../../../types'
 import { isSameTask } from '@windsland52/maa-log-tools/task-identity'
 
@@ -32,56 +33,82 @@ interface UseFlowchartGraphRuntimeOptions {
 export const useFlowchartGraphRuntime = (options: UseFlowchartGraphRuntimeOptions) => {
   const layoutRunId = ref(0)
   let renderedTask: TaskInfo | null = null
+  // 首次进入流程图时 ELK 的 chunk 还在下载、worker 还在启动，画布会空白数秒。
+  // 把这段状态暴露给画布，用于盖一层“布局计算中”的提示。
+  const isLayouting = ref(false)
+  const layoutError = ref<string | null>(null)
 
   const rebuildFlowchartLayout = async (
     task: TaskInfo,
     rebuildOptions?: { resetFocus?: boolean; fit?: boolean; preserveLayout?: boolean },
   ) => {
     const runId = ++layoutRunId.value
-    const { nodes, edges } = await buildFlowchartData(task, {
-      ignoreUnexecutedNodes: options.ignoreUnexecutedNodes.value,
-      previousNodes: rebuildOptions?.preserveLayout ? options.flowNodes.value : undefined,
-      previousEdges: rebuildOptions?.preserveLayout ? options.flowEdges.value : undefined,
-    })
-    if (runId !== layoutRunId.value) return
+    isLayouting.value = true
+    layoutError.value = null
 
-    options.flowNodes.value = nodes
-    options.flowEdges.value = options.decorateInitialEdges(edges as any[])
-    renderedTask = task
-
-    const renderedNodeIds = new Set(nodes.map((node) => node.id))
-    if (options.focusedNodeId.value && !renderedNodeIds.has(options.focusedNodeId.value)) {
-      options.focusedNodeId.value = null
-    }
-    if (options.popoverNodeId.value && !renderedNodeIds.has(options.popoverNodeId.value)) {
-      options.closePopover()
-    }
-
-    if (rebuildOptions?.resetFocus) {
-      options.focusedNodeId.value = null
-    }
-
-    options.applyFocusStyles()
-
-    if (rebuildOptions?.fit) {
-      nextTick(() => {
-        setTimeout(() => {
-          if (renderedTask && isSameTask(renderedTask, task)) {
-            options.fitView({ padding: 0.2 })
-          }
-        }, 50)
+    try {
+      const { nodes, edges } = await buildFlowchartData(task, {
+        ignoreUnexecutedNodes: options.ignoreUnexecutedNodes.value,
+        previousNodes: rebuildOptions?.preserveLayout ? options.flowNodes.value : undefined,
+        previousEdges: rebuildOptions?.preserveLayout ? options.flowEdges.value : undefined,
       })
-    }
+      if (runId !== layoutRunId.value) return
 
-    if (options.popoverNodeId.value) {
-      nextTick(() => {
-        if (runId !== layoutRunId.value) return
-        options.updatePopoverPosition()
-        requestAnimationFrame(() => {
-          if (runId === layoutRunId.value) options.updatePopoverPosition()
+      options.flowNodes.value = nodes
+      options.flowEdges.value = options.decorateInitialEdges(edges as any[])
+      renderedTask = task
+
+      const renderedNodeIds = new Set(nodes.map((node) => node.id))
+      if (options.focusedNodeId.value && !renderedNodeIds.has(options.focusedNodeId.value)) {
+        options.focusedNodeId.value = null
+      }
+      if (options.popoverNodeId.value && !renderedNodeIds.has(options.popoverNodeId.value)) {
+        options.closePopover()
+      }
+
+      if (rebuildOptions?.resetFocus) {
+        options.focusedNodeId.value = null
+      }
+
+      options.applyFocusStyles()
+
+      if (rebuildOptions?.fit) {
+        nextTick(() => {
+          setTimeout(() => {
+            if (renderedTask && isSameTask(renderedTask, task)) {
+              options.fitView({ padding: 0.2 })
+            }
+          }, 50)
         })
-      })
+      }
+
+      if (options.popoverNodeId.value) {
+        nextTick(() => {
+          if (runId !== layoutRunId.value) return
+          options.updatePopoverPosition()
+          requestAnimationFrame(() => {
+            if (runId === layoutRunId.value) options.updatePopoverPosition()
+          })
+        })
+      }
+    } catch (error) {
+      // 布局引擎起不来（chunk 拉取失败等）时不要静默留一块空白画布
+      if (runId !== layoutRunId.value) return
+      layoutError.value = getErrorMessage(error)
+      renderedTask = null
+      options.flowNodes.value = []
+      options.flowEdges.value = []
+    } finally {
+      if (runId === layoutRunId.value) {
+        isLayouting.value = false
+      }
     }
+  }
+
+  const retryLayout = () => {
+    const task = options.selectedTask.value
+    if (!task) return
+    void rebuildFlowchartLayout(task, { resetFocus: false, fit: true })
   }
 
   watch(
@@ -90,6 +117,8 @@ export const useFlowchartGraphRuntime = (options: UseFlowchartGraphRuntimeOption
       if (!task) {
         layoutRunId.value += 1
         renderedTask = null
+        isLayouting.value = false
+        layoutError.value = null
         options.stopPlayback()
         options.closePopover()
         options.focusedNodeId.value = null
@@ -165,5 +194,8 @@ export const useFlowchartGraphRuntime = (options: UseFlowchartGraphRuntimeOption
 
   return {
     onNodeDragStop,
+    isLayouting,
+    layoutError,
+    retryLayout,
   }
 }

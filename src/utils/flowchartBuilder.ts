@@ -77,6 +77,17 @@ const getElk = async (): Promise<ElkLayoutEngine> => {
   return elkPromise
 }
 
+/**
+ * 空闲时预热 ELK（api chunk + worker）。首次进入流程图要等它下载并启动 worker，
+ * 画布会空白数秒；预热把这部分开销提前到用户还在看别的视图的时候。
+ * 失败不抛出：真正的失败由 buildFlowchartData 的调用方兜住并给出提示。
+ */
+export const preloadFlowchartLayout = (): void => {
+  void getElk().catch(() => {
+    // 预加载失败不提示，等用户真正进入流程图时重试
+  })
+}
+
 interface ElkLayoutNode {
   id: string
   width?: number

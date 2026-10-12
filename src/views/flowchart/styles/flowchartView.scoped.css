@@ -17,6 +17,20 @@
   position: relative;
 }
 
+/* 画布加载/失败状态：盖住空画布，z-index 低于导航浮标(10)与节点弹窗(20) */
+.flowchart-status-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
 /* Navigation panel */
 .flowchart-nav-panel {
   width: 220px;

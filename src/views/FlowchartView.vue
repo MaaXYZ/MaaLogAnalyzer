@@ -3,7 +3,7 @@ import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
-import { NScrollbar, NDrawer, NDrawerContent, NButton, NText } from 'naive-ui'
+import { NScrollbar, NDrawer, NDrawerContent, NButton, NText, NSpin } from 'naive-ui'
 import FlowchartNode from '../components/FlowchartNode.vue'
 import FlowchartOrthogonalEdge from '../components/FlowchartOrthogonalEdge.vue'
 import FlowchartTopToolbar from './flowchart/components/FlowchartTopToolbar.vue'
@@ -206,7 +206,7 @@ const nodeImageMap = computed(() => {
   return map
 })
 
-const { onNodeDragStop } = useFlowchartGraphRuntime({
+const { onNodeDragStop, isLayouting, layoutError, retryLayout } = useFlowchartGraphRuntime({
   selectedTask,
   flowNodes,
   flowEdges,
@@ -349,6 +349,27 @@ const { onNodeClick, onPaneClick } = useFlowchartNodeInteraction({
           @close="closePopover"
           @navigate-to-node="navigateToNode"
         />
+
+        <!-- 首次进入流程图时 ELK 的 chunk 还在下载、worker 还在启动，画布会空白数秒，
+             这里给出明确的提示；已经有节点时（重排）不盖，避免遮挡现有图。 -->
+        <div
+          v-if="layoutError != null || (isLayouting && flowNodes.length === 0)"
+          class="flowchart-status-overlay"
+        >
+          <template v-if="layoutError != null">
+            <n-text depth="3" style="text-align: center">
+              流程图布局失败：{{ layoutError }}
+            </n-text>
+            <n-button size="small" @click="retryLayout">重试</n-button>
+          </template>
+          <template v-else>
+            <n-spin size="large" />
+            <n-text depth="3">正在计算流程图布局…</n-text>
+            <n-text depth="3" style="font-size: 12px">
+              首次打开需要先加载布局引擎，可能要等几秒
+            </n-text>
+          </template>
+        </div>
 
         <flowchart-legend />
       </div>
