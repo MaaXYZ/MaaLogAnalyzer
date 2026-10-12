@@ -358,7 +358,6 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
   const { mainContentProps, mainContentEventHandlers } = usePresentationMainContentBindings({
     viewMode,
     isMobile,
-    isVscodeLaunchEmbed,
     splitSize,
     splitVerticalSize,
     showTaskDrawer,

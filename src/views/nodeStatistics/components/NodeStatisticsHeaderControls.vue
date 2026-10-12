@@ -1,16 +1,5 @@
 <script setup lang="ts">
-import type { UploadFileInfo } from 'naive-ui'
-import {
-  NButton,
-  NFlex,
-  NIcon,
-  NInput,
-  NRadioButton,
-  NRadioGroup,
-  NSelect,
-  NUpload,
-} from 'naive-ui'
-import { CloudUploadOutlined, FolderOpenOutlined } from '@vicons/antd'
+import { NFlex, NInput, NRadioButton, NRadioGroup, NSelect } from 'naive-ui'
 import type { StatMode } from '../composables/useNodeStatisticsMetrics'
 
 const props = defineProps<{
@@ -19,18 +8,12 @@ const props = defineProps<{
   taskFilter: string | number
   taskOptions: Array<{ label: string; value: string | number }>
   searchKeyword: string
-  isInTauri: boolean
-  isVscodeLaunchEmbed: boolean
-  loading: boolean
-  uploadKey: number
-  handleNaiveUpload: (options: { file: UploadFileInfo }) => boolean | Promise<boolean>
 }>()
 
 const emit = defineEmits<{
   'update:statMode': [value: StatMode]
   'update:taskFilter': [value: string | number]
   'update:searchKeyword': [value: string]
-  tauriUploadClick: []
 }>()
 </script>
 
@@ -64,39 +47,6 @@ const emit = defineEmits<{
       size="small"
       @update:value="emit('update:searchKeyword', $event)"
     />
-
-    <n-button
-      v-if="props.isInTauri && !props.isVscodeLaunchEmbed"
-      size="small"
-      tertiary
-      :circle="props.isMobile"
-      :loading="props.loading"
-      @click="emit('tauriUploadClick')"
-    >
-      <template #icon>
-        <n-icon>
-          <folder-open-outlined />
-        </n-icon>
-      </template>
-      <span v-if="!props.isMobile">打开日志</span>
-    </n-button>
-
-    <n-upload
-      v-else-if="!props.isVscodeLaunchEmbed"
-      :key="props.uploadKey"
-      :custom-request="props.handleNaiveUpload"
-      :show-file-list="false"
-      accept=".log,.txt,.zip"
-    >
-      <n-button size="small" tertiary :circle="props.isMobile" :loading="props.loading">
-        <template #icon>
-          <n-icon>
-            <cloud-upload-outlined />
-          </n-icon>
-        </template>
-        <span v-if="!props.isMobile">导入日志</span>
-      </n-button>
-    </n-upload>
   </n-flex>
 </template>
 

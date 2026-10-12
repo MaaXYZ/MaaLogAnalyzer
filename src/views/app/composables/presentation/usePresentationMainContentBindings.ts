@@ -4,7 +4,6 @@ import type { UseAppPresentationBindingsOptions } from './types'
 interface UsePresentationMainContentBindingsOptions {
   viewMode: UseAppPresentationBindingsOptions['viewMode']
   isMobile: UseAppPresentationBindingsOptions['isMobile']
-  isVscodeLaunchEmbed: UseAppPresentationBindingsOptions['isVscodeLaunchEmbed']
   splitSize: UseAppPresentationBindingsOptions['splitSize']
   splitVerticalSize: UseAppPresentationBindingsOptions['splitVerticalSize']
   showTaskDrawer: UseAppPresentationBindingsOptions['showTaskDrawer']
@@ -47,7 +46,6 @@ export const usePresentationMainContentBindings = (
   const mainContentProps = computed(() => ({
     viewMode: options.viewMode.value,
     isMobile: options.isMobile.value,
-    isVscodeLaunchEmbed: options.isVscodeLaunchEmbed,
     splitSize: options.splitSize.value,
     splitVerticalSize: options.splitVerticalSize.value,
     showTaskDrawer: options.showTaskDrawer.value,

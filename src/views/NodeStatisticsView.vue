@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { NCard, NTag, useMessage } from 'naive-ui'
+import { NCard, NTag } from 'naive-ui'
 import type { TaskInfo } from '../types'
 import { useIsMobile } from '../composables/useIsMobile'
-import { useNodeStatisticsDataSource } from './nodeStatistics/composables/useNodeStatisticsDataSource'
 import {
   useNodeStatisticsMetrics,
   type StatMode,
@@ -12,32 +11,15 @@ import { useNodeStatisticsTableColumns } from './nodeStatistics/composables/useN
 import NodeStatisticsHeaderControls from './nodeStatistics/components/NodeStatisticsHeaderControls.vue'
 import NodeStatisticsSummarySection from './nodeStatistics/components/NodeStatisticsSummarySection.vue'
 import NodeStatisticsDataPanel from './nodeStatistics/components/NodeStatisticsDataPanel.vue'
-import NodeStatisticsLoadingModals from './nodeStatistics/components/NodeStatisticsLoadingModals.vue'
 
 const { isMobile } = useIsMobile()
 
 const props = defineProps<{
   tasks: TaskInfo[]
-  isVscodeLaunchEmbed?: boolean
 }>()
 
-// 消息提示
-const message = useMessage()
-
-const {
-  loading,
-  parseProgress,
-  showParsingModal,
-  showFileLoadingModal,
-  isInTauri,
-  uploadKey,
-  effectiveTasks,
-  handleNaiveUpload,
-  handleTauriFileSelect,
-} = useNodeStatisticsDataSource({
-  tasks: computed(() => props.tasks),
-  message,
-})
+// 运行统计固定复用当前已加载的日志（与 VS Code 内嵌时的行为一致），不再单独导入
+const effectiveTasks = computed(() => props.tasks)
 
 const statMode = ref<StatMode>('node')
 
@@ -138,15 +120,9 @@ const hasSummaryContent = computed(() => {
             :task-filter="selectedTaskId"
             :task-options="taskOptions"
             :search-keyword="searchKeyword"
-            :is-in-tauri="isInTauri"
-            :is-vscode-launch-embed="props.isVscodeLaunchEmbed === true"
-            :loading="loading"
-            :upload-key="uploadKey"
-            :handle-naive-upload="handleNaiveUpload"
             @update:stat-mode="statMode = $event"
             @update:task-filter="selectedTaskId = $event"
             @update:search-keyword="searchKeyword = $event"
-            @tauri-upload-click="handleTauriFileSelect"
           />
         </div>
       </div>
@@ -172,24 +148,11 @@ const hasSummaryContent = computed(() => {
               :statistics="statistics"
               :panel-title="statisticsPanelTitle"
               :effective-tasks-length="effectiveTasks.length"
-              :is-in-tauri="isInTauri"
-              :is-vscode-launch-embed="props.isVscodeLaunchEmbed === true"
-              :loading="loading"
-              :upload-key="uploadKey"
-              :handle-naive-upload="handleNaiveUpload"
-              @tauri-upload-click="handleTauriFileSelect"
             />
           </div>
         </div>
       </div>
     </div>
-
-    <node-statistics-loading-modals
-      :show-file-loading-modal="showFileLoadingModal"
-      :show-parsing-modal="showParsingModal"
-      :parse-progress="parseProgress"
-      :is-mobile="isMobile"
-    />
   </n-card>
 </template>
 

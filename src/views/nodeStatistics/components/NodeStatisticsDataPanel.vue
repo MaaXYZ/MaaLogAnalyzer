@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { UploadFileInfo, DataTableColumns } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import { NCard, NDataTable, NEmpty, NText } from 'naive-ui'
 import NodeStatisticsEmptyState from './NodeStatisticsEmptyState.vue'
 
@@ -9,15 +9,6 @@ const props = defineProps<{
   statistics: any[]
   panelTitle: string
   effectiveTasksLength: number
-  isInTauri: boolean
-  isVscodeLaunchEmbed: boolean
-  loading: boolean
-  uploadKey: number
-  handleNaiveUpload: (options: { file: UploadFileInfo }) => boolean | Promise<boolean>
-}>()
-
-const emit = defineEmits<{
-  tauriUploadClick: []
 }>()
 
 // 让表格按列宽总宽度开启横向滚动，避免右侧列溢出卡片/面板边界。
@@ -60,15 +51,7 @@ const tableScrollX = computed(() => {
         striped
       />
 
-      <node-statistics-empty-state
-        v-else-if="props.effectiveTasksLength === 0"
-        :is-in-tauri="props.isInTauri"
-        :is-vscode-launch-embed="props.isVscodeLaunchEmbed"
-        :loading="props.loading"
-        :upload-key="props.uploadKey"
-        :handle-naive-upload="props.handleNaiveUpload"
-        @tauri-upload-click="emit('tauriUploadClick')"
-      />
+      <node-statistics-empty-state v-else-if="props.effectiveTasksLength === 0" />
 
       <n-empty v-else description="暂无数据" style="margin-top: 60px" />
     </div>

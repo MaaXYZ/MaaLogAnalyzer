@@ -19,7 +19,6 @@ const MainContentSplitSection = defineAsyncComponent(() => import('./MainContent
 defineProps<{
   viewMode: string
   isMobile: boolean
-  isVscodeLaunchEmbed: boolean
   splitSize: number
   splitVerticalSize: number
   showTaskDrawer: boolean
@@ -101,12 +100,7 @@ const emit = defineEmits<{
         :text-search-view-props="textSearchViewProps"
       />
     </keep-alive>
-    <statistics-mode-pane
-      v-if="viewMode === 'statistics'"
-      :active="true"
-      :tasks="tasks"
-      :is-vscode-launch-embed="isVscodeLaunchEmbed"
-    />
+    <statistics-mode-pane v-if="viewMode === 'statistics'" :active="true" :tasks="tasks" />
 
     <flowchart-mode-pane
       v-else-if="viewMode === 'flowchart'"
