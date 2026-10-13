@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { NTag } from 'naive-ui'
+import { NTag, NIcon, NBadge } from 'naive-ui'
+import { FilterOutlined } from '@vicons/antd'
 import type { NodeInfo } from '../../../types'
 import { convertFileSrc } from '../utils/nodeImageLookup'
 import SafePreviewImage from '../../../components/SafePreviewImage.vue'
@@ -45,11 +46,14 @@ const isAbnormalExecution = (info: NodeInfo): boolean => {
   return info.status === 'failed' || hasFailedAction(info)
 }
 
-const hasAbnormalEntries = computed(() => {
+// 异常执行的条数，用于筛选按钮上的徽标与“是否可筛”
+const abnormalCount = computed(() => {
   const data = props.popoverData
-  if (!data) return false
-  return data.nodeInfos.some((info) => isAbnormalExecution(info))
+  if (!data) return 0
+  return data.nodeInfos.filter((info) => isAbnormalExecution(info)).length
 })
+
+const hasAbnormalEntries = computed(() => abnormalCount.value > 0)
 
 const popoverEntries = computed<PopoverExecutionEntry[]>(() => {
   const data = props.popoverData
@@ -99,11 +103,24 @@ watch(
         type="button"
         :title="showAbnormalOnly ? '仅显示异常执行（点击显示全部）' : '显示全部执行（点击仅异常）'"
         :disabled="!hasAbnormalEntries"
+        :aria-pressed="showAbnormalOnly ? 'true' : 'false'"
+        aria-label="仅显示异常执行"
         @click="toggleAbnormalOnly"
       >
-        <span
-          class="popover-filter-dot"
-          :class="{ 'popover-filter-dot--active': showAbnormalOnly }"
+        <n-icon
+          :size="14"
+          class="popover-filter-icon"
+          :class="{ 'popover-filter-icon--active': showAbnormalOnly }"
+        >
+          <filter-outlined />
+        </n-icon>
+        <n-badge
+          v-if="abnormalCount > 0"
+          class="popover-filter-badge"
+          :value="abnormalCount"
+          :max="99"
+          :type="showAbnormalOnly ? 'error' : 'default'"
+          :color="showAbnormalOnly ? undefined : 'rgba(143, 143, 143, 1)'"
         />
       </button>
       <span class="popover-close" @click="emit('close')">&times;</span>
@@ -205,9 +222,7 @@ watch(
 .popover-filter-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
+  gap: 2px;
   padding: 0;
   border: none;
   background: transparent;
@@ -221,16 +236,25 @@ watch(
   opacity: 0.45;
 }
 
-.popover-filter-dot {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--app-status-neutral);
+/* 与节点导航的筛选同一套观感：漏斗=筛选器，未开启压暗，开启时用异常色 */
+.popover-filter-icon {
+  opacity: 0.6;
+  transition:
+    color 0.2s,
+    opacity 0.2s;
 }
 
-.popover-filter-dot--active {
-  background: var(--app-status-failed);
+.popover-filter-icon--active {
+  opacity: 1;
+  color: var(--app-status-failed);
+}
+
+.popover-filter-badge :deep(.n-badge-sup) {
+  font-size: 10px;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
 }
 
 .popover-close {
