@@ -41,7 +41,9 @@ const collapsed = ref(false)
   left: 12px;
   bottom: 12px;
   z-index: 20;
-  background: color-mix(in srgb, var(--flowchart-panel-bg, #18181c) 88%, transparent);
+  /* 跟画布所在的面板同底色（原先用的 --flowchart-panel-bg 从没人定义，一直回落到深色，
+     于是浅色主题下会浮着一块深色卡片） */
+  background: color-mix(in srgb, var(--app-panel-bg, #18181c) 88%, transparent);
   border: 1px solid rgba(128, 128, 128, 0.25);
   border-radius: 8px;
   padding: 6px 10px;
@@ -58,14 +60,15 @@ const collapsed = ref(false)
   min-width: 30px;
 }
 
-/* 图例为固定深色卡片（与画布配色一致），内部文字不跟随主题色，避免浅色模式下不可读 */
+/* 图例跟随主题底色，文字改用继承色（此前写死白色，所以底色只能固定成深色） */
 .legend-title {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.78);
+  color: inherit;
 }
 
 .legend-header :deep(.n-icon) {
-  color: rgba(255, 255, 255, 0.6);
+  color: inherit;
+  opacity: 0.6;
 }
 
 .legend-body {
@@ -125,7 +128,8 @@ const collapsed = ref(false)
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.78);
+  color: inherit;
+  opacity: 0.85;
   white-space: nowrap;
 }
 
