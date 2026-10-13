@@ -75,6 +75,7 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
     tasks: options.filteredTasks.value,
     selectedTask: options.selectedTask.value,
     selectedNode: options.selectedNode.value,
+    selectedFlowItemId: options.selectedFlowItemId.value,
     loading: options.loading.value,
     parser: options.parser,
     isVscodeLaunchEmbed: options.isVscodeLaunchEmbed,

@@ -9,6 +9,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:search-text': [value: string]
+  'next-match': [delta: number]
   'scroll-top': []
   'scroll-bottom': []
 }>()
@@ -29,7 +30,8 @@ const searchTextModel = computed({
         clearable
         size="small"
         placeholder="搜索节点 / 识别"
-        title="支持节点名与识别项搜索，Enter 跳转下一处（Next）"
+        title="支持节点名与识别项搜索，Enter 跳转下一处（Next），Shift+Enter 跳上一处"
+        @keydown.enter="emit('next-match', $event.shiftKey ? -1 : 1)"
       />
     </div>
     <n-button text size="tiny" title="跳转顶部" @click="emit('scroll-top')">

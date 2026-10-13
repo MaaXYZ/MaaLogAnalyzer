@@ -66,6 +66,10 @@ const showModel = computed({
             </template>
             GitHub: Maa Log Analyzer
           </n-button>
+          <n-text depth="3" style="font-size: 12px">
+            键盘快捷键：按 ? 查看（j / k 上下节点、n / Shift+n 跳搜索命中、1–5 切视图、Esc
+            关闭浮层）
+          </n-text>
         </n-flex>
       </n-card>
 

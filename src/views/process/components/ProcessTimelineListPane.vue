@@ -48,6 +48,7 @@ const emit = defineEmits<{
 
 <template>
   <node-timeline-list
+    data-hotkey-panel="node-timeline"
     :nodes="props.currentNodes"
     :selected-task-key="props.selectedTaskKey"
     :display-mode="props.displayMode"

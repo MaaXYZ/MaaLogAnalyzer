@@ -8,6 +8,9 @@ import {
   type UseTextSearchViewModelOptions,
 } from './textSearch/composables/viewModel'
 import { injectTextSearchSharedViewModel } from './textSearch/composables/viewModel/sharedModel'
+import { resolveSearchResultStepLine } from './textSearch/composables/searchResultStep'
+import { useHotkeys } from '../composables/useHotkeys'
+import { buildSearchHitBindings } from '../utils/hotkeys'
 import type { LoadedSearchTarget } from './textSearch/composables/types'
 import type { PendingTextSearchRequest } from './app/components/types'
 
@@ -166,6 +169,18 @@ watch(
   },
   { immediate: true },
 )
+
+// n / Shift+n：在搜索结果里前后跳，沿用点击结果那条 jumpToLine 链路
+const stepSearchResult = (delta: number) => {
+  const line = resolveSearchResultStepLine(searchResults.value, selectedLine.value, delta)
+  if (line == null) return
+  void jumpToLine(line)
+}
+
+useHotkeys({
+  enabled: () => searchResults.value.length > 0,
+  bindings: () => buildSearchHitBindings(stepSearchResult),
+})
 </script>
 
 <template>

@@ -8,6 +8,11 @@ import NodeNavItem from './NodeNavItem.vue'
 import NodeNavHeader from './NodeNavHeader.vue'
 import NodeNavSearchInput from './NodeNavSearchInput.vue'
 import { useKeepAliveScrollPosition } from '../composables/keepAliveScrollPosition'
+import { useHotkeys } from '../../../composables/useHotkeys'
+import { buildSearchHitBindings } from '../../../utils/hotkeys'
+import { useNodeNavigationHotkeys } from '../composables/useNodeNavigationHotkeys'
+import { useActiveHotkeyPanel } from '../composables/hotkeyPanel'
+import { resolveActiveNavRowKey } from '../utils/resolveActiveNavRowKey'
 
 const props = withDefaults(
   defineProps<{
@@ -15,6 +20,7 @@ const props = withDefaults(
     selectedTaskKey?: string | null
     preserveScrollOnActivate?: boolean
     selectedNodeId?: number | null
+    selectedFlowItemId?: string | null
     currentNodesLength: number
     displayMode: string
     searchText: string
@@ -26,6 +32,7 @@ const props = withDefaults(
   }>(),
   {
     selectedTaskKey: null,
+    selectedFlowItemId: null,
     preserveScrollOnActivate: true,
   },
 )
@@ -122,18 +129,72 @@ const handleWheel = (event: WheelEvent) => {
   }
 }
 
-// 选中节点变化时让导航列表跟随：仅当目标行不在可视区域内才滚动，避免视口无谓跳动
+// 「当前行」的身份：Focus / 识别模式下同一个节点会有多行，只按 node_id 无法区分。
+// 优先用 flow 身份（点识别行/动作行时应用会给 selectedFlowItemId），其次记住的行，
+// 再退到节点行 / 第一行——高亮与 j/k 起点共用这一个 key。
+const lastSelectedNavKey = ref<string | null>(null)
+
+const activeRowKey = computed(() =>
+  resolveActiveNavRowKey(
+    props.items,
+    props.selectedNodeId ?? null,
+    props.selectedFlowItemId ?? null,
+    lastSelectedNavKey.value,
+  ),
+)
+
+const isRowActive = (item: NodeNavViewItem): boolean => item.navKey === activeRowKey.value
+
+const selectRow = (item: NodeNavViewItem) => {
+  lastSelectedNavKey.value = item.navKey
+  emit('select-item', item)
+}
+
+// j/↓ k/↑：导航面板聚焦时按导航列表顺序走（含同一节点下的多行）
+const activeHotkeyPanel = useActiveHotkeyPanel()
+const { step: stepNavItem } = useNodeNavigationHotkeys({
+  items: computed(() => props.items),
+  isCurrent: (item) => item.navKey === activeRowKey.value,
+  enabled: () => activeHotkeyPanel.value === 'node-nav' && props.items.length > 0,
+  onSelect: (item, _index, delta) => {
+    lastSelectedNavKey.value = item.navKey
+    if (delta < 0) {
+      emit('manual-scroll-up')
+    }
+    emit('select-item', item)
+  },
+})
+
+// 有搜索词时 n/N 在命中里前后跳（列表本身已按搜索词过滤）
+useHotkeys({
+  enabled: () =>
+    activeHotkeyPanel.value === 'node-nav' &&
+    props.items.length > 0 &&
+    Boolean(props.normalizedSearchText),
+  bindings: () => buildSearchHitBindings(stepNavItem),
+})
+
+/** 搜索框按 Enter（Shift+Enter 反向）跳到下一处命中 */
+const handleSearchNextMatch = (delta: number) => {
+  if (!props.normalizedSearchText) return
+  stepNavItem(delta)
+}
+
+// 当前行变化时让导航列表跟随：仅当它不在可视区域内才滚动
 watch(
-  () => [props.selectedNodeId, props.items] as const,
-  async ([nodeId]) => {
-    if (nodeId == null) return
+  () => [activeRowKey.value, props.items] as const,
+  async ([rowKey]) => {
+    if (!rowKey) return
     await nextTick()
-    const index = props.items.findIndex((item) => item.node.node_id === nodeId)
+
+    const index = props.items.findIndex((item) => item.navKey === rowKey)
     if (index < 0) return
 
+    const targetItem = props.items[index]
     const scrollerEl = getScrollerElement()
-    if (scrollerEl) {
-      const row = scrollerEl.querySelector<HTMLElement>(`.node-nav-row[data-node-id="${nodeId}"]`)
+    if (scrollerEl && targetItem) {
+      const rows = scrollerEl.querySelectorAll<HTMLElement>('.node-nav-row')
+      const row = Array.from(rows).find((el) => el.dataset.navKey === targetItem.navKey)
       if (row) {
         const rowRect = row.getBoundingClientRect()
         const scrollerRect = scrollerEl.getBoundingClientRect()
@@ -155,6 +216,7 @@ defineExpose({
   <n-card
     size="small"
     data-tour="analysis-node-nav"
+    data-hotkey-panel="node-nav"
     style="
       height: 100%;
       display: flex;
@@ -177,6 +239,7 @@ defineExpose({
       <node-nav-search-input
         :search-text="props.searchText"
         @update:search-text="emit('update:search-text', $event)"
+        @next-match="handleSearchNextMatch"
         @scroll-top="scrollToTop"
         @scroll-bottom="scrollToBottom"
       />
@@ -198,11 +261,11 @@ defineExpose({
               class="node-nav-row"
               :class="{
                 'node-nav-row-detailed': props.displayMode === 'detailed',
-                'node-nav-row-active':
-                  props.selectedNodeId != null && item.node.node_id === props.selectedNodeId,
+                'node-nav-row-active': isRowActive(item),
               }"
               :data-node-id="item.node.node_id"
-              @click="emit('select-item', item)"
+              :data-nav-key="item.navKey"
+              @click="selectRow(item)"
             >
               <node-nav-item
                 :item="item"

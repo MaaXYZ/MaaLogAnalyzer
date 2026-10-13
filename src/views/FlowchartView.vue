@@ -12,6 +12,7 @@ import FlowchartNodePopover from './flowchart/components/FlowchartNodePopover.vu
 import FlowchartLegend from './flowchart/components/FlowchartLegend.vue'
 import type { TaskInfo, NodeInfo } from '../types'
 import { useIsMobile } from '../composables/useIsMobile'
+import { useHotkeys } from '../composables/useHotkeys'
 import { getSettings, saveSettings } from '../utils/settings'
 import { getRuntimeStatusTagType, getRuntimeStatusText } from '../utils/runtimeStatus'
 import { useFlowchartUpload } from './flowchart/composables/useFlowchartUpload'
@@ -245,6 +246,12 @@ const { onNodeClick, onPaneClick } = useFlowchartNodeInteraction({
   closePopover,
   updatePopoverPosition,
   scrollNavToIndex,
+})
+
+// Esc 关闭节点弹窗（弹窗里没有输入框，allowInEditable 只是让它在别的输入框里也能用）
+useHotkeys({
+  enabled: () => Boolean(popoverNodeId.value),
+  bindings: () => [{ key: 'Escape', allowInEditable: true, run: () => closePopover() }],
 })
 </script>
 

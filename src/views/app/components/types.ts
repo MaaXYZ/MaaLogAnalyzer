@@ -30,6 +30,7 @@ export interface ProcessViewForwardProps {
   tasks: TaskInfo[]
   selectedTask: TaskInfo | null
   selectedNode?: NodeInfo | null
+  selectedFlowItemId?: string | null
   loading: boolean
   parser: LogParser
   detailViewCollapsed?: boolean

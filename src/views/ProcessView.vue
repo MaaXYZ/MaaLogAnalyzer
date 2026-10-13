@@ -7,6 +7,14 @@ import type { LogParser } from '@windsland52/maa-log-parser'
 import type { LoadedTextFile } from './process/utils/fileLoadingHelpers'
 import type { PrimaryLogFile, PrimaryLogSelectionOption } from '../utils/logFileDiscovery'
 import { useProcessViewController } from './process/composables/useProcessViewController'
+import { useHotkeys } from '../composables/useHotkeys'
+import { buildSearchHitBindings } from '../utils/hotkeys'
+import { useNodeNavigationHotkeys } from './process/composables/useNodeNavigationHotkeys'
+import {
+  isHotkeyPanelRendered,
+  useActiveHotkeyPanel,
+  useHotkeyPanelTracking,
+} from './process/composables/hotkeyPanel'
 import ProcessMobileToolbar from './process/components/ProcessMobileToolbar.vue'
 import ProcessContentSection from './process/components/ProcessContentSection.vue'
 import PrimaryLogSelectionModal from './process/components/PrimaryLogSelectionModal.vue'
@@ -16,6 +24,7 @@ const props = defineProps<{
   tasks: TaskInfo[]
   selectedTask: TaskInfo | null
   selectedNode?: NodeInfo | null
+  selectedFlowItemId?: string | null
   loading: boolean
   parser: LogParser
   detailViewCollapsed?: boolean
@@ -197,6 +206,53 @@ const {
   },
 })
 
+// j/↓ 下一个节点、k/↑ 上一个节点。两个面板的列表顺序不同（时间线按执行顺序、
+// 导航列表按当前模式），所以跟随“最后交互过的面板”；记录见 hotkeyPanel.ts
+useHotkeyPanelTracking()
+const activeHotkeyPanel = useActiveHotkeyPanel()
+const isTimelineHotkeyPanel = () =>
+  activeHotkeyPanel.value !== 'node-nav' || !isHotkeyPanelRendered('node-nav')
+
+const { step: stepTimelineNode } = useNodeNavigationHotkeys({
+  items: currentNodes,
+  isCurrent: (node) => props.selectedNode != null && node.node_id === props.selectedNode.node_id,
+  enabled: isTimelineHotkeyPanel,
+  onSelect: (node, index, delta) => {
+    if (delta < 0) {
+      stopFollowOnScrollUp()
+    }
+    handleNodeClick(node)
+    void scrollToNode(index)
+  },
+})
+
+// 有搜索词时 n/N 在命中里前后跳（时间线列表同样被这个搜索词过滤）
+useHotkeys({
+  enabled: () => isTimelineHotkeyPanel() && Boolean(normalizedNodeNavSearchText.value),
+  bindings: () => buildSearchHitBindings(stepTimelineNode),
+})
+
+// f 切换“仅失败/仅异常”（与漏斗、弹窗筛选同一个开关）；Esc 先关筛选、再清空搜索
+useHotkeys({
+  enabled: () => nodeNavItems.value.length > 0 || Boolean(nodeNavSearchText.value),
+  bindings: () => [
+    { key: 'f', run: () => toggleNodeNavFailedOnly() },
+    {
+      key: 'Escape',
+      allowInEditable: true,
+      run: () => {
+        if (nodeNavFailedOnly.value) {
+          toggleNodeNavFailedOnly()
+          return
+        }
+        if (nodeNavSearchText.value) {
+          nodeNavSearchText.value = ''
+        }
+      },
+    },
+  ],
+})
+
 void folderInputRef
 void fileInputRef
 </script>
@@ -228,6 +284,7 @@ void fileInputRef
       :tasks="tasks"
       :selected-task="selectedTask"
       :selected-node="selectedNode"
+      :selected-flow-item-id="props.selectedFlowItemId ?? null"
       :is-mobile="isMobile"
       :settings-display-mode="settings.displayMode"
       :detail-view-collapsed="!!detailViewCollapsed"

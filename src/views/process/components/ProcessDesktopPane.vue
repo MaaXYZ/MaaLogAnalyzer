@@ -27,6 +27,7 @@ const props = defineProps<{
   activeTaskIndex: number
   currentNodes: NodeTimelineItem[]
   selectedNodeId?: number | null
+  selectedFlowItemId?: string | null
   selectedTaskKey?: string | null
   displayMode: string
   showRealtimeStatus: boolean
@@ -133,6 +134,7 @@ const handleSelectNodeNavItem = (item: NodeNavViewItem) => {
         :selected-task-key="selectedTaskKey"
         :preserve-scroll-on-activate="preserveScrollOnActivate"
         :selected-node-id="selectedNodeId ?? null"
+        :selected-flow-item-id="props.selectedFlowItemId ?? null"
         :current-nodes-length="currentNodes.length"
         :display-mode="displayMode"
         :search-text="nodeNavSearchText"

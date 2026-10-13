@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from 'vue'
 import { version } from '../../../../package.json'
 import { getErrorMessage } from '../../../utils/errorHandler'
+import { useHotkeys } from '../../../composables/useHotkeys'
 import { useIsMobile } from '../../../composables/useIsMobile'
 import {
   buildNodeFlowItems,
@@ -58,6 +59,16 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
     ensureDetailViewExpanded,
   } = useAppViewState()
   const parser = new LogParser()
+
+  // 数字 1..N 直接切视图，顺序与顶栏标签一致（输入框里不生效由热键层保证）
+  useHotkeys({
+    enabled: () => viewModeOptions.value.length > 1,
+    bindings: () =>
+      viewModeOptions.value.slice(0, 9).map((option, index) => ({
+        key: String(index + 1),
+        run: () => handleViewModeSelect(option.key),
+      })),
+  })
 
   const tasks = shallowRef<TaskInfo[]>([])
   const selectedTask = shallowRef<TaskInfo | null>(null)

@@ -19,6 +19,7 @@ const props = defineProps<{
   tasks: TaskInfo[]
   selectedTask: TaskInfo | null
   selectedNode?: NodeInfo | null
+  selectedFlowItemId?: string | null
   isMobile?: boolean
   settingsDisplayMode: string
   detailViewCollapsed: boolean
@@ -129,6 +130,7 @@ const props = defineProps<{
         :active-task-index="props.activeTaskIndex"
         :current-nodes="props.currentNodes"
         :selected-node-id="props.selectedNode?.node_id ?? null"
+        :selected-flow-item-id="props.selectedFlowItemId ?? null"
         :selected-task-key="getSelectedTaskKey(props.selectedTask)"
         :preserve-scroll-on-activate="
           props.pendingScrollNodeId == null && (!props.isRealtimeStreaming || !props.followLast)

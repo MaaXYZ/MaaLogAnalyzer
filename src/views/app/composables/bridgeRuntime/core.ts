@@ -34,6 +34,10 @@ export const useBridgeRuntimeCore = (options: UseBridgeRuntimeCoreOptions) => {
 
   const forwardBridgeKeydown = (event: KeyboardEvent) => {
     if (!bridge?.enabled) return
+    // 不是 iframe（例如 VS Code 扩展用 createWebviewPanel 直载的 webview）时没有可投递的
+    // 父窗口：这时不能 preventDefault，否则快捷键被本地吞掉又送不出去，等于按了没反应。
+    // bridge.enabled 只表示“当前 profile 启用了 bridge”，不代表存在父窗口。
+    if (window.parent === window) return
 
     const hasMeta = event.ctrlKey || event.metaKey
     const code = event.keyCode

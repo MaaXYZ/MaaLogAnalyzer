@@ -5,6 +5,7 @@ import { registerToastMessageApi } from './utils/toast'
 import AppHeaderBar from './views/app/components/AppHeaderBar.vue'
 import AppOverlayStack from './views/app/components/AppOverlayStack.vue'
 import AppMainContent from './views/app/components/AppMainContent.vue'
+import HotkeysHelpModal from './views/app/modals/HotkeysHelpModal.vue'
 import { useAppRootViewModel } from './views/app/composables/useAppRootViewModel'
 
 // Props
@@ -50,5 +51,8 @@ const {
 
     <app-main-content v-bind="mainContentProps" v-on="mainContentEventHandlers" />
     <app-overlay-stack v-bind="overlayProps" v-on="overlayEventHandlers" />
+
+    <!-- 自包含：自己管显示状态与 ? 键位，不占 overlay 的 props 链 -->
+    <hotkeys-help-modal />
   </div>
 </template>
