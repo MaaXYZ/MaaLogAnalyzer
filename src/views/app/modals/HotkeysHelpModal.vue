@@ -25,6 +25,7 @@ const groups: HotkeyHelpGroup[] = [
   {
     title: '日志分析',
     items: [
+      { keys: ['[', ']'], label: '上一个 / 下一个任务' },
       { keys: ['j', '↓'], label: '下一个节点' },
       { keys: ['k', '↑'], label: '上一个节点' },
       { keys: ['f'], label: '只看失败 / 仅异常' },

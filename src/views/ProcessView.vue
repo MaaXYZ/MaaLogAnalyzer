@@ -10,6 +10,7 @@ import { useProcessViewController } from './process/composables/useProcessViewCo
 import { useHotkeys } from '../composables/useHotkeys'
 import { buildSearchHitBindings } from '../utils/hotkeys'
 import { useNodeNavigationHotkeys } from './process/composables/useNodeNavigationHotkeys'
+import { resolveTaskNavStepIndex } from './process/utils/taskNavStep'
 import {
   isHotkeyPanelRendered,
   useActiveHotkeyPanel,
@@ -250,6 +251,24 @@ useHotkeys({
         }
       },
     },
+  ],
+})
+
+// [ / ] 切换任务（顺序同任务列表，两端夹住）。Shift 变体一并注册，
+// 兼容 [ ] 需要 Shift 或位于其他键位的布局
+const stepTask = (delta: number) => {
+  const index = resolveTaskNavStepIndex(props.tasks.length, activeTaskIndex.value, delta)
+  if (index == null) return
+  handleTabChange(index)
+}
+
+useHotkeys({
+  enabled: () => props.tasks.length > 1,
+  bindings: () => [
+    { key: '[', shift: false, run: () => stepTask(-1) },
+    { key: '[', shift: true, run: () => stepTask(-1) },
+    { key: ']', shift: false, run: () => stepTask(1) },
+    { key: ']', shift: true, run: () => stepTask(1) },
   ],
 })
 

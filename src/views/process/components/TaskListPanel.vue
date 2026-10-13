@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { NCard, NFlex, NText, NButton, NIcon, NScrollbar, NList, NListItem, NTag } from 'naive-ui'
 import { VerticalAlignTopOutlined, VerticalAlignBottomOutlined } from '@vicons/antd'
 import type { TaskInfo } from '../../../types'
@@ -98,6 +98,22 @@ const handleWheel = (event: WheelEvent) => {
   }
 }
 
+// 键盘切换任务（[ / ]）或“失败于 X”跳转后，把当前任务卡带进视野；已经可见就不动
+watch(
+  () => props.activeTaskIndex,
+  async () => {
+    await nextTick()
+    const root = (taskListScrollbar.value as unknown as { $el?: HTMLElement } | null)?.$el
+    if (!root) return
+
+    const row = Array.from(root.querySelectorAll<HTMLElement>('[data-task-index]')).find(
+      (element) => Number(element.dataset.taskIndex) === props.activeTaskIndex,
+    )
+    row?.scrollIntoView({ block: 'nearest' })
+  },
+  { flush: 'post' },
+)
+
 defineExpose({
   scrollToTop,
   scrollToBottom,
@@ -158,6 +174,7 @@ defineExpose({
               :key="`${buildTaskIdentity(entry.task)}-${entry.index}`"
               @click="emit('select-task', entry.index)"
               :class="{ 'task-list-item-selected': props.activeTaskIndex === entry.index }"
+              :data-task-index="entry.index"
               :style="{
                 cursor: 'pointer',
                 padding: '12px 16px',
