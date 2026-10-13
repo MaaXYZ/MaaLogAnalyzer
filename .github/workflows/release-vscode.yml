@@ -136,5 +136,33 @@ jobs:
         with:
           node-version: 24
 
+      # Open VSX 侧的 namespace 是 `windsland52`（小写），而 package.json 的 publisher 是
+      # `Windsland52`。open-vsx.org 目前仍运行 v1.2.0，不含 openvsx#2279 的大小写修复，
+      # trusted publishing 会因此拒绝发布。扩展 ID 本身大小写不敏感，所以只改写交给 Open VSX
+      # 的这份 vsix，Marketplace 用的产物不受影响。
+      # 等 open-vsx.org 升级到含 openvsx PR #2282 的版本后，这一步即可删除。
+      - name: Use the Open VSX namespace as the publisher
+        run: |
+          python3 - assets/*.vsix <<'PY'
+          import re, shutil, sys, zipfile
+
+          path = sys.argv[1]
+          fixes = {
+              'extension/package.json': (r'"publisher":\s*"Windsland52"', '"publisher": "windsland52"'),
+              'extension.vsixmanifest': (r'Publisher="Windsland52"', 'Publisher="windsland52"'),
+          }
+          with zipfile.ZipFile(path) as source, zipfile.ZipFile(path + '.tmp', 'w') as target:
+              for item in source.infolist():
+                  data = source.read(item.filename)
+                  if item.filename in fixes:
+                      pattern, replacement = fixes[item.filename]
+                      text, count = re.subn(pattern, replacement, data.decode('utf-8'))
+                      if count != 1:
+                          sys.exit(f'Expected one publisher in {item.filename}, found {count}')
+                      data = text.encode('utf-8')
+                  target.writestr(item, data)
+          shutil.move(path + '.tmp', path)
+          PY
+
       - name: Publish to Open VSX
         run: npx --yes ovsx publish assets/*.vsix --trusted-publishing
