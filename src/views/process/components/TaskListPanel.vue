@@ -98,18 +98,21 @@ const handleWheel = (event: WheelEvent) => {
   }
 }
 
-// 键盘切换任务（[ / ]）或“失败于 X”跳转后，把当前任务卡带进视野；已经可见就不动
+// 键盘切换任务（[ / ]）或“失败于 X”跳转后，把当前任务卡带进视野；已经可见就不动。
+// 延迟到下一帧执行：先让选中态与时间线/详情的更新呈现出来，跟随滚动不占关键帧。
 watch(
   () => props.activeTaskIndex,
-  async () => {
+  async (index) => {
     await nextTick()
-    const root = (taskListScrollbar.value as unknown as { $el?: HTMLElement } | null)?.$el
-    if (!root) return
+    requestAnimationFrame(() => {
+      const root = (taskListScrollbar.value as unknown as { $el?: HTMLElement } | null)?.$el
+      if (!root) return
 
-    const row = Array.from(root.querySelectorAll<HTMLElement>('[data-task-index]')).find(
-      (element) => Number(element.dataset.taskIndex) === props.activeTaskIndex,
-    )
-    row?.scrollIntoView({ block: 'nearest' })
+      const row = Array.from(root.querySelectorAll<HTMLElement>('[data-task-index]')).find(
+        (element) => Number(element.dataset.taskIndex) === index,
+      )
+      row?.scrollIntoView({ block: 'nearest' })
+    })
   },
   { flush: 'post' },
 )
