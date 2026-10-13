@@ -22,6 +22,7 @@ The core purpose is to parse MaaFramework logs (`maa.log`, `maa.bak.log`, zip lo
 - `src-tauri/`: desktop app (Rust + Tauri 2)
 - `src-tauri/capabilities/default.json`: Tauri permissions and fs scope
 - `src-vscode/src/extension.ts`: extension entry + commands + webview bridge
+- `docs/TODO.md`: 尚未处理的 UI 体验改进待办（含证据位置与工作量）
 - `.github/workflows/`: CI/CD pipelines
 
 ## Common Commands
