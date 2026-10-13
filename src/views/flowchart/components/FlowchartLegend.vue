@@ -94,26 +94,26 @@ const collapsed = ref(false)
 
 .chip-success {
   background: var(--flowchart-success-bg, rgba(24, 160, 88, 0.15));
-  border: 1.5px solid var(--flowchart-success-border, #18a058);
-  color: var(--flowchart-success-text, #18a058);
+  border: 1.5px solid var(--flowchart-success-border, var(--app-status-success));
+  color: var(--flowchart-success-text, var(--app-status-success));
 }
 
 .chip-failed {
   background: var(--flowchart-failed-bg, rgba(208, 48, 80, 0.15));
-  border: 1.5px solid var(--flowchart-failed-border, #d03050);
-  color: var(--flowchart-failed-text, #d03050);
+  border: 1.5px solid var(--flowchart-failed-border, var(--app-status-failed));
+  color: var(--flowchart-failed-text, var(--app-status-failed));
 }
 
 .chip-running {
   background: var(--flowchart-running-bg, rgba(240, 160, 32, 0.15));
-  border: 1.5px solid var(--flowchart-running-border, #f0a020);
-  color: var(--flowchart-running-text, #f0a020);
+  border: 1.5px solid var(--flowchart-running-border, var(--app-status-warning));
+  color: var(--flowchart-running-text, var(--app-status-warning));
 }
 
 .chip-notexec {
   background: transparent;
-  border: 1.5px dashed rgba(153, 153, 153, 0.7);
-  color: rgba(153, 153, 153, 0.95);
+  border: 1.5px dashed color-mix(in srgb, var(--app-status-neutral) 70%, transparent);
+  color: color-mix(in srgb, var(--app-status-neutral) 95%, transparent);
 }
 
 .legend-lines {
@@ -136,22 +136,22 @@ const collapsed = ref(false)
 }
 
 .line-exec {
-  border-top: 3px solid #18a058;
+  border-top: 3px solid var(--app-status-success);
 }
 
 .line-jumpback {
-  border-top: 3px dashed #f0a020;
+  border-top: 3px dashed var(--app-status-warning);
 }
 
 .line-jumpback-return {
-  border-top: 3px dotted #f0a020;
+  border-top: 3px dotted var(--app-status-warning);
 }
 
 .line-onerror {
-  border-top: 3px dashed #d03050;
+  border-top: 3px dashed var(--app-status-failed);
 }
 
 .line-notexec {
-  border-top: 1.5px dashed rgba(153, 153, 153, 0.8);
+  border-top: 1.5px dashed color-mix(in srgb, var(--app-status-neutral) 80%, transparent);
 }
 </style>

@@ -277,19 +277,21 @@ const toggleActionSection = () => {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 2px solid #18181c;
+  /* 描边用来在导轨上“打洞”，要跟卡片底色一致：以前写死深色面板色，
+     浅色主题下会变成一圈突兀的深色 */
+  border: 2px solid var(--n-color, var(--app-panel-bg));
 }
 
 .node-card-success::before {
-  background: #63e2b7;
+  background: var(--app-status-success);
 }
 
 .node-card-running::before {
-  background: #f0a020;
+  background: var(--app-status-warning);
 }
 
 .node-card-failed::before {
-  background: #d03050;
+  background: var(--app-status-failed);
 }
 
 .node-card :deep(.n-card) {

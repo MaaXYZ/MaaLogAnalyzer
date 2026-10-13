@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { resolveResultStatusButtonType, resolveStatusButtonType } from '../statusButtonType'
 
 describe('resolveStatusButtonType', () => {
-  it('maps success/running/failed to success/info/warning', () => {
+  it('maps success/running/failed to success/warning/warning', () => {
     expect(resolveStatusButtonType('success')).toBe('success')
-    expect(resolveStatusButtonType('running')).toBe('info')
+    expect(resolveStatusButtonType('running')).toBe('warning')
     expect(resolveStatusButtonType('failed')).toBe('warning')
   })
 

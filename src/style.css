@@ -38,6 +38,18 @@ body {
 /* 滚动条样式 - 深色模式 */
 body {
   --app-panel-bg: var(--vscode-panel-background, #18181c);
+  /* 节点状态语义色：口径与 Index.vue 的 themeOverrides 一致（优先宿主 VS Code 变量，
+     再退回应用默认值），因此深浅主题同值——naive-ui 深色主题自带的 success 是
+     #63e2b7，这里刻意不跟随它，跟随 Index.vue 派生的 #18a058，免得同一个“成功”
+     出现两种颜色。手写样式请用这些变量，不要再抄十六进制；JS（canvas/SVG/内联样式）
+     请用 utils/statusColors.ts 的同一套值。 */
+  --app-status-success: var(--vscode-testing-iconPassed, var(--vscode-charts-green, #18a058));
+  --app-status-warning: var(
+    --vscode-editorWarning-foreground,
+    var(--vscode-terminal-ansiYellow, #f0a020)
+  );
+  --app-status-failed: var(--vscode-errorForeground, var(--vscode-terminal-ansiRed, #d03050));
+  --app-status-neutral: #8f8f8f;
   background: var(--app-panel-bg);
   color: var(--vscode-editor-foreground, rgba(255, 255, 255, 0.82));
 }

@@ -3,6 +3,7 @@ import type { VNodeChild } from 'vue'
 import type { SelectOption } from 'naive-ui'
 import type { TaskInfo } from '../../../types'
 import { findTaskIndex, isSameTask } from '@windsland52/maa-log-tools/task-identity'
+import { STATUS_COLORS } from '../../../utils/statusColors'
 
 type FlowchartTaskOption = SelectOption & {
   status: TaskInfo['status']
@@ -38,7 +39,11 @@ export const useFlowchartTaskSelection = (options: UseFlowchartTaskSelectionOpti
 
   const renderTaskLabel = (option: FlowchartTaskOption): VNodeChild => {
     const color =
-      option.status === 'succeeded' ? '#18a058' : option.status === 'failed' ? '#d03050' : '#f0a020'
+      option.status === 'succeeded'
+        ? STATUS_COLORS.success
+        : option.status === 'failed'
+          ? STATUS_COLORS.failed
+          : STATUS_COLORS.warning
     const label = typeof option.label === 'string' ? option.label : ''
     return h('span', { style: 'display: flex; align-items: center; gap: 6px' }, [
       h('span', {

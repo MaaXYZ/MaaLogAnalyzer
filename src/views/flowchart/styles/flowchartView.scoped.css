@@ -91,15 +91,15 @@
 }
 
 .nav-status-dot.dot-success {
-  background: #18a058;
+  background: var(--app-status-success);
 }
 
 .nav-status-dot.dot-running {
-  background: #f0a020;
+  background: var(--app-status-warning);
 }
 
 .nav-status-dot.dot-failed {
-  background: #d03050;
+  background: var(--app-status-failed);
 }
 
 /* Mobile floating nav button */
@@ -186,7 +186,7 @@
 
 .popover-locate {
   font-size: 11px;
-  color: #18a058;
+  color: var(--app-status-success);
   cursor: pointer;
   margin-left: auto;
   flex-shrink: 0;

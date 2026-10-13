@@ -340,9 +340,10 @@ const hasSummaryCard = computed(
   --summary-surface-muted: var(--vscode-sideBarSectionHeader-background, var(--n-color-embedded));
   --summary-border: var(--vscode-panel-border, var(--n-border-color));
   --summary-accent: var(--vscode-button-background, var(--n-color-target));
-  --summary-info-accent: var(--vscode-textLink-foreground, #5aa9e6);
-  --summary-success-accent: var(--vscode-testing-iconPassed, #18a058);
-  --summary-warning-accent: var(--vscode-editorWarning-foreground, #f0a020);
+  /* 成功/警告直接用应用状态色，别在这里再抄一份十六进制；info 与 common.infoColor 同源 */
+  --summary-info-accent: var(--vscode-textLink-foreground, #2080f0);
+  --summary-success-accent: var(--app-status-success);
+  --summary-warning-accent: var(--app-status-warning);
   background: var(--summary-surface);
   border: 1px solid var(--summary-border);
   box-shadow: none;

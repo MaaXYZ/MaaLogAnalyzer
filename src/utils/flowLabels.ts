@@ -21,7 +21,8 @@ export const getFlowItemButtonType = (
   item: Pick<UnifiedFlowItem, 'status' | 'type'>,
 ): FlowItemButtonType => {
   if (item.status === 'success') return 'success'
-  if (item.status === 'running') return 'info'
+  // 运行中使用 warning（橙），与状态圆点、minimap、runtimeStatus 统一；info 只留给中性信息
+  if (item.status === 'running') return 'warning'
   if (
     item.type === 'recognition' ||
     item.type === 'recognition_node' ||

@@ -112,23 +112,23 @@ const focusKindLabelMap = {
 }
 
 .nav-dot-success {
-  background: #63e2b7;
+  background: var(--app-status-success);
 }
 
 .nav-dot-running {
-  background: #f0a020;
+  background: var(--app-status-warning);
 }
 
 .nav-dot-failed {
-  background: #d03050;
+  background: var(--app-status-failed);
 }
 
 .nav-dot-timeout {
-  background: #f0a020;
+  background: var(--app-status-warning);
 }
 
 .nav-dot-action-failed {
-  background: #d03050;
+  background: var(--app-status-failed);
   box-shadow: 0 0 0 1px rgba(208, 48, 80, 0.25);
 }
 

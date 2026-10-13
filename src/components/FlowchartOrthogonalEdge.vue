@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { BaseEdge, getBezierPath, type EdgeProps } from '@vue-flow/core'
 import type { FlowEdgeData } from '../utils/flowchartBuilder'
+import { STATUS_COLORS } from '../utils/statusColors'
 
 const props = defineProps<EdgeProps>()
 
@@ -105,7 +106,7 @@ const chevronOffsetTo = computed(() => {
 const chevronStroke = computed(() => {
   const raw = (props.style as Record<string, unknown> | undefined)?.stroke
   if (typeof raw === 'string' && raw.trim()) return raw
-  return '#18a058'
+  return STATUS_COLORS.success
 })
 
 const normalizedMarkerEnd = computed(() => {

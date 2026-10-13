@@ -268,8 +268,8 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   )
   const infoColor = pickCssVarColor(
     styleDecl,
-    ['--vscode-textLink-foreground', '--vscode-charts-blue', '--vscode-button-background'],
-    primaryColor,
+    ['--vscode-textLink-foreground', '--vscode-charts-blue'],
+    '#2080f0',
   )
   const successColor = pickCssVarColor(
     styleDecl,
@@ -392,6 +392,13 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
       primaryColor,
       primaryColorHover,
       primaryColorPressed: primaryColor,
+      // 状态色也交给 common：否则 Tag 覆盖（下面 Tag 块的 borderSuccess 等）用这套派生值，
+      // 而 n-text/n-badge 等仍用主题自带值，同一个“成功”会出现两种颜色
+      // （深色主题自带 success 是 #63e2b7，派生值是 #18a058）。
+      successColor,
+      warningColor,
+      errorColor,
+      infoColor,
       borderRadius: '2px',
       bodyColor,
       cardColor: widgetColor,

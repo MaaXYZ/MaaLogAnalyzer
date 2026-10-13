@@ -226,11 +226,11 @@ watch(
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #8f8f8f;
+  background: var(--app-status-neutral);
 }
 
 .popover-filter-dot--active {
-  background: #d03050;
+  background: var(--app-status-failed);
 }
 
 .popover-close {
@@ -282,7 +282,7 @@ watch(
 
 .popover-locate {
   font-size: 11px;
-  color: #18a058;
+  color: var(--app-status-success);
   cursor: pointer;
   margin-left: auto;
   flex-shrink: 0;

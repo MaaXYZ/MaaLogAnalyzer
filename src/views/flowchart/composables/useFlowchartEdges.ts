@@ -1,5 +1,6 @@
 import { computed, type Ref } from 'vue'
 import type { FlowEdgeData } from '../../../utils/flowchartBuilder'
+import { STATUS_COLORS } from '../../../utils/statusColors'
 
 const DEFAULT_NODE_WIDTH = 120
 const DEFAULT_NODE_HEIGHT = 44
@@ -59,7 +60,7 @@ export const useFlowchartEdges = (options: UseFlowchartEdgesOptions) => {
     const transitionType = edgeData.transitionType
     if (transitionType === 'next') {
       return {
-        stroke: '#18a058',
+        stroke: STATUS_COLORS.success,
         strokeWidth: 3,
         opacity: 1,
         strokeDasharray: '7 4',
@@ -67,7 +68,7 @@ export const useFlowchartEdges = (options: UseFlowchartEdgesOptions) => {
     }
     if (transitionType === 'jump-back') {
       return {
-        stroke: '#f0a020',
+        stroke: STATUS_COLORS.warning,
         strokeWidth: 3,
         opacity: 1,
         strokeDasharray: '10 5',
@@ -75,7 +76,7 @@ export const useFlowchartEdges = (options: UseFlowchartEdgesOptions) => {
     }
     if (transitionType === 'jump-back-return') {
       return {
-        stroke: '#f0a020',
+        stroke: STATUS_COLORS.warning,
         strokeWidth: 3,
         opacity: 1,
         strokeDasharray: '2 6',
@@ -83,7 +84,7 @@ export const useFlowchartEdges = (options: UseFlowchartEdgesOptions) => {
     }
     if (transitionType === 'on-error') {
       return {
-        stroke: '#d03050',
+        stroke: STATUS_COLORS.failed,
         strokeWidth: 3,
         opacity: 1,
         strokeDasharray: '7 4',
@@ -92,10 +93,10 @@ export const useFlowchartEdges = (options: UseFlowchartEdgesOptions) => {
 
     const color =
       edgeData.edgeStatus === 'failed'
-        ? '#d03050'
+        ? STATUS_COLORS.failed
         : edgeData.edgeStatus === 'running'
-          ? '#f0a020'
-          : '#18a058'
+          ? STATUS_COLORS.warning
+          : STATUS_COLORS.success
 
     const style: Record<string, string | number> = { stroke: color, strokeWidth: 3, opacity: 1 }
     if (edgeData.jump_back) {

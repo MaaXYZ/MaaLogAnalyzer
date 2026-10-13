@@ -81,23 +81,23 @@ const emit = defineEmits<{
 }
 
 .nav-status-dot.dot-success {
-  background: #18a058;
+  background: var(--app-status-success);
 }
 
 .nav-status-dot.dot-running {
-  background: #f0a020;
+  background: var(--app-status-warning);
 }
 
 .nav-status-dot.dot-failed {
-  background: #d03050;
+  background: var(--app-status-failed);
 }
 
 .nav-status-dot.dot-timeout {
-  background: #f0a020;
+  background: var(--app-status-warning);
 }
 
 .nav-status-dot.dot-action-failed {
-  background: #d03050;
+  background: var(--app-status-failed);
   box-shadow: 0 0 0 1px rgba(208, 48, 80, 0.25);
 }
 </style>

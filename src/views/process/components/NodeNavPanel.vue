@@ -248,7 +248,10 @@ defineExpose({
 }
 
 .node-nav-row-active {
-  background: rgba(99, 226, 183, 0.15);
-  box-shadow: inset 0 0 0 1px rgba(99, 226, 183, 0.5);
+  /* 用当前主题的强调色（与任务列表选中行同一套写法），
+     不要再写死深色主题的 #63e2b7 */
+  background: rgba(128, 128, 128, 0.16);
+  background: color-mix(in srgb, var(--n-color-target) 15%, transparent);
+  box-shadow: inset 0 0 0 1px var(--n-color-target);
 }
 </style>

@@ -1,11 +1,14 @@
+import { STATUS_COLORS } from '../../../utils/statusColors'
+
 export const MINIMAP_CONFIG = {
   width: 16,
   colors: {
-    success: '#18a058',
-    warning: '#f0a020',
-    failed: '#d03050',
-    running: '#2080f0',
-    default: '#808080',
+    success: STATUS_COLORS.success,
+    warning: STATUS_COLORS.warning,
+    failed: STATUS_COLORS.failed,
+    // 运行中与警告同色（橙），与状态圆点、标签一致
+    running: STATUS_COLORS.warning,
+    default: STATUS_COLORS.neutral,
   },
   priority: {
     failed: 4,
