@@ -1,10 +1,5 @@
 import { onActivated, onBeforeUnmount, onDeactivated, onMounted } from 'vue'
-import {
-  isEditableHotkeyTarget,
-  isInteractiveOverlayTarget,
-  matchesHotkey,
-  type HotkeyHandler,
-} from '../utils/hotkeys'
+import { matchesHotkey, shouldRunHotkey, type HotkeyHandler } from '../utils/hotkeys'
 
 export type { HotkeyHandler } from '../utils/hotkeys'
 
@@ -31,12 +26,7 @@ export const useHotkeys = (options: UseHotkeysOptions) => {
 
     for (const binding of options.bindings()) {
       if (!matchesHotkey(event, binding)) continue
-
-      const guarded =
-        binding.allowInEditable === true
-          ? isInteractiveOverlayTarget(event.target)
-          : isEditableHotkeyTarget(event.target)
-      if (guarded) continue
+      if (!shouldRunHotkey(event, binding)) continue
 
       event.preventDefault()
       binding.run()

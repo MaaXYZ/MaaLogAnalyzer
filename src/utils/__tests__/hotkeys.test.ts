@@ -5,6 +5,7 @@ import {
   isTextEntryTarget,
   matchesHotkey,
   normalizeHotkeyKey,
+  shouldRunHotkey,
 } from '../hotkeys'
 
 describe('normalizeHotkeyKey', () => {
@@ -66,5 +67,30 @@ describe('isEditableHotkeyTarget', () => {
     expect(isInteractiveOverlayTarget(input)).toBe(false)
     expect(isTextEntryTarget(overlay)).toBe(false)
     expect(isInteractiveOverlayTarget(overlay)).toBe(true)
+  })
+})
+
+describe('shouldRunHotkey', () => {
+  const input = { tagName: 'INPUT', closest: () => null }
+  const overlay = { tagName: 'DIV', closest: () => ({}) }
+  const page = { tagName: 'DIV', closest: () => null }
+
+  it('skips key auto-repeat only for bindings that ask for it', () => {
+    expect(shouldRunHotkey({ repeat: true, target: page }, { key: ']', ignoreRepeat: true })).toBe(
+      false,
+    )
+    expect(shouldRunHotkey({ repeat: true, target: page }, { key: ']' })).toBe(true)
+    expect(shouldRunHotkey({ repeat: false, target: page }, { key: ']', ignoreRepeat: true })).toBe(
+      true,
+    )
+  })
+
+  it('lets allowInEditable bindings through inputs but still yields to overlays', () => {
+    expect(shouldRunHotkey({ target: input }, { key: 'Escape', allowInEditable: true })).toBe(true)
+    expect(shouldRunHotkey({ target: overlay }, { key: 'Escape', allowInEditable: true })).toBe(
+      false,
+    )
+    expect(shouldRunHotkey({ target: input }, { key: 'f' })).toBe(false)
+    expect(shouldRunHotkey({ target: page }, { key: 'f' })).toBe(true)
   })
 })

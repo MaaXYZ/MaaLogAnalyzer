@@ -255,7 +255,8 @@ useHotkeys({
 })
 
 // [ / ] 切换任务（顺序同任务列表，两端夹住）。Shift 变体一并注册，
-// 兼容 [ ] 需要 Shift 或位于其他键位的布局
+// 兼容 [ ] 需要 Shift 或位于其他键位的布局。
+// ignoreRepeat：切换任务要重建整个视图，长按连发会让请求堆积、手感发凝，所以只认单次按下。
 const stepTask = (delta: number) => {
   const index = resolveTaskNavStepIndex(props.tasks.length, activeTaskIndex.value, delta)
   if (index == null) return
@@ -265,10 +266,10 @@ const stepTask = (delta: number) => {
 useHotkeys({
   enabled: () => props.tasks.length > 1,
   bindings: () => [
-    { key: '[', shift: false, run: () => stepTask(-1) },
-    { key: '[', shift: true, run: () => stepTask(-1) },
-    { key: ']', shift: false, run: () => stepTask(1) },
-    { key: ']', shift: true, run: () => stepTask(1) },
+    { key: '[', shift: false, ignoreRepeat: true, run: () => stepTask(-1) },
+    { key: '[', shift: true, ignoreRepeat: true, run: () => stepTask(-1) },
+    { key: ']', shift: false, ignoreRepeat: true, run: () => stepTask(1) },
+    { key: ']', shift: true, ignoreRepeat: true, run: () => stepTask(1) },
   ],
 })
 

@@ -14,6 +14,8 @@ export interface HotkeyBinding {
   alt?: boolean
   /** 允许在文本输入里生效（Esc 这类“取消/清除”语义）。浮层（下拉、弹窗、抽屉）里仍让路 */
   allowInEditable?: boolean
+  /** 忽略长按连发：单次操作成本高（例如切换任务要重建整个视图）时避免请求堆积 */
+  ignoreRepeat?: boolean
 }
 
 export interface HotkeyEventLike {
@@ -103,3 +105,19 @@ export const isInteractiveOverlayTarget = (target: unknown): boolean => {
 /** 默认让路条件：文本输入或浮层里都不抢键 */
 export const isEditableHotkeyTarget = (target: unknown): boolean =>
   isTextEntryTarget(target) || isInteractiveOverlayTarget(target)
+
+/**
+ * 这条键位此刻是否该执行。除了前面的键匹配，还要过两道：
+ * - 长按连发：标了 ignoreRepeat 的键位只认单次按下（切换任务这类操作成本高，连发会堆积）；
+ * - 让路：默认文本输入与浮层都不抢；标了 allowInEditable 的只避开浮层。
+ */
+export const shouldRunHotkey = (
+  event: { repeat?: boolean; target?: unknown },
+  binding: HotkeyBinding,
+): boolean => {
+  if (binding.ignoreRepeat === true && event.repeat === true) return false
+
+  return binding.allowInEditable === true
+    ? !isInteractiveOverlayTarget(event.target)
+    : !isEditableHotkeyTarget(event.target)
+}
