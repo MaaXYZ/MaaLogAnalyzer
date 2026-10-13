@@ -106,6 +106,13 @@ Compatibility note:
 - Flowchart index display must follow global task execution order, not local node order.
 - In Tauri folder-open flow, selecting the `debug` folder directly must work (check current folder first, then `debug` subfolder, then recursive search).
 - For VS Code webview CSP, avoid dynamic chunk loading unless nonce/CSP policy is configured for it.
+- Switching tasks in the 日志分析 view can take several hundred ms **in the vite dev server**; that is
+  normal dev-build amplification, not a bug — a production build (`pnpm build` + `pnpm preview`) is
+  smooth on the same log. Measured once with a DevTools profile of a single `[`/`]` switch: the long
+  task was ~800 ms, of which `flushJobs` (Vue's update flush) self time was ~562 ms, GC ~67 ms and
+  virtual-scroller DOM churn ~50 ms, while the hotkey layer (`useHotkeys`) was ~0.6 ms and the
+  task-list follow-scroll watcher 0 ms. So before optimizing task switching, reproduce on a
+  production build first.
 
 ## Validation Checklist Before Finishing
 
