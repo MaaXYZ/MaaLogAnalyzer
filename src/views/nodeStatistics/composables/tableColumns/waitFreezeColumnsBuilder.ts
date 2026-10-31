@@ -5,6 +5,7 @@ import { renderSuccessRateProgress } from './renderers'
 
 export const buildWaitFreezeColumns = (
   isMobile: boolean,
+  isCompact = false,
 ): DataTableColumns<WaitFreezeStatistics> => {
   if (isMobile) {
     return [
@@ -20,6 +21,7 @@ export const buildWaitFreezeColumns = (
         key: 'count',
         width: 60,
         align: 'center',
+        ellipsis: { tooltip: true },
         sorter: (a, b) => a.count - b.count,
         render: (row) => row.count,
       },
@@ -28,6 +30,7 @@ export const buildWaitFreezeColumns = (
         key: 'repeatCount',
         width: 80,
         align: 'center',
+        ellipsis: { tooltip: true },
         sorter: (a, b) => a.repeatCount - b.repeatCount,
         render: (row) => row.repeatCount,
       },
@@ -36,6 +39,7 @@ export const buildWaitFreezeColumns = (
         key: 'avgElapsed',
         width: 90,
         align: 'right',
+        ellipsis: { tooltip: true },
         defaultSortOrder: 'descend',
         sorter: (a, b) => a.avgElapsed - b.avgElapsed,
         render: (row) => formatDuration(row.avgElapsed),
@@ -43,11 +47,13 @@ export const buildWaitFreezeColumns = (
     ]
   }
 
+  // 这张表 8 列合计 940px，1024 视口（容器 990px）本来就能整表放下，
+  // 所以窄屏只收窄节点名列，不砍任何指标。
   return [
     {
       title: '节点名称',
       key: 'name',
-      width: 220,
+      width: isCompact ? 180 : 220,
       ellipsis: { tooltip: true },
       render: (row) => row.name,
     },
@@ -56,6 +62,7 @@ export const buildWaitFreezeColumns = (
       key: 'count',
       width: 90,
       align: 'center',
+      ellipsis: { tooltip: true },
       sorter: (a, b) => a.count - b.count,
       render: (row) => row.count,
     },
@@ -64,6 +71,7 @@ export const buildWaitFreezeColumns = (
       key: 'repeatCount',
       width: 100,
       align: 'center',
+      ellipsis: { tooltip: true },
       sorter: (a, b) => a.repeatCount - b.repeatCount,
       render: (row) => row.repeatCount,
     },
@@ -72,6 +80,7 @@ export const buildWaitFreezeColumns = (
       key: 'avgElapsed',
       width: 110,
       align: 'right',
+      ellipsis: { tooltip: true },
       defaultSortOrder: 'descend',
       sorter: (a, b) => a.avgElapsed - b.avgElapsed,
       render: (row) => formatDuration(row.avgElapsed),
@@ -81,6 +90,7 @@ export const buildWaitFreezeColumns = (
       key: 'maxElapsed',
       width: 110,
       align: 'right',
+      ellipsis: { tooltip: true },
       sorter: (a, b) => a.maxElapsed - b.maxElapsed,
       render: (row) => formatDuration(row.maxElapsed),
     },
@@ -97,6 +107,7 @@ export const buildWaitFreezeColumns = (
       key: 'avgRecoIds',
       width: 100,
       align: 'center',
+      ellipsis: { tooltip: true },
       sorter: (a, b) => a.avgRecoIds - b.avgRecoIds,
       render: (row) => row.avgRecoIds.toFixed(1),
     },
@@ -105,6 +116,7 @@ export const buildWaitFreezeColumns = (
       key: 'imageCount',
       width: 80,
       align: 'center',
+      ellipsis: { tooltip: true },
       sorter: (a, b) => a.imageCount - b.imageCount,
       render: (row) => row.imageCount,
     },

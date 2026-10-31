@@ -85,4 +85,36 @@ const tableScrollX = computed(() => {
   min-height: 0;
   overflow: visible;
 }
+
+/*
+ * 横向滚动条常显。
+ *
+ * naive-ui 的 NScrollbar 把原生滚动条藏了起来（scrollbar-width:none + ::-webkit-scrollbar 0 宽），
+ * 只在鼠标移入时才画出自己的 rail。统计表 10 列在 1024 视口下必然横向溢出，
+ * 不 hover 就完全看不到「右边还有成功率 / 成功·失败」，用户会以为这份日志没有失败数据。
+ *
+ * 做法：把原生滚动条改回常显的细条（两个轴都常显，滚动能力本来就该一直可见），
+ * 并把 naive 自绘的 rail 隐藏掉，避免 hover 时两条滚动条叠在同一个位置。
+ * scrollbar-width/-color 是标准属性（Chromium 121+/Firefox 生效），
+ * 下面 ::-webkit-scrollbar 规则供不支持标准属性的旧版 Chromium 兜底。
+ */
+.data-panel-body :deep(.n-scrollbar-container) {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(144, 147, 153, 0.5) transparent;
+}
+
+.data-panel-body :deep(.n-scrollbar-rail) {
+  display: none;
+}
+
+.data-panel-body :deep(.n-scrollbar-container::-webkit-scrollbar) {
+  width: 10px;
+  height: 10px;
+}
+
+.data-panel-body :deep(.n-scrollbar-container::-webkit-scrollbar-thumb) {
+  border-radius: 5px;
+  background-color: rgba(144, 147, 153, 0.5);
+}
 </style>
