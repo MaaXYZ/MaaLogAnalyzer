@@ -7,6 +7,7 @@ import {
   DashboardOutlined,
   ApartmentOutlined,
   ColumnHeightOutlined,
+  FileTextOutlined,
   SettingOutlined,
   InfoCircleOutlined,
 } from '@vicons/antd'
@@ -24,6 +25,9 @@ const props = defineProps<{
   viewModeOptions: Array<Record<string, unknown>>
   isVscodeLaunchEmbed: boolean
   isDark: boolean
+  // 当前打开的日志：名字显示在标题旁，完整路径放在悬停提示里
+  loadedLogName?: string
+  loadedLogPath?: string
 }>()
 
 const emit = defineEmits<{
@@ -98,6 +102,19 @@ const isNativeVSCodeHost = isVSCode()
     <n-flex align="center" style="gap: 12px">
       <n-text strong style="font-size: 16px">MAA 日志工具</n-text>
 
+      <!-- 当前日志：多份日志对照/实时跟随时，先在顶栏分清楚自己在看哪份 -->
+      <div
+        v-if="props.loadedLogName"
+        class="header-loaded-log"
+        :title="props.loadedLogPath || props.loadedLogName"
+        data-tour="header-loaded-log"
+      >
+        <n-icon :size="14" aria-hidden="true">
+          <file-text-outlined />
+        </n-icon>
+        <n-text depth="2" class="header-loaded-log__name">{{ props.loadedLogName }}</n-text>
+      </div>
+
       <div
         ref="viewSwitchRef"
         data-tour="header-view-switch"
@@ -117,7 +134,9 @@ const isNativeVSCodeHost = isVSCode()
             @keydown="handleTabKeydown(option.key, $event)"
           >
             <span class="view-tab-content">
-              <n-icon :size="14">
+              <!-- 图标是装饰：标签文字已经在同一行，n-icon 默认渲染 role="img"，
+                   不给 aria-hidden 会被 axe 判成「img 缺 alt」 -->
+              <n-icon :size="14" aria-hidden="true">
                 <component :is="viewModeIcons[option.key] ?? BarChartOutlined" />
               </n-icon>
               {{ option.label }}
@@ -136,7 +155,7 @@ const isNativeVSCodeHost = isVSCode()
         data-tour="header-settings-button"
         @click="emit('open-settings')"
       >
-        <n-icon>
+        <n-icon aria-hidden="true">
           <setting-outlined />
         </n-icon>
       </n-button>
@@ -148,7 +167,7 @@ const isNativeVSCodeHost = isVSCode()
         aria-label="打开关于对话框"
         @click="emit('open-about')"
       >
-        <n-icon>
+        <n-icon aria-hidden="true">
           <info-circle-outlined />
         </n-icon>
       </n-button>
@@ -162,7 +181,7 @@ const isNativeVSCodeHost = isVSCode()
         data-tour="header-theme-button"
         @click="emit('toggle-theme')"
       >
-        <n-icon>
+        <n-icon aria-hidden="true">
           <!-- 深色主题显示太阳（点击切浅色），浅色主题显示月亮（点击切深色） -->
           <svg v-if="isDark" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path
@@ -206,7 +225,7 @@ const isNativeVSCodeHost = isVSCode()
 }
 
 .header-view-switch--dark :deep(.n-tabs-capsule) {
-  background-color: rgba(255, 255, 255, 0.14);
+  background-color: rgba(255, 255, 255, 0.22);
 }
 
 .header-view-switch:not(.header-view-switch--dark) :deep(.n-tabs-rail) {
@@ -216,12 +235,38 @@ const isNativeVSCodeHost = isVSCode()
 .header-view-switch:not(.header-view-switch--dark) :deep(.n-tabs-capsule) {
   background-color: #ffffff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  /* 白胶囊压浅灰轨道只有 1.10:1，光靠底色分不出选中：补一圈描边，并对齐主色文字 */
+  border: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+/* 选中标签的文字也上主色：底色对比不足时，靠文字色 + 字重两个信号区分选中 */
+.header-view-switch :deep(.n-tabs-tab--active) .view-tab-content {
+  color: var(--n-color-target);
 }
 
 .view-tab-content {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+}
+
+/* 当前日志：弱化为「上下文标签」，不要跟工具名抢视觉重量 */
+.header-loaded-log {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 240px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(128, 128, 128, 0.14);
+}
+
+.header-loaded-log__name {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 </style>

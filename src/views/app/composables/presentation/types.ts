@@ -24,6 +24,9 @@ export interface UseAppPresentationBindingsOptions {
   viewMode: Ref<string>
   viewModeOptions: Ref<ViewModeOptionLike[]>
   currentViewLabel: Ref<string>
+  // 顶栏展示「当前日志」用；空串表示没有可显示的日志名
+  loadedLogName: ComputedRef<string>
+  loadedLogPath: ComputedRef<string>
   handleViewModeSelect: (key: string) => void
   showTaskDrawer: Ref<boolean>
   showDetailDrawer: Ref<boolean>

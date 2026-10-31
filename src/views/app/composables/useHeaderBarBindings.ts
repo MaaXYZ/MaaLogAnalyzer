@@ -12,6 +12,9 @@ interface UseHeaderBarBindingsOptions {
   showTaskDrawer: Ref<boolean>
   showSettingsModal: Ref<boolean>
   showAboutModal: Ref<boolean>
+  // 顶栏「当前日志」：名字必填（空串则不显示），路径只用于悬停提示
+  loadedLogName: ComputedRef<string>
+  loadedLogPath: ComputedRef<string>
   handleMobileMenuSelect: (key: string) => void
   handleViewModeSelect: (key: string) => void
   toggleTheme: () => void
@@ -26,6 +29,8 @@ export const useHeaderBarBindings = (options: UseHeaderBarBindingsOptions) => {
     mobileMenuOptions: options.mobileMenuOptions.value,
     isVscodeLaunchEmbed: options.isVscodeLaunchEmbed,
     isDark: options.isDark.value,
+    loadedLogName: options.loadedLogName.value,
+    loadedLogPath: options.loadedLogPath.value,
   }))
 
   const headerBarEventHandlers = {

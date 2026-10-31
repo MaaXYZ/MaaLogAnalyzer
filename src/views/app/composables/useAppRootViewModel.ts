@@ -85,6 +85,8 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
   const {
     textSearchLoadedTargets,
     textSearchLoadedDefaultTargetId,
+    deferredTextSearchTargets,
+    deferredTextSearchDefaultTargetId,
     hasDeferredTextSearchTargets,
     setTextSearchLoadedTargets,
     pickPreferredLogTargetId,
@@ -352,6 +354,33 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
     showTaskDrawer,
   })
 
+  // 顶栏要显示「当前在看哪份日志」：主日志的显示名与完整路径从已加载（或待加载）的搜索目标里取。
+  // 取不到（例如 VS Code iframe 复用宿主数据）就留空，顶栏不显示这一段，不要瞎猜。
+  const loadedLogTarget = computed(() => {
+    const loaded = textSearchLoadedTargets.value ?? []
+    if (loaded.length > 0) {
+      return loaded.find((target) => target.id === textSearchLoadedDefaultTargetId.value) ?? loaded[0]
+    }
+    const deferred = deferredTextSearchTargets.value ?? []
+    if (deferred.length > 0) {
+      return (
+        deferred.find((target) => target.id === deferredTextSearchDefaultTargetId.value) ??
+        deferred[0]
+      )
+    }
+    return null
+  })
+
+  const loadedLogName = computed(
+    () => loadedLogTarget.value?.fileName || loadedLogTarget.value?.label || '',
+  )
+
+  const loadedLogPath = computed(() => {
+    const label = loadedLogTarget.value?.label || ''
+    // label 常常就是同名文件（没走目录选择），这时别在 tooltip 里重复一遍
+    return label && label !== loadedLogTarget.value?.fileName ? label : ''
+  })
+
   const { headerBarProps, headerBarEventHandlers } = usePresentationHeaderBindings({
     propsIsDark,
     onToggleTheme,
@@ -364,6 +393,8 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
     showTaskDrawer,
     showSettingsModal,
     showAboutModal,
+    loadedLogName,
+    loadedLogPath,
   })
 
   const { mainContentProps, mainContentEventHandlers } = usePresentationMainContentBindings({

@@ -17,6 +17,8 @@ interface UsePresentationHeaderBindingsOptions {
   showTaskDrawer: UseAppPresentationBindingsOptions['showTaskDrawer']
   showSettingsModal: UseAppPresentationBindingsOptions['showSettingsModal']
   showAboutModal: UseAppPresentationBindingsOptions['showAboutModal']
+  loadedLogName: UseAppPresentationBindingsOptions['loadedLogName']
+  loadedLogPath: UseAppPresentationBindingsOptions['loadedLogPath']
 }
 
 export const usePresentationHeaderBindings = (options: UsePresentationHeaderBindingsOptions) => {
@@ -69,6 +71,8 @@ export const usePresentationHeaderBindings = (options: UsePresentationHeaderBind
     showTaskDrawer: options.showTaskDrawer,
     showSettingsModal: options.showSettingsModal,
     showAboutModal: options.showAboutModal,
+    loadedLogName: options.loadedLogName,
+    loadedLogPath: options.loadedLogPath,
     handleMobileMenuSelect,
     handleViewModeSelect: options.handleViewModeSelect,
     toggleTheme: options.onToggleTheme,

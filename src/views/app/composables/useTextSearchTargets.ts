@@ -225,6 +225,9 @@ export const useTextSearchTargets = () => {
   return {
     textSearchLoadedTargets,
     textSearchLoadedDefaultTargetId,
+    // 顶栏「当前日志」也要能读到尚未 hydrate 的延迟目标（大日志只登记元数据时同样要显示文件名）
+    deferredTextSearchTargets,
+    deferredTextSearchDefaultTargetId,
     hasDeferredTextSearchTargets,
     setTextSearchLoadedTargets,
     pickPreferredLogTargetId,

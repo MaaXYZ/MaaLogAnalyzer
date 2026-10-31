@@ -11,6 +11,8 @@ defineProps<{
   mobileMenuOptions: Array<Record<string, unknown>>
   isVscodeLaunchEmbed: boolean
   isDark: boolean
+  loadedLogName?: string
+  loadedLogPath?: string
 }>()
 
 const emit = defineEmits<{
@@ -40,6 +42,8 @@ const emit = defineEmits<{
       :view-mode-options="viewModeOptions"
       :is-vscode-launch-embed="isVscodeLaunchEmbed"
       :is-dark="isDark"
+      :loaded-log-name="loadedLogName"
+      :loaded-log-path="loadedLogPath"
       @select-view-mode="emit('select-view-mode', $event)"
       @open-settings="emit('open-settings')"
       @open-about="emit('open-about')"
