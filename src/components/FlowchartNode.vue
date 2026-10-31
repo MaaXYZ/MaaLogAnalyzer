@@ -106,4 +106,12 @@ const nodeStyle = computed(() => {
   white-space: nowrap;
   font-weight: 500;
 }
+
+/* 这里的 Handle 只用来给连线定位，用户既不能连也不该看见。
+   vue-flow 默认把锚点画成节点上下的小圆点，一张图上看过去全是噪点；
+   保留尺寸（只是不可见）以免连线端点位置漂移。 */
+.flowchart-node :deep(.vue-flow__handle) {
+  opacity: 0;
+  pointer-events: none;
+}
 </style>

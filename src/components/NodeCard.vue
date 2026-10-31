@@ -186,7 +186,7 @@ const toggleActionSection = () => {
     <n-card size="small" :bordered="true">
       <!-- Header: 节点名称按钮 + 时间 -->
       <template #header>
-        <div style="display: flex; align-items: center; gap: 8px">
+        <div class="node-card-header">
           <n-popover
             v-if="taskDocText"
             trigger="manual"
@@ -195,8 +195,12 @@ const toggleActionSection = () => {
             style="max-width: 420px"
           >
             <template #trigger>
-              <span @mouseenter="handleTaskDocHoverEnter" @mouseleave="handleTaskDocHoverLeave">
-                <n-button size="small" @click="handleNodeClick">
+              <span
+                class="node-card-title-wrap"
+                @mouseenter="handleTaskDocHoverEnter"
+                @mouseleave="handleTaskDocHoverLeave"
+              >
+                <n-button size="small" class="node-card-title-button" @click="handleNodeClick">
                   {{ node.name }}
                 </n-button>
               </span>
@@ -205,8 +209,13 @@ const toggleActionSection = () => {
               {{ taskDocText }}
             </n-text>
           </n-popover>
-          <span v-else @mouseenter="handleTaskDocHoverEnter" @mouseleave="handleTaskDocHoverLeave">
-            <n-button size="small" @click="handleNodeClick">
+          <span
+            v-else
+            class="node-card-title-wrap"
+            @mouseenter="handleTaskDocHoverEnter"
+            @mouseleave="handleTaskDocHoverLeave"
+          >
+            <n-button size="small" class="node-card-title-button" @click="handleNodeClick">
               {{ node.name }}
             </n-button>
           </span>
@@ -219,7 +228,7 @@ const toggleActionSection = () => {
           >
             Reveal
           </n-button>
-          <n-text depth="3" style="font-size: 12px">
+          <n-text depth="3" class="node-card-time" style="font-size: 12px">
             {{ extractTime(node.ts) }}
           </n-text>
         </div>
@@ -309,6 +318,37 @@ const toggleActionSection = () => {
   background-color: rgba(128, 128, 128, 0.16);
   background-color: color-mix(in srgb, var(--n-color-target) 15%, transparent);
   box-shadow: inset 0 0 0 1px var(--n-color-target);
+}
+
+/* 标题行：节点名可以省略，时间必须完整显示。
+   窄列下（1024 附近的时间线只有 ~285px）之前是节点名按钮撑满、时间被压成
+   竖排的单字符，一行「22:59:36」被折成 8 行。 */
+.node-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.node-card-title-wrap {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.node-card-title-button {
+  max-width: 100%;
+}
+
+.node-card-title-button :deep(.n-button__content) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-card-time {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {
