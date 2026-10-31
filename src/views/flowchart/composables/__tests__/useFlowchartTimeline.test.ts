@@ -115,11 +115,14 @@ describe('useFlowchartTimeline', () => {
       selectedTask: computed(() => selectedTask.value),
     })
 
+    // 旧实现直接拿时间线的 navName 当标题：它是 next_list 里命中的**下一个**节点名，
+    // 于是与节点时间线逐项错位一格，未命中的项还被「未命中（识别超时）」顶替掉真名。
+    // 现在标题 = 本节点真实名字 + 状态标记（状态词只做后缀，不再替换节点名）。
     expect(timeline.timelineNavItems.value.map((item) => item.name)).toEqual([
-      'CCCombatEnd',
-      '动作失败: CCBuyCard',
-      '未命中（识别超时）',
-      '未命中（识别中）',
+      'NodeHitSuccess',
+      'NodeActionFailed（动作失败）',
+      'NodeTimeout（未命中）',
+      'NodeRunningNoHit（运行中）',
     ])
     expect(timeline.timelineNavItems.value.map((item) => item.status)).toEqual([
       'success',
@@ -156,7 +159,9 @@ describe('useFlowchartTimeline', () => {
     })
 
     expect(timeline.timelineNavItems.value).toHaveLength(1)
-    expect(timeline.timelineNavItems.value[0]?.name).toBe('CombatEntering')
+    // 跳转目标仍是画布联动用的 focusNodeId（[JumpBack] 前缀已规范化），
+    // 但列表标题已改为本次真正执行的节点名 ParentNode（旧期望是目标名 CombatEntering）。
+    expect(timeline.timelineNavItems.value[0]?.name).toBe('ParentNode')
     expect(timeline.timelineNavItems.value[0]?.focusNodeId).toBe('CombatEntering')
 
     timeline.selectedTimelineIndex.value = 0
@@ -189,8 +194,10 @@ describe('useFlowchartTimeline', () => {
       selectedTask: computed(() => selectedTask.value),
     })
 
+    // executionTimeline 仍用跳转目标名（画布联动按目标节点高亮），这部分语义没变
     expect(timeline.executionTimeline.value.map((item) => item.name)).toEqual(['CCBuyCard'])
-    expect(timeline.timelineNavItems.value.map((item) => item.name)).toEqual(['CCBuyCard'])
+    // 列表标题改成真实节点名了：旧期望 'CCBuyCard' 是把「下一步去哪」当成了标题
+    expect(timeline.timelineNavItems.value.map((item) => item.name)).toEqual(['CCFlagInCombatMain'])
 
     timeline.selectedTimelineIndex.value = 0
     expect(timeline.selectedFlowNodeId.value).toBe('CCBuyCard')

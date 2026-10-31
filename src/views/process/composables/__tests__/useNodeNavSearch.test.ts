@@ -100,11 +100,14 @@ describe('useNodeNavSearch', () => {
     const { nodeNavItems, setNodeNavMode } = useNodeNavSearch(nodes, rootTaskId)
     setNodeNavMode('next-list-hit')
 
+    // 旧实现把「next_list 命中的下一个节点名」当标题：与节点时间线错位一格，
+    // 未命中的项还被「未命中（识别超时）」顶替真名。现在标题 = 本次真正执行的节点名，
+    // 状态由 navStatus 驱动标签（见下一处断言），不再往名字里塞状态词。
     expect(nodeNavItems.value.map((item) => item.primaryText)).toEqual([
-      'B',
-      '动作失败: CCBuyCard',
-      '未命中（识别超时）',
-      '未命中（识别中）',
+      'NodeHit',
+      'NodeActionFailed',
+      'NodeTimeout',
+      'NodeRunning',
     ])
     expect(nodeNavItems.value.map((item) => item.navStatus)).toEqual([
       'success',
@@ -116,7 +119,7 @@ describe('useNodeNavSearch', () => {
     expect(nodeNavItems.value.map((item) => item.node.node_id)).toEqual([1, 4, 5, 2])
   })
 
-  it('does not include jump_back or anchor prefixes in recognition label', () => {
+  it('labels the executed node instead of the jump-back target', () => {
     const nodes = ref<NodeInfo[]>([
       {
         ...createNode({ nodeId: 21, name: 'A', taskId: 100, nextList: [] }),
@@ -137,7 +140,8 @@ describe('useNodeNavSearch', () => {
     setNodeNavMode('next-list-hit')
 
     expect(nodeNavItems.value).toHaveLength(2)
-    expect(nodeNavItems.value[0]?.primaryText).toBe('B')
+    // 旧期望是 'B'（跳转目标名）；标题已改为真实节点名，[JumpBack]/[Anchor] 前缀不再有机会泄漏到标题
+    expect(nodeNavItems.value[0]?.primaryText).toBe('A')
   })
 
   it('toggles failed-only filter for pipeline and recognition modes', () => {
@@ -206,17 +210,17 @@ describe('useNodeNavSearch', () => {
 
     setNodeNavMode('next-list-hit')
     expect(nodeNavItems.value.map((item) => item.primaryText)).toEqual([
-      '动作失败: CCCombatEnd',
-      '未命中（识别超时）',
+      'NodeActionFailed',
+      'NodeFailed',
     ])
 
     toggleNodeNavFailedOnly()
     expect(nodeNavFailedOnly.value).toBe(false)
     expect(nodeNavItems.value.map((item) => item.primaryText)).toEqual([
-      'CCBuyCard',
-      '动作失败: CCCombatEnd',
-      '未命中（识别超时）',
-      '未命中（识别中）',
+      'NodeHit',
+      'NodeActionFailed',
+      'NodeFailed',
+      'NodeRunning',
     ])
   })
 
@@ -239,6 +243,50 @@ describe('useNodeNavSearch', () => {
     toggleNodeNavFailedOnly()
     expect(nodeNavFailedOnly.value).toBe(true)
     expect(nodeNavFailedCount.value).toBe(2)
+  })
+
+  it('keeps recognition misses out of the failed status', () => {
+    // small.log 任务 #2 的形状：节点 failed，但有识别尝试记录且没有任何 next_list 命中，
+    // 之后任务整体 succeeded。这类「没识别到」不是节点执行失败，必须有独立状态，
+    // 否则「任务成功 + 节点红点 + 统计记失败」三个视图继续互相打脸。
+    const nodes = ref<NodeInfo[]>([
+      {
+        ...createNode({
+          nodeId: 61,
+          name: 'RecognitionMiss',
+          taskId: 100,
+          nextList: ['NeverReached'],
+          status: 'failed',
+        }),
+        ts: '2026-04-08 10:00:00.100',
+        node_flow: [
+          {
+            id: 'recognition:61:1',
+            type: 'recognition',
+            name: 'NeverReached',
+            status: 'failed',
+            ts: '2026-04-08 10:00:00.110',
+          },
+        ],
+      },
+      // 没有任何识别尝试记录的失败节点缺少「未命中」的证据，继续保持 failed
+      {
+        ...createNode({ nodeId: 62, name: 'PlainFailed', taskId: 100, status: 'failed' }),
+        ts: '2026-04-08 10:00:00.200',
+      },
+    ])
+
+    const rootTaskId = computed(() => 100)
+    const { nodeNavItems, nodeNavFailedCount, nodeNavNotHitCount, setNodeNavMode } =
+      useNodeNavSearch(nodes, rootTaskId)
+
+    expect(nodeNavItems.value.map((item) => item.navStatus)).toEqual(['not-hit', 'failed'])
+    // 徽标保持「异常」口径（未命中也要能被筛选出来），但要能单独数出未命中数
+    expect(nodeNavFailedCount.value).toBe(2)
+    expect(nodeNavNotHitCount.value).toBe(1)
+
+    setNodeNavMode('next-list-hit')
+    expect(nodeNavItems.value.map((item) => item.navStatus)).toEqual(['not-hit', 'timeout'])
   })
 
   it('returns root-layer empty description when selected root task has no nodes', () => {

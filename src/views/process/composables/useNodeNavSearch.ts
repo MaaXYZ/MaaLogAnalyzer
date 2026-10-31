@@ -7,6 +7,7 @@ import {
   normalizeSearchText,
 } from './nodeNavSearch/match'
 import { formatNodeNavMatchHint, formatNodeNavMatchPreview } from './nodeNavSearch/format'
+import { resolveNodeNavStatus, resolveTimelineNavStatus } from './nodeNavSearch/status'
 import {
   buildActionFocusCardData,
   buildNodeFocusCardData,
@@ -124,7 +125,8 @@ export const useNodeNavSearch = (
       originalIndex,
       primaryText: node.name || '未命名节点',
       primaryMatchKind: 'node',
-      navStatus: node.status,
+      // 识别未命中不再算 failed：它不代表节点执行逻辑失败（任务可能整体成功）
+      navStatus: resolveNodeNavStatus(node),
     }))
   })
 
@@ -136,9 +138,11 @@ export const useNodeNavSearch = (
       navKey: `recognition:${timelineIndex}:${item.originalIndex}`,
       node: item.nodeInfo,
       originalIndex: item.originalIndex,
-      primaryText: item.navName,
-      primaryMatchKind: item.matchedRecognitionName ? 'next-list' : 'node',
-      navStatus: item.navStatus,
+      // 标题用本节点真实名字，与节点时间线/详情逐项对齐；时间线的 navName 只作兜底
+      // （旧实现直接把 navName 当标题 = 显示下一个节点名，整体错位一格，见流程图执行顺序）
+      primaryText: item.nodeInfo.name || item.navName,
+      primaryMatchKind: 'node',
+      navStatus: resolveTimelineNavStatus(item.navStatus, item.nodeInfo),
     }))
   })
 
@@ -154,7 +158,7 @@ export const useNodeNavSearch = (
           originalIndex,
           primaryText: node.name || '未命名节点',
           primaryMatchKind: 'focus',
-          navStatus: node.status,
+          navStatus: resolveNodeNavStatus(node),
           focusKind: 'node',
           focusDisplay: readFocusCardDisplay(nodeFocusCard.entries),
           matchDetails: [
@@ -226,17 +230,26 @@ export const useNodeNavSearch = (
     nodeNavFailedOnly.value = !nodeNavFailedOnly.value
   }
 
-  // 「仅失败」的判定：识别模式（next-list-hit）下超时与动作失败也算异常
-  const isFailedNodeNavStatus = (status: NodeNavStatus): boolean => {
+  // 「仅失败」筛选的判定：除了 failed，识别未命中（not-hit）与识别模式下的超时/动作失败也算异常，
+  // 否则开了筛选反而找不到要排查的那一项。注意这是「异常」口径，不等于「节点失败」——
+  // 徽标文案要的是后者，见 nodeNavNotHitCount。
+  const isAnomalousNodeNavStatus = (status: NodeNavStatus): boolean => {
+    if (status === 'not-hit') return true
     if (nodeNavMode.value === 'next-list-hit') {
       return status === 'failed' || status === 'timeout' || status === 'action-failed'
     }
     return status === 'failed'
   }
 
-  // 当前模式下命中「仅失败」的节点数，用于表头徽标（不受搜索框与筛选开关影响）
+  // 当前模式下命中「仅异常」的条目数，用于表头徽标（不受搜索框与筛选开关影响）
   const nodeNavFailedCount = computed(
-    () => sourceEntries.value.filter((entry) => isFailedNodeNavStatus(entry.navStatus)).length,
+    () => sourceEntries.value.filter((entry) => isAnomalousNodeNavStatus(entry.navStatus)).length,
+  )
+
+  // 其中「识别未命中」的条目数：任务卡/统计要说「N 个节点未命中」时用它，
+  // 不能再用失败数当未命中数——那正是「任务成功却记失败」矛盾的来源。
+  const nodeNavNotHitCount = computed(
+    () => sourceEntries.value.filter((entry) => entry.navStatus === 'not-hit').length,
   )
 
   const nodeNavItems = computed<NodeNavViewItem[]>(() => {
@@ -262,7 +275,7 @@ export const useNodeNavSearch = (
           matchPreview: formatNodeNavMatchPreview(item.matchDetails),
         }
       })
-      .filter((item) => !nodeNavFailedOnly.value || isFailedNodeNavStatus(item.navStatus))
+      .filter((item) => !nodeNavFailedOnly.value || isAnomalousNodeNavStatus(item.navStatus))
       .filter((item) => !query || item.matchDetails.length > 0)
   })
 
@@ -296,6 +309,7 @@ export const useNodeNavSearch = (
     nodeNavItems,
     nodeNavEmptyDescription,
     nodeNavFailedCount,
+    nodeNavNotHitCount,
     formatNodeNavMatchHint,
     formatNodeNavMatchPreview,
   }

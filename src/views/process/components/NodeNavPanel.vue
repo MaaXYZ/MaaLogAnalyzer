@@ -29,6 +29,8 @@ const props = withDefaults(
     failedOnly: boolean
     failedCount: number
     emptyDescription: string
+    // 折叠入口：展开态的把手放在标题栏里（竖排把手只在收起后才出现）
+    onToggleNodeNav?: () => void
   }>(),
   {
     selectedTaskKey: null,
@@ -150,6 +152,29 @@ const selectRow = (item: NodeNavViewItem) => {
   emit('select-item', item)
 }
 
+// 行可聚焦：列表是虚拟滚动（同屏只渲染 ~20 行），所以用 roving tabindex ——
+// 只有「当前行」是 Tab 站点（tabindex=0），其余 -1，行间用 ↑/↓ 或 j/k 换。
+// 这样 Tab 一次就进列表，不会在几百个节点里按几十次 Tab；读屏也终于能一行一行地读，
+// 而不是把整列拼成一串没有边界的文本。
+const lastFocusedNavKey = ref<string | null>(null)
+
+/** 键盘要落的行：当前行 → 最近聚焦过的行 → 第一行（还没选节点时列表也必须能 Tab 进去） */
+const tabStopNavKey = computed(
+  () => activeRowKey.value ?? lastFocusedNavKey.value ?? props.items[0]?.navKey ?? null,
+)
+
+const rowElementByKey = (key: string): HTMLElement | null => {
+  const scrollerEl = getScrollerElement()
+  if (!scrollerEl) return null
+  const escaped =
+    typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(key) : key
+  return scrollerEl.querySelector<HTMLElement>(`.node-nav-row[data-nav-key="${escaped}"]`)
+}
+
+const handleRowFocus = (item: NodeNavViewItem) => {
+  lastFocusedNavKey.value = item.navKey
+}
+
 // j/↓ k/↑：导航面板聚焦时按导航列表顺序走（含同一节点下的多行）
 const activeHotkeyPanel = useActiveHotkeyPanel()
 const { step: stepNavItem } = useNodeNavigationHotkeys({
@@ -163,6 +188,40 @@ const { step: stepNavItem } = useNodeNavigationHotkeys({
     }
     emit('select-item', item)
   },
+})
+
+const isRowFocused = () => {
+  const focused = document.activeElement as HTMLElement | null
+  return focused?.classList.contains('node-nav-row') === true
+}
+
+const handleRowKeydown = (event: KeyboardEvent, item: NodeNavViewItem) => {
+  // Enter / Space 选中（空格默认会滚整页，必须拦掉）
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    selectRow(item)
+    return
+  }
+
+  // ↑/↓ 与 j/k 由行自己处理，不能指望全局热键层：utils/hotkeys.ts 的守卫把
+  // [role="listbox"] 整块当成「控件自己的领地」（免得下拉菜单里的方向键被抢），
+  // 焦点落进列表后全局 j/k 与方向键都会被让路。而这一行本身就是列表项，
+  // 方向键换行正是它该有的语义，所以在这里直接调同一套 stepNavItem，行为与面板层一致。
+  const delta = event.key === 'ArrowDown' || event.key === 'j' ? 1 : 0
+  const back = event.key === 'ArrowUp' || event.key === 'k' ? -1 : 0
+  const move = delta || back
+  if (move === 0) return
+  event.preventDefault()
+  stepNavItem(move)
+}
+
+// 键盘换行后把焦点搬到新行：否则焦点还留在旧行上，读屏念的是上一条，
+// Tab 出去再 Shift+Tab 回来也会跳回旧位置。
+// 只在焦点本来就在列表行上时搬，避免鼠标点选或别处操作时被抢走焦点。
+watch(activeRowKey, async (key) => {
+  if (!key || !isRowFocused()) return
+  await nextTick()
+  rowElementByKey(key)?.focus()
 })
 
 // 有搜索词时 n/N 在命中里前后跳（列表本身已按搜索词过滤）
@@ -231,11 +290,12 @@ defineExpose({
         :failed-only="props.failedOnly"
         :failed-count="props.failedCount"
         :mode="props.mode"
+        :on-toggle-node-nav="props.onToggleNodeNav"
         @update:mode="emit('update:mode', $event)"
         @toggle-failed-only="emit('toggle-failed-only')"
       />
     </template>
-    <div style="display: flex; flex-direction: column; height: 100%; min-height: 0">
+    <div class="node-nav-body">
       <node-nav-search-input
         :search-text="props.searchText"
         @update:search-text="emit('update:search-text', $event)"
@@ -250,22 +310,30 @@ defineExpose({
         key-field="navKey"
         :min-item-size="navMinItemSize"
         class="node-nav-scroller"
+        role="listbox"
+        aria-label="节点导航列表"
         @pointerdown.capture="cancelScrollRestore"
         @scroll.passive="captureCurrentScrollPosition"
         @wheel.passive="handleWheel"
       >
         <template #default="{ item, active }">
-          <dynamic-scroller-item :item="item" :active="active">
+          <dynamic-scroller-item :item="item" :active="active" role="presentation">
             <div
               :title="item.node.name"
               class="node-nav-row"
+              role="option"
+              :aria-selected="isRowActive(item)"
+              :tabindex="item.navKey === tabStopNavKey ? 0 : -1"
               :class="{
                 'node-nav-row-detailed': props.displayMode === 'detailed',
                 'node-nav-row-active': isRowActive(item),
               }"
               :data-node-id="item.node.node_id"
               :data-nav-key="item.navKey"
+              :data-nav-status="item.navStatus"
               @click="selectRow(item)"
+              @focus="handleRowFocus(item)"
+              @keydown="handleRowKeydown($event, item)"
             >
               <node-nav-item
                 :item="item"
@@ -287,6 +355,16 @@ defineExpose({
 </template>
 
 <style scoped>
+.node-nav-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  /* 面板可以被拖宽拖窄：让行内元素按「面板宽度」降级，
+     具体降级规则在 NodeNavItem 的 @container 里（窄到 160px 以下先让出时间与 #序号）。 */
+  container-type: inline-size;
+}
+
 .node-nav-scroller {
   flex: 1;
   min-height: 0;
@@ -300,6 +378,20 @@ defineExpose({
   transition:
     background-color 0.2s,
     box-shadow 0.2s;
+}
+
+/* 行贴着滚动容器的左右边缘，向外扩的焦点环会被裁掉一半，改成向内描边 */
+.node-nav-row:focus-visible {
+  outline-offset: -2px !important;
+}
+
+/* 「识别未命中」和「识别超时」都不是节点失败，共用琥珀色，只能靠形状再区分一层：
+   未命中 = 空心菱形。在父组件按 data-nav-status 覆盖，不去动子组件里按状态到类名的映射。 */
+.node-nav-row[data-nav-status='not-hit'] :deep(.nav-status-dot) {
+  background: transparent;
+  border: 1.5px solid var(--app-status-warning);
+  border-radius: 2px;
+  transform: rotate(45deg);
 }
 
 .node-nav-row-detailed {
