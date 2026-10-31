@@ -66,6 +66,30 @@ const hasSummaryContent = computed(() => {
   if (statMode.value === 'recognition-action') return recognitionActionSummary.value !== null
   return waitFreezeSummary.value !== null
 })
+
+// 空表与列口径提示：Wait Freezes 为空很常见（只有 pipeline 里配了 wait_freezes 的节点才有记录），
+// 不说清楚的话用户只会看到一张空表加一个图标，误以为是解析坏了。
+const statisticsEmptyTitle = computed(() => {
+  if (searchKeyword.value.trim()) return '当前搜索没有匹配项'
+  if (selectedTaskId.value !== 'all') return '这个任务没有对应记录'
+  if (statMode.value === 'wait-freezes') return '这份日志没有 Wait Freezes 记录'
+  return '没有可统计的数据'
+})
+
+const statisticsEmptyHint = computed(() => {
+  if (searchKeyword.value.trim()) return '清空右上角的「搜索节点名称」即可看全部数据。'
+  if (selectedTaskId.value !== 'all') return '把右上角的筛选改回「全部任务」再试。'
+  if (statMode.value === 'wait-freezes') {
+    return 'Wait Freezes 只统计 pipeline 里配置了 wait_freezes 的节点；这个节点不产生记录时表是空的，属于正常情况。'
+  }
+  return '切换任务筛选或重新加载日志后重试。'
+})
+
+const statisticsPanelHint = computed(() =>
+  statMode.value === 'wait-freezes'
+    ? '「重复等待」只在 phase=repeat 时计数；「截图」依赖日志目录里的 debug 截图资源'
+    : '',
+)
 </script>
 
 <template>
@@ -136,9 +160,11 @@ const hasSummaryContent = computed(() => {
             :stat-mode="statMode"
             :is-mobile="isMobile"
             :search-keyword="searchKeyword"
-            :node-summary="nodeSummary"
-            :recognition-action-summary="recognitionActionSummary"
-            :wait-freeze-summary="waitFreezeSummary"
+            :node-summary="statMode === 'node' ? nodeSummary : null"
+            :recognition-action-summary="
+              statMode === 'recognition-action' ? recognitionActionSummary : null
+            "
+            :wait-freeze-summary="statMode === 'wait-freezes' ? waitFreezeSummary : null"
             @update:search-keyword="searchKeyword = $event"
           />
 
@@ -147,6 +173,9 @@ const hasSummaryContent = computed(() => {
               :columns="columns"
               :statistics="statistics"
               :panel-title="statisticsPanelTitle"
+              :panel-hint="statisticsPanelHint"
+              :empty-title="statisticsEmptyTitle"
+              :empty-hint="statisticsEmptyHint"
               :effective-tasks-length="effectiveTasks.length"
             />
           </div>
