@@ -9,6 +9,7 @@ import {
 import { resolveEmbedProfile } from '../../../embed/profiles'
 import { EMBED_MODE_VSCODE_LAUNCH, parseEmbedMode } from '../../../utils/embedMode'
 import { APP_LAYOUT_STORAGE_KEY, layoutResetGeneration } from '../../../utils/layoutPersistence'
+import { useIsCompactDesktop } from '../../../composables/useIsCompactDesktop'
 
 type ViewMode = 'analysis' | 'search' | 'statistics' | 'flowchart' | 'split'
 
@@ -108,9 +109,15 @@ export const useAppViewState = () => {
   }
 
   const appLayoutState = readAppLayoutState()
-  const splitSize = ref(clampLayoutValue(appLayoutState.analysisSplitSize, 0.4, 1, 0.65))
+  // 紧凑桌面（<=1100px）下四列装不下：首次进入就把详情面板收起，宽度还给节点卡片区。
+  // 只看初始值——用户手动展开后不再自动收起，避免读东西时窗口一变就被抢走。
+  const { isCompactDesktop } = useIsCompactDesktop()
+  const compactDesktopOnEntry = isCompactDesktop.value
+  const splitSize = ref(
+    compactDesktopOnEntry ? 1 : clampLayoutValue(appLayoutState.analysisSplitSize, 0.4, 1, 0.65),
+  )
   const splitVerticalSize = ref(clampLayoutValue(appLayoutState.splitVerticalSize, 0.2, 0.8, 0.5))
-  const detailViewCollapsed = ref(false)
+  const detailViewCollapsed = ref(compactDesktopOnEntry)
   const detailViewSavedSize = ref(0.6)
 
   const toggleDetailView = () => {

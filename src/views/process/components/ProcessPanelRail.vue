@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { NButton } from 'naive-ui'
 
-defineProps<{
+const props = defineProps<{
   taskListCollapsed: boolean
   nodeNavCollapsed: boolean
   detailViewCollapsed: boolean
@@ -13,34 +14,46 @@ const emit = defineEmits<{
   'toggle-node-nav': []
   'expand-detail': []
 }>()
+
+// 这些竖排把手只在面板「收起后」出现，充当展开入口。
+// 面板展开时把它们留在原地会跟面板本身错位（导航把手贴在屏幕最左边、面板却在 200px 之外），
+// 所以展开态的折叠动作交给各自面板标题栏里的按钮。
+const visible = computed(
+  () =>
+    props.taskListCollapsed ||
+    props.nodeNavCollapsed ||
+    (props.detailViewCollapsed && props.showDetailButton),
+)
 </script>
 
 <template>
-  <div class="analysis-layout-rail">
+  <div v-if="visible" class="analysis-layout-rail">
     <n-button
+      v-if="props.taskListCollapsed"
       class="panel-tab-handle panel-tab-handle--left panel-tab-handle--task"
       size="tiny"
       secondary
       strong
-      :title="taskListCollapsed ? '展开任务列表' : '收起任务列表'"
+      title="展开任务列表"
       @click="emit('toggle-task-list')"
     >
       <span class="panel-tab-handle__text">任务</span>
     </n-button>
 
     <n-button
+      v-if="props.nodeNavCollapsed"
       class="panel-tab-handle panel-tab-handle--left panel-tab-handle--nav"
       size="tiny"
       secondary
       strong
-      :title="nodeNavCollapsed ? '展开节点导航' : '收起节点导航'"
+      title="展开节点导航"
       @click="emit('toggle-node-nav')"
     >
       <span class="panel-tab-handle__text">导航</span>
     </n-button>
 
     <n-button
-      v-if="detailViewCollapsed && showDetailButton"
+      v-if="props.detailViewCollapsed && props.showDetailButton"
       class="panel-tab-handle panel-tab-handle--left panel-tab-handle--detail"
       size="tiny"
       secondary

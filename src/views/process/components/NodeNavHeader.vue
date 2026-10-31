@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { NFlex, NText, NButton, NIcon, NSelect, NBadge } from 'naive-ui'
-import { FilterOutlined } from '@vicons/antd'
+import { FilterOutlined, MenuFoldOutlined } from '@vicons/antd'
 import type { NodeNavMode } from '../composables/useNodeNavSearch'
 
 const props = defineProps<{
   failedOnly: boolean
   failedCount: number
   mode: NodeNavMode
+  // 折叠入口：展开态的把手放在标题栏里（竖排把手只在收起后才出现）
+  onToggleNodeNav?: () => void
 }>()
 
 const emit = defineEmits<{
@@ -80,6 +82,17 @@ const failedFilterTitle = computed(() => {
             :color="props.failedOnly ? undefined : FILTER_BADGE_IDLE_COLOR"
           />
         </n-flex>
+      </n-button>
+      <n-button
+        v-if="props.onToggleNodeNav"
+        text
+        size="tiny"
+        class="node-nav-collapse-button"
+        title="收起节点导航"
+        aria-label="收起节点导航"
+        @click="props.onToggleNodeNav?.()"
+      >
+        <n-icon size="16"><menu-fold-outlined /></n-icon>
       </n-button>
     </n-flex>
   </n-flex>

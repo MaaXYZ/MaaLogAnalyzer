@@ -106,6 +106,7 @@ const handleSelectNodeNavItem = (item: NodeNavViewItem) => {
         :tasks="tasks"
         :active-task-index="activeTaskIndex"
         :is-realtime-streaming="isRealtimeStreaming"
+        :on-toggle-task-list="() => emit('toggle-task-list')"
         @select-task="emit('select-task-index', $event)"
         @locate-failure="(index, nodeId) => emit('locate-failure', index, nodeId)"
         @manual-scroll-up="emit('manual-scroll-up')"
@@ -131,6 +132,7 @@ const handleSelectNodeNavItem = (item: NodeNavViewItem) => {
       <node-nav-panel
         :ref="props.setNodeNavPanelRef"
         :items="nodeNavItems"
+        :on-toggle-node-nav="() => emit('toggle-node-nav')"
         :selected-task-key="selectedTaskKey"
         :preserve-scroll-on-activate="preserveScrollOnActivate"
         :selected-node-id="selectedNodeId ?? null"

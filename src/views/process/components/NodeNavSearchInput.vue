@@ -34,10 +34,22 @@ const searchTextModel = computed({
         @keydown.enter="emit('next-match', $event.shiftKey ? -1 : 1)"
       />
     </div>
-    <n-button text size="tiny" title="跳转顶部" @click="emit('scroll-top')">
+    <n-button
+      text
+      size="tiny"
+      class="node-nav-jump-button"
+      title="跳转顶部"
+      @click="emit('scroll-top')"
+    >
       <n-icon size="16"><vertical-align-top-outlined /></n-icon>
     </n-button>
-    <n-button text size="tiny" title="跳转底部" @click="emit('scroll-bottom')">
+    <n-button
+      text
+      size="tiny"
+      class="node-nav-jump-button"
+      title="跳转底部"
+      @click="emit('scroll-bottom')"
+    >
       <n-icon size="16"><vertical-align-bottom-outlined /></n-icon>
     </n-button>
   </div>
@@ -50,6 +62,8 @@ const searchTextModel = computed({
   align-items: center;
   gap: 4px;
   padding: 0 12px 8px 12px;
+  /* 面板被拖窄时按容器宽度降级，而不是把输入框压成一个字 */
+  container-type: inline-size;
 }
 
 .node-nav-search-shell {
@@ -58,6 +72,13 @@ const searchTextModel = computed({
   border: 1px solid rgba(127, 127, 127, 0.65);
   border-radius: 6px;
   background: var(--n-color, transparent);
+}
+
+/* 窄面板里顶部/底部跳转按钮纯属占地方（还有 minimap 和 k/j 热键），先让位给输入框 */
+@container (max-width: 132px) {
+  .node-nav-jump-button {
+    display: none;
+  }
 }
 
 .node-nav-search-input :deep(.n-input-wrapper) {

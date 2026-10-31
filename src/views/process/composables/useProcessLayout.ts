@@ -62,9 +62,17 @@ export const useProcessLayout = (options: {
   )
 
   const nodeNavCollapsed = ref(isPersistedLayoutCollapsed(processLayoutState.nodeNavCollapsed))
-  const nodeNavSize = ref(
-    nodeNavCollapsed.value ? 0 : clampLayoutSize(processLayoutState.nodeNavSize, 0, 0.4, 0.2),
-  )
+  // 首次进入没有持久化布局时，初始宽度要与「恢复默认布局」算出来的值一致，
+  // 否则首次打开拿到的是 0.2、点一次恢复默认变成 0.35，同一份日志两种版式。
+  const initialNodeNavSize =
+    processLayoutState.nodeNavSize === undefined
+      ? getNodeNavDefaultSize(
+          taskListCollapsed.value,
+          options.detailViewCollapsed.value === true,
+          options.displayMode.value,
+        )
+      : clampLayoutSize(processLayoutState.nodeNavSize, 0, 0.4, 0.2)
+  const nodeNavSize = ref(nodeNavCollapsed.value ? 0 : initialNodeNavSize)
   const nodeNavSavedSize = ref(clampLayoutSize(processLayoutState.nodeNavSavedSize, 0.05, 0.4, 0.2))
 
   const toggleTaskList = () => {
