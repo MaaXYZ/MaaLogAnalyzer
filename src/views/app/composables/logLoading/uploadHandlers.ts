@@ -1,11 +1,23 @@
-import { getErrorMessage } from '../../../../utils/errorHandler'
 import type { LoadedTextFile } from '../../../../utils/fileDialog'
+import { toastInfo } from '../../../../utils/toast'
 import {
   createPrimaryLogParseInputs,
   getPrimaryLogContentLoader,
   type PrimaryLogFile,
+  type PrimaryLogSelectionOption,
 } from '../../../../utils/logFileDiscovery'
 import { isSupportedArchive, extractArchiveContents } from '../../../../utils/archiveExtractor'
+import {
+  CANCELLED_LOAD_MESSAGE,
+  FILE_HEAD_SAMPLE_BYTES,
+  MAX_SINGLE_LOG_BYTES,
+  classifyFileHead,
+  describeArchiveFailure,
+  describeArchiveWithoutLogs,
+  describeFileReadFailure,
+  describeOversizedArchive,
+  describeSingleFileRejection,
+} from './loadErrorMessages'
 import type { LogLoadingPipelineOptions } from './types'
 import type { ProcessLogContentParams } from './types'
 import type { DeferredTextSearchTarget, TextSearchLoadedTarget } from '../useTextSearchTargets'
@@ -80,14 +92,33 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
     pipeline.loading.value = true
     try {
       if (isSupportedArchive(file.name)) {
+        if (file.size > MAX_SINGLE_LOG_BYTES) {
+          pipeline.onWarning(describeOversizedArchive(file.name, file.size))
+          return
+        }
         pipeline.onFileLoadingStart?.()
         let fileLoadingActive = true
         try {
-          const result = await extractArchiveContents(files, selectPrimaryLogs, undefined, {
+          // 解压层在「用户点了取消」和「压缩包里确实没有日志」两种情况下都返回 null，
+          // 之前共用一句「压缩包中未找到有效的日志文件」，把主动取消说成了压缩包有问题。
+          // 这里包一层记住选择器是否被取消，把两种结果分开处理。
+          let selectionCancelled = false
+          const trackCancelledSelection = selectPrimaryLogs
+            ? async (options: PrimaryLogSelectionOption[]) => {
+                const selected = await selectPrimaryLogs(options)
+                if (!selected) selectionCancelled = true
+                return selected
+              }
+            : undefined
+          const result = await extractArchiveContents(files, trackCancelledSelection, undefined, {
             archiveLimits: null,
           })
           if (!result) {
-            pipeline.onWarning('压缩包中未找到有效的日志文件')
+            if (selectionCancelled) {
+              toastInfo(CANCELLED_LOAD_MESSAGE)
+              return
+            }
+            pipeline.onWarning(describeArchiveWithoutLogs())
             return
           }
 
@@ -121,6 +152,14 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
       }
 
       const fileName = file.name || 'loaded.log'
+      // 单文件先做「只看开头几 KB」的预检：空文件 / 超大文件 / UTF-16 / 二进制文件
+      // 注定解析不出任务，没必要让用户等一次必然失败的解析，更没必要为它清空旧日志。
+      const head = new Uint8Array(await file.slice(0, FILE_HEAD_SAMPLE_BYTES).arrayBuffer())
+      const rejection = classifyFileHead(head, file.size)
+      if (rejection !== 'ok') {
+        pipeline.onWarning(describeSingleFileRejection(rejection, fileName, file.size))
+        return
+      }
       await processLogContent({
         content: '',
         parseInputs: [
@@ -142,7 +181,13 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
         ],
       })
     } catch (error) {
-      pipeline.onError(getErrorMessage(error))
+      // 底层错误的英文原文（如 invalid zip data）只留在 console 供排障，界面给中文结论 + 下一步。
+      console.error('[log-loading] 读取文件失败', error)
+      pipeline.onError(
+        isSupportedArchive(file.name)
+          ? describeArchiveFailure(file.name)
+          : describeFileReadFailure(file.name || '选择的文件'),
+      )
     } finally {
       pipeline.loading.value = false
     }
@@ -182,7 +227,8 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
         loadedDefaultTargetId: defaultTargetId,
       })
     } catch (error) {
-      pipeline.onError(getErrorMessage(error))
+      console.error('[log-loading] 读取内容失败', error)
+      pipeline.onError(describeFileReadFailure('已选择的日志'))
     } finally {
       pipeline.loading.value = false
     }

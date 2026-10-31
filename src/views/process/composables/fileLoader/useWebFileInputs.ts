@@ -1,5 +1,6 @@
 import { ref } from 'vue'
-import { toastError, toastWarning } from '../../../../utils/toast'
+import { toastError, toastInfo, toastWarning } from '../../../../utils/toast'
+import { CANCELLED_LOAD_MESSAGE } from '../../../app/composables/logLoading/loadErrorMessages'
 import {
   collectTextFilesFromFiles,
   collectDebugAssetsFromFiles,
@@ -141,7 +142,12 @@ export const useWebFileInputs = (
           budget,
         )
         if (!operationGate.isCurrent(generation)) return
-        if (cancelled) return
+        if (cancelled) {
+          // 主动取消不是错误：之前这里静默返回，用户只看到「什么都没发生」；
+          // 统一用「已取消加载」确认操作被识别，且不占用 warning/error 语义。
+          toastInfo(CANCELLED_LOAD_MESSAGE)
+          return
+        }
         if (primaryLogFiles.length === 0) {
           const volumes = findMxuZipVolumes(files)
           if (volumes.length > 0) {
@@ -173,7 +179,12 @@ export const useWebFileInputs = (
         )
       })
     } catch (error) {
-      if (operationGate.isCurrent(generation)) toastError('读取文件夹失败: ' + error)
+      if (operationGate.isCurrent(generation)) {
+        // 原来直接把 error 对象拼进 toast（用户看到 “[object Object]” 或英文堆栈），
+        // 原文留给 console，界面只给中文结论。
+        console.error('[file-loader] 读取文件夹失败', error)
+        toastError('读取文件夹失败：文件夹可能太大或没有读取权限，请换一个位置后重试。')
+      }
     } finally {
       operationGate.finish(generation)
     }
@@ -224,7 +235,12 @@ export const useWebFileInputs = (
           budget,
         )
         if (!operationGate.isCurrent(generation)) return
-        if (cancelled) return
+        if (cancelled) {
+          // 主动取消不是错误：之前这里静默返回，用户只看到「什么都没发生」；
+          // 统一用「已取消加载」确认操作被识别，且不占用 warning/error 语义。
+          toastInfo(CANCELLED_LOAD_MESSAGE)
+          return
+        }
         if (primaryLogFiles.length === 0) {
           const volumes = findMxuZipVolumes(Array.from(files))
           if (volumes.length > 0) {
@@ -256,7 +272,10 @@ export const useWebFileInputs = (
         )
       })
     } catch (error) {
-      if (operationGate.isCurrent(generation)) toastError('读取文件失败: ' + error)
+      if (operationGate.isCurrent(generation)) {
+        console.error('[file-loader] 读取文件失败', error)
+        toastError('读取文件失败：文件可能已被移动或没有读取权限，请重新选择。')
+      }
     } finally {
       operationGate.finish(generation)
       input.value = ''
