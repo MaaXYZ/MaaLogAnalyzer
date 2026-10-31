@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NFlex, NIcon, NSelect, NTag, NText } from 'naive-ui'
+import { NButton, NFlex, NIcon, NSelect, NText } from 'naive-ui'
 import { FileTextOutlined, CloseOutlined } from '@vicons/antd'
 import type { SourceMode } from './types'
 
@@ -72,17 +72,19 @@ const emit = defineEmits<{
       <n-text v-else-if="props.fileName" depth="3" style="font-size: 13px">
         📄 {{ props.fileName }}
       </n-text>
-      <n-tag v-if="props.totalLines > 0 && !props.isLoadingFile" size="small" type="info">
+      <!-- 行数与体积只是「这份文件有多大」的事实描述，既不是提示也不是警告：
+           之前用 info / warning 标签，等于把「1.14 MB」画成了需要处理的告警，
+           还比同行的文件名更抢眼。改成和文件名同一层级的弱化文本。 -->
+      <n-text v-if="props.totalLines > 0 && !props.isLoadingFile" depth="3" style="font-size: 13px">
         {{ props.totalLines }} 行
-      </n-tag>
-      <n-tag
+      </n-text>
+      <n-text
         v-if="props.fileSizeInMB > 0 && !props.isLoadingFile"
-        size="small"
-        :type="props.isLargeFile ? 'error' : 'warning'"
+        depth="3"
+        style="font-size: 13px"
       >
-        {{ props.fileSizeInMB.toFixed(2) }} MB
-        <span v-if="props.isLargeFile"> (流式模式)</span>
-      </n-tag>
+        {{ props.fileSizeInMB.toFixed(2) }} MB{{ props.isLargeFile ? '（流式模式）' : '' }}
+      </n-text>
     </n-flex>
   </n-flex>
 </template>
