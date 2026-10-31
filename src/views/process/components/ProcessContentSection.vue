@@ -95,6 +95,7 @@ const props = defineProps<{
     @drop="props.onDrop"
     @drag-over="props.onDragOver"
     @reload-select="props.onReloadSelect"
+    @pick-file="props.onReloadSelect('file')"
   />
 
   <template v-else>
