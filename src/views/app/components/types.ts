@@ -66,6 +66,9 @@ export interface ProcessViewEventHandlers {
 export interface DetailViewForwardProps {
   selectedNode: NodeInfo | null
   selectedFlowItemId: string | null
+  // 没选中节点时，详情面板用它显示「任务概要」（失败节点、最慢节点）
+  selectedTask?: TaskInfo | null
+  onSelectNode?: (node: NodeInfo) => void
   bridgeRecognitionImages: {
     raw: string | null
     draws: string[]

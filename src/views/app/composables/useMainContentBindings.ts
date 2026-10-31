@@ -134,6 +134,9 @@ export const useMainContentBindings = (options: UseMainContentBindingsOptions) =
   const detailViewProps = computed(() => ({
     selectedNode: options.selectedNode.value,
     selectedFlowItemId: options.selectedFlowItemId.value,
+    // 详情面板空态用它渲染任务概要：失败节点与最慢节点可以直接点进详情
+    selectedTask: options.selectedTask.value,
+    onSelectNode: options.handleSelectNode,
     bridgeRecognitionImages: options.bridgeRecognitionImages.value,
     bridgeRecognitionImageRefs: options.bridgeRecognitionImageRefs.value,
     bridgeRecognitionLoading: options.bridgeRecognitionLoading.value,

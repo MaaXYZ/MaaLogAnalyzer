@@ -2,7 +2,7 @@
 import { ref, watch, nextTick } from 'vue'
 import { NCard, NFlex, NScrollbar, NEmpty } from 'naive-ui'
 import type { ScrollbarInst } from 'naive-ui'
-import type { NodeInfo } from '../types'
+import type { NodeInfo, TaskInfo } from '../types'
 import { useDetailViewController } from './detail/composables/useDetailViewController'
 import type { BridgeOpenCropRequest } from './detail/composables/types'
 import RecognitionDetailCard from './detail/components/RecognitionDetailCard.vue'
@@ -10,10 +10,14 @@ import ActionDetailCard from './detail/components/ActionDetailCard.vue'
 import FlowFallbackCard from './detail/components/FlowFallbackCard.vue'
 import NodeDetailCard from './detail/components/NodeDetailCard.vue'
 import FocusDetailCard from './detail/components/FocusDetailCard.vue'
+import TaskOverviewCard from './detail/components/TaskOverviewCard.vue'
 
 const props = defineProps<{
   selectedNode: NodeInfo | null
   selectedFlowItemId?: string | null
+  // 未选中节点时的兜底内容：先给「任务概要」，再退回到空态提示
+  selectedTask?: TaskInfo | null
+  onSelectNode?: (node: NodeInfo) => void
   bridgeRecognitionImages?: {
     raw: string | null
     draws: string[]
@@ -91,8 +95,15 @@ watch(
   <n-scrollbar ref="scrollbarRef" style="height: 100%">
     <div class="detail-inspector-container">
       <n-flex vertical style="gap: 12px">
-        <n-card v-if="!selectedNode" title="节点详情" size="small">
-          <n-empty description="请在时间线或节点导航中选择节点查看详情" />
+        <!-- 没选节点时，右侧 500px 宽的面板不该是一片空白：
+             先把「这个任务怎么样」给出来（失败节点 / 最慢节点都能直接点进详情） -->
+        <task-overview-card
+          v-if="!selectedNode && selectedTask"
+          :task="selectedTask"
+          :on-select-node="props.onSelectNode"
+        />
+        <n-card v-else-if="!selectedNode" title="节点详情" size="small">
+          <n-empty description="选择一个任务后，这里会显示它的失败节点与最慢节点" />
         </n-card>
 
         <template v-else>

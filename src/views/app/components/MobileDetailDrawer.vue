@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { NDrawer, NDrawerContent } from 'naive-ui'
 import DetailView from '../../DetailView.vue'
-import type { NodeInfo } from '../../../types'
+import type { NodeInfo, TaskInfo } from '../../../types'
 import type { BridgeOpenCropRequest } from '../composables/useBridgeTaskActions'
 
 defineProps<{
   show: boolean
   selectedNode: NodeInfo | null
   selectedFlowItemId: string | null
+  selectedTask?: TaskInfo | null
+  onSelectNode?: (node: NodeInfo) => void
   bridgeRecognitionImages: {
     raw: string | null
     draws: string[]
@@ -48,6 +50,8 @@ const handleUpdateShow = (value: boolean) => {
       <detail-view
         :selected-node="selectedNode"
         :selected-flow-item-id="selectedFlowItemId"
+        :selected-task="selectedTask"
+        :on-select-node="onSelectNode"
         :bridge-recognition-images="bridgeRecognitionImages"
         :bridge-recognition-image-refs="bridgeRecognitionImageRefs"
         :bridge-recognition-loading="bridgeRecognitionLoading"
