@@ -220,11 +220,17 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   const styleDecl =
     typeof window !== 'undefined' ? getComputedStyle(document.documentElement) : null
 
-  const primaryColor = pickCssVarColor(styleDecl, ['--vscode-button-background'], '#63e2b7')
+  // 没有 VS Code 宿主变量时（网页 / 桌面端）的兜底主色必须跟着主题走：
+  // #63e2b7 是深色主题的主色，浅色主题下它压在白底上只有 ~1.6:1，
+  // 白字压它也是 ~1.6:1，按钮和主色文字基本看不清。浅色回落到 naive-ui 自己的
+  // 浅色主色 #18a058（与 successColor 同值，避免"成功"出现两种绿）。
+  const fallbackPrimary = effectiveIsDark.value ? '#63e2b7' : '#18a058'
+  const fallbackPrimaryHover = effectiveIsDark.value ? '#7fe7c4' : '#36ad6a'
+  const primaryColor = pickCssVarColor(styleDecl, ['--vscode-button-background'], fallbackPrimary)
   const primaryColorHover = pickCssVarColor(
     styleDecl,
     ['--vscode-button-hoverBackground'],
-    '#7fe7c4',
+    fallbackPrimaryHover,
   )
   const primaryTextColor = pickCssVarColor(
     styleDecl,
@@ -271,10 +277,16 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
     ['--vscode-textLink-foreground', '--vscode-charts-blue'],
     '#2080f0',
   )
+  // 状态色的兜底也按主题分深浅。naive-ui 会拿 common 里的 success/warning/error
+  // 直接当文字色用（n-text :type、n-tag 的 textColorXxx），而深色主题自带的
+  // #d03050 压卡片底只有 3.56:1、浅色 #f0a020 压白底只有 2.15:1，都不够正文的 4.5:1。
+  // 所以这里给的是「文字安全」的值；图形（圆点/连线）另有 --app-status-*，
+  // 见 style.css 与 utils/statusColors.ts。
+  const statusFallback = (dark: string, light: string) => (effectiveIsDark.value ? dark : light)
   const successColor = pickCssVarColor(
     styleDecl,
     ['--vscode-testing-iconPassed', '--vscode-charts-green', '--vscode-terminal-ansiGreen'],
-    '#18a058',
+    statusFallback('#4ecf8f', '#0f7a42'),
   )
   const warningColor = pickCssVarColor(
     styleDecl,
@@ -283,7 +295,7 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
       '--vscode-testing-iconQueued',
       '--vscode-terminal-ansiYellow',
     ],
-    '#f0a020',
+    statusFallback('#f0a020', '#a34a06'),
   )
   const errorColor = pickCssVarColor(
     styleDecl,
@@ -293,7 +305,7 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
       '--vscode-testing-iconFailed',
       '--vscode-terminal-ansiRed',
     ],
-    '#d03050',
+    statusFallback('#ff6b86', '#b01634'),
   )
   const listHoverColor = pickCssVarColor(
     styleDecl,
@@ -414,6 +426,15 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
       textColor3: subTextColor,
       inputTextColor,
       placeholderColor,
+    },
+    // 空态描述文字：naive 的 Empty 把描述色绑到 textColorDisabled（浅色 #c2c2c2 压白底
+    // 只有 1.78:1），而「请在时间线或节点导航中选择节点查看详情」这类引导语是空面板里
+    // 唯一告诉用户下一步点哪的文本。只覆盖 Empty 自己的 textColor，
+    // 不去动 common.textColorDisabled —— 那会顺带把禁用控件的文字提亮。
+    Empty: {
+      textColor: subTextColor,
+      iconColor: subTextColor,
+      extraTextColor: subTextColor,
     },
     ...(isVscodeThemeContext.value
       ? {

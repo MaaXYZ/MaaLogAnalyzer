@@ -50,6 +50,19 @@ body {
   );
   --app-status-failed: var(--vscode-errorForeground, var(--vscode-terminal-ansiRed, #d03050));
   --app-status-neutral: #8f8f8f;
+  /* 上面几个是「图形色」，只保证 ≥3:1（WCAG 1.4.11），可以拿来画圆点/边/进度条。
+     把它们直接当文字色用是不够的：深色失败 #d03050 压 #18181c 只有 3.56:1，
+     浅色警告 #f0a020 压白底只有 2.15:1，而正文要求 4.5:1。所以文字另起一套
+     -text 变量，深浅各一份（浅色见下面的浅色块），JS 侧同值见 utils/statusColors.ts。 */
+  --app-status-success-text: #4ecf8f;
+  --app-status-warning-text: #f0a020;
+  --app-status-failed-text: #ff6b86;
+  /* 「识别未命中」不是失败：给不参与成功/失败判定的中性状态用，同样按文字口径取值 */
+  --app-status-neutral-text: #b4b4b4;
+  /* 焦点环：优先跟宿主 VS Code 的焦点边框，网页端回落到主色 */
+  --app-focus-ring: var(--vscode-focusBorder, #63e2b7);
+  /* 空状态描述文字（n-empty）：naive 默认绑 textColorDisabled，浅色下只有 1.78:1 */
+  --app-empty-description: rgba(255, 255, 255, 0.72);
   background: var(--app-panel-bg);
   color: var(--vscode-editor-foreground, rgba(255, 255, 255, 0.82));
 }
@@ -60,6 +73,23 @@ body.vscode-high-contrast-light:not(.force-dark) {
   --app-panel-bg: var(--vscode-panel-background, #ffffff);
   background: var(--app-panel-bg);
   color: var(--vscode-editor-foreground, rgba(0, 0, 0, 0.82));
+}
+
+/* 浅色主题的状态色与焦点环。
+   浅色入口一共有三处（VS Code 浅色宿主 / 系统浅色 / 手动强制浅色），值必须完全一致：
+   这里覆盖前两处，系统浅色那份在下面的 @media (prefers-color-scheme: light) 里，改一处要同步另一处。
+   图形色 --app-status-warning 在浅色下也要跟着变深：宿主给的浅色 warning 常见值压白底不到 3:1，
+   所以这一格不再跟随 --vscode-editorWarning-foreground。 */
+body.vscode-light:not(.force-dark),
+body.vscode-high-contrast-light:not(.force-dark),
+body.force-light {
+  --app-status-success-text: #0f7a42;
+  --app-status-warning-text: #a34a06;
+  --app-status-failed-text: #b01634;
+  --app-status-neutral-text: #5f5f5f;
+  --app-status-warning: #b45309;
+  --app-focus-ring: var(--vscode-focusBorder, #18a058);
+  --app-empty-description: rgba(0, 0, 0, 0.62);
 }
 
 body.vscode-dark:not(.force-light),
@@ -93,6 +123,18 @@ body.vscode-high-contrast:not(.force-light) {
     --app-panel-bg: var(--vscode-panel-background, #ffffff);
     background: var(--app-panel-bg);
     color: var(--vscode-editor-foreground, rgba(0, 0, 0, 0.82));
+  }
+
+  /* 与上面 body.force-light / body.vscode-light 那份保持同值。
+     排除 VS Code 深色宿主：那种情况下系统是浅色但界面必须是深色，不能被系统偏好带成浅色状态色。 */
+  body:not(.force-dark):not(.force-light):not(.vscode-dark):not(.vscode-high-contrast) {
+    --app-status-success-text: #0f7a42;
+    --app-status-warning-text: #a34a06;
+    --app-status-failed-text: #b01634;
+    --app-status-neutral-text: #5f5f5f;
+    --app-status-warning: #b45309;
+    --app-focus-ring: var(--vscode-focusBorder, #18a058);
+    --app-empty-description: rgba(0, 0, 0, 0.62);
   }
 
   body:not(.force-dark) ::-webkit-scrollbar-thumb {
@@ -129,5 +171,57 @@ body.force-dark {
 @media (max-width: 768px) {
   .drop-zone {
     min-height: 200px;
+  }
+}
+
+/* 视觉隐藏但留在无障碍树里：给 aria-live 播报区这类「只给读屏看」的内容用。
+   不能用 display:none / visibility:hidden —— 那会把内容从无障碍树里一起删掉，播报也就没了。 */
+.app-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 空状态描述（naive-ui 的 n-empty 把描述色绑在 textColorDisabled 上）：
+   浅色下实测只有 1.78:1，而这行字往往是「下一步点哪」的唯一提示。
+   只覆盖空态，不动全局 disabled 色（那会影响禁用控件）。 */
+.n-empty .n-empty__description {
+  color: var(--app-empty-description);
+}
+
+/* ------------------------------------------------------------------ */
+/* 焦点可见（WCAG 2.4.7）                                              */
+/* ------------------------------------------------------------------ */
+/* naive-ui 的按钮/关闭按钮/输入内层都写了 outline: none，全站 33 个 Tab
+   站点里只有 2 个自己带了环，其余按 Tab 走过去屏幕上毫无变化。这里给一条
+   全局兜底：键盘焦点（:focus-visible）必有 2px 实线环。
+   只用 :focus-visible 而不是 :focus —— 鼠标点按钮不该出现环（点击也会让
+   按钮获得焦点，用 :focus 会把环画得到处都是）。!important 是为了压过
+   库在 .n-button 上写死的 outline: none（库样式在运行时注入，晚于本文件）。 */
+:focus-visible {
+  outline: 2px solid var(--app-focus-ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* 输入类控件的环画在外壳上：内层 <input>/<textarea> 紧贴外壳内壁，
+   在它身上画环看起来像第二道边框。:has() 不可用时上面的全局规则仍然生效。 */
+@supports selector(:has(*)) {
+  .n-input:has(.n-input__input-el:focus-visible),
+  .n-input:has(.n-input__textarea-el:focus-visible),
+  .n-base-selection:has(.n-base-selection-input:focus-visible) {
+    outline: 2px solid var(--app-focus-ring) !important;
+    outline-offset: 2px !important;
+  }
+
+  .n-input__input-el:focus-visible,
+  .n-input__textarea-el:focus-visible,
+  .n-base-selection-input:focus-visible {
+    outline: none !important;
   }
 }
