@@ -652,6 +652,32 @@ type ReducerState = {
 3. 对缺失的终态或缺失的子 scope 做有限 fallback
 4. 截图关联和视图补偿不进入 reducer，放在 projector 或后置 enrich 阶段
 
+#### 9.2.1 任务身份与来源：对外可追溯的字段
+
+下游（证据导出、跨会话对照）需要回答「这条事件属于哪个任务」「这条信息出自哪份日志」，
+这些事实在 reducer 里齐全，但投影成 `TaskInfo` / `NodeInfo` / `EventNotification` 时必须显式带出去。
+以下字段**全部是加性字段**，不改变任何既有解析语义：
+
+| 字段                                           | 含义                                                                                      | 来源                                                                                 |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `TaskInfo.process_id`                          | 所属进程（`Px1228` 这种）。`task_id` 只在进程内唯一，`(process_id, task_id)` 才是任务身份 | reducer 的 `buildTaskIndexKey` 已经在用 `(processId, taskId)`，投影时补出            |
+| `TaskInfo.entry_source`                        | `entry` 的可信度：`field`（日志原值）/ `node`（借第一个节点名）/ `scope`（最后兜底）      | `projectTaskScope` 的三级兜底分支                                                    |
+| `TaskInfo.has_starting_event`                  | 是否真的收到过 `Tasker.Task.Starting`                                                     | 作用域被 Starting 打开，或补建后被真正的 Starting 转正（`payload.taskStartingSeen`） |
+| `TaskInfo.rotation_gap`                        | 这批输入从任务中间开始（日志轮转截断），作用域曾被补建                                    | `payload.truncatedStart`（只增不减，转正后仍保留）                                   |
+| `TaskInfo.truncated_start`                     | 直到解析结束都没等到 `Tasker.Task.Starting`：任务开头证据确实缺失                         | `rotation_gap && !has_starting_event`                                                |
+| `EventNotification.source` / `NodeInfo.source` | `{ path, line, inputIndex }`：该事件/节点第一次出现的位置                                 | `ProtocolEvent.source`（第一段就已经带上）                                           |
+
+两条契约（下游依赖，请勿在重构中打破）：
+
+1. **`TaskInfo.events` 会保留 `Tasker.Task.Starting`**（当任务确实收到过它时）。
+   跨源镜像去重仍会过滤*别的来源*的重复事件，但「本作用域的起始事件」以及
+   「本任务缺少 Starting 时从另一份文件补到的那条 Starting」不会被过滤 ——
+   否则加载了轮转片段的场景里，下游无法证明任务真的启动过。
+2. **隐式补建的任务不会伪造身份**：`entry_source` 会明示是 `node` / `scope`，
+   `has_starting_event=false` 时 `entry` 不能当作任务名导出。
+
+对应测试：`packages/maa-log-parser/src/__tests__/parser.taskIdentity.test.ts`。
+
 ### 9.3 面向外部调用的 Query 能力
 
 如果该包后续需要作为独立解析工具供其他项目调用，并支持“查询某个 task / node / reco / action / wait-freezes 的细节”，则不能只输出 `TaskInfo[]`。

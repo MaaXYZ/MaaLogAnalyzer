@@ -27,6 +27,13 @@ MaaLogAnalyzer 的重要更改记录。格式参考 [Keep a Changelog](https://k
 - 空态拖拽区只有 `cursor: pointer` 却点不动；拖拽时没有任何接收反馈
 - 任务卡状态只靠颜色表达、`#序号` 与右侧状态色重复表达同一件事；长任务名把 `#序号` 挤到第二行
 
+### 解析器（npm 包，加性字段）
+
+- `TaskInfo` 增加 `process_id`：`task_id` 只在进程内唯一，`(process_id, task_id)` 才能精确定位任务（同一份日志里两个 session 复用 `task_id` 时不再只能靠时间区间猜）
+- `TaskInfo` 增加 `entry_source` / `has_starting_event` / `rotation_gap` / `truncated_start`：区分「真 entry」与「借来的节点名」、区分「隐式任务」与「日志轮转截断」，下游可显式报「证据缺失」而不是静默留空
+- `EventNotification` 与 `NodeInfo` 增加 `source`（文件 + 行号）：多文件加载（轮转片段 / 双来源）时可以回溯每条事件、每个节点出自哪份日志的哪一行
+- 修复：任务事件列表的跨来源过滤改用「作用域起始事件的来源」判定（原先读的是被后续事件覆盖的合并值），并保证 `Tasker.Task.Starting` 不会被镜像过滤误删
+
 ### 无障碍
 
 - 全站补 `:focus-visible` 焦点环（此前 33 个 Tab 站点只有 2 个可见）；任务卡与节点导航行可用键盘聚焦与操作
