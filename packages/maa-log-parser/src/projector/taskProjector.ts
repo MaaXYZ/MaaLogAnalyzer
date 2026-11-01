@@ -1067,6 +1067,8 @@ const projectTaskScope = (
   // 或者先是补建的、后来真身 Starting 到了并转正（payload.taskStartingSeen）。
   const openedByTaskStarting = payload.taskStartingSeen === true || isOpenedByTaskStarting(scope)
   const everImplicit = payload.truncatedStart === true || payload.implicitTask === true
+  // 子树进程集合只算一次：无索引时（第三方直接调 projector）它会走一遍子树
+  const ownerProcessIds = collectTaskOwnerProcessIds(scope, options)
 
   return {
     task_id: readScopeTaskId(scope) ?? 0,
@@ -1077,11 +1079,11 @@ const projectTaskScope = (
     // finalizeScope 会用关闭事件重写它，而 closeScope 在找不到自己的作用域时会
     // adoptOpenTaskScope 认领另一进程的打开作用域（客户端 + agent 镜像、一侧 Starting 被去重），
     // 那时 payload 记的是「谁把它关掉的」，按它定位会落到错误的执行。
-    process_id: readScopeStartEvent(scope)?.processId ?? readScopeProcessId(scope),
+    // 起始事件没有 processId 时直接留空，**不要**回退到 payload 里的值 ——
+    // 那正是上面说的「可能被关闭事件改写」的不可靠来源，宁可让下游拿到 undefined 显式处理。
+    process_id: readScopeStartEvent(scope)?.processId,
     // 子树涉及的全部进程：镜像场景下可能不止一个（创建者的节点在 Px1、关闭事件在 Px2）
-    process_ids: collectTaskOwnerProcessIds(scope, options).size
-      ? [...collectTaskOwnerProcessIds(scope, options)].sort()
-      : undefined,
+    process_ids: ownerProcessIds.size > 0 ? [...ownerProcessIds].sort() : undefined,
     task_execution_id: scope.id,
     has_starting_event: openedByTaskStarting,
     rotation_gap: everImplicit,
