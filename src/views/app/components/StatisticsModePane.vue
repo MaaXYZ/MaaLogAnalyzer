@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { defineAsyncComponent } from 'vue'
+import { createAsyncView } from '../../../utils/asyncView'
 import type { TaskInfo } from '../../../types'
 
-const NodeStatisticsView = defineAsyncComponent(() => import('../../NodeStatisticsView.vue'))
+const NodeStatisticsView = createAsyncView('运行统计', () => import('../../NodeStatisticsView.vue'))
 
 defineProps<{
   active: boolean

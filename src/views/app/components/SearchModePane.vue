@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { defineAsyncComponent } from 'vue'
+import { createAsyncView } from '../../../utils/asyncView'
 import type { TextSearchViewForwardProps } from './types'
 
-const TextSearchView = defineAsyncComponent(() => import('../../TextSearchView.vue'))
+const TextSearchView = createAsyncView('文本搜索', () => import('../../TextSearchView.vue'))
 
 defineProps<{
   active: boolean

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { defineAsyncComponent } from 'vue'
+import { createAsyncView } from '../../../utils/asyncView'
 import type { NodeInfo, TaskInfo } from '../../../types'
 import type { UploadContentHandler, UploadFileHandler } from './types'
 
-const FlowchartView = defineAsyncComponent(() => import('../../FlowchartView.vue'))
+const FlowchartView = createAsyncView('流程图', () => import('../../FlowchartView.vue'))
 
 defineProps<{
   active: boolean

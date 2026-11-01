@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { defineAsyncComponent } from 'vue'
 import type { NodeInfo, TaskInfo } from '../../../types'
+import { createAsyncView } from '../../../utils/asyncView'
 import MainContentAnalysisSection from './MainContentAnalysisSection.vue'
 import type {
   DetailViewForwardProps,
@@ -11,10 +11,14 @@ import type {
   UploadFileHandler,
 } from './types'
 
-const SearchModePane = defineAsyncComponent(() => import('./SearchModePane.vue'))
-const StatisticsModePane = defineAsyncComponent(() => import('./StatisticsModePane.vue'))
-const FlowchartModePane = defineAsyncComponent(() => import('./FlowchartModePane.vue'))
-const MainContentSplitSection = defineAsyncComponent(() => import('./MainContentSplitSection.vue'))
+// 懒加载面板都必须带兜底：部署/重建之后旧 chunk 会 404，没有兜底时整块区域是纯空白
+const SearchModePane = createAsyncView('文本搜索', () => import('./SearchModePane.vue'))
+const StatisticsModePane = createAsyncView('运行统计', () => import('./StatisticsModePane.vue'))
+const FlowchartModePane = createAsyncView('流程图', () => import('./FlowchartModePane.vue'))
+const MainContentSplitSection = createAsyncView(
+  '分屏模式',
+  () => import('./MainContentSplitSection.vue'),
+)
 
 defineProps<{
   viewMode: string
