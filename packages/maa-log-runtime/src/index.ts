@@ -12,6 +12,16 @@ export interface AnalyzeLogContentInput {
   errorImages?: Map<string, string>
   visionImages?: Map<string, string>
   waitFreezesImages?: Map<string, string>
+  /**
+   * 这份 content 来自哪个文件。给了它，输出里的 `EventNotification.source.path` /
+   * `NodeInfo.source.path` 才有值（下游要回答「这条事件出自哪份日志」）。
+   *
+   * **只有确定 content 就是这一个文件的全部内容时才该给**：多文件被合并成一段字符串时，
+   * `source.line` 是合并后的行号，配上一个具体 path 会指错文件 —— 那种情况请留空。
+   */
+  sourcePath?: string
+  /** 解析输入的去重键（默认取 `sourcePath`）；一般不需要手动给 */
+  sourceKey?: string
   parseOptions?: ParseFileOptions
   parserVersion?: string
 }
@@ -22,6 +32,9 @@ export interface RuntimeParseInput {
   visionImages?: Map<string, string>
   waitFreezesImages?: Map<string, string>
   parseOptions?: ParseFileOptions
+  /** 来源文件；见 AnalyzeLogContentInput.sourcePath */
+  sourcePath?: string
+  sourceKey?: string
 }
 
 export interface RuntimeParseResult<TTask extends TaskInfo = TaskInfo> {
@@ -49,6 +62,8 @@ export const analyzeLogContentWith = async <TTask extends TaskInfo = TaskInfo>(
     visionImages: input.visionImages,
     waitFreezesImages: input.waitFreezesImages,
     parseOptions: input.parseOptions ?? DEFAULT_CORE_PARSE_OPTIONS,
+    sourcePath: input.sourcePath,
+    sourceKey: input.sourceKey,
   })
   const stats = adapter.buildStatistics(parseResult.tasks)
 

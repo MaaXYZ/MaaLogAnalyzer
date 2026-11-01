@@ -17,7 +17,13 @@ export const createMlaRuntimeAdapter = (): RuntimeExecutionAdapter<ParserTaskInf
       parser.setVisionImages(input.visionImages ?? new Map())
       parser.setWaitFreezesImages(input.waitFreezesImages ?? new Map())
 
-      await parser.parseFile(input.content, undefined, input.parseOptions)
+      // 来源元数据只影响事件/节点的 `source` 标注，不改变解析语义；
+      // 没给就退回 parseFile 的默认（sourceKey 为 input:0、无 path）。
+      await parser.parseFile(input.content, undefined, {
+        ...input.parseOptions,
+        sourcePath: input.sourcePath,
+        sourceKey: input.sourceKey,
+      })
 
       return {
         tasks: parser.getTasksSnapshot(),

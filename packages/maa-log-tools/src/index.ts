@@ -44,6 +44,15 @@ export const analyzeLogContent = async (input: AnalyzeLogContentInput): Promise<
   })
 }
 
+/**
+ * 目录 / 压缩包被合并成一段字符串后，`source.line` 是**合并后**的行号。
+ * 只有当所有内容确实来自同一个文件时，才能给出可信的 sourcePath；
+ * 多文件合并时留空，不制造「这一行属于某个文件」的假象。
+ */
+const resolveSingleSourcePath = (
+  segments: readonly { path: string }[] | undefined,
+): string | undefined => (segments?.length === 1 ? segments[0]?.path : undefined)
+
 export const analyzeZipBuffer = async (
   input: AnalyzeZipBufferInput,
 ): Promise<KernelOutput | null> => {
@@ -58,6 +67,7 @@ export const analyzeZipBuffer = async (
     errorImages: extracted.errorImages,
     visionImages: extracted.visionImages,
     waitFreezesImages: extracted.waitFreezesImages,
+    sourcePath: resolveSingleSourcePath(extracted.sourceSegments),
     parseOptions: input.parseOptions,
     parserVersion: input.parserVersion,
   })
@@ -75,6 +85,7 @@ export const analyzeZipFile = async (input: AnalyzeZipFileInput): Promise<Kernel
     errorImages: extracted.errorImages,
     visionImages: extracted.visionImages,
     waitFreezesImages: extracted.waitFreezesImages,
+    sourcePath: resolveSingleSourcePath(extracted.sourceSegments),
     parseOptions: input.parseOptions,
     parserVersion: input.parserVersion,
   })
@@ -94,6 +105,7 @@ export const analyzeDirectory = async (
     errorImages: extracted.errorImages,
     visionImages: extracted.visionImages,
     waitFreezesImages: extracted.waitFreezesImages,
+    sourcePath: resolveSingleSourcePath(extracted.sourceSegments),
     parseOptions: input.parseOptions,
     parserVersion: input.parserVersion,
   })
