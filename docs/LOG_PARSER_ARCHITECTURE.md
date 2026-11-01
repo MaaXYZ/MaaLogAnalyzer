@@ -658,14 +658,28 @@ type ReducerState = {
 这些事实在 reducer 里齐全，但投影成 `TaskInfo` / `NodeInfo` / `EventNotification` 时必须显式带出去。
 以下字段**全部是加性字段**，不改变任何既有解析语义：
 
-| 字段                                           | 含义                                                                                      | 来源                                                                                 |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `TaskInfo.process_id`                          | 所属进程（`Px1228` 这种）。`task_id` 只在进程内唯一，`(process_id, task_id)` 才是任务身份 | reducer 的 `buildTaskIndexKey` 已经在用 `(processId, taskId)`，投影时补出            |
-| `TaskInfo.entry_source`                        | `entry` 的可信度：`field`（日志原值）/ `node`（借第一个节点名）/ `scope`（最后兜底）      | `projectTaskScope` 的三级兜底分支                                                    |
-| `TaskInfo.has_starting_event`                  | 是否真的收到过 `Tasker.Task.Starting`                                                     | 作用域被 Starting 打开，或补建后被真正的 Starting 转正（`payload.taskStartingSeen`） |
-| `TaskInfo.rotation_gap`                        | 这批输入从任务中间开始（日志轮转截断），作用域曾被补建                                    | `payload.truncatedStart`（只增不减，转正后仍保留）                                   |
-| `TaskInfo.truncated_start`                     | 直到解析结束都没等到 `Tasker.Task.Starting`：任务开头证据确实缺失                         | `rotation_gap && !has_starting_event`                                                |
-| `EventNotification.source` / `NodeInfo.source` | `{ path, line, inputIndex }`：该事件/节点第一次出现的位置                                 | `ProtocolEvent.source`（第一段就已经带上）                                           |
+| 字段                                           | 含义                                                                                            | 来源                                                                                 |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `TaskInfo.process_id`                          | **创建者**进程（`Px1228` 这种）。`task_id` 只在进程内唯一，`(process_id, task_id)` 才是任务身份 | 取起始事件的 `processId`；**不能**用合并后的 `payload.processId`（见下文）           |
+| `TaskInfo.process_ids`                         | 该任务子树涉及的全部进程（升序）；镜像混搭时可能不止一个                                        | `collectTaskOwnerProcessIds`                                                         |
+| `TaskInfo.entry_source`                        | `entry` 的可信度：`field`（日志原值）/ `node`（借第一个节点名）/ `scope`（最后兜底）            | `projectTaskScope` 的三级兜底分支                                                    |
+| `TaskInfo.has_starting_event`                  | 是否真的收到过 `Tasker.Task.Starting`                                                           | 作用域被 Starting 打开，或补建后被真正的 Starting 转正（`payload.taskStartingSeen`） |
+| `TaskInfo.rotation_gap`                        | 这批输入从任务中间开始（日志轮转截断），作用域曾被补建                                          | `payload.truncatedStart`（只增不减，转正后仍保留）                                   |
+| `TaskInfo.truncated_start`                     | 直到解析结束都没等到 `Tasker.Task.Starting`：任务开头证据确实缺失                               | `rotation_gap && !has_starting_event`                                                |
+| `EventNotification.source` / `NodeInfo.source` | `{ path, line, inputIndex }`：该事件/节点第一次出现的位置                                       | `ProtocolEvent.source`（第一段就已经带上）                                           |
+
+**为什么 `process_id` 必须取起始事件**：`payload` 是每条事件 merge 覆盖的，
+`finalizeScope` 会用关闭事件重写 `payload.processId`；而 `closeScope` 在找不到自己的作用域时会走
+`adoptOpenTaskScope` 认领**另一进程**的打开作用域（客户端 + agent 镜像、一侧 `Starting` 被镜像去重）。
+此时 `payload.processId` 是「谁把它关掉的」，不是「谁拥有它的节点」。同一文件里 `finalizeScope`
+附近的注释与 `parser.subTaskScope.test.ts` 的 _keeps the owning process events when the task is
+closed by an adopted foreign terminal_ 都在盯着这件事。
+
+**`task_execution_id` 的稳定性边界**：形状是 `task:<taskId>:<localId>:seq<起始事件序号>`，
+其中 `seq` 是**合并后事件流的全局序号**，依赖调用方给的输入顺序（`inputIndex` 默认取下标）
+以及这次到底加载了哪些文件。所以它**只在单次加载内唯一且稳定**：同一份事故材料只要多带一个
+轮转片段，后面所有 `task_execution_id` 都会变 —— 不要当跨运行的证据主键或去重键；
+跨运行恒定请用 `process_id` + `task_id` + `start_time`（必要时叠加 `hash` / `uuid`）。
 
 两条契约（下游依赖，请勿在重构中打破）：
 

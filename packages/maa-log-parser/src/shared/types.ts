@@ -68,20 +68,36 @@ export interface TaskInfo {
   _endEventIndex?: number
 
   /**
-   * 所属进程（形如 `Px1228`）。
+   * 创建该任务的进程（形如 `Px1228`），取**起始事件**所在的进程。
    *
    * MaaFramework 的 id 分配器是进程级静态计数器，`task_id` 只在进程内唯一；解析内核内部
    * 早就按 `(processId, task_id)` 建索引（`trace/reducer.ts` 的 `buildTaskIndexKey`），
    * 但投影时把进程丢了，于是同一份日志里两个 session 复用 `task_id` 时，下游只能靠时间区间
-   * 猜归属，区间重叠就无从判断。这里把内核已有的身份补出来，属于加性字段。
+   * 猜归属，区间重叠就无从判断。
+   *
+   * 注意取值来源：不能读合并后的 `payload.processId`。`finalizeScope` 会用关闭事件重写它，
+   * 而 `closeScope` 在找不到自己的作用域时会 `adoptOpenTaskScope` 认领**另一进程**的打开
+   * 作用域（客户端 + agent 镜像、一侧 Starting 被去重）。那种情况下 payload 记的是
+   * 「谁把它关掉的」，按它定位会落到错误的执行。所以这里固定取起始事件所在进程。
    */
   process_id?: string
 
   /**
-   * 一次任务执行的稳定标识（同一次执行内的所有节点共享）。
+   * 该任务子树涉及的全部进程（升序）。镜像混搭场景下可能有多个：
+   * 创建者的节点在 Px1、关闭事件来自 Px2。
+   */
+  process_ids?: string[]
+
+  /**
+   * 一次任务执行在**本次加载内**的唯一标识（同一次执行的节点都落在同一个作用域上）。
    *
-   * 形状是作用域 id（`task:<taskId>:<localId>:seq<起始事件序号>`）。它比 `(process_id, task_id)`
-   * 更进一步：同进程同 id 的两次执行也能区分开，适合做证据主键 / 去重键。
+   * 形状是作用域 id（`task:<taskId>:<localId>:seq<起始事件序号>`），其中 `seq` 是
+   * **合并后事件流的全局序号**，因此它依赖两件外部事实：调用方给的输入顺序
+   * （`inputIndex` 默认取数组下标）和这次到底加载了哪些文件。
+   *
+   * 结论：**只在单次加载内稳定**。同一份事故材料只要多带一个轮转片段，后面所有
+   * `task_execution_id` 都会变 —— 不要把它当跨运行的证据主键或去重键。
+   * 跨运行恒定请用 `process_id` + `task_id` + `start_time`（必要时叠加 `hash` / `uuid`）。
    */
   task_execution_id?: string
 

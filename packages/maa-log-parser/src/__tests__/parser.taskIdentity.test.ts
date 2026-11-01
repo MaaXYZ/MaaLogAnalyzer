@@ -93,6 +93,8 @@ describe('TaskInfo 身份与来源信息（下游可追溯性）', () => {
     expect(beta?.task_id).toBe(1)
     expect(alpha?.process_id).toBe('Px1')
     expect(beta?.process_id).toBe('Px2')
+    expect(alpha?.process_ids).toEqual(['Px1'])
+    expect(beta?.process_ids).toEqual(['Px2'])
 
     // 更细一级：同一 (process_id, task_id) 的两次执行也能靠 task_execution_id 分开
     expect(alpha?.task_execution_id).toBeTruthy()
@@ -127,6 +129,39 @@ describe('TaskInfo 身份与来源信息（下游可追溯性）', () => {
     expect(tasks[0]?.process_id).toBe('Px1')
     expect(tasks[1]?.process_id).toBe('Px1')
     expect(tasks[0]?.task_execution_id).not.toBe(tasks[1]?.task_execution_id)
+  })
+
+  it('① 任务被另一进程「认领关闭」时，process_id 仍是创建者而不是关闭者', async () => {
+    // 客户端 + agent 镜像的典型形状：一侧的 Tasker.Task.Starting 被当作镜像去重掉，
+    // 终止事件找不到自己的作用域 -> closeScope 走 adoptOpenTaskScope 认领另一进程的作用域，
+    // finalizeScope 随后用**关闭事件**重写 payload.processId。
+    // 若 process_id 取合并后的 payload，就会变成「谁把它关掉的」= Px2。
+    const start = { task_id: 91, entry: 'MainTask', hash: 'h-91', uuid: 'u-91' }
+    const lines = [
+      makeEventLine(1000, 'Tasker.Task.Starting', start, { processId: 'Px1', threadId: 'Tx1' }),
+      makeEventLine(
+        1100,
+        'Node.PipelineNode.Starting',
+        { task_id: 91, node_id: 9101, name: 'OwnedNode' },
+        { processId: 'Px1', threadId: 'Tx1' },
+      ),
+      // 另一进程的终止事件：没有自己的作用域，会认领 Px1 那个
+      makeEventLine(2000, 'Tasker.Task.Failed', start, { processId: 'Px2', threadId: 'Tx2' }),
+    ]
+
+    const parser = new LogParser()
+    await parser.parseFile(lines.join('\n'))
+    const [task] = parser.getTasksSnapshot().filter((item) => item.task_id === 91)
+
+    expect(task?.status).toBe('failed')
+    expect(task?.nodes.map((node) => node.name)).toEqual(['OwnedNode'])
+    // 关键断言：创建者是 Px1，不是把它关掉的 Px2
+    expect(task?.process_id).toBe('Px1')
+    // 子树涉及的两个进程都在，下游需要时能自行取舍
+    expect(task?.process_ids).toEqual(['Px1', 'Px2'])
+    // 起始事件的归属同样是 Px1
+    const starting = task?.events.find((event) => event.message === 'Tasker.Task.Starting')
+    expect(starting?.process_id).toBe('Px1')
   })
 
   it('② entry 的来源可以区分（field / node）', async () => {

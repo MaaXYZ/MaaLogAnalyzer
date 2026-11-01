@@ -1073,8 +1073,15 @@ const projectTaskScope = (
     entry,
     entry_source: entrySource,
     // task_id 只在进程内唯一，把内核早就在用的进程身份补出来供下游精确定位
-    process_id: readScopeProcessId(scope),
-    // 作用域 id 唯一对应「一次执行」：同进程同 task_id 的两次运行也能分开
+    // 创建者进程 = 起始事件所在的进程。**不能**读合并后的 payload.processId：
+    // finalizeScope 会用关闭事件重写它，而 closeScope 在找不到自己的作用域时会
+    // adoptOpenTaskScope 认领另一进程的打开作用域（客户端 + agent 镜像、一侧 Starting 被去重），
+    // 那时 payload 记的是「谁把它关掉的」，按它定位会落到错误的执行。
+    process_id: readScopeStartEvent(scope)?.processId ?? readScopeProcessId(scope),
+    // 子树涉及的全部进程：镜像场景下可能不止一个（创建者的节点在 Px1、关闭事件在 Px2）
+    process_ids: collectTaskOwnerProcessIds(scope, options).size
+      ? [...collectTaskOwnerProcessIds(scope, options)].sort()
+      : undefined,
     task_execution_id: scope.id,
     has_starting_event: openedByTaskStarting,
     rotation_gap: everImplicit,

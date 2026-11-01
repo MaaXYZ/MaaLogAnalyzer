@@ -156,11 +156,18 @@ export interface TaskInfo {
   duration?: number
 
   /**
-   * 所属进程（形如 `Px1228`）。MaaFramework 的 task_id 只在进程内唯一，
+   * 创建该任务的进程（取起始事件所在进程）。MaaFramework 的 task_id 只在进程内唯一，
    * 跨 session 复用同一个 id 时必须靠 `(process_id, task_id)` 才能精确定位任务。
+   * 注意：不是「关闭事件」的进程 —— 镜像混搭时两者可能不同。
    */
   process_id?: string
-  /** 一次任务执行的稳定标识（作用域 id），比 (process_id, task_id) 更细 */
+  /** 该任务子树涉及的全部进程（升序）；镜像混搭场景可能不止一个 */
+  process_ids?: string[]
+  /**
+   * 一次任务执行在**本次加载内**的唯一标识（作用域 id）。内含合并后事件流的全局序号，
+   * 所以换输入集/顺序就会变 —— 不要当跨运行的证据主键，跨运行请用
+   * `(process_id, task_id, start_time)`。
+   */
   task_execution_id?: string
   /** `entry` 的来源：只有 `field` 是日志原值，`node` / `scope` 是兜底推断 */
   entry_source?: 'field' | 'node' | 'scope'
