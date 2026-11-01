@@ -1,6 +1,7 @@
 import type {
   ActionDetail,
   EventNotification,
+  EventSourceRef,
   NextListItem,
   NodeInfo,
   RecognitionDetail,
@@ -11,6 +12,7 @@ import type {
 } from '../shared/types'
 import { toTimestampMs } from '../shared/timestamp'
 import { findImageByTimestampSuffix } from '../event/imageLookupHelpers'
+import type { ProtocolEvent } from '../protocol/types'
 import type { ScopeNode, ScopeStatus } from '../trace/scopeTypes'
 import { buildWaitFreezesImageAssignments } from './waitFreezesImageProjector'
 
@@ -497,14 +499,53 @@ const getEventTimestampMs = (event: EventNotification): number => {
   return parsed
 }
 
-const readScopeSourceKey = (scope: ScopeNode): string | undefined => {
-  const source = readRecord(readScopePayload(scope).source)
-  return source ? readStringField(source, 'sourceKey') : undefined
-}
+/** 该作用域「起始事件」的来源键。
+ *
+ * 不能读合并后的 payload.source：`buildScopePayload` 每来一条事件都会把 payload 覆盖一遍，
+ * 于是跨文件的任务（轮转片段）payload.source 会变成最后一条事件所在的文件，
+ * 用它做过滤会把任务开头的事件（包括 `Tasker.Task.Starting`）整段丢掉。
+ * 起始事件的来源是稳定的，用它才对得上「这个任务是从哪份日志开始的」。
+ */
+const readScopeSourceKey = (scope: ScopeNode): string | undefined =>
+  readScopeStartEvent(scope)?.source?.sourceKey
 
 /** 作用域所属进程；同一 `task_id` 被多进程复用时用它区分任务。 */
 const readScopeProcessId = (scope: ScopeNode): string | undefined =>
   readStringField(readScopePayload(scope), 'processId')
+
+/** 打开该作用域的那条协议事件（任务/节点都可能由「中间事件」补建）。 */
+const readScopeStartEvent = (scope: ScopeNode): ProtocolEvent | undefined => {
+  const payload = readScopePayload(scope)
+  const startEvent = payload.startEvent
+  if (!startEvent || typeof startEvent !== 'object') return undefined
+  return startEvent as ProtocolEvent
+}
+
+/** 该作用域第一次出现的位置（文件 + 行号），透传给下游做「这条信息出自哪里」。 */
+const readScopeSourceRef = (scope: ScopeNode): EventSourceRef | undefined => {
+  const source = readScopeStartEvent(scope)?.source
+  if (!source) return undefined
+  const ref: EventSourceRef = {
+    path: source.sourcePath,
+    line: source.line,
+    inputIndex: source.inputIndex,
+    sourceKey: source.sourceKey,
+  }
+  const hasAny =
+    ref.path != null || ref.line != null || ref.inputIndex != null || ref.sourceKey != null
+  return hasAny ? ref : undefined
+}
+
+/**
+ * 这个任务作用域是不是被 `Tasker.Task.Starting` 打开的。
+ *
+ * 补建的任务（日志轮转截断、或只打开了轮转片段）由节点事件打开，
+ * `kind` 是 `pipeline_node` 之类，据此可以区分「真任务」与「隐式任务」。
+ */
+const isOpenedByTaskStarting = (scope: ScopeNode): boolean => {
+  const startEvent = readScopeStartEvent(scope)
+  return startEvent?.kind === 'task' && startEvent.phase === 'starting'
+}
 
 const collectSubtreeProcessIds = (root: ScopeNode, output: Set<string>): void => {
   // 同 collectTaskScopes：深度不设上限的输入不允许把调用栈打爆。
@@ -589,6 +630,8 @@ const copyTaskEvent = (event: EventNotification): EventNotification => ({
   message: event.message,
   details: event.details,
   _lineNumber: event._lineNumber,
+  // 来源文件/行号随事件一起带走：下游要回答「这条识别事件出自哪份日志的哪一行」
+  ...(event.source ? { source: event.source } : {}),
 })
 
 const findFirstSequencedEventIndex = (events: SequencedTaskEvent[], targetSeq: number): number => {
@@ -626,10 +669,26 @@ const projectTaskEvents = (
 
     const projectedEvents: EventNotification[] = []
     const firstEventIndex = findFirstSequencedEventIndex(sequencedEvents, scope.seq)
+    // 这个任务自己有没有收到过 Starting：没有时（补建/轮转缺口）才允许把别的来源里
+    // 同一 task_id 的 Starting 捞进来补齐证据；有的话镜像源的 Starting 必须继续被过滤掉。
+    const scopeHasOwnStarting = isOpenedByTaskStarting(scope)
     for (let index = firstEventIndex; index < sequencedEvents.length; index += 1) {
       const item = sequencedEvents[index]
       if (!item || item.seq > occurrenceEndSeq) break
-      if (sourceKey != null && item.sourceKey !== sourceKey) continue
+      // 跨源镜像去重只应该过滤「重复的镜像事件」。但一个任务可能横跨多份文件
+      // （轮转片段：任务在 maa.bak.log 里开始、在 maa.log 里结束），按来源整段过滤会把
+      // 任务的起始事件、特别是 Tasker.Task.Starting 丢掉，下游就无法证明「这个任务真的启动过」。
+      // 所以这两类事件无条件保留，其余仍按来源过滤。
+      const isScopeStartEvent = item.seq === scope.seq
+      const isMissingTaskStart =
+        !scopeHasOwnStarting && item.event.message === 'Tasker.Task.Starting'
+      if (
+        sourceKey != null &&
+        item.sourceKey !== sourceKey &&
+        !isScopeStartEvent &&
+        !isMissingTaskStart
+      )
+        continue
       if (
         ownerProcessIds.size > 0 &&
         item.processId != null &&
@@ -977,6 +1036,7 @@ const projectPipelineNodeScope = (
       readNestedDetailName(payload, 'actionDetails'),
       readNestedDetailName(payload, 'recoDetails'),
     ]),
+    source: readScopeSourceRef(scope),
   }
 }
 
@@ -993,11 +1053,31 @@ const projectTaskScope = (
     projectPipelineNodeScope(pipelineScope, options),
   )
 
+  // entry 的三级兜底各自代表不同可信度，必须告诉下游用的是哪一级：
+  // 只有日志里的 entry 字段（'field'）是事实，`nodes[0].name` 与作用域名都是推断。
+  const fieldEntry = readStringField(payload, 'entry')
+  const nodeEntry = nodes[0]?.name
+  const entry = fieldEntry ?? nodeEntry ?? readScopeName(scope)
+  const entrySource: TaskInfo['entry_source'] =
+    fieldEntry != null ? 'field' : nodeEntry != null ? 'node' : 'scope'
+
+  // 隐式补建的作用域说明这批输入从任务中间开始；转正之后 reducer 会在 payload 上留下
+  // `truncatedStart`，所以「曾经缺过」与「至今仍缺」是两件事，分别给两个字段。
+  // 两种情况都算「收到过 Starting」：作用域直接被 Starting 打开，
+  // 或者先是补建的、后来真身 Starting 到了并转正（payload.taskStartingSeen）。
+  const openedByTaskStarting =
+    payload.taskStartingSeen === true || isOpenedByTaskStarting(scope)
+  const everImplicit = payload.truncatedStart === true || payload.implicitTask === true
+
   return {
     task_id: readScopeTaskId(scope) ?? 0,
-    // 没有 entry 的任务（隐式补建、且还没收到终止事件）不要显示成 "task"：
-    // 拿第一个节点的名字当线索，比 scope.kind 有用得多。
-    entry: readStringField(payload, 'entry') ?? nodes[0]?.name ?? readScopeName(scope),
+    entry,
+    entry_source: entrySource,
+    // task_id 只在进程内唯一，把内核早就在用的进程身份补出来供下游精确定位
+    process_id: readScopeProcessId(scope),
+    has_starting_event: openedByTaskStarting,
+    rotation_gap: everImplicit,
+    truncated_start: everImplicit && !openedByTaskStarting,
     hash: readStringField(payload, 'hash') ?? '',
     uuid: readStringField(payload, 'uuid') ?? '',
     _startEventIndex: scope.seq,

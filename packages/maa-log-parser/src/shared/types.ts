@@ -12,6 +12,26 @@ export interface LogLine {
   _lineNumber?: number
 }
 
+/**
+ * 一条事件/节点来自哪份输入文件。
+ *
+ * 为什么要带出去：一次加载可以是多份日志（`maa.log` + `maa.bak.<时间>.log` 轮转片段，
+ * 或客户端与 agent 两份来源），解析阶段每份输入都是独立的一条流，来源信息在
+ * `ProtocolEvent.source` 上是齐的；但投影成 `EventNotification` / `NodeInfo` 时过去只留了
+ * `_lineNumber`，下游（证据导出、界面的「这条信息在哪个文件」）无法回溯。
+ * 纯加性字段：单文件解析时 `path` 通常为空，`line` 仍然可用。
+ */
+export interface EventSourceRef {
+  /** 来源文件路径（VS Code/桌面端为真实路径；网页端选择多文件时为相对路径或文件名） */
+  path?: string
+  /** 来源文件内的行号（1 起） */
+  line?: number
+  /** 该文件在本次解析输入中的序号 */
+  inputIndex?: number
+  /** 解析输入的去重键；跨源镜像去重用，一般不要用于展示 */
+  sourceKey?: string
+}
+
 // Event notification type
 export interface EventNotification {
   timestamp: string
@@ -19,6 +39,8 @@ export interface EventNotification {
   message: string
   details: Record<string, any>
   _lineNumber?: number
+  /** 该事件的来源文件与行号（见 `EventSourceRef`） */
+  source?: EventSourceRef
 }
 
 // Next list item
@@ -42,6 +64,52 @@ export interface TaskInfo {
   duration?: number
   _startEventIndex?: number
   _endEventIndex?: number
+
+  /**
+   * 所属进程（形如 `Px1228`）。
+   *
+   * MaaFramework 的 id 分配器是进程级静态计数器，`task_id` 只在进程内唯一；解析内核内部
+   * 早就按 `(processId, task_id)` 建索引（`trace/reducer.ts` 的 `buildTaskIndexKey`），
+   * 但投影时把进程丢了，于是同一份日志里两个 session 复用 `task_id` 时，下游只能靠时间区间
+   * 猜归属，区间重叠就无从判断。这里把内核已有的身份补出来，属于加性字段。
+   */
+  process_id?: string
+
+  /**
+   * `entry` 是从哪来的：
+   * - `field`：日志里 `Tasker.Task.Starting` 的 `entry` 字段原值（真任务名）
+   * - `node`：没有 entry 字段时借用了第一个节点的名字
+   * - `scope`：连节点都没有，最后退回作用域名（通常是 `task`）
+   *
+   * 消费者据此决定「能不能把它当任务名导出」：只有 `field` 是事实，其余是推断。
+   */
+  entry_source?: 'field' | 'node' | 'scope'
+
+  /**
+   * 是否真的收到过 `Tasker.Task.Starting`。
+   *
+   * 过去下游靠 `events.some(e => e.message === 'Tasker.Task.Starting')` 判断，是隐式契约；
+   * 这里显式给出，并且 `events` 仍会保留该事件（见 docs/LOG_PARSER_ARCHITECTURE.md）。
+   * 为 false 时通常是隐式补建的任务（日志从任务中间开始，或被截断）。
+   */
+  has_starting_event?: boolean
+
+  /**
+   * 这份日志是从任务中间开始的（轮转缺口）：任务作用域由中间事件补建而成，
+   * 说明它之前还有一段日志不在这批输入里。
+   *
+   * 注意即使后来真正的 `Tasker.Task.Starting` 到了（例如加载了 `maa.bak.*.log` 片段），
+   * 该标记仍然保留 —— 它记录的是「这批输入里任务开头不完整」这个事实。
+   */
+  rotation_gap?: boolean
+
+  /**
+   * 直到解析结束都没等到 `Tasker.Task.Starting`：任务开头的证据确实缺失。
+   *
+   * 与 `rotation_gap` 的关系：`truncated_start` 是「至今仍然缺」，
+   * `rotation_gap` 是「曾经缺过（后来补上了）」。两者都为 false 表示开头完整。
+   */
+  truncated_start?: boolean
 }
 
 // Recognition attempt record
@@ -117,6 +185,8 @@ export interface NodeInfo {
     reco_id: number
   }
   error_image?: string
+  /** 该节点（首次出现那条事件）来自哪份输入文件；见 `EventSourceRef` */
+  source?: EventSourceRef
 }
 
 // Recognition detail

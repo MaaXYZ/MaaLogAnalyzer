@@ -7,7 +7,7 @@
  * Keep this file focused on high-level flow wiring; move detailed domain logic
  * into helper modules under ./logParser/ whenever possible.
  */
-import type { EventNotification, TaskInfo } from '../shared/types'
+import type { EventNotification, EventSourceRef, TaskInfo } from '../shared/types'
 import { parseEventLine as parseMaaEventLine, type ParsedEventLine } from '../event/line'
 import { createProtocolEvent } from '../protocol/eventFactory'
 import type { ProtocolEvent } from '../protocol/types'
@@ -373,12 +373,28 @@ export class LogParser {
       return
     }
 
+    // 来源信息在这里就绑到事件上，而不是等投影时再反查：
+    // 一个事件一旦被接受，它来自哪份文件、第几行就确定了；后面跨源去重、按任务归并
+    // 都会改变事件顺序，事后再查就得额外维护一份索引。
+    const sourceRef: EventSourceRef = {
+      path: sourceOptions?.sourcePath,
+      line: event._lineNumber,
+      inputIndex: sourceOptions?.inputIndex,
+      sourceKey: sourceOptions?.sourceKey,
+    }
+    const hasSourceRef =
+      sourceRef.path != null ||
+      sourceRef.line != null ||
+      sourceRef.inputIndex != null ||
+      sourceRef.sourceKey != null
+
     const storedEvent: EventNotification = {
       timestamp: event.timestamp,
       level: event.level,
       message: event.message,
       details: event.details,
       _lineNumber: event._lineNumber,
+      ...(hasSourceRef ? { source: sourceRef } : {}),
     }
     const protocolEvent = createProtocolEvent(event, {
       seq: this.protocolEvents.length + 1,

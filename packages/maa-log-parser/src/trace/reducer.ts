@@ -382,6 +382,9 @@ const createImplicitTaskScope = (
       startEvent: event,
       latestEvent: event,
       implicitTask: true,
+      // `implicitTask` 的含义是「还没见过真正的 Tasker.Task.Starting」，转正时会被清掉；
+      // 而「这批输入从任务中间开始」是永久事实（日志轮转截断），所以另留一个只增不减的标记。
+      truncatedStart: true,
     },
     children: [],
   }
@@ -463,7 +466,13 @@ const openScope = (state: ReducerState, event: ProtocolEvent): TraceScopeNode =>
       // 起始时间保留更早的那个（补建的作用域先看到节点），节点时间线才不会倒挂。
       provisional.payload = {
         ...buildScopePayload(event),
+        // 起始时刻仍用补建时更早的那个，节点时间线才不会倒挂；
+        // 但「收到过真正的 Starting」必须单独留痕：投影层要靠它区分
+        // 「任务真的启动过」与「至今只有中间事件」。
         startEvent: provisional.payload.startEvent,
+        taskStartingSeen: true,
+        // 转正只说明「后来补到了 Starting」，不改变「这批输入曾经缺开头」这个事实
+        ...(provisional.payload.truncatedStart === true ? { truncatedStart: true } : {}),
       } as TraceScopePayload
       return provisional
     }
