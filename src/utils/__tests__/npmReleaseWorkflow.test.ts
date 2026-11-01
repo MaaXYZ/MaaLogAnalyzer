@@ -61,4 +61,43 @@ describe('npm release workflow', () => {
   it('limits registry mutations to the upstream repository', () => {
     expect(workflow).toContain("if: ${{ github.repository == 'MaaXYZ/MaaLogAnalyzer' }}")
   })
+
+  // OIDC 交换失败是静默的（npm 的 oidc() 从不抛错，只在 verbose 级别记录原因），
+  // 不给 verbose 的话线上只能看到一个没有原因的 ENEEDAUTH。
+  it('publishes with verbose logging so a rejected OIDC exchange is diagnosable', () => {
+    const publish = step('Publish release tarballs')
+
+    expect(publish).toContain('--loglevel verbose')
+  })
+
+  // 每个包是独立的一次发布：一个包配错 trusted publishing 不能连带吞掉后面所有包
+  // （出现过 adapter 发成功、kernel 失败后 parser/runtime/tools 完全没被尝试）。
+  // 发布顺序必须自底向上：adapter 精确钉住 parser，若先发 adapter 再挂掉，
+  // 线上会留下一个依赖未发布版本的包，消费者的 `npm i` 直接坏掉。
+  it('publishes in dependency order so a partial run leaves only a consistent prefix', () => {
+    const publish = step('Publish release tarballs')
+    const order = [
+      '*maa-log-kernel-*',
+      '*maa-log-parser-*',
+      '*maa-log-runtime-*',
+      '*maa-log-adapter-*',
+      '*maa-log-tools-*',
+    ].map((pattern) => publish.indexOf(pattern))
+
+    expect(publish).toContain('order_key()')
+    for (const index of order) expect(index).toBeGreaterThan(-1)
+    for (let i = 1; i < order.length; i += 1) {
+      expect(order[i], `${order[i - 1]} 应排在 ${order[i]} 之前`).toBeGreaterThan(order[i - 1])
+    }
+  })
+
+  it('keeps publishing after a failure and reports every failed package at the end', () => {
+    const publish = step('Publish release tarballs')
+
+    expect(publish).toContain('if npm publish "${tarball}"')
+    expect(publish).toContain('failed_refs+=("${package_ref}")')
+    expect(publish).toContain('Failed to publish: ${failed_refs[*]}')
+    expect(publish).toMatch(/Trusted publishing is configured per package/)
+    expect(publish).toContain('exit 1')
+  })
 })

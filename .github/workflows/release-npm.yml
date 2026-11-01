@@ -153,6 +153,34 @@ jobs:
             exit 1
           fi
 
+          # Publish in dependency order (leaf packages first). The tarballs are discovered
+          # alphabetically, which used to publish `adapter` before `parser` — and adapter pins
+          # parser exactly, so a run that died midway left a published adapter depending on a
+          # version that did not exist yet (`npm i` for consumers breaks until the rest lands).
+          # Bottom-up ordering means a partial run leaves only a consistent prefix: everything
+          # on the registry has its dependencies satisfied.
+          order_key() {
+            case "$1" in
+              *maa-log-kernel-*) echo 0 ;;
+              *maa-log-parser-*) echo 1 ;;
+              *maa-log-runtime-*) echo 2 ;;
+              *maa-log-adapter-*) echo 3 ;;
+              *maa-log-tools-*) echo 4 ;;
+              *) echo 9 ;;
+            esac
+          }
+          ordered=()
+          while IFS= read -r tarball; do
+            ordered+=("${tarball}")
+          done < <(
+            for tarball in "${tarballs[@]}"; do
+              printf '%s %s\n' "$(order_key "$(basename "${tarball}")")" "${tarball}"
+            done | sort -n -k1,1 | cut -d' ' -f2-
+          )
+          tarballs=("${ordered[@]}")
+          echo "Publish order:"
+          printf '  %s\n' "${tarballs[@]}"
+
           package_exists() {
             local package_ref="$1"
             local output
@@ -169,6 +197,7 @@ jobs:
 
           metadata_root="${RUNNER_TEMP}/mla-npm-package-metadata"
           published=0
+          failed_refs=()
           for tarball in "${tarballs[@]}"; do
             # Read the identity from the artifact itself: the already-published check must describe
             # what would actually be uploaded, not what some other checkout claims.
@@ -185,12 +214,35 @@ jobs:
             fi
 
             echo "Publish ${package_ref}"
+            # --loglevel verbose is deliberate and load-bearing: npm's trusted-publishing exchange
+            # swallows its own errors (`oidc()` never throws) and only logs the reason at verbose
+            # level, so without it an auth failure surfaces as a bare ENEEDAUTH with no cause.
             # Provenance is kept explicit: it is generated from the same OIDC identity, and losing it
             # silently would be a supply-chain regression.
-            npm publish "${tarball}" --access public --provenance
-            published=$((published + 1))
+            #
+            # A failure must not abort the whole run: each package is an independent publish, and
+            # one package with a missing trusted-publisher config used to hide every later package
+            # (the adapter published, the kernel failed, parser/runtime/tools were never attempted).
+            if npm publish "${tarball}" --access public --provenance --loglevel verbose; then
+              published=$((published + 1))
+            else
+              failed_refs+=("${package_ref}")
+            fi
           done
 
-          if [ "${published}" -eq 0 ]; then
+          if [ "${published}" -eq 0 ] && [ "${#failed_refs[@]}" -eq 0 ]; then
             echo "All package versions already exist."
+          fi
+
+          if [ "${#failed_refs[@]}" -gt 0 ]; then
+            echo "" >&2
+            echo "Failed to publish: ${failed_refs[*]}" >&2
+            echo "" >&2
+            echo "If the error above is ENEEDAUTH / 'need auth', the OIDC token exchange was rejected." >&2
+            echo "Trusted publishing is configured per package on npmjs, so each of these must have:" >&2
+            echo "  npmjs.com -> <package> -> Settings -> Trusted publishing -> GitHub Actions" >&2
+            echo "  repository: MaaXYZ/MaaLogAnalyzer   workflow filename: release-npm.yml" >&2
+            echo "The verbose 'oidc' lines above say which package failed and why." >&2
+            echo "Already-published versions are skipped, so re-running after fixing config is safe." >&2
+            exit 1
           fi
