@@ -20,9 +20,14 @@ const makeEventLine = (
 }
 
 const taskStarting = (eventIndex: number, taskId: number, entry: string, processId?: string) =>
-  makeEventLine(eventIndex, 'Tasker.Task.Starting', { task_id: taskId, entry, hash: 'h', uuid: 'u' }, {
-    processId,
-  })
+  makeEventLine(
+    eventIndex,
+    'Tasker.Task.Starting',
+    { task_id: taskId, entry, hash: 'h', uuid: 'u' },
+    {
+      processId,
+    },
+  )
 
 const taskSucceeded = (eventIndex: number, taskId: number, entry: string, processId?: string) =>
   makeEventLine(
@@ -32,7 +37,13 @@ const taskSucceeded = (eventIndex: number, taskId: number, entry: string, proces
     { processId },
   )
 
-const nodeStarting = (eventIndex: number, taskId: number, nodeId: number, name: string, processId?: string) =>
+const nodeStarting = (
+  eventIndex: number,
+  taskId: number,
+  nodeId: number,
+  name: string,
+  processId?: string,
+) =>
   makeEventLine(
     eventIndex,
     'Node.PipelineNode.Starting',
@@ -40,7 +51,13 @@ const nodeStarting = (eventIndex: number, taskId: number, nodeId: number, name: 
     { processId },
   )
 
-const nodeSucceeded = (eventIndex: number, taskId: number, nodeId: number, name: string, processId?: string) =>
+const nodeSucceeded = (
+  eventIndex: number,
+  taskId: number,
+  nodeId: number,
+  name: string,
+  processId?: string,
+) =>
   makeEventLine(
     eventIndex,
     'Node.PipelineNode.Succeeded',
@@ -76,6 +93,40 @@ describe('TaskInfo 身份与来源信息（下游可追溯性）', () => {
     expect(beta?.task_id).toBe(1)
     expect(alpha?.process_id).toBe('Px1')
     expect(beta?.process_id).toBe('Px2')
+
+    // 更细一级：同一 (process_id, task_id) 的两次执行也能靠 task_execution_id 分开
+    expect(alpha?.task_execution_id).toBeTruthy()
+    expect(beta?.task_execution_id).toBeTruthy()
+    expect(alpha?.task_execution_id).not.toBe(beta?.task_execution_id)
+
+    // 事件级也带进程归属，下游不必再按时间区间反推
+    const alphaStarting = alpha?.events.find((event) => event.message === 'Tasker.Task.Starting')
+    expect(alphaStarting?.process_id).toBe('Px1')
+  })
+
+  it('①同进程重复执行同一 task_id 时，task_execution_id 仍能区分两次执行', async () => {
+    const lines = [
+      taskStarting(1, 1, 'RepeatTask', 'Px1'),
+      nodeStarting(2, 1, 101, 'N1', 'Px1'),
+      nodeSucceeded(3, 1, 101, 'N1', 'Px1'),
+      taskSucceeded(4, 1, 'RepeatTask', 'Px1'),
+      // 同进程、同 task_id，再跑一次
+      taskStarting(5, 1, 'RepeatTask', 'Px1'),
+      nodeStarting(6, 1, 101, 'N1', 'Px1'),
+      nodeSucceeded(7, 1, 101, 'N1', 'Px1'),
+      taskSucceeded(8, 1, 'RepeatTask', 'Px1'),
+    ]
+
+    const parser = new LogParser()
+    await parser.parseFile(lines.join('\n'))
+    const tasks = parser.getTasksSnapshot()
+
+    expect(tasks).toHaveLength(2)
+    expect(tasks[0]?.task_id).toBe(1)
+    expect(tasks[1]?.task_id).toBe(1)
+    expect(tasks[0]?.process_id).toBe('Px1')
+    expect(tasks[1]?.process_id).toBe('Px1')
+    expect(tasks[0]?.task_execution_id).not.toBe(tasks[1]?.task_execution_id)
   })
 
   it('② entry 的来源可以区分（field / node）', async () => {
@@ -126,12 +177,8 @@ describe('TaskInfo 身份与来源信息（下游可追溯性）', () => {
     expect(implicit?.has_starting_event).toBe(false)
 
     // 文档承诺：events 里能查到 Starting（下游历史用法仍然成立）
-    expect(
-      real?.events.some((event) => event.message === 'Tasker.Task.Starting'),
-    ).toBe(true)
-    expect(
-      implicit?.events.some((event) => event.message === 'Tasker.Task.Starting'),
-    ).toBe(false)
+    expect(real?.events.some((event) => event.message === 'Tasker.Task.Starting')).toBe(true)
+    expect(implicit?.events.some((event) => event.message === 'Tasker.Task.Starting')).toBe(false)
   })
 
   it('④ 轮转缺口可判定：只有片段时 truncated_start 为真，片段后补到 Starting 时只剩 rotation_gap', async () => {
@@ -199,7 +246,10 @@ describe('TaskInfo 身份与来源信息（下游可追溯性）', () => {
     await parser.parseInputs(inputs)
     const [task] = parser.getTasksSnapshot()
 
-    console.log('DEBUG events:', JSON.stringify(task?.events?.map((e: any) => ({ m: e.message, s: e.source }))))
+    console.log(
+      'DEBUG events:',
+      JSON.stringify(task?.events?.map((e: any) => ({ m: e.message, s: e.source }))),
+    )
     console.log('DEBUG node:', JSON.stringify(task?.nodes?.[0]))
     const startingEvent = task?.events.find((event) => event.message === 'Tasker.Task.Starting')
     const succeededEvent = task?.events.find((event) => event.message === 'Tasker.Task.Succeeded')

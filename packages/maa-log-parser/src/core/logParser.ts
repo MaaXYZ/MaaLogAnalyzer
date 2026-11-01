@@ -394,6 +394,7 @@ export class LogParser {
       message: event.message,
       details: event.details,
       _lineNumber: event._lineNumber,
+      process_id: event.processId,
       ...(hasSourceRef ? { source: sourceRef } : {}),
     }
     const protocolEvent = createProtocolEvent(event, {

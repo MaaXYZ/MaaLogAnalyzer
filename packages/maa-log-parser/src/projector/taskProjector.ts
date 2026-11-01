@@ -581,9 +581,7 @@ const buildScopeProcessIdSets = (
   root: ScopeNode,
   output: Map<ScopeNode, ReadonlySet<string>>,
 ): void => {
-  const stack: Array<{ scope: ScopeNode; expanded: boolean }> = [
-    { scope: root, expanded: false },
-  ]
+  const stack: Array<{ scope: ScopeNode; expanded: boolean }> = [{ scope: root, expanded: false }]
 
   while (stack.length > 0) {
     const entry = stack.pop() as { scope: ScopeNode; expanded: boolean }
@@ -611,9 +609,9 @@ const collectTaskOwnerProcessIds = (
   scope: ScopeNode,
   options: ProjectTasksFromTraceOptions = {},
 ): ReadonlySet<string> => {
-  const indexed = (
-    options as Partial<InternalProjectTasksFromTraceOptions>
-  ).getScopeProcessIds?.(scope)
+  const indexed = (options as Partial<InternalProjectTasksFromTraceOptions>).getScopeProcessIds?.(
+    scope,
+  )
   if (indexed) return indexed
 
   // 兜底：调用方没带索引（第三方直接用 projector）时仍旧自己走一遍子树。
@@ -632,6 +630,8 @@ const copyTaskEvent = (event: EventNotification): EventNotification => ({
   _lineNumber: event._lineNumber,
   // 来源文件/行号随事件一起带走：下游要回答「这条识别事件出自哪份日志的哪一行」
   ...(event.source ? { source: event.source } : {}),
+  // 事件级进程归属：下游做证据归属时不必再按时间区间反推
+  ...(event.process_id ? { process_id: event.process_id } : {}),
 })
 
 const findFirstSequencedEventIndex = (events: SequencedTaskEvent[], targetSeq: number): number => {
@@ -1065,8 +1065,7 @@ const projectTaskScope = (
   // `truncatedStart`，所以「曾经缺过」与「至今仍缺」是两件事，分别给两个字段。
   // 两种情况都算「收到过 Starting」：作用域直接被 Starting 打开，
   // 或者先是补建的、后来真身 Starting 到了并转正（payload.taskStartingSeen）。
-  const openedByTaskStarting =
-    payload.taskStartingSeen === true || isOpenedByTaskStarting(scope)
+  const openedByTaskStarting = payload.taskStartingSeen === true || isOpenedByTaskStarting(scope)
   const everImplicit = payload.truncatedStart === true || payload.implicitTask === true
 
   return {
@@ -1075,6 +1074,8 @@ const projectTaskScope = (
     entry_source: entrySource,
     // task_id 只在进程内唯一，把内核早就在用的进程身份补出来供下游精确定位
     process_id: readScopeProcessId(scope),
+    // 作用域 id 唯一对应「一次执行」：同进程同 task_id 的两次运行也能分开
+    task_execution_id: scope.id,
     has_starting_event: openedByTaskStarting,
     rotation_gap: everImplicit,
     truncated_start: everImplicit && !openedByTaskStarting,

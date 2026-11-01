@@ -41,6 +41,8 @@ export interface EventNotification {
   _lineNumber?: number
   /** 该事件的来源文件与行号（见 `EventSourceRef`） */
   source?: EventSourceRef
+  /** 写这条事件的进程（与 `TaskInfo.process_id` 同源），事件级归属需要时不必再按时间区间推断 */
+  process_id?: string
 }
 
 // Next list item
@@ -74,6 +76,14 @@ export interface TaskInfo {
    * 猜归属，区间重叠就无从判断。这里把内核已有的身份补出来，属于加性字段。
    */
   process_id?: string
+
+  /**
+   * 一次任务执行的稳定标识（同一次执行内的所有节点共享）。
+   *
+   * 形状是作用域 id（`task:<taskId>:<localId>:seq<起始事件序号>`）。它比 `(process_id, task_id)`
+   * 更进一步：同进程同 id 的两次执行也能区分开，适合做证据主键 / 去重键。
+   */
+  task_execution_id?: string
 
   /**
    * `entry` 是从哪来的：

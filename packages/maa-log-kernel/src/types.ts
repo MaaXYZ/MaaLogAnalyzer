@@ -6,6 +6,8 @@ export interface EventNotification {
   _lineNumber?: number
   /** 该事件的来源文件与行号；多份输入（轮转片段 / 客户端与 agent）时用来回溯 */
   source?: EventSourceRef
+  /** 写这条事件的进程（与 TaskInfo.process_id 同源） */
+  process_id?: string
 }
 
 /** 一条事件/节点来自哪份输入文件（与 @windsland52/maa-log-parser 的 EventSourceRef 同形） */
@@ -158,6 +160,8 @@ export interface TaskInfo {
    * 跨 session 复用同一个 id 时必须靠 `(process_id, task_id)` 才能精确定位任务。
    */
   process_id?: string
+  /** 一次任务执行的稳定标识（作用域 id），比 (process_id, task_id) 更细 */
+  task_execution_id?: string
   /** `entry` 的来源：只有 `field` 是日志原值，`node` / `scope` 是兜底推断 */
   entry_source?: 'field' | 'node' | 'scope'
   /** 是否真的收到过 `Tasker.Task.Starting`（false = 隐式补建的任务） */
