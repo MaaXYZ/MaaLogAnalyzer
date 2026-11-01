@@ -334,31 +334,30 @@ fn resolve_archive_paths(
     Ok(volumes.into_iter().map(|(_, _, path)| path).collect())
 }
 
-fn validate_zip_entry(entry: &zip::read::ZipFile<'_>) -> Result<(), String> {
-    validate_archive_entry_path(entry.name())?;
+// zip 9 起 `ZipFile` 多了 reader 泛型，`name()` 也从 `&str` 变成
+// `Result<Cow<'_, str>, ZipError>`（文件名解码失败不再静默给出乱码）。
+// 这里一次取出名字再复用；读不出名字就当该条目不可信、直接拒绝。
+fn validate_zip_entry<R: std::io::Read + std::io::Seek>(
+    entry: &zip::read::ZipFile<'_, R>,
+) -> Result<(), String> {
+    let name = entry
+        .name()
+        .map_err(|error| format!("读取 ZIP 条目名称失败: {error}"))?;
+    validate_archive_entry_path(name.as_ref())?;
     if entry.enclosed_name().is_none() {
-        return Err(format!(
-            "ZIP contains an unsafe entry path: {}",
-            entry.name()
-        ));
+        return Err(format!("ZIP contains an unsafe entry path: {name}"));
     }
     if entry.encrypted() {
-        return Err(format!("ZIP contains an encrypted entry: {}", entry.name()));
+        return Err(format!("ZIP contains an encrypted entry: {name}"));
     }
     if entry.is_symlink() {
-        return Err(format!(
-            "ZIP contains a symbolic link entry: {}",
-            entry.name()
-        ));
+        return Err(format!("ZIP contains a symbolic link entry: {name}"));
     }
 
     if let Some(mode) = entry.unix_mode() {
         let file_type = mode & 0o170000;
         if file_type != 0 && file_type != 0o040000 && file_type != 0o100000 {
-            return Err(format!(
-                "ZIP contains a special file entry: {}",
-                entry.name()
-            ));
+            return Err(format!("ZIP contains a special file entry: {name}"));
         }
     }
     Ok(())
@@ -454,7 +453,10 @@ fn extract_zip_log_inner(
                 .add_directory_entry(entry.name_raw().len() as u64, ARCHIVE_LIMITS)
                 .map_err(|error| error.to_string())?;
 
-            let name = register_archive_entry_path(&mut seen_entry_paths, entry.name())?;
+            let raw_entry_name = entry
+                .name()
+                .map_err(|error| format!("读取 ZIP 条目名称失败: {error}"))?;
+            let name = register_archive_entry_path(&mut seen_entry_paths, raw_entry_name.as_ref())?;
             names.push(name.clone());
             entries.push(ZipEntryMetadata {
                 name,
@@ -513,7 +515,10 @@ fn extract_zip_log_inner(
             let mut entry = archive
                 .by_index(i)
                 .map_err(|e| format!("读取条目失败 [{}]: {e}", archive_path.display()))?;
-            let name = entry.name().replace('\\', "/");
+            let name = entry
+                .name()
+                .map_err(|error| format!("读取 ZIP 条目名称失败: {error}"))?
+                .replace('\\', "/");
             let lower = name.to_lowercase();
 
             if let Some(candidate) = selected_log_lookup.get(&lower) {
@@ -617,8 +622,8 @@ fn extract_zip_log_inner(
     })
 }
 
-fn save_zip_entry_to_temp_file(
-    entry: &mut zip::read::ZipFile<'_>,
+fn save_zip_entry_to_temp_file<R: std::io::Read + std::io::Seek>(
+    entry: &mut zip::read::ZipFile<'_, R>,
     temp_dir: &Path,
     seq: &mut u64,
     ext: &str,
