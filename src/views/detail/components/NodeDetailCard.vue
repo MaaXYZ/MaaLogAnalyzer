@@ -16,6 +16,7 @@ import {
 } from 'naive-ui'
 import { CopyOutlined } from '@vicons/antd'
 import type { NodeInfo } from '../../../types'
+import { describeSourceRef } from '../../../utils/sourceLabel'
 import SafePreviewImage from '../../../components/SafePreviewImage.vue'
 import RawJsonCollapseItem from './RawJsonCollapseItem.vue'
 
@@ -53,6 +54,10 @@ watch(
 )
 
 const nodeDefinitionExpanded = computed(() => expandedNames.value.includes('node-definition'))
+
+// 这个节点出自哪份日志的哪一行：多文件加载（轮转片段 / 双来源）时这是唯一能回答
+// 「我在看的是哪份文件里的东西」的地方。取不到来源就整行不渲染。
+const nodeSource = computed(() => describeSourceRef(props.selectedNode?.source))
 </script>
 
 <template>
@@ -91,6 +96,17 @@ const nodeDefinitionExpanded = computed(() => expandedNames.value.includes('node
 
       <n-descriptions-item label="节点 ID">
         {{ props.selectedNode.node_id }}
+      </n-descriptions-item>
+
+      <n-descriptions-item label="来源" v-if="nodeSource">
+        <n-flex align="center" style="gap: 6px; min-width: 0">
+          <n-text :title="nodeSource.path || nodeSource.file" style="font-size: 13px">
+            {{ nodeSource.file }}
+          </n-text>
+          <n-text v-if="nodeSource.line" depth="3" style="font-size: 12px">
+            第 {{ nodeSource.line }} 行
+          </n-text>
+        </n-flex>
       </n-descriptions-item>
 
       <n-descriptions-item

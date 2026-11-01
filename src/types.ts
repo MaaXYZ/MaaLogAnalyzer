@@ -1,6 +1,7 @@
 export type {
   ActionDetail,
   EventNotification,
+  EventSourceRef,
   LogLine,
   MergedRecognitionItem,
   NestedActionGroup,

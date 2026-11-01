@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { NCard, NFlex, NTag, NText, NButton, NDivider } from 'naive-ui'
 import type { NodeInfo, TaskInfo } from '../../../types'
 import { extractTime, formatDuration } from '../../../utils/formatDuration'
+import { describeSourceRef } from '../../../utils/sourceLabel'
 
 const props = defineProps<{
   task: TaskInfo
@@ -53,6 +54,19 @@ const slowestNodes = computed(() =>
     .slice(0, 3),
 )
 
+// 任务级来源：取任务里第一条事件的来源（多文件加载时告诉用户这个任务出自哪份日志）
+const taskSource = computed(() => {
+  const first = props.task.events?.[0]
+  return describeSourceRef(first?.source)
+})
+
+// 拼成整串，避免模板里 file 与「第 N 行」之间的空格被 Vue 折叠掉
+const taskSourceLabel = computed(() => {
+  const source = taskSource.value
+  if (!source) return ''
+  return source.line ? `${source.file} 第 ${source.line} 行` : source.file
+})
+
 const durationLabel = computed(() => formatDuration(props.task.duration))
 const startTimeLabel = computed(() => extractTime(props.task.start_time) || props.task.start_time)
 
@@ -76,6 +90,10 @@ const selectNode = (node: NodeInfo) => {
         <n-text depth="3" class="task-overview__meta">
           {{ startTimeLabel }} 开始 · 耗时 {{ durationLabel }} · {{ task.nodes.length }} 个节点
           <template v-if="failedNodes.length"> · {{ failedNodes.length }} 个失败</template>
+          <template v-if="taskSourceLabel">
+            ·
+            <span :title="taskSource?.path || taskSource?.file">来自 {{ taskSourceLabel }}</span>
+          </template>
         </n-text>
       </div>
 
