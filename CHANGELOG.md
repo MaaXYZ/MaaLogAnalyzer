@@ -35,8 +35,12 @@ MaaLogAnalyzer 的重要更改记录。格式参考 [Keep a Changelog](https://k
 - `TaskInfo` 增加 `entry_source` / `has_starting_event` / `rotation_gap` / `truncated_start`：区分「真 entry」与「借来的节点名」、区分「隐式任务」与「日志轮转截断」，下游可显式报「证据缺失」而不是静默留空
 - `EventNotification` 与 `NodeInfo` 增加 `source`（文件 + 行号）：多文件加载（轮转片段 / 双来源）时可以回溯每条事件、每个节点出自哪份日志的哪一行
 - 修复：任务事件列表的跨来源过滤改用「作用域起始事件的来源」判定（原先读的是被后续事件覆盖的合并值），并保证 `Tasker.Task.Starting` 不会被镜像过滤误删
-- 版本：`@windsland52/maa-log-parser` 2.1.0、`@windsland52/maa-log-kernel` 1.1.0、`@windsland52/maa-log-tools` 2.2.0（均为加性字段）
-  下游只直接依赖 `maa-log-tools` 时，靠它把 parser 2.1.0 / kernel 1.1.0 一起带上；tools 本身行为不变
+- 版本（发布链要一起升，否则新字段到不了下游：真正 `new LogParser()` 的是 adapter，tools 只转发）：
+  `maa-log-kernel` 1.1.0、`maa-log-parser` 2.1.0、`maa-log-runtime` 1.1.1、`maa-log-adapter` 1.1.2、`maa-log-tools` 2.2.0，均为加性字段
+- 工具层 `analyzeLogContent` 现在支持 `sourcePath` / `sourceKey` 透传：给了就能在事件的
+  `source.path` 上拿到具体文件；`analyzeDirectory` / `analyzeZip*` 只在内容确实来自单个文件时
+  才标注路径（多文件合并时 `source.line` 是合并后的行号，标了会指错文件）
+- `buildTaskIdentity` / `isSameTask` 优先使用 `task_execution_id`，缺失时退回历史规则
 
 ### 无障碍
 
