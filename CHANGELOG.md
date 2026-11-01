@@ -14,6 +14,7 @@ MaaLogAnalyzer 的重要更改记录。格式参考 [Keep a Changelog](https://k
 
 ### 修复
 
+- 部署或本地重建后，仍开着的旧页面切到没加载过的板块（文本搜索 / 运行统计 / 流程图 / 分屏）会整块空白：现在失败时重试一次并显示「没能加载出来」的说明与重新加载入口，不再是无提示的白屏
 - 运行统计切「节点 / 识别动作 / Wait Freezes」子标签时明显卡顿：表格改为虚拟滚动（只渲染视口内的行），三个统计结果按日志缓存。5.8MB 日志实测 953 / 906 / 282ms → 109 / 114 / 78ms
 - 运行统计的空表只显示一个图标，分不清「这类记录本来就没有」还是「页面坏了」：现在保留表头并说明原因（例如「这份日志没有 Wait Freezes 记录」），Wait Freezes 的「重复等待 / 截图」两列也补了口径提示
 - 切任务时控制台报 `querySelectorAll is not a function`，同时「把选中任务卡滚进视野」从未生效
@@ -29,10 +30,12 @@ MaaLogAnalyzer 的重要更改记录。格式参考 [Keep a Changelog](https://k
 
 ### 解析器（npm 包，加性字段）
 
-- `TaskInfo` 增加 `process_id`：`task_id` 只在进程内唯一，`(process_id, task_id)` 才能精确定位任务（同一份日志里两个 session 复用 `task_id` 时不再只能靠时间区间猜）
+- `TaskInfo` 增加 `process_id` / `process_ids`：`task_id` 只在进程内唯一，`(process_id, task_id)` 才能精确定位任务（同一份日志里两个 session 复用 `task_id` 时不再只能靠时间区间猜）。`process_id` 取**创建者**进程（起始事件），不是关闭事件所在进程 —— 镜像混搭时两者可能不同
+- `TaskInfo.task_execution_id`：仅保证**单次加载内**唯一（内含合并后事件流的全局序号，换输入集就会变），跨运行请用 `(process_id, task_id, start_time)`
 - `TaskInfo` 增加 `entry_source` / `has_starting_event` / `rotation_gap` / `truncated_start`：区分「真 entry」与「借来的节点名」、区分「隐式任务」与「日志轮转截断」，下游可显式报「证据缺失」而不是静默留空
 - `EventNotification` 与 `NodeInfo` 增加 `source`（文件 + 行号）：多文件加载（轮转片段 / 双来源）时可以回溯每条事件、每个节点出自哪份日志的哪一行
 - 修复：任务事件列表的跨来源过滤改用「作用域起始事件的来源」判定（原先读的是被后续事件覆盖的合并值），并保证 `Tasker.Task.Starting` 不会被镜像过滤误删
+- 版本：`@windsland52/maa-log-parser` 2.1.0、`@windsland52/maa-log-kernel` 1.1.0（均为加性字段）
 
 ### 无障碍
 
