@@ -149,11 +149,29 @@ export const useDetailViewController = (props: DetailViewControllerProps) => {
     return props.selectedNode?.error_image ?? null
   })
 
+  // 动作落点标记用的截图 = 动作作用的那一帧（识别帧），不是 on_error 帧：
+  // on_error 是动作之后才截的异常屏，把点击点画在它上面是错的。
+  // 优先级：实时桥接 raw > 选中/命中 reco 的 vision_image > 节点 error_image（本地日志兜底）
+  const currentActionScreenshot = computed(() => {
+    if (bridgeRecognitionRawImage.value) {
+      return bridgeRecognitionRawImage.value
+    }
+    const node = props.selectedNode
+    const attempts = node ? buildNodeRecognitionAttempts(node) : []
+    const hitAttempt = [...attempts].reverse().find((item) => item?.reco_details?.box != null)
+    const trimOrNull = (v: unknown): string | null =>
+      typeof v === 'string' && v.trim().length > 0 ? v : null
+    const vision =
+      trimOrNull(currentRecognitionItem.value?.vision_image) ?? trimOrNull(hitAttempt?.vision_image)
+    if (vision) return vision
+    return currentActionErrorImage.value
+  })
+
   const openSelectedFlowErrorInCrop = () =>
     openImageInCrop(selectedFlowErrorImage.value, selectedFlowItem.value)
   const openCurrentActionErrorInCrop = () =>
     openImageInCrop(
-      currentActionErrorImage.value,
+      currentActionScreenshot.value,
       currentActionItem.value ?? currentActionDetails.value,
     )
   const openSelectedNodeErrorInCrop = () =>
@@ -214,6 +232,7 @@ export const useDetailViewController = (props: DetailViewControllerProps) => {
     formattedBridgeNodeDefinition,
     selectedNodeDisplayErrorImage,
     currentActionErrorImage,
+    currentActionScreenshot,
     currentFocusCard,
   }
 }

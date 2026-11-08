@@ -73,6 +73,7 @@ const {
   formattedBridgeNodeDefinition,
   selectedNodeDisplayErrorImage,
   currentActionErrorImage,
+  currentActionScreenshot,
   currentFocusCard,
 } = useDetailViewController(props)
 
@@ -144,6 +145,7 @@ watch(
             :current-action-details="currentActionDetails"
             :current-action-status="currentActionStatus"
             :action-error-image="currentActionErrorImage"
+            :action-screenshot="currentActionScreenshot"
             :action-execution-time="actionExecutionTime"
             :description-columns="descriptionColumns"
             :selected-node="selectedNode"

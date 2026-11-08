@@ -20,6 +20,8 @@ const props = defineProps<{
   currentActionDetails: any
   currentActionStatus: 'success' | 'failed' | 'running' | null
   actionErrorImage: string | null
+  /** 叠加点击点标记用的截图；失败 = error_image，成功 = 节点识别帧 */
+  actionScreenshot: string | null
   actionExecutionTime: string
   descriptionColumns: number
   selectedNode: NodeInfo | null
@@ -42,6 +44,104 @@ watch(
 
 const actionDetailRows = computed(() =>
   buildActionDetailRows(props.currentActionDetails, props.descriptionColumns),
+)
+
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+// 目标区域（随机/滑动范围）；Click 的 box 是 [x,y,w,h] Rect
+const actionBox = computed<[number, number, number, number] | null>(() => {
+  const box = props.currentActionDetails?.box
+  if (!Array.isArray(box) || box.length !== 4) return null
+  if (!box.every(isNum)) return null
+  return box as [number, number, number, number]
+})
+
+// 实际落点：detail.point 优先（Click 随机偏移后的真坐标），否则 box 中心，
+// box 是 2 元点时直接用
+const actionPoint = computed<[number, number] | null>(() => {
+  const point = props.currentActionDetails?.detail?.point
+  if (Array.isArray(point) && point.length === 2 && point.every(isNum)) {
+    return point as [number, number]
+  }
+  const box = props.currentActionDetails?.box
+  if (!Array.isArray(box)) return null
+  if (box.length === 2 && box.every(isNum)) {
+    return box as [number, number]
+  }
+  if (box.length === 4 && box.every(isNum)) {
+    return [box[0] + box[2] / 2, box[1] + box[3] / 2]
+  }
+  return null
+})
+
+// 把目标框 + 落点直接烘进截图像素（canvas 合成 data URL）：
+// 用户点开 n-image 大图预览时 CSS 叠层会丢，烘进图里就一直在
+const resolvedScreenshot = computed(() =>
+  props.actionScreenshot ? props.resolveImageSrc(props.actionScreenshot) : null,
+)
+const markedScreenshot = ref<string | null>(null)
+watch(
+  [resolvedScreenshot, actionPoint, actionBox],
+  async ([src, point, box]) => {
+    markedScreenshot.value = null
+    if (!src) return
+    const img = new Image()
+    await new Promise<void>((resolve) => {
+      img.onload = () => resolve()
+      img.onerror = () => resolve()
+      img.src = src
+    })
+    const w = img.naturalWidth
+    const h = img.naturalHeight
+    if (!w || !h) return
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(img, 0, 0)
+
+    // 目标区域（虚线红框）：Click 的 box 是随机点击范围
+    if (box) {
+      ctx.save()
+      ctx.strokeStyle = '#f03e3e'
+      ctx.lineWidth = 2
+      ctx.setLineDash([6, 4])
+      ctx.strokeRect(box[0], box[1], box[2], box[3])
+      ctx.restore()
+    }
+    // 实际落点：白边红十字 + 圆点
+    if (point) {
+      const [px, py] = point
+      const arm = 14
+      ctx.save()
+      ctx.strokeStyle = '#fff'
+      ctx.lineWidth = 4
+      ctx.beginPath()
+      ctx.moveTo(px - arm, py)
+      ctx.lineTo(px + arm, py)
+      ctx.moveTo(px, py - arm)
+      ctx.lineTo(px, py + arm)
+      ctx.stroke()
+      ctx.strokeStyle = '#f03e3e'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(px - arm, py)
+      ctx.lineTo(px + arm, py)
+      ctx.moveTo(px, py - arm)
+      ctx.lineTo(px, py + arm)
+      ctx.stroke()
+      ctx.fillStyle = '#f03e3e'
+      ctx.beginPath()
+      ctx.arc(px, py, 4, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.strokeStyle = '#fff'
+      ctx.lineWidth = 1
+      ctx.stroke()
+      ctx.restore()
+    }
+    markedScreenshot.value = canvas.toDataURL('image/png')
+  },
+  { immediate: true },
 )
 
 // 动作原文定位：用节点名检索更可靠（动作类型如 click 太泛），时间戳优先用动作自身的
@@ -123,12 +223,15 @@ const handleSearchInSource = () => {
       </n-descriptions-item>
     </n-descriptions>
 
-    <div
-      v-if="props.currentActionStatus === 'failed' && props.actionErrorImage"
-      style="margin-top: 12px"
-    >
+    <div v-if="resolvedScreenshot" style="margin-top: 12px">
       <n-flex align="center" justify="space-between" style="margin-bottom: 8px">
-        <n-text depth="3" style="font-size: 13px">失败截图</n-text>
+        <n-text depth="3" style="font-size: 13px">
+          {{
+            props.currentActionStatus === 'failed' && props.actionErrorImage
+              ? '失败截图'
+              : '动作位置（识别帧，虚线=点击范围）'
+          }}
+        </n-text>
         <n-button
           v-if="props.showOpenCropButton"
           size="tiny"
@@ -138,7 +241,7 @@ const handleSearchInSource = () => {
         </n-button>
       </n-flex>
       <safe-preview-image
-        :src="props.resolveImageSrc(props.actionErrorImage)"
+        :src="markedScreenshot ?? resolvedScreenshot"
         class="detail-preview-image"
       />
     </div>

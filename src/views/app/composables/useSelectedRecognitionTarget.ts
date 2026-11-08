@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
 import type { NodeInfo, UnifiedFlowItem } from '../../../types'
 import type { SelectedRecognitionQueryTarget } from './useBridgeRecognition'
+import { buildNodeRecognitionAttempts } from '@windsland52/maa-log-parser/node-flow'
 
 interface UseSelectedRecognitionTargetOptions {
   bridgeEnabled: boolean
@@ -60,7 +61,21 @@ export const useSelectedRecognitionTarget = (options: UseSelectedRecognitionTarg
       }
     }
 
-    return null
+    // 动作等非识别项：拉回节点命中那次识别的缓存帧，
+    // 即动作作用的画面（动作卡的落点标记叠在这张图上）
+    const attempts = buildNodeRecognitionAttempts(node)
+    const hitAttempt = [...attempts].reverse().find((item) => item?.reco_details?.box != null)
+    const targetAttempt = hitAttempt ?? attempts[attempts.length - 1]
+    const recoId = options.toPositiveInteger(
+      targetAttempt?.reco_id ?? targetAttempt?.reco_details?.reco_id,
+    )
+    if (recoId == null) return null
+    return {
+      sessionId,
+      taskId,
+      recoIds: [recoId],
+      sourceType: 'recognition',
+    }
   }
 
   return {
