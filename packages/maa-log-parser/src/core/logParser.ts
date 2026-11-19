@@ -30,6 +30,7 @@ import {
   type RawLineStore,
 } from '../raw/store'
 import { cloneSnapshotData, freezeSnapshotData } from './snapshotIsolation'
+import { slimTaskRecognitionDetails } from './slimRecognitionDetails'
 
 export interface ParseProgress {
   current: number
@@ -51,6 +52,15 @@ export interface ParseSourceInput {
   sourceKey?: string
   sourcePath?: string
   inputIndex?: number
+}
+
+export interface ParseSnapshotOptions {
+  /**
+   * 裁剪 `reco_details.detail` 里的候选数组（`all` / `filtered`），只保留前若干条并
+   * 记录原始数量到 `allTotal` / `filteredTotal`。默认关闭，用于降低一次性解析的任务树
+   * 内存与跨线程传输体积（详情面板只读计数与 best，不受影响）。
+   */
+  slimRecognitionDetails?: boolean
 }
 
 export interface ParseArtifactsSnapshot {
@@ -702,7 +712,10 @@ export class LogParser {
     this.syntheticLineNumber = 1
   }
 
-  private projectTasksSnapshot(consume: boolean): TaskInfo[] {
+  private projectTasksSnapshot(
+    consume: boolean,
+    options: ParseSnapshotOptions = {},
+  ): TaskInfo[] {
     const trace = this.traceReducer.getTrace()
     const tasks = projectTasksFromTrace(trace, {
       sequencedEventsByTaskId: this.sequencedEventsByTaskId,
@@ -711,6 +724,8 @@ export class LogParser {
       visionImages: this.visionImages,
       waitFreezesImages: this.waitFreezesImages,
     })
+    // 裁剪必须发生在冻结之前（原地修改），且只在调用方显式要求时执行。
+    if (options.slimRecognitionDetails) slimTaskRecognitionDetails(tasks)
     for (const task of tasks) freezeSnapshotData(task)
 
     if (consume) {
@@ -726,8 +741,8 @@ export class LogParser {
    * Use this for realtime/incremental consumers that need to read the current
    * task tree repeatedly as new lines arrive.
    */
-  getTasksSnapshot(): TaskInfo[] {
-    return this.projectTasksSnapshot(false)
+  getTasksSnapshot(options: ParseSnapshotOptions = {}): TaskInfo[] {
+    return this.projectTasksSnapshot(false, options)
   }
 
   getEventsSnapshot(): EventNotification[] {
@@ -770,8 +785,8 @@ export class LogParser {
    * Use this for one-shot parse flows where the caller only needs the final
    * projected task list and will not keep querying parser snapshots afterward.
    */
-  consumeTasks(): TaskInfo[] {
-    return this.projectTasksSnapshot(true)
+  consumeTasks(options: ParseSnapshotOptions = {}): TaskInfo[] {
+    return this.projectTasksSnapshot(true, options)
   }
 
   /**
