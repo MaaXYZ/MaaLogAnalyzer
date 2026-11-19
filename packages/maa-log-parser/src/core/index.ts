@@ -4,10 +4,8 @@ export type {
   ParseArtifactsSnapshot,
   ParseFileOptions,
   ParseProgress,
-  ParseSnapshotOptions,
   ParseSourceInput,
 } from './logParser'
-export { SLIM_CANDIDATE_LIMIT, slimTaskRecognitionDetails } from './slimRecognitionDetails'
 export {
   createRawLineStore,
   cloneRawLineStore,

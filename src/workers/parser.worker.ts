@@ -38,11 +38,7 @@ self.onmessage = async (event: MessageEvent<LogParserWorkerRequest>) => {
     // consumeTasks 投影是内存峰值，先释放输入引用可让这部分缓冲被回收。
     parseInputs.length = 0
 
-    post({
-      type: 'result',
-      requestId,
-      tasks: parser.consumeTasks({ slimRecognitionDetails: true }),
-    })
+    post({ type: 'result', requestId, tasks: parser.consumeTasks() })
   } catch (error) {
     post({ type: 'error', requestId, message: getErrorMessage(error) })
   }

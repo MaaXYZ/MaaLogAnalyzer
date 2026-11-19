@@ -49,13 +49,7 @@ const formatRecognitionResultSummary = (value: unknown) => {
   return parts.length > 0 ? parts.join(' | ') : formatDetailValue(value, 240)
 }
 
-// 解析器可能把候选数组截断并记录原始数量到 allTotal/filteredTotal，优先展示原始数量。
-const formatCount = (value: unknown, total?: unknown) =>
-  typeof total === 'number'
-    ? String(total)
-    : Array.isArray(value)
-      ? String(value.length)
-      : '-'
+const formatCount = (value: unknown) => (Array.isArray(value) ? String(value.length) : '-')
 
 const formatChildBestSummary = (value: unknown) => {
   if (!isRecord(value)) return '-'
@@ -78,8 +72,8 @@ const formatChildRecognitionSummary = (item: Record<string, any>) => {
   }
 
   if (isRecord(item.detail)) {
-    parts.push(`all ${formatCount(item.detail.all, item.detail.allTotal)}`)
-    parts.push(`filtered ${formatCount(item.detail.filtered, item.detail.filteredTotal)}`)
+    parts.push(`all ${formatCount(item.detail.all)}`)
+    parts.push(`filtered ${formatCount(item.detail.filtered)}`)
     parts.push(`best ${formatChildBestSummary(item.detail.best)}`)
   }
 
@@ -122,10 +116,9 @@ export const buildRecognitionDetailRows = (
   }
 
   if (isRecord(detail)) {
-    if (Array.isArray(detail.all))
-      rows.push({ label: '全部结果', value: detail.allTotal ?? detail.all.length })
+    if (Array.isArray(detail.all)) rows.push({ label: '全部结果', value: detail.all.length })
     if (Array.isArray(detail.filtered))
-      rows.push({ label: '过滤结果', value: detail.filteredTotal ?? detail.filtered.length })
+      rows.push({ label: '过滤结果', value: detail.filtered.length })
     if (hasDetailValue(detail.best)) {
       rows.push({
         label: '最佳结果',
