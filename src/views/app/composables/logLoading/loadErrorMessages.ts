@@ -130,7 +130,7 @@ export const describeArchiveFailure = (fileName: string): string =>
 /** 压缩包能解开但里面没有日志：说清期望的文件名与目录结构，否则用户只能反复试。 */
 export const describeArchiveWithoutLogs = (): string =>
   withPreservedLogNotice(
-    '压缩包里没有找到日志文件：需要包含 maa.log / maafw.log / maa.bak.*.log，并保留 debug/ 目录结构。',
+    '压缩包里没有找到 MaaFramework 日志。请选择包含 maa.log、maafw.log 或对应 .bak*.log、.bak*.log.gz 备份的压缩包。',
   )
 
 /** 读文件阶段就失败（权限、文件被移动、磁盘异常）：同样不把底层英文直接甩给用户。 */

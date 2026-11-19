@@ -1,14 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { strToU8, zipSync } from 'fflate'
+import { gzipSync, strToU8, zipSync } from 'fflate'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }))
 
 import { extractZipContent, extractZipContents } from '../zipExtractor'
-import type { PrimaryLogSelectionOption } from '../logFileDiscovery'
+import { createPrimaryLogParseInputs, type PrimaryLogSelectionOption } from '../logFileDiscovery'
+import { prepareParserInputs } from '../prepareParserInputs'
+import { LogParser } from '@windsland52/maa-log-parser'
 import { decodeFileContent } from '../textEncoding'
-import { toExactArrayBuffer } from '../logInputSource'
+import { materializeWorkerParseInput, toExactArrayBuffer } from '../logInputSource'
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const copy = new Uint8Array(bytes.byteLength)
@@ -19,6 +21,66 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
 describe('extractZipContent', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('loads selected gzip rotations across volumes with their source names and searchable text', async () => {
+    const name = 'maafw.bak.2026.11.18-07.48.15.972.log.gz'
+    const details = JSON.stringify({ task_id: 7, entry: '历史记录', hash: 'h', uuid: 'u' })
+    const event = (time: string, status: string) =>
+      `[2026-11-18 ${time}][INF][Px1][Tx1][test] !!!OnEventNotify!!! [handle=1] [msg=Tasker.Task.${status}] [details=${details}]`
+    const history = event('07:48:15.000', 'Starting')
+    const current = event('07:48:16.000', 'Succeeded')
+    const volumes = [
+      new File(
+        [
+          toArrayBuffer(
+            zipSync({
+              [name]: gzipSync(strToU8(history)),
+              'maafw.bak.log.gz': strToU8('broken gzip'),
+            }),
+          ),
+        ],
+        'logs-part01.zip',
+      ),
+      new File([toArrayBuffer(zipSync({ 'maafw.log': strToU8(current) }))], 'logs-part02.zip'),
+    ]
+    const result = await extractZipContents(volumes, async (options) =>
+      options.filter((o) => o.name !== 'maafw.bak.log.gz'),
+    )
+    expect(result?.primaryLogFiles.map((file) => file.name)).toEqual([name, 'maafw.log'])
+    expect(await result?.primaryLogFiles[0].loadContent?.()).toBe(history)
+    expect(result?.textFiles).toEqual([])
+    const sources = createPrimaryLogParseInputs(result!.primaryLogFiles).reverse()
+    const inputs = await prepareParserInputs(
+      await Promise.all(sources.map(materializeWorkerParseInput)),
+      true,
+    )
+    const parser = new LogParser()
+    await parser.parseInputs(inputs)
+    expect(parser.getEventsSnapshot().map((event) => event.source?.path)).toEqual([name, 'maafw.log'])
+    expect(parser.consumeTasks()).toHaveLength(1)
+    const broken = await extractZipContents(volumes, async (options) =>
+      options.filter((o) => o.name === 'maafw.bak.log.gz'),
+    )
+    await expect(broken!.primaryLogFiles[0].loadContent!()).rejects.toThrow()
+  })
+
+  it('enforces the selected output budget across nested gzip members', async () => {
+    const compressed = gzipSync(strToU8('x'.repeat(600)))
+    const archive = new File(
+      [
+        toArrayBuffer(
+          zipSync({
+            'maa.bak.log.gz': compressed,
+            'maafw.bak.log.gz': compressed,
+          }),
+        ),
+      ],
+      'logs.zip',
+    )
+    await expect(
+      extractZipContent(archive, undefined, { archiveLimits: { maxExtractedBytes: 1000 } }),
+    ).rejects.toMatchObject({ code: 'extracted-size' })
   })
 
   it('loads root-level debug images from zip archives', async () => {

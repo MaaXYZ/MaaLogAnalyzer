@@ -13,6 +13,7 @@ export interface DeferredTextSearchTarget {
   label: string
   fileName: string
   loadContent: () => Promise<string>
+  loadSortSample?: () => Promise<string>
 }
 
 export const useTextSearchTargets = () => {
@@ -100,7 +101,7 @@ export const useTextSearchTargets = () => {
       const loaded: TextSearchLoadedTarget[] = []
       for (const target of deferredTargets) {
         try {
-          const content = await target.loadContent()
+          const content = await (target.loadSortSample ?? target.loadContent)()
           if (token !== hydrateTextSearchTargetsToken) return
           loaded.push({
             id: target.id,
@@ -118,6 +119,12 @@ export const useTextSearchTargets = () => {
         ...target,
         content: target.id === defaultId ? target.content : '',
       }))
+      const preferred = deferredTargets.find((target) => target.id === defaultId)
+      if (preferred?.loadSortSample) {
+        const target = merged.find((entry) => entry.id === defaultId)!
+        target.content = await preferred.loadContent()
+        if (token !== hydrateTextSearchTargetsToken) return
+      }
       setTextSearchLoadedTargets(merged, defaultId)
       return
     }

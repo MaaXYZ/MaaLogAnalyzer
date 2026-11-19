@@ -377,7 +377,7 @@ void fileInputRef
       ref="fileInputRef"
       type="file"
       multiple
-      accept=".log,.txt,.jsonl,.zip"
+      accept=".log,.log.gz,.txt,.jsonl,.zip"
       style="display: none"
       @change="handleFileInputChange"
     />

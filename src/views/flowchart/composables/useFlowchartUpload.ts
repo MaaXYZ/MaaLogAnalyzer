@@ -1,7 +1,13 @@
 import { onUnmounted, ref } from 'vue'
 import { toastError, toastWarning } from '../../../utils/toast'
 import { isTauri } from '../../../utils/platform'
-import { decodeFileContent } from '../../../utils/textEncoding'
+import { createPrimaryFileSource } from '../../../utils/gzipLog'
+import {
+  listTauriArchiveLogs,
+  openTauriArchiveLogs,
+  openTauriPrimaryLog,
+  type TauriArchiveLogs,
+} from '../../../utils/tauriPrimaryLogs'
 import { replaceBlobUrl, revokeBlobUrlMap } from '../../../utils/blobUrlMap'
 import { chargeTauriRegularFile, normalizeTauriDialogPaths } from '../../../utils/fileDialog'
 import {
@@ -9,12 +15,10 @@ import {
   type LoadedTextFile,
 } from '../../process/utils/fileLoadingHelpers'
 import {
-  type LoadedPrimaryLogFile,
   type FilePrimaryLogFile,
   type PrimaryLogFile,
   PRIMARY_LOG_FILE_HINT,
   selectPrimaryLogGroup,
-  sortLoadedPrimaryLogSegments,
 } from '../../../utils/logFileDiscovery'
 import { collectMxuZipVolumes, findMxuZipVolumes } from '../../../utils/mxuZipVolumes'
 import {
@@ -170,12 +174,9 @@ export const useFlowchartUpload = ({
     for (const { item } of selectedLogs) {
       chargeBrowserInputFile(budget, item.file)
     }
-    const primaryLogFiles: FilePrimaryLogFile[] = selectedLogs.map(({ item }) => ({
-      name: item.name,
-      path: item.path,
-      file: item.file,
-      loadContent: async () => decodeFileContent(new Uint8Array(await item.file.arrayBuffer())),
-    }))
+    const primaryLogFiles = selectedLogs.map(({ item }) =>
+      createPrimaryFileSource(item.path, item.file),
+    )
 
     return {
       content: '',
@@ -190,7 +191,7 @@ export const useFlowchartUpload = ({
         const { open } = await import('@tauri-apps/plugin-dialog')
         const selected = await open({
           multiple: true,
-          filters: [{ name: 'Log Files', extensions: ['log', 'jsonl', 'txt', 'zip'] }],
+          filters: [{ name: 'Log Files', extensions: ['log', 'gz', 'jsonl', 'txt', 'zip'] }],
           directory: false,
           title: '选择日志文件',
         })
@@ -200,9 +201,8 @@ export const useFlowchartUpload = ({
         if (!path) return
         if (path.toLowerCase().endsWith('.zip')) {
           const { invoke } = await import('@tauri-apps/api/core')
-          type ArchiveResult = {
+          type ArchiveResult = TauriArchiveLogs & {
             content: string
-            primary_log_files: LoadedPrimaryLogFile[]
             error_images: Record<string, string>
             vision_images: Record<string, string>
             wait_freezes_images: Record<string, string>
@@ -212,13 +212,19 @@ export const useFlowchartUpload = ({
             path,
             paths: selectedPaths,
           })
+          const opened = await openTauriArchiveLogs(listTauriArchiveLogs(result)).catch(
+            async (error) => {
+              await releaseTauriArchiveResource(result.resource_token)
+              throw error
+            },
+          )
           await emitUploadContent(
             result.content,
             toImageMap(result.error_images),
             toImageMap(result.vision_images),
             toImageMap(result.wait_freezes_images),
             undefined,
-            sortLoadedPrimaryLogSegments(result.primary_log_files ?? []),
+            opened,
             result.resource_token,
             generation,
           )
@@ -234,14 +240,7 @@ export const useFlowchartUpload = ({
             new Map(),
             new Map(),
             undefined,
-            [
-              {
-                path,
-                name: fileName,
-                loadBytes: async () => await readFile(path),
-                loadContent: async () => decodeFileContent(await readFile(path)),
-              },
-            ],
+            [await openTauriPrimaryLog(path, fileName, () => readFile(path))],
             undefined,
             generation,
           )

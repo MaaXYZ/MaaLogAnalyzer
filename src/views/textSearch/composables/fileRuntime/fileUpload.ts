@@ -1,3 +1,4 @@
+import { expandGzipFile, isGzipLog } from '../../../../utils/gzipLog'
 import { countLinesInFile } from './lineCount'
 
 interface UploadedFilePayload {
@@ -12,12 +13,14 @@ interface UploadedFilePayload {
 const LARGE_FILE_THRESHOLD_MB = 5
 
 export const readUploadedFile = async (file: File): Promise<UploadedFilePayload> => {
+  const fileName = file.name
+  if (isGzipLog(fileName)) file = await expandGzipFile(file)
   const fileSizeInMB = file.size / 1024 / 1024
 
   if (fileSizeInMB < LARGE_FILE_THRESHOLD_MB) {
     const fileContent = await file.text()
     return {
-      fileName: file.name,
+      fileName,
       fileSizeInMB,
       isLargeFile: false,
       fileContent,
@@ -27,7 +30,7 @@ export const readUploadedFile = async (file: File): Promise<UploadedFilePayload>
   }
 
   return {
-    fileName: file.name,
+    fileName,
     fileSizeInMB,
     isLargeFile: true,
     fileContent: '',

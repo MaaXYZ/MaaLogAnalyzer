@@ -6,6 +6,7 @@ import {
   rememberLoadedTaskCount,
   withPreservedLogNotice,
 } from './loadErrorMessages'
+import { isGzipLog, readGzipLogHead } from '../../../../utils/gzipLog'
 import { decodeFileContent } from '../../../../utils/textEncoding'
 import { LogParser } from '@windsland52/maa-log-parser'
 import type { TaskInfo } from '../../../../types'
@@ -16,10 +17,9 @@ import {
 } from '../../../../utils/parserWorkerClient'
 import { reviveParsedTaskList } from '../../../../utils/parsedTaskRevival'
 import {
-  materializeInlineParseInput,
   materializeWorkerParseInput,
 } from '../../../../utils/logInputSource'
-import { sortPrimaryLogParseInputs } from '../../../../utils/logFileDiscovery'
+import { prepareParserInputs } from '../../../../utils/prepareParserInputs'
 
 // 解析很快时（内置示例日志只要几十毫秒）不要闪一个 0% 的进度弹窗：
 // 超过这个时间还没结束，才认为值得给用户进度反馈。
@@ -45,6 +45,8 @@ const readLogSampleText = async (params: ProcessLogContentParams): Promise<strin
     return decodeFileContent(input.bytes.subarray(0, LOG_SAMPLE_CHARS))
   }
   if ('file' in input && input.file) {
+    if (isGzipLog(input.file.name))
+      return decodeFileContent(await readGzipLogHead(input.file, LOG_SAMPLE_CHARS))
     const head = await input.file.slice(0, LOG_SAMPLE_CHARS).arrayBuffer()
     return decodeFileContent(new Uint8Array(head))
   }
@@ -97,12 +99,8 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
 
       const parseInline = async (): Promise<TaskInfo[]> => {
         if (params.parseInputs && params.parseInputs.length > 0) {
-          const decodedInputs = await Promise.all(
-            params.parseInputs.map(materializeInlineParseInput),
-          )
-          const parseInputs = params.sortParseInputs
-            ? sortPrimaryLogParseInputs(decodedInputs)
-            : decodedInputs
+          const sources = await Promise.all(params.parseInputs.map(materializeWorkerParseInput))
+          const parseInputs = await prepareParserInputs(sources, params.sortParseInputs)
           await parser.parseInputs(parseInputs, onProgress)
         } else {
           await parser.parseFile(params.content, onProgress)

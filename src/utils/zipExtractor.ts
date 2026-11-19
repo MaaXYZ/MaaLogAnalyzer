@@ -6,6 +6,7 @@
  */
 
 import { unzip, unzipSync, type UnzipFileInfo, type Unzipped } from 'fflate'
+import { createGzipBudget, isGzipLog, openArchiveGzipLog } from './gzipLog'
 import { decodeFileContent } from './textEncoding'
 import {
   addArchiveDirectoryEntry,
@@ -20,7 +21,6 @@ import {
 import {
   createPrimaryLogSelectionOptions,
   isPrimaryLogFileName,
-  type BytePrimaryLogFile,
   type PrimaryLogFile,
   type PrimaryLogSelectionOption,
   selectPrimaryLogGroup,
@@ -284,10 +284,27 @@ export async function extractZipContents(
   const selectedPrimaryLogs = selectedLogs
     .filter(({ item }) => selectedPaths.has(item.path))
     .sort((a, b) => (selectedOrder.get(a.item.path) ?? 0) - (selectedOrder.get(b.item.path) ?? 0))
-  const primaryLogFiles: BytePrimaryLogFile[] = []
+  const primaryLogFiles: PrimaryLogFile[] = []
+  const gzipBudget =
+    limits &&
+    createGzipBudget(
+      limits,
+      selectedEntries.reduce(
+        (sum, entry) => sum + (isGzipLog(entry.name) ? 0 : entry.originalSize),
+        0,
+      ),
+    )
   for (const { item } of selectedPrimaryLogs) {
     const data = findFile(files, paths, item.path)
-    if (data) {
+    if (data && isGzipLog(item.name)) {
+      primaryLogFiles.push(
+        await openArchiveGzipLog(
+          item.path,
+          new File([toExactArrayBuffer(data)], item.name),
+          gzipBudget ?? undefined,
+        ),
+      )
+    } else if (data) {
       primaryLogFiles.push({
         path: item.path,
         name: item.name,

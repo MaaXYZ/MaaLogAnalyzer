@@ -13,7 +13,8 @@ export const isSearchTextFile = (normalizedPath: string) => {
 
 export function isNeededFile(path: string): boolean {
   const lower = path.replace(/\\/g, '/').toLowerCase()
-  if (isSearchTextFile(lower)) return true
+  if (isSearchTextFile(lower) || isPrimaryLogFileName(lower.slice(lower.lastIndexOf('/') + 1)))
+    return true
   if ((lower.includes('/on_error/') || lower.startsWith('on_error/')) && lower.endsWith('.png'))
     return true
   if ((lower.includes('/vision/') || lower.startsWith('vision/')) && lower.endsWith('.jpg'))

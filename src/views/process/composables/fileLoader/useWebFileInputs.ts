@@ -12,7 +12,7 @@ import {
   PRIMARY_LOG_FILE_HINT,
   selectPrimaryLogGroup,
 } from '../../../../utils/logFileDiscovery'
-import { decodeFileContent } from '../../../../utils/textEncoding'
+import { createPrimaryFileSource } from '../../../../utils/gzipLog'
 import type { UseProcessFileLoaderOptions } from './types'
 import { collectMxuZipVolumes, findMxuZipVolumes } from '../../../../utils/mxuZipVolumes'
 import {
@@ -100,12 +100,9 @@ const resolveSelectedLogContent = async (
     registerBrowserInputFile(budget, item.file, item.path)
     chargeBrowserInputFile(budget, item.file)
   }
-  const primaryLogFiles: FilePrimaryLogFile[] = selectedLogItems.map(({ item }) => ({
-    name: item.name,
-    path: item.path,
-    file: item.file,
-    loadContent: async () => decodeFileContent(new Uint8Array(await item.file.arrayBuffer())),
-  }))
+  const primaryLogFiles = selectedLogItems.map(({ item }) =>
+    createPrimaryFileSource(item.path, item.file),
+  )
 
   return {
     content: '',

@@ -1,4 +1,5 @@
 import { lstat, opendir, realpath } from 'node:fs/promises'
+import { expandGzipLog, expandSelectedGzipLogs, isGzipLog } from './gzipLog'
 import type { Stats } from 'node:fs'
 import path from 'node:path'
 import type { SourceSegment } from './runtimeInspection'
@@ -37,7 +38,7 @@ const MAIN_LOG_NAMES = ['maa.log', 'maafw.log'] as const
 const SEARCH_TEXT_EXTENSIONS = ['.log', '.txt', '.jsonl'] as const
 
 const MAIN_LOG_NAME_SET = new Set<string>(MAIN_LOG_NAMES.map((name) => name.toLowerCase()))
-const HISTORY_LOG_NAME_PATTERNS = [/^maa\.bak(?:\..+)?\.log$/i, /^maafw\.bak(?:\..+)?\.log$/i]
+const HISTORY_LOG_NAME_RE = /^(?:maa|maafw)\.bak(?:\..+)?\.log(?:\.gz)?$/i
 
 export interface KernelTextFile {
   path: string
@@ -86,7 +87,7 @@ const isSearchTextFile = (normalizedPath: string): boolean => {
 }
 
 const isHistoryLogName = (fileName: string): boolean => {
-  return HISTORY_LOG_NAME_PATTERNS.some((pattern) => pattern.test(fileName))
+  return HISTORY_LOG_NAME_RE.test(fileName)
 }
 
 const isCoreLogName = (fileName: string): boolean => {
@@ -528,13 +529,16 @@ const readNodeTextFileWithinBudget = async (
       ),
     { expectedIdentity: context.discoveredIdentities.get(pathKey(filePath)) },
   )
+  const content = isGzipLog(filePath)
+    ? expandGzipLog(filePath, bytes, context.limits, context.extraction.extractedBytes)
+    : bytes
   context.extraction = addSelectedEntry(
     context.extraction,
-    createStoredFileMetadata(toPosixPath(filePath), bytes.byteLength),
+    createStoredFileMetadata(toPosixPath(filePath), content.byteLength),
     context.limits,
     false,
   )
-  return decodeNodeBytes(bytes)
+  return decodeNodeBytes(content)
 }
 
 const collectFocusedFileContents = async (
@@ -645,6 +649,7 @@ export const extractZipContentFromNodeBuffer = (
   const paths = Object.keys(files)
   const group = selectPrimaryLogGroup(paths)
   if (!group) return null
+  expandSelectedGzipLogs(files, group.paths, limits)
   const basePath = group.directory
 
   const merged = options.focus

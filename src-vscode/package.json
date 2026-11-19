@@ -81,7 +81,7 @@
       "editor/context": [
         {
           "command": "maaLogAnalyzer.analyzeFile",
-          "when": "resourceExtname == .log",
+          "when": "resourceExtname == .log || resourceFilename =~ /\\.log\\.gz$/i",
           "group": "8_maa@1"
         }
       ],

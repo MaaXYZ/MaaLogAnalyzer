@@ -24,7 +24,9 @@ import {
   extractWaitFreezesImages,
   extractSearchTextFiles,
 } from './archiveShared'
-import type { ArchiveLimits } from './archiveLimits'
+import { createGzipBudget, isGzipLog, openArchiveGzipLog } from './gzipLog'
+import { toExactArrayBuffer } from './logInputSource'
+import { resolveArchiveLimits, type ArchiveLimits } from './archiveLimits'
 import { extractSevenZipEntries } from './sevenZipExtractor'
 
 export { ensureSevenZipModule } from './sevenZipExtractor'
@@ -151,7 +153,7 @@ async function extractSevenZipOrRar(
     .filter(({ item }) => selectedPaths.has(item.path))
     .map(({ item }) => {
       const data = neededFiles.get(item.path)
-      if (!data) return null
+      if (!data || isGzipLog(item.name)) return null
       return {
         path: item.path,
         name: item.name,
@@ -160,7 +162,28 @@ async function extractSevenZipOrRar(
     })
     .filter((entry): entry is LoadedPrimaryLogFile => entry != null)
 
-  const primaryLogFiles = sortLoadedPrimaryLogSegments(loadedLogs)
+  const primaryLogFiles: PrimaryLogFile[] = sortLoadedPrimaryLogSegments(loadedLogs)
+  const gzipBudget =
+    options.archiveLimits &&
+    createGzipBudget(
+      resolveArchiveLimits(options.archiveLimits),
+      [...neededFiles].reduce(
+        (sum, [path, bytes]) => sum + (isGzipLog(path) ? 0 : bytes.byteLength),
+        0,
+      ),
+    )
+  for (const { item } of selectedLogs) {
+    if (!selectedPaths.has(item.path) || !isGzipLog(item.name)) continue
+    const data = neededFiles.get(item.path)
+    if (data)
+      primaryLogFiles.push(
+        await openArchiveGzipLog(
+          item.path,
+          new File([toExactArrayBuffer(data)], item.name),
+          gzipBudget ?? undefined,
+        ),
+      )
+  }
 
   if (primaryLogFiles.length === 0) {
     return null

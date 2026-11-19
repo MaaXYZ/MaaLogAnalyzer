@@ -1,5 +1,6 @@
 import { lstat } from 'node:fs/promises'
 import path from 'node:path'
+import { expandSelectedGzipLogs } from './gzipLog'
 import type { FrameworkLogSource } from './frameworkVersion'
 import {
   extractInspectedZipEntriesWithinLimits,
@@ -56,6 +57,7 @@ const loadZipSources = async (
     limits,
   )
 
+  expandSelectedGzipLogs(files, group.paths, limits)
   return group.paths.flatMap((entryPath) => {
     const data = files[entryPath]
     if (!data) return []

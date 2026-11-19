@@ -60,7 +60,16 @@ export interface ParseArtifactsSnapshot {
   rawLines?: RawLineStore
 }
 
-const normalizeParseSourceInputs = (inputs: ParseSourceInput[]): ParseSourceInput[] => {
+type BatchInput =
+  | ParseSourceInput
+  | (Omit<ParseSourceInput, 'content'> & {
+      size: number
+      loadContent: () => Promise<string>
+    })
+
+const inputSize = (input: BatchInput) => ('content' in input ? input.content.length : input.size)
+
+const normalizeParseSourceInputs = (inputs: BatchInput[]) => {
   const indexedInputs = inputs.map((input, index) => ({
     ...input,
     inputIndex: input.inputIndex ?? index,
@@ -481,6 +490,7 @@ export class LogParser {
       chunkLineCount: number
       yieldControl: (() => Promise<void> | void) | null
       progressOffset: number
+      progressWeight: number
       totalChars: number
       storeRawLines: boolean
     },
@@ -549,7 +559,8 @@ export class LogParser {
 
       if (runtime.onProgress) {
         const current = Math.min(
-          runtime.progressOffset + Math.min(cursor, totalChars),
+          runtime.progressOffset +
+            Math.round(runtime.progressWeight * (Math.min(cursor, totalChars) / totalChars)),
           runtime.totalChars,
         )
         runtime.onProgress({
@@ -575,7 +586,7 @@ export class LogParser {
    * 解析多 source 日志内容（异步分块处理）
    */
   async parseInputs(
-    inputs: ParseSourceInput[],
+    inputs: BatchInput[],
     onProgress?: (progress: ParseProgress) => void,
     options?: ParseFileOptions,
   ): Promise<void> {
@@ -594,7 +605,7 @@ export class LogParser {
       this.resetParsedEvents()
 
       const normalizedInputs = normalizeParseSourceInputs(inputs)
-      const totalChars = normalizedInputs.reduce((sum, input) => sum + input.content.length, 0)
+      const totalChars = normalizedInputs.reduce((sum, input) => sum + inputSize(input), 0)
       const yieldControl =
         options?.yieldControl === undefined ? defaultParseYieldControl : options.yieldControl
       const storeRawLines = options?.storeRawLines === true
@@ -612,15 +623,21 @@ export class LogParser {
 
       let progressOffset = 0
       for (const input of normalizedInputs) {
-        const parsedChars = await this.parseSourceContent(input, {
-          onProgress,
-          chunkLineCount,
-          yieldControl,
-          progressOffset,
-          totalChars,
-          storeRawLines,
-        })
-        progressOffset += parsedChars
+        const content = 'content' in input ? input.content : await input.loadContent()
+        const weight = inputSize(input)
+        await this.parseSourceContent(
+          { ...input, content },
+          {
+            onProgress,
+            chunkLineCount,
+            yieldControl,
+            progressOffset,
+            progressWeight: weight,
+            totalChars,
+            storeRawLines,
+          },
+        )
+        progressOffset += weight
       }
 
       if (onProgress) {

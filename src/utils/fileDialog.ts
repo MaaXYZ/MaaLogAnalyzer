@@ -5,6 +5,13 @@
 
 import { isTauri, isVSCode } from './platform'
 import { toastError, toastWarning } from './toast'
+import { createPrimaryFileSource } from './gzipLog'
+import {
+  listTauriArchiveLogs,
+  openTauriArchiveLogs,
+  openTauriPrimaryLog,
+  type TauriArchiveLogs,
+} from './tauriPrimaryLogs'
 import { decodeFileContent } from './textEncoding'
 import type { TextFileSource } from './textFileSource'
 import { invoke } from '@tauri-apps/api/core'
@@ -27,7 +34,7 @@ import {
   isPrimaryLogFileName,
   type LoadedPrimaryLogFile,
   type FilePrimaryLogFile,
-  type LoadablePrimaryLogFile,
+  getPrimaryLogContentLoader,
   type PrimaryLogFile,
   type PrimaryLogSelectionOption,
   PRIMARY_LOG_FILE_HINT,
@@ -168,7 +175,7 @@ async function openLogFileWithTauri(): Promise<string | null> {
       filters: [
         {
           name: 'Log Files',
-          extensions: ['log', 'jsonl', 'txt', 'zip', '7z', 'rar'],
+          extensions: ['log', 'gz', 'jsonl', 'txt', 'zip', '7z', 'rar'],
         },
         {
           name: 'Archive Files',
@@ -191,9 +198,10 @@ async function openLogFileWithTauri(): Promise<string | null> {
         await chargeTauriRegularFile(anchor, budget)
       })
       const { readFile } = await import('@tauri-apps/plugin-fs')
-      const bytes = await readFile(anchor)
-      const content = decodeFileContent(bytes)
-      return content
+      const source = await openTauriPrimaryLog(anchor, anchor.split(/[/\\]/).pop()!, () =>
+        readFile(anchor),
+      )
+      return source.loadContent()
     }
   } catch (error) {
     toastError('打开文件失败: ' + error)
@@ -202,17 +210,23 @@ async function openLogFileWithTauri(): Promise<string | null> {
 }
 
 async function openArchiveFileWithTauri(path: string, paths: string[]): Promise<string | null> {
-  type ArchiveResult = {
+  type ArchiveResult = TauriArchiveLogs & {
     content: string
-    primary_log_files: LoadedPrimaryLogFile[]
     resource_token?: string | null
   }
   const result = await invoke<ArchiveResult>('extract_zip_log', { path, paths })
   try {
-    // Rust extract_zip_log returns empty content; real logs live in primary_log_files
-    const primaryLogFiles = result.primary_log_files ?? []
+    const primaryLogFiles = await openTauriArchiveLogs(listTauriArchiveLogs(result))
     if (primaryLogFiles.length === 0) return null
-    return combineLoadedPrimaryLogSegments(primaryLogFiles)
+    const segments: LoadedPrimaryLogFile[] = []
+    for (const entry of primaryLogFiles) {
+      segments.push({
+        path: entry.path,
+        name: entry.name,
+        content: await getPrimaryLogContentLoader(entry)(),
+      })
+    }
+    return combineLoadedPrimaryLogSegments(segments)
   } finally {
     await releaseTauriArchiveResource(result.resource_token).catch((error) => {
       console.warn('Failed to release unused Tauri archive images:', error)
@@ -227,7 +241,7 @@ async function openLogFileWithWeb(): Promise<string | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = '.log,.txt'
+    input.accept = '.log,.log.gz,.txt'
 
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
@@ -236,7 +250,7 @@ async function openLogFileWithWeb(): Promise<string | null> {
           const budget = createBrowserInputBudget(null)
           registerInputResourceEntry(budget, file.name, 0)
           chargeWebRegularFile(file, file.name, budget)
-          const content = await file.text()
+          const content = await createPrimaryFileSource(file.name, file).loadContent()
           resolve(content)
         } catch (error) {
           toastError('读取文件失败: ' + error)
@@ -563,7 +577,7 @@ async function readPrimaryLogFilesTauri(
   dirPath: string,
   budget: InputResourceBudget,
   selectPrimaryLogs?: OpenFolderDialogOptions['selectPrimaryLogs'],
-): Promise<LoadablePrimaryLogFile[] | null> {
+): Promise<PrimaryLogFile[] | null> {
   const { readFile } = await import('@tauri-apps/plugin-fs')
   const selectedLogs = selectPrimaryLogGroup(await listPrimaryLogFilesTauri(dirPath, budget))
   if (selectedLogs.length === 0) return []
@@ -583,12 +597,11 @@ async function readPrimaryLogFilesTauri(
   for (const { item } of selectedLogItems) {
     await chargeTauriRegularFile(item.path, budget)
   }
-  return selectedLogItems.map(({ item }): LoadablePrimaryLogFile => ({
-    path: item.path,
-    name: item.name,
-    loadBytes: async () => await readFile(item.path),
-    loadContent: async () => decodeFileContent(await readFile(item.path)),
-  }))
+  const files: PrimaryLogFile[] = []
+  for (const { item } of selectedLogItems) {
+    files.push(await openTauriPrimaryLog(item.path, item.name, () => readFile(item.path)))
+  }
+  return files
 }
 
 async function listPrimaryLogFilesWeb(
@@ -657,12 +670,7 @@ async function readPrimaryLogFilesWeb(
     chargeWebRegularFile(file, item.resourcePath, budget)
     selectedFiles.push({ item, file })
   }
-  return selectedFiles.map(({ item, file }): FilePrimaryLogFile => ({
-    path: item.path,
-    name: item.name,
-    file,
-    loadContent: async () => decodeFileContent(new Uint8Array(await file.arrayBuffer())),
-  }))
+  return selectedFiles.map(({ item, file }) => createPrimaryFileSource(item.path, file))
 }
 
 /**

@@ -23,7 +23,7 @@ use archive_safety::{
     ArchiveEntryReader, ArchiveSnapshotWorkspace, ARCHIVE_LIMITS,
 };
 
-const PRIMARY_LOG_FILE_HINT: &str = "maa.log / maa.bak*.log / maafw.log / maafw.bak*.log";
+const PRIMARY_LOG_FILE_HINT: &str = "maa.log / maa.bak*.log[.gz] / maafw.log / maafw.bak*.log[.gz]";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PrimaryLogKind {
@@ -56,9 +56,17 @@ struct LoadedPrimaryLogFileDto {
 }
 
 #[derive(Serialize)]
+struct GzipLogFileDto {
+    path: String,
+    name: String,
+    temp_path: String,
+}
+
+#[derive(Serialize)]
 struct ArchiveExtractResult {
     content: String,
     primary_log_files: Vec<LoadedPrimaryLogFileDto>,
+    gzip_log_files: Vec<GzipLogFileDto>,
     error_images: HashMap<String, String>,
     vision_images: HashMap<String, String>,
     wait_freezes_images: HashMap<String, String>,
@@ -482,7 +490,7 @@ fn extract_zip_log_inner(
     let on_error_prefix_lower = on_error_prefix.to_lowercase();
     let vision_prefix_lower = vision_prefix.to_lowercase();
 
-    let mut has_selected_images = false;
+    let mut needs_temp_directory = false;
     for entry in archive_entries
         .iter()
         .flatten()
@@ -492,12 +500,10 @@ fn extract_zip_log_inner(
         let is_log = selected_log_lookup.contains_key(&lower);
         let is_image = (lower.starts_with(&on_error_prefix_lower) && lower.ends_with(".png"))
             || (lower.starts_with(&vision_prefix_lower) && lower.ends_with(".jpg"));
-        if is_log || is_image {
-            has_selected_images |= is_image;
-        }
+        needs_temp_directory |= is_image || (is_log && lower.ends_with(".gz"));
     }
 
-    let mut pending_resource = if has_selected_images {
+    let mut pending_resource = if needs_temp_directory {
         Some(resources.create_pending_resource(app)?)
     } else {
         None
@@ -505,6 +511,7 @@ fn extract_zip_log_inner(
     let mut temp_seq: u64 = 0;
     let mut entry_reader = ArchiveEntryReader;
 
+    let mut gzip_log_files = Vec::new();
     let mut log_segments: Vec<LoadedPrimaryLogSegment> = Vec::new();
     let mut error_images: HashMap<String, String> = HashMap::new();
     let mut vision_images: HashMap<String, String> = HashMap::new();
@@ -522,6 +529,21 @@ fn extract_zip_log_inner(
             let lower = name.to_lowercase();
 
             if let Some(candidate) = selected_log_lookup.get(&lower) {
+                if lower.ends_with(".gz") {
+                    let directory = &pending_resource
+                        .as_ref()
+                        .ok_or_else(|| "ZIP log directory is unavailable".to_string())?
+                        .directory;
+                    let temp_path = save_zip_entry_to_temp_file(
+                        &mut entry, directory, &mut temp_seq, "gz", &mut entry_reader,
+                    )?;
+                    gzip_log_files.push(GzipLogFileDto {
+                        path: candidate.path.clone(),
+                        name: name.rsplit('/').next().unwrap_or(&name).to_string(),
+                        temp_path,
+                    });
+                    continue;
+                }
                 let expected_size = entry.size();
                 let buf = entry_reader.read_to_end(&mut entry, expected_size)?;
                 let content = decode_content(&buf);
@@ -597,13 +619,13 @@ fn extract_zip_log_inner(
         })
         .collect();
 
-    if primary_log_files.is_empty() {
+    if primary_log_files.is_empty() && gzip_log_files.is_empty() {
         return Err("ZIP 中未找到有效的日志内容".to_string());
     }
 
     let has_extracted_images =
         !error_images.is_empty() || !vision_images.is_empty() || !wait_freezes_images.is_empty();
-    let resource_token = if has_extracted_images {
+    let resource_token = if has_extracted_images || !gzip_log_files.is_empty() {
         let resource = pending_resource
             .take()
             .ok_or_else(|| "ZIP image resource is unavailable".to_string())?;
@@ -615,6 +637,7 @@ fn extract_zip_log_inner(
     Ok(ArchiveExtractResult {
         content: String::new(),
         primary_log_files,
+        gzip_log_files,
         error_images,
         vision_images,
         wait_freezes_images,
@@ -653,7 +676,7 @@ fn looks_like_rotation_timestamp(value: &str) -> bool {
     }
     for (idx, ch) in chars.iter().enumerate() {
         let expected_sep = match idx {
-            4 | 7 | 13 | 16 => Some('.'),
+            4 | 7 | 13 | 16 | 19 => Some('.'),
             10 => Some('-'),
             _ => None,
         };
@@ -673,13 +696,14 @@ fn parse_primary_log_candidate(raw_path: &str) -> Option<PrimaryLogCandidate> {
     let file_name = normalized.rsplit('/').next()?.to_string();
     let lower = file_name.trim().to_ascii_lowercase();
 
+    let backup_name = lower.strip_suffix(".gz").unwrap_or(&lower);
     let (kind, rotated_timestamp_hint) = if lower == "maa.log" || lower == "maafw.log" {
         (PrimaryLogKind::Main, None)
-    } else if lower == "maa.bak.log" || lower == "maafw.bak.log" {
+    } else if backup_name == "maa.bak.log" || backup_name == "maafw.bak.log" {
         (PrimaryLogKind::Bak, None)
-    } else if let Some(rest) = lower
+    } else if let Some(rest) = backup_name
         .strip_prefix("maa.bak.")
-        .or_else(|| lower.strip_prefix("maafw.bak."))
+        .or_else(|| backup_name.strip_prefix("maafw.bak."))
     {
         let timestamp = rest.strip_suffix(".log")?;
         if !looks_like_rotation_timestamp(timestamp) {
@@ -953,6 +977,19 @@ mod tests {
         writer.start_file(name, options).unwrap();
         writer.write_all(b"content").unwrap();
         ZipArchive::new(writer.finish().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn discovers_gzip_rotations_with_their_original_path_and_timestamp() {
+        let path = "debug/maafw.bak.2026.11.18-07.48.15.972.log.gz";
+        let candidate = super::parse_primary_log_candidate(path).unwrap();
+        assert_eq!(candidate.path, path);
+        assert_eq!(
+            candidate.rotated_timestamp_hint.as_deref(),
+            Some("2026.11.18-07.48.15.972")
+        );
+        assert!(matches!(candidate.kind, super::PrimaryLogKind::Bak));
+        assert!(super::parse_primary_log_candidate("debug/service.log.gz").is_none());
     }
 
     #[test]

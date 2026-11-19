@@ -396,7 +396,7 @@ const getArchiveBaseName = (value: string): string => {
 
 const isPrimaryLogName = (name: string): boolean =>
   /^(?:maa|maafw)\.log$/i.test(name.trim()) ||
-  /^(?:maa|maafw)\.bak(?:\.\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3})?\.log$/i.test(
+  /^(?:maa|maafw)\.bak(?:\.\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3})?\.log(?:\.gz)?$/i.test(
     name.trim(),
   )
 

@@ -1,7 +1,7 @@
 import type { ParseSourceInput } from '@windsland52/maa-log-parser'
 import type { LogParseSourceInput } from './logInputSource'
 
-export const PRIMARY_LOG_FILE_HINT = 'maa.log / maa.bak*.log / maafw.log / maafw.bak*.log'
+export const PRIMARY_LOG_FILE_HINT = 'maa.log / maa.bak*.log[.gz] / maafw.log / maafw.bak*.log[.gz]'
 
 export type PrimaryLogKind = 'main' | 'bak'
 export type PrimaryLogFamily = 'maa' | 'maafw'
@@ -59,7 +59,7 @@ export interface MatchedPrimaryLogEntry<T extends PrimaryLogSourceEntry> {
 
 const MAIN_LOG_RE = /^(maa|maafw)\.log$/i
 const BAK_LOG_RE =
-  /^(maa|maafw)\.bak(?:\.(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3}))?\.log$/i
+  /^(maa|maafw)\.bak(?:\.(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3}))?\.log(?:\.gz)?$/i
 const CONTENT_TIMESTAMP_RE = /\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{1,3})\]/
 
 const toPosixPath = (value: string): string => value.replace(/\\/g, '/')
@@ -238,9 +238,9 @@ export const sortLoadedPrimaryLogSegments = <T extends PrimaryLogSourceEntry & {
     .map(({ item }) => item)
 }
 
-export const sortPrimaryLogParseInputs = (
-  inputs: readonly ParseSourceInput[],
-): ParseSourceInput[] => {
+export const sortPrimaryLogParseInputs = <T extends ParseSourceInput>(
+  inputs: readonly T[],
+): T[] => {
   const sortable = inputs.map((input, index) => ({
     input,
     path: input.sourcePath ?? input.sourceKey ?? `primary-log:${index}`,

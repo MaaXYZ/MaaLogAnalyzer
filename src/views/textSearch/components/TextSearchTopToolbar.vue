@@ -72,7 +72,7 @@ defineExpose({
       id="text-search-file-input"
       ref="fileInputRef"
       type="file"
-      accept=".txt,.log"
+      accept=".txt,.log,.log.gz"
       @change="handleFileUpload"
       style="display: none"
     />

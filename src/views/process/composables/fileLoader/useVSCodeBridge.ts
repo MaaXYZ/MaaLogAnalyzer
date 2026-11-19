@@ -4,6 +4,7 @@ import type { FilePrimaryLogFile, LoadedPrimaryLogFile } from '../../../../utils
 import type { UseProcessFileLoaderOptions } from './types'
 import { InputResourceLimitError } from '../../../../utils/browserInputBudget'
 import { replaceBlobUrl, revokeBlobUrlMap } from '../../../../utils/blobUrlMap'
+import { createPrimaryFileSource } from '../../../../utils/gzipLog'
 import { decodeFileContent } from '../../../../utils/textEncoding'
 
 export interface VSCodeBridgePayload {
@@ -399,12 +400,7 @@ export const createVSCodeByteTransferHandler = (
         const blob = new Blob(file.parts, { type: file.mimeType })
         if (file.kind === 'primary') {
           const source = new File([blob], file.name, { type: 'text/plain' })
-          transfer.primaryLogFiles.push({
-            path: file.path,
-            name: file.name,
-            file: source,
-            loadContent: async () => decodeFileContent(new Uint8Array(await source.arrayBuffer())),
-          })
+          transfer.primaryLogFiles.push(createPrimaryFileSource(file.path, source))
         } else if (file.kind === 'text') {
           transfer.textFiles.push({
             path: file.path,

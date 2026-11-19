@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { strToU8, zipSync } from 'fflate'
+import { gzipSync, strToU8, zipSync } from 'fflate'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   ArchiveLimitError,
@@ -23,6 +23,27 @@ afterEach(async () => {
 })
 
 describe('node input focus selectors', () => {
+  it('reads gzip rotations from folders and ZIPs and accounts for expanded bytes', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'mla-gzip-'))
+    tempRoots.push(root)
+    const name = 'maafw.bak.2026.11.18-07.48.15.972.log.gz'
+    const history = '历史记录'.repeat(200)
+    const bytes = gzipSync(strToU8(history))
+    await writeFile(path.join(root, name), bytes)
+    const bundle = zipSync({ [name]: bytes, 'maafw.log': strToU8('current') })
+    expect((await loadNodeLogDirectory(root))?.content).toBe(history)
+    const result = extractZipContentFromNodeBuffer(bundle)
+    expect(result?.content).toBe(history + '\ncurrent')
+    expect(result?.sourceSegments[0].path).toBe(name)
+    const archiveLimits = { maxFileBytes: 1000 }
+    await expect(loadNodeLogDirectory(root, { archiveLimits })).rejects.toMatchObject({
+      code: 'file-size',
+    })
+    expect(() => extractZipContentFromNodeBuffer(bundle, 'logs.zip', { archiveLimits })).toThrow(
+      ArchiveLimitError,
+    )
+  })
+
   it('loads every segment of the newest log group by default', async () => {
     // 默认路径也要带上 *.bak.<时间戳>.log 轮转片段（与 Web / 桌面端一致）：以前只取
     // maa.bak.log + maa.log，轮转片段里的历史被静默丢掉。

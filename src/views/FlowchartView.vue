@@ -276,7 +276,7 @@ useHotkeys({
       ref="fileInputRef"
       type="file"
       multiple
-      accept=".log,.jsonl,.txt,.zip"
+      accept=".log,.log.gz,.jsonl,.txt,.zip"
       style="display: none"
       @change="handleFileInputChange"
     />

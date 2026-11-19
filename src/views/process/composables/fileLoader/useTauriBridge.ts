@@ -1,12 +1,15 @@
 import type { UseProcessFileLoaderOptions } from './types'
 import { toastError } from '../../../../utils/toast'
 import { invoke } from '@tauri-apps/api/core'
-import { decodeFileContent } from '../../../../utils/textEncoding'
+import {
+  listTauriArchiveLogs,
+  openTauriArchiveLogs,
+  openTauriPrimaryLog,
+  type TauriArchiveLogs,
+} from '../../../../utils/tauriPrimaryLogs'
 import { chargeTauriRegularFile, normalizeTauriDialogPaths } from '../../../../utils/fileDialog'
 import {
   createPrimaryLogSelectionOptions,
-  sortLoadedPrimaryLogSegments,
-  type LoadedPrimaryLogFile,
 } from '../../../../utils/logFileDiscovery'
 import {
   releaseTauriArchiveResource,
@@ -18,9 +21,8 @@ import {
 } from '../../../../utils/browserInputBudget'
 import type { FileLoadOperationGate } from './operationGate'
 
-interface TauriArchiveLoadResult {
+interface TauriArchiveLoadResult extends TauriArchiveLogs {
   content: string
-  primary_log_files: LoadedPrimaryLogFile[]
   error_images: Record<string, string>
   vision_images: Record<string, string>
   wait_freezes_images: Record<string, string>
@@ -49,7 +51,7 @@ export const useTauriBridge = (
         filters: [
           {
             name: 'Log Files',
-            extensions: ['log', 'jsonl', 'txt', 'zip'],
+            extensions: ['log', 'gz', 'jsonl', 'txt', 'zip'],
           },
         ],
         directory: false,
@@ -76,7 +78,7 @@ export const useTauriBridge = (
               const errorImages = createTauriImageMap(result.error_images)
               const visionImages = createTauriImageMap(result.vision_images)
               const waitFreezesImages = createTauriImageMap(result.wait_freezes_images)
-              const primaryLogFiles = sortLoadedPrimaryLogSegments(result.primary_log_files ?? [])
+              const primaryLogFiles = listTauriArchiveLogs(result)
               const selectedOptions = options.selectPrimaryLogs
                 ? await options.selectPrimaryLogs(createPrimaryLogSelectionOptions(primaryLogFiles))
                 : createPrimaryLogSelectionOptions(primaryLogFiles)
@@ -89,13 +91,15 @@ export const useTauriBridge = (
               )
               if (selectedPrimaryLogFiles.length === 0) return
 
+              const opened = await openTauriArchiveLogs(selectedPrimaryLogFiles)
+              if (!operationGate.isCurrent(generation)) return
               options.onUploadContent(
                 result.content,
                 errorImages,
                 visionImages,
                 waitFreezesImages,
                 undefined,
-                selectedPrimaryLogFiles,
+                opened,
               )
               await archiveResourceOwner.replace(resourceToken)
               adoptedResource = true
@@ -112,14 +116,9 @@ export const useTauriBridge = (
             if (!operationGate.isCurrent(generation)) return
 
             const fileName = anchor.split(/[/\\]/).pop() || 'loaded.log'
-            options.onUploadContent('', undefined, undefined, undefined, undefined, [
-              {
-                path: anchor,
-                name: fileName,
-                loadBytes: async () => await readFile(anchor),
-                loadContent: async () => decodeFileContent(await readFile(anchor)),
-              },
-            ])
+            const source = await openTauriPrimaryLog(anchor, fileName, () => readFile(anchor))
+            if (!operationGate.isCurrent(generation)) return
+            options.onUploadContent('', undefined, undefined, undefined, undefined, [source])
           }
         } finally {
           operationGate.finish(generation)

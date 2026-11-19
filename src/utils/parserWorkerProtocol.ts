@@ -9,6 +9,7 @@ import type { TaskInfo } from '../types'
  */
 export interface LogParserWorkerInput {
   bytes?: ArrayBuffer
+  gzip?: Blob
   content?: string
   sourceKey?: string
   sourcePath?: string

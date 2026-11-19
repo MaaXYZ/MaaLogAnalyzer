@@ -1,6 +1,6 @@
 import type { ParseSourceInput } from '@windsland52/maa-log-parser'
 import type { LogParserWorkerInput } from './parserWorkerProtocol'
-import { decodeFileContent } from './textEncoding'
+import { isGzipLog } from './gzipLog'
 
 type LogParseSourceMetadata = Omit<ParseSourceInput, 'content'>
 
@@ -32,18 +32,6 @@ export const toExactArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   return bytes.slice().buffer as ArrayBuffer
 }
 
-export const materializeInlineParseInput = async (
-  input: LogParseSourceInput,
-): Promise<ParseSourceInput> => ({
-  content:
-    'content' in input && typeof input.content === 'string'
-      ? input.content
-      : decodeFileContent(await readSourceBytes(input)),
-  sourceKey: input.sourceKey,
-  sourcePath: input.sourcePath,
-  inputIndex: input.inputIndex,
-})
-
 export const materializeWorkerParseInput = async (
   input: LogParseSourceInput,
 ): Promise<LogParserWorkerInput> => {
@@ -55,6 +43,7 @@ export const materializeWorkerParseInput = async (
   if ('content' in input && typeof input.content === 'string') {
     return { ...metadata, content: input.content }
   }
+  if (input.file && isGzipLog(input.file.name)) return { ...metadata, gzip: input.file }
   return {
     ...metadata,
     bytes: toExactArrayBuffer(await readSourceBytes(input)),

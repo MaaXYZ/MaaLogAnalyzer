@@ -22,6 +22,9 @@ import type { LogLoadingPipelineOptions } from './types'
 import type { ProcessLogContentParams } from './types'
 import type { DeferredTextSearchTarget, TextSearchLoadedTarget } from '../useTextSearchTargets'
 import { getTextFileContentLoader } from '../../../../utils/textFileSource'
+import { readGzipSortSample } from '../../../../utils/prepareParserInputs'
+import { ArchiveLimitError } from '../../../../utils/archiveLimits'
+import { isGzipLog, expandGzipFile } from '../../../../utils/gzipLog'
 import { decodeFileContent } from '../../../../utils/textEncoding'
 
 interface CreateUploadHandlersOptions {
@@ -40,6 +43,8 @@ const createDeferredTargetsFromTextFiles = (
     label: file.path || file.name,
     fileName: file.name,
     loadContent: getPrimaryLogContentLoader(file),
+    loadSortSample:
+      'file' in file && isGzipLog(file.file.name) ? () => readGzipSortSample(file.file) : undefined,
   }))
   const explicitTargets: DeferredTextSearchTarget[] = (textFiles ?? [])
     .filter((file) => !primaryPaths.has(file.path))
@@ -82,7 +87,7 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
     selectPrimaryLogs = pipeline.selectPrimaryLogs,
   ) => {
     const files = Array.isArray(upload) ? upload : [upload]
-    const file = files[0]
+    let file = files[0]
     if (!file) return
 
     if (pipeline.loading.value) {
@@ -154,6 +159,23 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
       const fileName = file.name || 'loaded.log'
       // 单文件先做「只看开头几 KB」的预检：空文件 / 超大文件 / UTF-16 / 二进制文件
       // 注定解析不出任务，没必要让用户等一次必然失败的解析，更没必要为它清空旧日志。
+      if (isGzipLog(fileName)) {
+        if (file.size > MAX_SINGLE_LOG_BYTES) {
+          pipeline.onWarning(describeSingleFileRejection('oversized', fileName, file.size))
+          return
+        }
+        try {
+          file = await expandGzipFile(file, (_compressed, size) => {
+            if (size > MAX_SINGLE_LOG_BYTES) {
+              throw new ArchiveLimitError('file-size', size, MAX_SINGLE_LOG_BYTES)
+            }
+          })
+        } catch (error) {
+          if (!(error instanceof ArchiveLimitError)) throw error
+          pipeline.onWarning(describeSingleFileRejection('oversized', fileName, error.actual))
+          return
+        }
+      }
       const head = new Uint8Array(await file.slice(0, FILE_HEAD_SAMPLE_BYTES).arrayBuffer())
       const rejection = classifyFileHead(head, file.size)
       if (rejection !== 'ok') {
@@ -174,8 +196,8 @@ export const createLogLoadingUploadHandlers = (options: CreateUploadHandlersOpti
         deferredTargets: [
           {
             id: 'loaded:single',
-            label: file.name,
-            fileName: file.name,
+            label: fileName,
+            fileName,
             loadContent: async () => decodeFileContent(new Uint8Array(await file.arrayBuffer())),
           },
         ],

@@ -32,10 +32,10 @@ const execFileAsync = promisify(execFile)
 const t = (message: string, ...args: Array<string | number | boolean>) =>
   vscode.l10n.t(message, ...args)
 
-const PRIMARY_LOG_FILE_HINT = 'maa.log / maa.bak*.log / maafw.log / maafw.bak*.log'
+const PRIMARY_LOG_FILE_HINT = 'maa.log / maa.bak*.log[.gz] / maafw.log / maafw.bak*.log[.gz]'
 const MAIN_LOG_RE = /^(maa|maafw)\.log$/i
 const BAK_LOG_RE =
-  /^(maa|maafw)\.bak(?:\.(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3}))?\.log$/i
+  /^(maa|maafw)\.bak(?:\.(\d{4}\.\d{2}\.\d{2}-\d{2}\.\d{2}\.\d{2}\.\d{1,3}))?\.log(?:\.gz)?$/i
 
 const beginLoadOperation = (): LoadOperation => {
   webviewReadiness?.cancelPending(new Error('Load operation was superseded'))
@@ -442,7 +442,7 @@ function createOrShowPanel(context: vscode.ExtensionContext): vscode.WebviewPane
           const fileUri = await vscode.window.showOpenDialog({
             canSelectMany: false,
             filters: {
-              [t('Log Files')]: ['log', 'jsonl', 'txt', 'zip'],
+              [t('Log Files')]: ['log', 'gz', 'jsonl', 'txt', 'zip'],
             },
             title: t('Select Log File'),
           })
@@ -595,7 +595,7 @@ async function pickFileUriForAnalysis(): Promise<vscode.Uri | undefined> {
     canSelectMany: false,
     canSelectFolders: false,
     canSelectFiles: true,
-    filters: { [t('Log Files')]: ['log', 'jsonl', 'txt', 'zip'] },
+    filters: { [t('Log Files')]: ['log', 'gz', 'jsonl', 'txt', 'zip'] },
     title: t('Select Log File'),
   })
 
@@ -653,6 +653,7 @@ async function analyzeUri(
   const looksLikeFile =
     lower.endsWith('.zip') ||
     lower.endsWith('.log') ||
+    lower.endsWith('.log.gz') ||
     lower.endsWith('.jsonl') ||
     lower.endsWith('.txt')
   if (looksLikeFile) {
@@ -675,6 +676,8 @@ async function analyzeFolderUri(
       '**/maafw.log',
       '**/maa.bak*.log',
       '**/maafw.bak*.log',
+      '**/maa.bak*.log.gz',
+      '**/maafw.bak*.log.gz',
     ].map((pattern) => new vscode.RelativePattern(folderUri, pattern))
     const candidateLists = await Promise.all(
       candidatePatterns.map((pattern) =>
