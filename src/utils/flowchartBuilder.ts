@@ -53,6 +53,33 @@ type ElkLayoutEngine = InstanceType<typeof ELK>
 
 let elkPromise: Promise<ElkLayoutEngine> | null = null
 
+/**
+ * ELK 的 worker 脚本不能用 Vite 的 `?worker`：那样拿到的是扩展资源 URL，而 VS Code
+ * webview 的文档源是 vscode-webview://，资源挂在 https://*.vscode-cdn.net 上，两者不同源，
+ * `new Worker(资源 URL)` 会被浏览器直接拒绝（Failed to construct 'Worker': Script at ...
+ * cannot be accessed from origin 'vscode-webview://...'）。
+ *
+ * 所以这里把 worker 源码当字符串取回来，用 Blob URL 构造：Blob URL 与文档同源，webview
+ * 的 CSP 也已放行 `worker-src blob:`。Web/Tauri 走同一条路径，代价只是 worker 源码随
+ * elkjs chunk 一起下发，总量与原先单独下载 worker 文件相当。
+ */
+const createElkWorker = (source: string): Worker => {
+  const scriptUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }))
+  let worker: Worker
+  try {
+    worker = new Worker(scriptUrl)
+  } catch (error) {
+    URL.revokeObjectURL(scriptUrl)
+    throw error
+  }
+  // worker 脚本一旦加载并运行，blob URL 就不再需要了。首条 message 表示它已在运行，
+  // error 覆盖脚本加载失败的情况，两种情况下都回收 object URL，避免长期占用内存。
+  const revoke = () => URL.revokeObjectURL(scriptUrl)
+  worker.addEventListener('message', revoke, { once: true })
+  worker.addEventListener('error', revoke, { once: true })
+  return worker
+}
+
 const getElk = async (): Promise<ElkLayoutEngine> => {
   if (!elkPromise) {
     const pending: Promise<ElkLayoutEngine> = import.meta.env.SSR
@@ -61,10 +88,10 @@ const getElk = async (): Promise<ElkLayoutEngine> => {
         )
       : Promise.all([
           import('elkjs/lib/elk-api.js'),
-          import('elkjs/lib/elk-worker.min.js?worker'),
+          import('elkjs/lib/elk-worker.min.js?raw'),
         ]).then(
-          ([{ default: ElkConstructor }, { default: ElkWorker }]) =>
-            new ElkConstructor({ workerFactory: () => new ElkWorker() }),
+          ([{ default: ElkConstructor }, { default: elkWorkerSource }]) =>
+            new ElkConstructor({ workerFactory: () => createElkWorker(elkWorkerSource) }),
         )
     // 失败不留缓存：chunk / worker 起不来通常是一次性的，缓存了失败的 promise
     // 等于整个会话再也画不出流程图，连重试的机会都没有。
