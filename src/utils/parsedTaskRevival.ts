@@ -12,35 +12,39 @@ const isObject = (value: unknown): value is Record<PropertyKey, unknown> =>
   value !== null && typeof value === 'object'
 
 /**
- * 第一遍：重新标记 `markRaw`。
+ * 给大体积详情对象补 `markRaw`。
  *
- * 必须先于冻结完成。`markRaw` 内部用 `Object.defineProperty` 写入 `__v_skip`，
- * 对已冻结的对象会抛错，所以标记与冻结不能在同一次遍历里交错进行。
+ * `markRaw` 用 `Object.defineProperty` 写 `__v_skip`，对已冻结对象会抛错；同一个
+ * 详情对象可能被多个任务共享，先检查 `__v_skip` / 冻结状态，保证幂等、不重复 define。
  */
-const markRawDetails = (value: unknown, seen: WeakSet<object>): void => {
+const markRawDetail = (detail: object): void => {
+  if ('__v_skip' in detail || Object.isFrozen(detail)) return
+  markRaw(detail)
+}
+
+/**
+ * 单次遍历同时完成「补 markRaw」与「深冻结」。
+ *
+ * 两件事必须「先标记、后冻结」（同上），但不必分两遍：后序遍历时先给本对象引用的
+ * 详情子对象补标记，递归完子节点再冻结自身即可。旧实现为此走两趟全树，改动后
+ * 只走一趟——大型日志的任务树可达上百万节点，这一步在主线程是"解析 100% 之后"
+ * 的主要耗时之一。与主线程解析路径的 `freezeSnapshotData` 行为保持一致。
+ */
+const reviveValue = (value: unknown, seen: WeakSet<object>): void => {
   if (!isObject(value) || seen.has(value)) return
   seen.add(value)
 
   if (!Array.isArray(value)) {
     for (const key of RAW_DETAIL_KEYS) {
       const detail = value[key]
-      if (isObject(detail)) markRaw(detail)
+      if (isObject(detail)) markRawDetail(detail)
     }
   }
 
   for (const key of Reflect.ownKeys(value)) {
-    markRawDetails(value[key], seen)
+    reviveValue(value[key], seen)
   }
-}
 
-/** 第二遍：深冻结，与主线程解析路径的 `freezeSnapshotData` 行为一致。 */
-const freezeDeep = (value: unknown, seen: WeakSet<object>): void => {
-  if (!isObject(value) || seen.has(value)) return
-  seen.add(value)
-
-  for (const key of Reflect.ownKeys(value)) {
-    freezeDeep(value[key], seen)
-  }
   Object.freeze(value)
 }
 
@@ -52,11 +56,7 @@ const freezeDeep = (value: unknown, seen: WeakSet<object>): void => {
  * 使两条路径产出的任务树行为一致。
  */
 export const reviveParsedTaskList = (tasks: TaskInfo[]): TaskInfo[] => {
-  const markSeen = new WeakSet<object>()
-  for (const task of tasks) markRawDetails(task, markSeen)
-
-  const freezeSeen = new WeakSet<object>()
-  for (const task of tasks) freezeDeep(task, freezeSeen)
-
+  const seen = new WeakSet<object>()
+  for (const task of tasks) reviveValue(task, seen)
   return tasks
 }

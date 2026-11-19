@@ -273,6 +273,9 @@ export async function extractZipContents(
       files[path] = data
     }
   }
+  // 各分卷原始字节（分卷多时可达上百 MB）只在解包时需要；后续文本懒加载走的是
+  // archiveFiles 的 Blob，这里尽早释放缓冲以降低峰值内存。
+  archives.length = 0
 
   const fileMap = toMap(files)
   const paths = Object.keys(files)

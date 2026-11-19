@@ -34,6 +34,10 @@ self.onmessage = async (event: MessageEvent<LogParserWorkerRequest>) => {
       post({ type: 'progress', requestId, percentage: progress.percentage })
     })
 
+    // 解析已产出事件，输入来源（gzip Blob / 大字符串）不再需要；紧随其后的
+    // consumeTasks 投影是内存峰值，先释放输入引用可让这部分缓冲被回收。
+    parseInputs.length = 0
+
     post({ type: 'result', requestId, tasks: parser.consumeTasks() })
   } catch (error) {
     post({ type: 'error', requestId, message: getErrorMessage(error) })

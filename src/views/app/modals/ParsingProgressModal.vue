@@ -36,7 +36,9 @@ const announcedPercent = computed(() => Math.min(100, Math.floor(props.progress 
     :close-on-esc="false"
   >
     <n-flex vertical style="gap: 20px; padding: 20px 0">
-      <n-text style="text-align: center; font-size: 16px"> 解析进度：{{ props.progress }}% </n-text>
+      <n-text style="text-align: center; font-size: 16px">
+        {{ props.progress >= 100 ? '正在整理任务数据…' : `解析进度：${props.progress}%` }}
+      </n-text>
       <!-- 视觉隐藏的播报区：可见的那行百分比对读屏不是 live 内容，
            不加这个的话「0→100%」全程静音，用户不知道还要等多久、也不知道已经完成 -->
       <div
@@ -46,7 +48,7 @@ const announcedPercent = computed(() => Math.min(100, Math.floor(props.progress 
         aria-live="polite"
         aria-atomic="true"
       >
-        {{ announcedPercent >= 100 ? '日志解析完成' : `日志解析进度 ${announcedPercent}%` }}
+        {{ announcedPercent >= 100 ? '日志解析完成，正在整理任务数据' : `日志解析进度 ${announcedPercent}%` }}
       </div>
       <n-progress
         type="line"
@@ -56,7 +58,9 @@ const announcedPercent = computed(() => Math.min(100, Math.floor(props.progress 
         status="success"
       />
       <n-text depth="3" style="text-align: center; font-size: 13px">
-        正在分块处理日志，请稍候...
+        {{ props.progress >= 100
+          ? '解析完成，正在生成任务视图，请稍候…'
+          : '正在分块处理日志，请稍候...' }}
       </n-text>
     </n-flex>
   </n-modal>
