@@ -8,7 +8,7 @@ import {
   buildNodeRecognitionFlowItems,
 } from '@windsland52/maa-log-parser/node-flow'
 import { TOUR_STEPS, TOUR_STORAGE_KEY, TOUR_VERSION } from '../../../tutorial/steps'
-import type { NodeInfo, TaskInfo } from '../../../types'
+import type { NodeInfo, TaskInfo, TaskSummary } from '../../../types'
 import { LogParser } from '@windsland52/maa-log-parser'
 import { BRIDGE_THEME_UPDATED_EVENT } from '../../../utils/bridgeEvents'
 import { isVSCode } from '../../../utils/platform'
@@ -79,6 +79,9 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
   const followLast = ref(true)
   const parseProgress = ref(0)
   const showParsingModal = ref(false)
+  // 解析进行中的任务瘦摘要：边解析边上屏，解析完成后由 applyParsedTasks 用完整任务树替换。
+  const parseTaskSummaries = shallowRef<TaskSummary[]>([])
+  const parseInputsProgress = ref({ parsedInputs: 0, totalInputs: 0 })
 
   const { resetParserDebugAssets } = useParserDebugAssets({ parser })
 
@@ -236,6 +239,10 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
     setDeferredTextSearchTargets,
     pickPreferredLogTargetId,
     applyParsedTasks,
+    onTaskSummaries: (summaries, progress) => {
+      parseTaskSummaries.value = summaries
+      parseInputsProgress.value = progress
+    },
     handleFileLoadingStart,
     handleFileLoadingEnd,
     steps: TOUR_STEPS,
@@ -430,6 +437,8 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
     modalWidth: modalWidth.value,
     modalWidthSmall: modalWidthSmall.value,
     parseProgress: parseProgress.value,
+    parseTaskSummaries: parseTaskSummaries.value,
+    parseInputsProgress: parseInputsProgress.value,
     tourActive: tourActive.value,
     currentTourStep: currentTourStep.value,
     tourStepIndex: tourStepIndex.value,

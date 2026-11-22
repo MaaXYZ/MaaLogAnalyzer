@@ -12,6 +12,7 @@ export type {
   RecognitionDetail,
   ResourceLoadingDetail,
   TaskInfo,
+  TaskSummary,
   UnifiedFlowGroup,
   UnifiedFlowItem,
   UnifiedFlowType,

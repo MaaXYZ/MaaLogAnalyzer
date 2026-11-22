@@ -1,5 +1,5 @@
 import LogParserWorker from '../workers/parser.worker?worker'
-import type { TaskInfo } from '../types'
+import type { TaskInfo, TaskSummary } from '../types'
 import {
   collectWorkerInputTransfers,
   LOG_PARSER_WORKER_OOM_MESSAGE,
@@ -18,6 +18,11 @@ export interface ParseInWorkerParams {
   visionImages?: Map<string, string>
   waitFreezesImages?: Map<string, string>
   onProgress?: (percentage: number) => void
+  /** 每解析完一个分卷回传一次当前任务瘦摘要（用于边解析边上屏）。 */
+  onTaskSummaries?: (
+    summaries: TaskSummary[],
+    progress: { parsedInputs: number; totalInputs: number },
+  ) => void
 }
 
 export const isLogParserWorkerSupported = (): boolean => typeof Worker !== 'undefined'
@@ -36,6 +41,7 @@ export const parseLogsInWorker = ({
   visionImages,
   waitFreezesImages,
   onProgress,
+  onTaskSummaries,
 }: ParseInWorkerParams): Promise<TaskInfo[]> => {
   if (!isLogParserWorkerSupported()) {
     return Promise.reject(new LogParserWorkerUnavailableError('当前环境不支持 Web Worker'))
@@ -63,6 +69,13 @@ export const parseLogsInWorker = ({
       const message = event.data
       if (message.type === 'progress') {
         onProgress?.(message.percentage)
+        return
+      }
+      if (message.type === 'task-summaries') {
+        onTaskSummaries?.(message.summaries, {
+          parsedInputs: message.parsedInputs,
+          totalInputs: message.totalInputs,
+        })
         return
       }
       if (message.type === 'result') {

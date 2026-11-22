@@ -1,5 +1,5 @@
 import type { ComputedRef, Ref, VNodeChild } from 'vue'
-import type { NodeInfo, TaskInfo } from '../../../../types'
+import type { NodeInfo, TaskInfo, TaskSummary } from '../../../../types'
 import type { TourStep } from '../../../../tutorial/types'
 import type { PrimaryLogSelectionOption } from '../../../../utils/logFileDiscovery'
 import type {
@@ -60,6 +60,8 @@ export interface UseAppPresentationBindingsOptions {
   modalWidth: Ref<string>
   modalWidthSmall: Ref<string>
   parseProgress: Ref<number>
+  parseTaskSummaries: Ref<TaskSummary[]>
+  parseInputsProgress: Ref<{ parsedInputs: number; totalInputs: number }>
   tourActive: Ref<boolean>
   currentTourStep: Ref<TourStep | null>
   tourStepIndex: Ref<number>

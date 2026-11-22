@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TaskSummary } from '../../../../types'
 import AboutModal from '../../modals/AboutModal.vue'
 import FileLoadingModal from '../../modals/FileLoadingModal.vue'
 import ParsingProgressModal from '../../modals/ParsingProgressModal.vue'
@@ -10,6 +11,8 @@ defineProps<{
   modalWidth: string
   modalWidthSmall: string
   parseProgress: number
+  parseTaskSummaries: TaskSummary[]
+  parseInputsProgress: { parsedInputs: number; totalInputs: number }
   isVscodeLaunchEmbed: boolean
   appEmbedMode: string
   bridgeEnabled: boolean
@@ -61,5 +64,7 @@ const handleParsingModalUpdate = (value: boolean) => {
     @update:show="handleParsingModalUpdate"
     :width="modalWidthSmall"
     :progress="parseProgress"
+    :task-summaries="parseTaskSummaries"
+    :inputs-progress="parseInputsProgress"
   />
 </template>

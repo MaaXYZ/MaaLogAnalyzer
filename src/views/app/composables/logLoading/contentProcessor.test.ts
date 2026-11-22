@@ -53,7 +53,11 @@ describe('createProcessLogContent', () => {
 
     await processLogContent({ content: '', parseInputs })
 
-    expect(parser.parseInputs).toHaveBeenCalledWith(parseInputs, expect.any(Function))
+    expect(parser.parseInputs).toHaveBeenCalledWith(
+      parseInputs,
+      expect.any(Function),
+      expect.objectContaining({ onInputParsed: expect.any(Function) }),
+    )
     expect(parser.parseFile).not.toHaveBeenCalled()
   })
 
@@ -93,7 +97,63 @@ describe('createProcessLogContent', () => {
         expect.objectContaining({ sourcePath: 'maa.log', inputIndex: 1 }),
       ],
       expect.any(Function),
+      expect.objectContaining({ onInputParsed: expect.any(Function) }),
     )
+  })
+
+  it('emits incremental task summaries at each segment boundary and clears them on success', async () => {
+    const summariesByBoundary = [
+      [{ task_id: 1, entry: 'FirstTask', status: 'succeeded' as const, start_time: 't1', node_count: 1 }],
+      [
+        { task_id: 1, entry: 'FirstTask', status: 'succeeded' as const, start_time: 't1', node_count: 1 },
+        { task_id: 2, entry: 'SecondTask', status: 'succeeded' as const, start_time: 't2', node_count: 2 },
+      ],
+    ]
+    const parser = {
+      resetParsedEvents: vi.fn(),
+      setErrorImages: vi.fn(),
+      setVisionImages: vi.fn(),
+      setWaitFreezesImages: vi.fn(),
+      parseInputs: vi.fn(async (_inputs, _onProgress, options) => {
+        options.onInputParsed({ index: 0, total: 2 })
+        options.onInputParsed({ index: 1, total: 2 })
+      }),
+      parseFile: vi.fn(async () => undefined),
+      getTaskSummaries: vi.fn(() => summariesByBoundary.shift() ?? []),
+      consumeTasks: vi.fn(() => [
+        {
+          task_id: 1,
+          entry: 'FirstTask',
+          hash: '',
+          uuid: '',
+          start_time: 't1',
+          status: 'succeeded',
+          nodes: [],
+          events: [],
+        },
+      ]),
+    } as unknown as LogParser
+
+    const onTaskSummaries = vi.fn()
+    const processLogContent = createProcessLogContent({
+      ...createOptions(parser),
+      onTaskSummaries,
+    })
+
+    await processLogContent({
+      content: '',
+      parseInputs: [
+        { content: 'first', sourceKey: 'seg-1', sourcePath: 'seg-1', inputIndex: 0 },
+        { content: 'second', sourceKey: 'seg-2', sourcePath: 'seg-2', inputIndex: 1 },
+      ],
+    })
+
+    // 起点清空 → 两个分卷边界各发一次 → 成功后清空
+    expect(onTaskSummaries.mock.calls.map((call) => (call[0] as unknown[]).length)).toEqual([
+      0, 1, 2, 0,
+    ])
+    expect(onTaskSummaries.mock.calls[1]![1]).toEqual({ parsedInputs: 1, totalInputs: 2 })
+    expect(onTaskSummaries.mock.calls[2]![1]).toEqual({ parsedInputs: 2, totalInputs: 2 })
   })
 
   it('keeps content-only callers on parseFile', async () => {

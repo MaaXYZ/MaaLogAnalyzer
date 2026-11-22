@@ -1,4 +1,4 @@
-import type { TaskInfo } from '../types'
+import type { TaskInfo, TaskSummary } from '../types'
 
 /**
  * 传给 Worker 的单个日志来源。
@@ -34,6 +34,15 @@ export interface LogParserWorkerProgressResponse {
   percentage: number
 }
 
+export interface LogParserWorkerTaskSummariesResponse {
+  type: 'task-summaries'
+  requestId: number
+  /** 截至该分卷解析完成时的任务瘦摘要（不含 nodes/明细）。 */
+  summaries: TaskSummary[]
+  parsedInputs: number
+  totalInputs: number
+}
+
 export interface LogParserWorkerResultResponse {
   type: 'result'
   requestId: number
@@ -47,7 +56,10 @@ export interface LogParserWorkerErrorResponse {
 }
 
 export type LogParserWorkerResponse =
-  LogParserWorkerProgressResponse | LogParserWorkerResultResponse | LogParserWorkerErrorResponse
+  | LogParserWorkerProgressResponse
+  | LogParserWorkerTaskSummariesResponse
+  | LogParserWorkerResultResponse
+  | LogParserWorkerErrorResponse
 
 export const LOG_PARSER_WORKER_OOM_MESSAGE =
   '日志解析占用的内存超出了当前设备的可用上限，解析已中止。请尝试减少一次载入的日志量。'

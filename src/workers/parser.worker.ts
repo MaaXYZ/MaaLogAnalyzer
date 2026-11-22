@@ -30,9 +30,25 @@ self.onmessage = async (event: MessageEvent<LogParserWorkerRequest>) => {
     const parseInputs = await prepareParserInputs(request.inputs, request.sortInputsByTimestamp)
     request.inputs.length = 0
 
-    await parser.parseInputs(parseInputs, (progress) => {
-      post({ type: 'progress', requestId, percentage: progress.percentage })
-    })
+    await parser.parseInputs(
+      parseInputs,
+      (progress) => {
+        post({ type: 'progress', requestId, percentage: progress.percentage })
+      },
+      {
+        // 边解析边把「已归约出的任务清单」回传主线程：大日志上整树投影比解析还慢，
+        // 先用瘦摘要让界面出列表，解析完成后再用完整任务树整表替换。
+        onInputParsed: ({ index, total }) => {
+          post({
+            type: 'task-summaries',
+            requestId,
+            summaries: parser.getTaskSummaries(),
+            parsedInputs: index + 1,
+            totalInputs: total,
+          })
+        },
+      },
+    )
 
     // 解析已产出事件，输入来源（gzip Blob / 大字符串）不再需要；紧随其后的
     // consumeTasks 投影是内存峰值，先释放输入引用可让这部分缓冲被回收。

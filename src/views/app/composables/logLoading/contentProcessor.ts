@@ -78,6 +78,8 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
 
     clearParsingModalTimer()
     options.parseProgress.value = 0
+    // 新一次解析：上一次的任务瘦摘要已失效，先清空，避免弹窗里残留旧日志的任务名。
+    options.onTaskSummaries?.([], { parsedInputs: 0, totalInputs: 0 })
     parsingModalTimer = setTimeout(() => {
       parsingModalTimer = null
       if (requestId !== latestRequestId) return
@@ -97,11 +99,25 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
         }
       }
 
+      const emitTaskSummaries = (
+        currentParser: LogParser,
+        parsedInputs: number,
+        totalInputs: number,
+      ) => {
+        if (requestId !== latestRequestId || !options.onTaskSummaries) return
+        options.onTaskSummaries(currentParser.getTaskSummaries(), {
+          parsedInputs,
+          totalInputs,
+        })
+      }
+
       const parseInline = async (): Promise<TaskInfo[]> => {
         if (params.parseInputs && params.parseInputs.length > 0) {
           const sources = await Promise.all(params.parseInputs.map(materializeWorkerParseInput))
           const parseInputs = await prepareParserInputs(sources, params.sortParseInputs)
-          await parser.parseInputs(parseInputs, onProgress)
+          await parser.parseInputs(parseInputs, onProgress, {
+            onInputParsed: ({ index, total }) => emitTaskSummaries(parser, index + 1, total),
+          })
         } else {
           await parser.parseFile(params.content, onProgress)
         }
@@ -128,6 +144,10 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
               visionImages: params.visionImages,
               waitFreezesImages: params.waitFreezesImages,
               onProgress: (percentage) => onProgress({ percentage }),
+              onTaskSummaries: (summaries, progress) => {
+                if (requestId !== latestRequestId || !options.onTaskSummaries) return
+                options.onTaskSummaries(summaries, progress)
+              },
             }),
           )
         } catch (error) {
@@ -157,6 +177,8 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
       )
       options.resetAnalysisState()
       options.applyParsedTasks(parsedTasks, false)
+      // 完整任务树已上屏，瘦摘要完成使命；清空避免弹窗/调试面板里残留半份列表。
+      options.onTaskSummaries?.([], { parsedInputs: 0, totalInputs: 0 })
       rememberLoadedTaskCount(parsedTasks.length)
     } catch (error) {
       // 迟到的失败不应该覆盖新请求的结果。

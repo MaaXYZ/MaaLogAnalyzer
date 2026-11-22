@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TaskSummary } from '../../../types'
 import type { TourStep } from '../../../tutorial/types'
 import OverlaySettingsSection from './overlay/OverlaySettingsSection.vue'
 import OverlayTourSection from './overlay/OverlayTourSection.vue'
@@ -12,6 +13,8 @@ defineProps<{
   modalWidth: string
   modalWidthSmall: string
   parseProgress: number
+  parseTaskSummaries: TaskSummary[]
+  parseInputsProgress: { parsedInputs: number; totalInputs: number }
   tourActive: boolean
   currentTourStep: TourStep | null
   tourStepIndex: number
@@ -82,6 +85,8 @@ const emit = defineEmits<{
     :modal-width="modalWidth"
     :modal-width-small="modalWidthSmall"
     :parse-progress="parseProgress"
+    :parse-task-summaries="parseTaskSummaries"
+    :parse-inputs-progress="parseInputsProgress"
     :is-vscode-launch-embed="isVscodeLaunchEmbed"
     :app-embed-mode="appEmbedMode"
     :bridge-enabled="bridgeEnabled"

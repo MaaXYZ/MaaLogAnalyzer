@@ -1,6 +1,6 @@
 import { useMessage } from 'naive-ui'
 import type { Ref } from 'vue'
-import type { TaskInfo } from '../../../types'
+import type { TaskInfo, TaskSummary } from '../../../types'
 import type { LogParser } from '@windsland52/maa-log-parser'
 import type { TourStep } from '../../../tutorial/types'
 import { useLogLoadingPipeline } from './useLogLoadingPipeline'
@@ -28,6 +28,10 @@ interface UseAppWorkflowBindingsOptions {
     targets: Array<{ id: string; label: string; fileName: string; content: string }>,
   ) => string
   applyParsedTasks: (tasks: TaskInfo[], preserveSelection: boolean) => void
+  onTaskSummaries?: (
+    summaries: TaskSummary[],
+    progress: { parsedInputs: number; totalInputs: number },
+  ) => void
   handleFileLoadingStart: () => void
   handleFileLoadingEnd: () => void
   steps: TourStep[]
@@ -55,6 +59,7 @@ export const useAppWorkflowBindings = (options: UseAppWorkflowBindingsOptions) =
     setDeferredTextSearchTargets: options.setDeferredTextSearchTargets,
     pickPreferredLogTargetId: options.pickPreferredLogTargetId,
     applyParsedTasks: options.applyParsedTasks,
+    onTaskSummaries: options.onTaskSummaries,
     onWarning: (text) => message.warning(text, { duration: 5000 }),
     onError: (text) => message.error(text, { duration: 5000 }),
     onFileLoadingStart: options.handleFileLoadingStart,
