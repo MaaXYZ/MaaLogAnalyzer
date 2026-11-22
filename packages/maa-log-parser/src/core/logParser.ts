@@ -7,7 +7,7 @@
  * Keep this file focused on high-level flow wiring; move detailed domain logic
  * into helper modules under ./logParser/ whenever possible.
  */
-import type { EventNotification, EventSourceRef, TaskInfo } from '../shared/types'
+import type { EventNotification, EventSourceRef, TaskInfo, TaskSummary } from '../shared/types'
 import { parseEventLine as parseMaaEventLine, type ParsedEventLine } from '../event/line'
 import { createProtocolEvent } from '../protocol/eventFactory'
 import type { ProtocolEvent } from '../protocol/types'
@@ -19,6 +19,7 @@ import {
 import type { ScopeNode } from '../trace/scopeTypes'
 import { buildTraceIndex, type TraceIndex } from '../query/traceIndex'
 import {
+  projectTaskSummariesFromTrace,
   projectTasksFromTrace,
   type ProjectedTaskCacheEntry,
   type SequencedTaskEvent,
@@ -44,6 +45,14 @@ export interface ParseFileOptions {
   sourcePath?: string
   inputIndex?: number
   storeRawLines?: boolean
+  /**
+   * 每个输入（一份日志文件/分卷）解析完成时回调一次。
+   *
+   * 用于「边解析边上屏」：调用方可在首卷解析完后立刻读取 `getTaskSummaries()`，
+   * 得到截至此刻已归约出的任务清单，而不必等整批解析 + 整树投影完成。
+   * 回调抛错不会中断解析（内部吞掉并 warn）。
+   */
+  onInputParsed?: (info: { index: number; total: number }) => void
 }
 
 export interface ParseSourceInput {
@@ -622,7 +631,7 @@ export class LogParser {
       }
 
       let progressOffset = 0
-      for (const input of normalizedInputs) {
+      for (const [currentInputIndex, input] of normalizedInputs.entries()) {
         const content = 'content' in input ? input.content : await input.loadContent()
         const weight = inputSize(input)
         await this.parseSourceContent(
@@ -638,6 +647,14 @@ export class LogParser {
           },
         )
         progressOffset += weight
+        if (options?.onInputParsed) {
+          try {
+            options.onInputParsed({ index: currentInputIndex, total: normalizedInputs.length })
+          } catch (error) {
+            // 上屏回调属于消费方副作用：它失败不该让整批解析失败。
+            console.warn('onInputParsed 回调失败:', error)
+          }
+        }
       }
 
       if (onProgress) {
@@ -728,6 +745,23 @@ export class LogParser {
    */
   getTasksSnapshot(): TaskInfo[] {
     return this.projectTasksSnapshot(false)
+  }
+
+  /**
+   * 当前已归约任务的**瘦摘要**（不展开 nodes/node_flow/events/明细）。
+   *
+   * 与 `getTasksSnapshot()` / `consumeTasks()` 共用同一套作用域收集与排序，
+   * 任务集合、顺序、任务级字段一致；区别是**不投影任务树**，因此可以在解析
+   * 进行中频繁调用（配合 `ParseFileOptions.onInputParsed`）做「边解析边上屏」。
+   *
+   * 解析完成后仍应使用 `consumeTasks()` / `getTasksSnapshot()` 拿完整任务树。
+   */
+  getTaskSummaries(): TaskSummary[] {
+    return projectTaskSummariesFromTrace(this.traceReducer.getTrace(), {
+      errorImages: this.errorImages,
+      visionImages: this.visionImages,
+      waitFreezesImages: this.waitFreezesImages,
+    })
   }
 
   getEventsSnapshot(): EventNotification[] {

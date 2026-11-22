@@ -7,6 +7,7 @@ import type {
   RecognitionDetail,
   ResourceLoadingDetail,
   TaskInfo,
+  TaskSummary,
   UnifiedFlowItem,
   WaitFreezesDetail,
 } from '../shared/types'
@@ -98,14 +99,14 @@ const sortScopesBySeq = (scopes: ScopeNode[]): ScopeNode[] => {
   return scopes
 }
 
-const mergeProjectedTaskEntries = (
-  left: ProjectedTaskEntry[],
-  right: ProjectedTaskEntry[],
-): ProjectedTaskEntry[] => {
+const mergeProjectedTaskEntries = <T extends { seq: number }>(
+  left: T[],
+  right: T[],
+): T[] => {
   if (left.length === 0) return right
   if (right.length === 0) return left
 
-  const merged = new Array<ProjectedTaskEntry>(left.length + right.length)
+  const merged = new Array<T>(left.length + right.length)
   let leftIndex = 0
   let rightIndex = 0
   let outputIndex = 0
@@ -1235,3 +1236,108 @@ export const projectTasksFromTrace = (
     .map(({ task }) => task)
     .filter((task) => task.entry !== 'MaaTaskerPostStop')
 }
+
+/**
+ * 从作用域树投影「任务级瘦摘要」。
+ *
+ * 与 `projectTasksFromTrace` 共用同一套作用域收集、排序、根资源伪任务合并与
+ * `MaaTaskerPostStop` 过滤逻辑，因此**任务集合与顺序完全一致**；差别只在于不展开
+ * `nodes` / `node_flow` / `events` / 识别与动作明细——那部分才是投影耗时的来源
+ * （大日志上实测 `consumeTasks` 比 `parseInputs` 慢数倍）。
+ *
+ * 用途：解析进行中先把任务清单交给界面（P0 首屏），解析完成后用完整 `TaskInfo`
+ * 整表替换；两者按稳定三元组（process_id + task_id + start_time）对得上。
+ */
+export const projectTaskSummariesFromTrace = (
+  root: ScopeNode,
+  options: ProjectTasksFromTraceOptions = {},
+): TaskSummary[] => {
+  const scopeProcessIdsByScope = new Map<ScopeNode, ReadonlySet<string>>()
+  let scopeProcessIdsBuilt = false
+  const summaryOptions: InternalProjectTasksFromTraceOptions = {
+    ...options,
+    // 伪任务只需要状态与时间，不渲染图片；用空表避免为它构建整棵树的图片索引。
+    waitFreezesImagesByScopeId: new Map<string, readonly string[]>(),
+    getScopeProcessIds: (scope: ScopeNode): ReadonlySet<string> => {
+      if (!scopeProcessIdsBuilt) {
+        buildScopeProcessIdSets(root, scopeProcessIdsByScope)
+        scopeProcessIdsBuilt = true
+      }
+      return scopeProcessIdsByScope.get(scope) ?? new Set<string>()
+    },
+  }
+
+  const taskScopes: ScopeNode[] = []
+  collectTaskScopes(root, taskScopes)
+  const summaryEntries = sortScopesBySeq(taskScopes).map((scope) => ({
+    seq: scope.seq,
+    summary: summarizeTaskScope(scope, summaryOptions),
+  }))
+
+  // 根资源伪任务的 entry/status 由 flow 汇总得出，复用完整投影保证与 consumeTasks 一致；
+  // 它只有「根级连续 resource_loading」分组，数量极小。
+  const rootResourceEntries = collectRootResourceScopeGroups(root)
+    .map((groupedScopes, groupIndex) =>
+      projectRootResourceTaskEntry(groupedScopes, summaryOptions, groupIndex),
+    )
+    .filter((entry): entry is ProjectedTaskEntry => !!entry)
+    .map((entry) => ({ seq: entry.seq, summary: toTaskSummaryFromTask(entry.task) }))
+
+  return mergeProjectedTaskEntries(summaryEntries, rootResourceEntries)
+    .map(({ summary }) => summary)
+    .filter((summary) => summary.entry !== 'MaaTaskerPostStop')
+}
+
+const summarizeTaskScope = (
+  scope: ScopeNode,
+  options: InternalProjectTasksFromTraceOptions,
+): TaskSummary => {
+  const payload = readScopePayload(scope)
+  const pipelineScopes = sortScopesBySeq(scope.children).filter(
+    (child) => child.kind === 'pipeline_node',
+  )
+  // 与 projectTaskScope 的三级兜底保持一致：field 是事实，节点名与作用域名是推断。
+  const fieldEntry = readStringField(payload, 'entry')
+  const nodeEntry = pipelineScopes[0] ? readScopeName(pipelineScopes[0]) : undefined
+  const entry = fieldEntry ?? nodeEntry ?? readScopeName(scope)
+  const entrySource: TaskSummary['entry_source'] =
+    fieldEntry != null ? 'field' : nodeEntry != null ? 'node' : 'scope'
+
+  const openedByTaskStarting = payload.taskStartingSeen === true || isOpenedByTaskStarting(scope)
+  const everImplicit = payload.truncatedStart === true || payload.implicitTask === true
+  const ownerProcessIds = collectTaskOwnerProcessIds(scope, options)
+
+  return {
+    task_id: readScopeTaskId(scope) ?? 0,
+    entry,
+    entry_source: entrySource,
+    process_id: readScopeStartEvent(scope)?.processId,
+    process_ids: ownerProcessIds.size > 0 ? [...ownerProcessIds].sort() : undefined,
+    task_execution_id: scope.id,
+    has_starting_event: openedByTaskStarting,
+    rotation_gap: everImplicit,
+    truncated_start: everImplicit && !openedByTaskStarting,
+    start_time: scope.ts,
+    end_time: scope.endTs,
+    status: toTaskStatus(scope.status),
+    duration: buildDuration(scope.ts, scope.endTs),
+    node_count: pipelineScopes.length,
+  }
+}
+
+const toTaskSummaryFromTask = (task: TaskInfo): TaskSummary => ({
+  task_id: task.task_id,
+  entry: task.entry,
+  entry_source: task.entry_source,
+  process_id: task.process_id,
+  process_ids: task.process_ids,
+  task_execution_id: task.task_execution_id ?? `task:${task.task_id}:seq${task._startEventIndex ?? 0}`,
+  has_starting_event: task.has_starting_event,
+  rotation_gap: task.rotation_gap,
+  truncated_start: task.truncated_start,
+  start_time: task.start_time,
+  end_time: task.end_time,
+  status: task.status,
+  duration: task.duration,
+  node_count: task.nodes.length,
+})

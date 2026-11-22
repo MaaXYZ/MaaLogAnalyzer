@@ -138,6 +138,35 @@ export interface TaskInfo {
   truncated_start?: boolean
 }
 
+/**
+ * 任务级瘦摘要（不含 nodes / node_flow / events / 识别与动作明细）。
+ *
+ * 用于「解析进行中先把任务清单交给界面」：投影整棵任务树很贵（实测大日志上
+ * `consumeTasks` 比 `parseInputs` 还慢数倍），而任务清单本身只需要任务级字段。
+ * 字段语义与 `TaskInfo` 同名同义，且任务集合与顺序与 `consumeTasks()` 保持一致
+ * （同一套作用域收集/排序/过滤逻辑），因此可以「先用摘要上屏、解析完成后整表替换」。
+ *
+ * 稳定身份：`process_id + task_id + start_time` 跨运行/跨材料唯一；
+ * `task_execution_id` 只在本轮加载内唯一（由作用域 id 派生），不可作跨重解析主键。
+ */
+export interface TaskSummary {
+  task_id: number
+  entry: string
+  entry_source?: 'field' | 'node' | 'scope'
+  process_id?: string
+  process_ids?: string[]
+  task_execution_id: string
+  has_starting_event?: boolean
+  rotation_gap?: boolean
+  truncated_start?: boolean
+  start_time: string
+  end_time?: string
+  status: 'running' | 'succeeded' | 'failed'
+  duration?: number
+  /** 直接子级 pipeline 节点数量（与 TaskInfo.nodes 的长度一致）。 */
+  node_count: number
+}
+
 // Recognition attempt record
 export interface RecognitionAttempt {
   reco_id: number
