@@ -72,6 +72,9 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
 
   const tasks = shallowRef<TaskInfo[]>([])
   const selectedTask = shallowRef<TaskInfo | null>(null)
+  // 骨架任务 → 完整任务：Worker 会话在解析完成后仍常驻，选中骨架时向它按需取详情。
+  const taskDetailLoader = shallowRef<((task: TaskInfo) => Promise<TaskInfo | null>) | null>(null)
+  const pendingTaskDetailKeys = new Set<string>()
   const selectedNode = shallowRef<NodeInfo | null>(null)
   const selectedFlowItemId = ref<string | null>(null)
   const loading = ref(false)
@@ -82,6 +85,37 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
   // 解析进行中的任务瘦摘要：边解析边上屏，解析完成后由 applyParsedTasks 用完整任务树替换。
   const parseTaskSummaries = shallowRef<TaskSummary[]>([])
   const parseInputsProgress = ref({ parsedInputs: 0, totalInputs: 0 })
+
+  const ensureSelectedTaskDetail = async (task: TaskInfo | null) => {
+    if (!task?._skeleton) return
+    const key = task.task_execution_id
+    const loader = taskDetailLoader.value
+    if (!key || !loader || pendingTaskDetailKeys.has(key)) return
+    pendingTaskDetailKeys.add(key)
+    try {
+      const detail = await loader(task)
+      if (!detail) return
+      // 选中项与列表里的同一项都要换成完整任务（否则详情/流程图仍拿骨架）。
+      if (selectedTask.value?.task_execution_id === key) {
+        selectedTask.value = detail
+      }
+      const index = tasks.value.findIndex((item) => item.task_execution_id === key)
+      if (index >= 0) {
+        const next = tasks.value.slice()
+        next[index] = detail
+        tasks.value = next
+      }
+    } catch (error) {
+      // 详情取失败不影响已上屏的骨架；用户切换任务时会再试。
+      console.warn('[log-loading] 任务详情加载失败:', error)
+    } finally {
+      pendingTaskDetailKeys.delete(key)
+    }
+  }
+
+  watch(selectedTask, (task) => {
+    void ensureSelectedTaskDetail(task)
+  })
 
   const { resetParserDebugAssets } = useParserDebugAssets({ parser })
 
@@ -242,6 +276,9 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
     onTaskSummaries: (summaries, progress) => {
       parseTaskSummaries.value = summaries
       parseInputsProgress.value = progress
+    },
+    setTaskDetailLoader: (loader) => {
+      taskDetailLoader.value = loader
     },
     handleFileLoadingStart,
     handleFileLoadingEnd,

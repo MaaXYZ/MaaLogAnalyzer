@@ -42,6 +42,14 @@ export const useFlowchartGraphRuntime = (options: UseFlowchartGraphRuntimeOption
     task: TaskInfo,
     rebuildOptions?: { resetFocus?: boolean; fit?: boolean; preserveLayout?: boolean },
   ) => {
+    // 骨架任务还没有 node_flow / 识别 / 动作明细：先盖住画布，等按需详情回来再重建。
+    // （详情由应用层在选中任务时异步拉取，拉到后会以完整任务再次触发这里。）
+    if (task._skeleton) {
+      isLayouting.value = true
+      layoutError.value = null
+      return
+    }
+
     const runId = ++layoutRunId.value
     isLayouting.value = true
     layoutError.value = null

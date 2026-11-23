@@ -63,6 +63,13 @@ export interface ProjectTasksFromTraceOptions {
    * 跨源去重窗口而产生的重复任务。不提供则该行为关闭（第三方直接调 projector 时保持旧输出）。
    */
   mirrorProcessPairs?: ReadonlySet<string>
+  /**
+   * 投影详细程度：
+   * - `full`（默认）：完整任务树，含 node_flow / 识别 / 动作 / 事件。
+   * - `skeleton`：只保留列表与导航需要的字段（节点名/状态/时间/next_list），
+   *   跳过 node_flow、识别/动作明细与事件——大日志上这是 1.8GB → 几 MB 的关键。
+   */
+  detail?: 'full' | 'skeleton'
 }
 
 interface InternalProjectTasksFromTraceOptions extends ProjectTasksFromTraceOptions {
@@ -1021,6 +1028,19 @@ const projectPipelineNodeScope = (
   const nodeId = readScopeNodeId(scope) ?? 0
   const taskId = readScopeTaskId(scope) ?? 0
   const nodeName = readScopeName(scope)
+  const skeleton = options.detail === 'skeleton'
+  if (skeleton) {
+    return {
+      node_id: nodeId,
+      name: nodeName,
+      ts: scope.ts,
+      end_ts: scope.endTs,
+      status: toRuntimeStatus(scope.status),
+      task_id: taskId,
+      next_list: resolveNodeNextList(scope),
+    }
+  }
+
   const nodeFlow = projectFlowChildren(scope, {
     currentTaskId: taskId,
     currentNodeId: nodeId,
@@ -1104,7 +1124,7 @@ const projectTaskScope = (
     end_time: scope.endTs,
     status: toTaskStatus(scope.status),
     nodes,
-    events: projectTaskEvents(scope, options, nextOccurrenceSeq),
+    events: options.detail === 'skeleton' ? [] : projectTaskEvents(scope, options, nextOccurrenceSeq),
     duration: buildDuration(scope.ts, scope.endTs),
   }
 }
@@ -1195,6 +1215,12 @@ const projectRootResourceTaskEntry = (
     ],
     events: [],
     duration: buildDuration(firstScope.ts, endTime),
+  }
+
+  if (options.detail === 'skeleton') {
+    // 资源伪任务的 status 依赖 flow 汇总；骨架只丢详情，不丢状态。
+    const node = task.nodes[0]
+    if (node) node.node_flow = undefined
   }
 
   return {

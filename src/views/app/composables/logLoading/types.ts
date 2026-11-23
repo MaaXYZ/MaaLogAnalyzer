@@ -30,6 +30,12 @@ export interface LogLoadingPipelineOptions {
     summaries: TaskSummary[],
     progress: { parsedInputs: number; totalInputs: number },
   ) => void
+  /**
+   * 注册「按需取任务详情」的加载器（Worker 会话提供）；换日志/解析失败时传 null。
+   *
+   * 界面拿到的是骨架任务，选中后调用该加载器换成完整任务（含 node_flow/识别/动作）。
+   */
+  setTaskDetailLoader?: (loader: ((task: TaskInfo) => Promise<TaskInfo | null>) | null) => void
   onWarning: (message: string) => void
   onError: (message: string) => void
   onFileLoadingStart?: () => void

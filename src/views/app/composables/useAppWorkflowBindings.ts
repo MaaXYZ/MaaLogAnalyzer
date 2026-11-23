@@ -32,6 +32,7 @@ interface UseAppWorkflowBindingsOptions {
     summaries: TaskSummary[],
     progress: { parsedInputs: number; totalInputs: number },
   ) => void
+  setTaskDetailLoader?: (loader: ((task: TaskInfo) => Promise<TaskInfo | null>) | null) => void
   handleFileLoadingStart: () => void
   handleFileLoadingEnd: () => void
   steps: TourStep[]
@@ -60,6 +61,7 @@ export const useAppWorkflowBindings = (options: UseAppWorkflowBindingsOptions) =
     pickPreferredLogTargetId: options.pickPreferredLogTargetId,
     applyParsedTasks: options.applyParsedTasks,
     onTaskSummaries: options.onTaskSummaries,
+    setTaskDetailLoader: options.setTaskDetailLoader,
     onWarning: (text) => message.warning(text, { duration: 5000 }),
     onError: (text) => message.error(text, { duration: 5000 }),
     onFileLoadingStart: options.handleFileLoadingStart,

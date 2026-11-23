@@ -13,7 +13,8 @@ import type { TaskInfo } from '../../../../types'
 import {
   isLogParserWorkerSupported,
   LogParserWorkerUnavailableError,
-  parseLogsInWorker,
+  openParseWorkerSession,
+  type ParseWorkerSession,
 } from '../../../../utils/parserWorkerClient'
 import { reviveParsedTaskList } from '../../../../utils/parsedTaskRevival'
 import {
@@ -66,6 +67,14 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
     parsingModalTimer = null
   }
 
+  // 每个加载流程共用一个解析会话；换日志时要先释放上一次的（Worker 里留着它的 trace 与骨架）。
+  let session: ParseWorkerSession | null = null
+  const disposeSession = () => {
+    session?.dispose()
+    session = null
+    options.setTaskDetailLoader?.(null)
+  }
+
   return async (params: ProcessLogContentParams) => {
     const requestId = ++latestRequestId
     const parser = options.createParser?.() ?? new LogParser()
@@ -76,6 +85,7 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
     // 而失败不该把用户正在看的日志清成 0 个任务。应用层状态（任务列表、选中项、搜索目标、
     // 错误截图）统一挪到「确实解析出任务之后」再重置，失败时旧数据原样保留。
 
+    disposeSession()
     clearParsingModalTimer()
     options.parseProgress.value = 0
     // 新一次解析：上一次的任务瘦摘要已失效，先清空，避免弹窗里残留旧日志的任务名。
@@ -111,32 +121,6 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
         })
       }
 
-      // —— 流式上屏 ——
-      // Worker 会按摘要顺序逐个任务回传投影结果。第一个任务到达就说明这份日志确实解析出了
-      // 任务，此时才动旧数据（保持「解析失败不清旧日志」的约定）；之后每来一个就追加进列表，
-      // 用户不必等整棵树投影完（大日志上那一步要几十秒）。
-      let committed = false
-      const streamedTasks: TaskInfo[] = []
-
-      const commitParsedTasks = (tasksToApply: TaskInfo[], preserveSelection: boolean) => {
-        if (!committed) {
-          committed = true
-          options.resetParserDebugAssets(
-            params.errorImages,
-            params.visionImages,
-            params.waitFreezesImages,
-          )
-          options.setDeferredTextSearchTargets(
-            resolveDeferredTargets(params.content, params.loadedTargets, params.deferredTargets),
-            params.loadedDefaultTargetId,
-          )
-          options.resetAnalysisState()
-          // 任务列表已经开始出现：不再用阻塞式弹窗挡住它，剩下的投影在背后补齐。
-          options.showParsingModal.value = false
-        }
-        options.applyParsedTasks(tasksToApply, preserveSelection)
-      }
-
       const parseInline = async (): Promise<TaskInfo[]> => {
         if (params.parseInputs && params.parseInputs.length > 0) {
           const sources = await Promise.all(params.parseInputs.map(materializeWorkerParseInput))
@@ -162,7 +146,8 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
             params.parseInputs && params.parseInputs.length > 0
               ? await Promise.all(params.parseInputs.map(materializeWorkerParseInput))
               : [{ content: params.content }]
-          const workerTasks = await parseLogsInWorker({
+          // 会话在解析完成后仍然活着：主线程拿到的只是骨架，点开任务时才向它取详情。
+          const opened = await openParseWorkerSession({
             inputs,
             sortInputsByTimestamp: params.sortParseInputs,
             errorImages: params.errorImages,
@@ -173,22 +158,26 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
               if (requestId !== latestRequestId || !options.onTaskSummaries) return
               options.onTaskSummaries(summaries, progress)
             },
-            onTaskProjected: (task, { index }) => {
-              if (requestId !== latestRequestId) return
-              const revived = reviveParsedTaskList([task])[0]
-              if (!revived) return
-              streamedTasks[index] = revived
-              commitParsedTasks(
-                streamedTasks.filter((item): item is TaskInfo => item != null),
-                true,
-              )
+            onDispose: () => {
+              if (session === opened) {
+                session = null
+                options.setTaskDetailLoader?.(null)
+              }
             },
           })
-          parsedTasks = committed
-            ? streamedTasks.filter((item): item is TaskInfo => item != null)
-            : reviveParsedTaskList(workerTasks)
+          session = opened
+          // 骨架在 Worker 里已冻结，但结构化克隆会丢掉 markRaw/冻结状态，主线程要补回来。
+          parsedTasks = reviveParsedTaskList(opened.tasks)
+          options.setTaskDetailLoader?.(async (task) => {
+            const executionId = task.task_execution_id
+            if (!executionId) return null
+            const detail = await opened.projectTaskDetail(executionId, task.process_ids)
+            if (!detail) return null
+            return reviveParsedTaskList([detail])[0] ?? null
+          })
         } catch (error) {
           if (!(error instanceof LogParserWorkerUnavailableError)) throw error
+          disposeSession()
           parsedTasks = await parseInline()
         }
       }
@@ -202,14 +191,25 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
         return
       }
 
-      // 流式路径已经边收边上屏；这里只补一次最终列表（保留用户已做的选择）。
-      commitParsedTasks(parsedTasks, committed)
-      // 完整任务树已上屏，瘦摘要完成使命；清空避免弹窗/调试面板里残留半份列表。
+      // 到这里才确认本次加载有效，可以安全替换旧数据。
+      options.resetParserDebugAssets(
+        params.errorImages,
+        params.visionImages,
+        params.waitFreezesImages,
+      )
+      options.setDeferredTextSearchTargets(
+        resolveDeferredTargets(params.content, params.loadedTargets, params.deferredTargets),
+        params.loadedDefaultTargetId,
+      )
+      options.resetAnalysisState()
+      options.applyParsedTasks(parsedTasks, false)
+      // 骨架已上屏，解析中的瘦摘要完成使命。
       options.onTaskSummaries?.([], { parsedInputs: 0, totalInputs: 0 })
       rememberLoadedTaskCount(parsedTasks.length)
     } catch (error) {
       // 迟到的失败不应该覆盖新请求的结果。
       if (requestId !== latestRequestId) return
+      disposeSession()
       // 底层异常（Worker 内存不足、解码失败）含英文细节，留在 console 供排障，界面只给结论。
       console.error('[log-loading] 解析日志失败', error)
       options.onError(withPreservedLogNotice(describeParseFailure(error)))

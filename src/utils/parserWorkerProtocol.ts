@@ -26,7 +26,18 @@ export interface LogParserWorkerParseRequest {
   waitFreezesImages?: Map<string, string>
 }
 
-export type LogParserWorkerRequest = LogParserWorkerParseRequest
+export interface LogParserWorkerProjectTaskRequest {
+  type: 'project-task'
+  requestId: number
+  /** 任务在本轮加载内的唯一 id（`TaskSummary.task_execution_id`）。 */
+  taskExecutionId: string
+  /** 镜像合并后的进程集合（骨架里有、单任务投影本身看不到被合并的副本）。 */
+  processIds?: readonly string[]
+}
+
+export type LogParserWorkerRequest =
+  | LogParserWorkerParseRequest
+  | LogParserWorkerProjectTaskRequest
 
 export interface LogParserWorkerProgressResponse {
   type: 'progress'
@@ -43,13 +54,18 @@ export interface LogParserWorkerTaskSummariesResponse {
   totalInputs: number
 }
 
-export interface LogParserWorkerTaskProjectedResponse {
-  type: 'task-projected'
+export interface LogParserWorkerSkeletonsResponse {
+  type: 'task-skeletons'
   requestId: number
-  /** 已完成投影的单个任务（按摘要顺序逐条回传，主线程可以边收边上屏）。 */
-  task: TaskInfo
-  index: number
-  total: number
+  /** 全部任务的骨架（不含 node_flow / 识别 / 动作 / 事件），payload 只有几百 KB 量级。 */
+  tasks: TaskInfo[]
+}
+
+export interface LogParserWorkerTaskDetailResponse {
+  type: 'task-detail'
+  requestId: number
+  taskExecutionId: string
+  task: TaskInfo | null
 }
 
 export interface LogParserWorkerResultResponse {
@@ -66,7 +82,8 @@ export interface LogParserWorkerErrorResponse {
 export type LogParserWorkerResponse =
   | LogParserWorkerProgressResponse
   | LogParserWorkerTaskSummariesResponse
-  | LogParserWorkerTaskProjectedResponse
+  | LogParserWorkerSkeletonsResponse
+  | LogParserWorkerTaskDetailResponse
   | LogParserWorkerResultResponse
   | LogParserWorkerErrorResponse
 

@@ -136,6 +136,13 @@ export interface TaskInfo {
    * `rotation_gap` 是「曾经缺过（后来补上了）」。两者都为 false 表示开头完整。
    */
   truncated_start?: boolean
+
+  /**
+   * 这份 TaskInfo 是**骨架**：`nodes` 只带 name/status/ts/next_list 等轻量字段，
+   * `node_flow` / `reco_details` / `action_details` / `events` 未填充。
+   * 消费方需要详情时应按 `task_execution_id` 向解析方取完整任务。
+   */
+  _skeleton?: boolean
 }
 
 /**

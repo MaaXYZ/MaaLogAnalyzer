@@ -16,11 +16,43 @@ const getErrorMessage = (error: unknown): string => {
   return String(error)
 }
 
+/**
+ * 解析完成后保留的 parser 实例。
+ *
+ * 主线程不再一次性拿走完整任务树（大日志上那是 1.8GB、克隆要几十秒），
+ * 而是只拿骨架；用户点开某个任务时再发 `project-task`，这里按需投影该任务。
+ */
+let retainedParser: LogParser | null = null
+
 self.onmessage = async (event: MessageEvent<LogParserWorkerRequest>) => {
   const request = event.data
+  if (request?.type === 'project-task') {
+    const parser = retainedParser
+    if (!parser) {
+      post({
+        type: 'error',
+        requestId: request.requestId,
+        message: '解析器尚未就绪，无法投影任务详情',
+      })
+      return
+    }
+    try {
+      const task = parser.projectTaskDetail(request.taskExecutionId, request.processIds)
+      post({
+        type: 'task-detail',
+        requestId: request.requestId,
+        taskExecutionId: request.taskExecutionId,
+        task,
+      })
+    } catch (error) {
+      post({ type: 'error', requestId: request.requestId, message: getErrorMessage(error) })
+    }
+    return
+  }
   if (request?.type !== 'parse') return
 
   const { requestId } = request
+  retainedParser = null
   try {
     const parser = new LogParser()
     parser.setErrorImages(request.errorImages ?? new Map())
@@ -50,23 +82,13 @@ self.onmessage = async (event: MessageEvent<LogParserWorkerRequest>) => {
       },
     )
 
-    // 解析已产出事件，输入来源（gzip Blob / 大字符串）不再需要；紧随其后的
-    // 投影是内存峰值，先释放输入引用可让这部分缓冲被回收。
+    // 解析已产出事件，输入来源（gzip Blob / 大字符串）不再需要。
     parseInputs.length = 0
 
-    // 不再一次性投影整棵树（大日志上要几十秒、回传 1.7GB），而是按摘要顺序逐任务投影、
-    // 每完成一个就回传：主线程可以边收边上屏，用户不必对着一个卡住的进度条等。
-    // 单任务投影与整树投影逐字段一致（实测 28/28），只是不为其它任务付投影开销。
-    const summaries = parser.getTaskSummaries()
-    for (let index = 0; index < summaries.length; index += 1) {
-      const summary = summaries[index]
-      if (!summary) continue
-      const task = parser.projectTaskDetail(summary.task_execution_id, summary.process_ids)
-      if (!task) continue
-      post({ type: 'task-projected', requestId, task, index, total: summaries.length })
-    }
-
-    post({ type: 'result', requestId })
+    // 只回传骨架：几十 KB～几百 KB，主线程立即可用。完整任务在用户点开时按需投影。
+    post({ type: 'task-skeletons', requestId, tasks: parser.getTaskSkeletons() })
+    // Worker 保持存活以响应后续 `project-task`；主线程换下一份日志时 terminate 它。
+    retainedParser = parser
   } catch (error) {
     post({ type: 'error', requestId, message: getErrorMessage(error) })
   }

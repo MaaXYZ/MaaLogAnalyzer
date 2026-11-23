@@ -777,6 +777,29 @@ export class LogParser {
   }
 
   /**
+   * 全部任务的**骨架**（列表/导航可用，不含 node_flow、识别/动作明细与事件）。
+   *
+   * 与 `consumeTasks()` 的任务集合、顺序、任务级字段一致，但 payload 从 GB 级降到 MB 级；
+   * 详情由 `projectTaskDetail()` 按任务取。注意**不能**复用 `completedTaskCache`：
+   * 那个缓存存的是完整任务，骨架走它会互相污染。
+   */
+  getTaskSkeletons(): TaskInfo[] {
+    const tasks = projectTasksFromTrace(this.traceReducer.getTrace(), {
+      completedTaskCache: new Map(),
+      errorImages: this.errorImages,
+      visionImages: this.visionImages,
+      waitFreezesImages: this.waitFreezesImages,
+      mirrorProcessPairs: this.mirroredProcessPairs,
+      detail: 'skeleton',
+    })
+    for (const task of tasks) {
+      task._skeleton = true
+      freezeSnapshotData(task)
+    }
+    return tasks
+  }
+
+  /**
    * 只投影一个任务（按 `TaskSummary.task_execution_id`）。
    *
    * 大日志上「整树投影」是首屏大头（实测 48.7s / 1.76GB），而多数交互只需要当前选中的任务。
