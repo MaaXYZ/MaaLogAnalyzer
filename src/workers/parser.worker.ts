@@ -51,10 +51,22 @@ self.onmessage = async (event: MessageEvent<LogParserWorkerRequest>) => {
     )
 
     // 解析已产出事件，输入来源（gzip Blob / 大字符串）不再需要；紧随其后的
-    // consumeTasks 投影是内存峰值，先释放输入引用可让这部分缓冲被回收。
+    // 投影是内存峰值，先释放输入引用可让这部分缓冲被回收。
     parseInputs.length = 0
 
-    post({ type: 'result', requestId, tasks: parser.consumeTasks() })
+    // 不再一次性投影整棵树（大日志上要几十秒、回传 1.7GB），而是按摘要顺序逐任务投影、
+    // 每完成一个就回传：主线程可以边收边上屏，用户不必对着一个卡住的进度条等。
+    // 单任务投影与整树投影逐字段一致（实测 28/28），只是不为其它任务付投影开销。
+    const summaries = parser.getTaskSummaries()
+    for (let index = 0; index < summaries.length; index += 1) {
+      const summary = summaries[index]
+      if (!summary) continue
+      const task = parser.projectTaskDetail(summary.task_execution_id, summary.process_ids)
+      if (!task) continue
+      post({ type: 'task-projected', requestId, task, index, total: summaries.length })
+    }
+
+    post({ type: 'result', requestId })
   } catch (error) {
     post({ type: 'error', requestId, message: getErrorMessage(error) })
   }

@@ -1355,6 +1355,69 @@ const applyMirroredOrphanMergeToSummaries = (
   return summaries.filter((_, index) => !plan.drop.has(index))
 }
 
+/**
+ * 只投影**一个**任务（按 `task_execution_id`，即作用域 id）。
+ *
+ * 用途：大日志上整树投影要几十秒，而界面通常只需要「用户当前点开的那个任务」。
+ * 做法是把作用域树裁到只剩这一棵任务子树再走完整投影 —— 结果与整树投影逐字段一致
+ * （同一套 projector、同一作用域），只是不必为其它任务付出投影开销。
+ *
+ * 根级 `[Global] Resource.Loading` 伪任务没有作用域 id，用合成 uuid 匹配。
+ */
+export const projectTaskFromTrace = (
+  root: ScopeNode,
+  taskExecutionId: string,
+  options: ProjectTasksFromTraceOptions = {},
+  /** 镜像合并后的进程集合（来自 `TaskSummary.process_ids`）；单任务投影看不到被合并的副本。 */
+  processIdsOverride?: readonly string[],
+): TaskInfo | null => {
+  if (!taskExecutionId) return null
+
+  // 1) 先按作用域 id 找真实任务作用域。
+  const stack: ScopeNode[] = [root]
+  let target: ScopeNode | null = null
+  while (stack.length > 0) {
+    const scope = stack.pop() as ScopeNode
+    if (scope.kind === 'task' && scope.id === taskExecutionId) {
+      target = scope
+      break
+    }
+    for (const child of scope.children) stack.push(child)
+  }
+
+  if (target) {
+    const pruned = { ...root, children: [target] } as ScopeNode
+    const projected = projectTasksFromTrace(pruned, {
+      ...options,
+      mirrorProcessPairs: undefined,
+    })
+    const task =
+      projected.find((item) => item.task_execution_id === taskExecutionId) ?? projected[0] ?? null
+    if (task && processIdsOverride && processIdsOverride.length > 0) {
+      task.process_ids = [...processIdsOverride]
+    }
+    return task
+  }
+
+  // 2) 伪任务（根级 `[Global] Resource.Loading`）：合成 id 形如
+  //    `synthetic:resource_loading:<组号>:seq<首作用域序号>`。分组是按「根子节点的连续性」
+  //    切出来的，所以必须**先在全量根上分组、再按 seq 命中目标组**；直接把所有
+  //    resource_loading 子节点摘出来会跨过中间的业务子节点、把多个组合成一组。
+  const match = /seq(\d+)$/.exec(taskExecutionId)
+  if (!match) return null
+  const targetSeq = Number(match[1])
+  const group = collectRootResourceScopeGroups(root).find(
+    (scopes) => scopes[0]?.seq === targetSeq,
+  )
+  if (!group || group.length === 0) return null
+  const pruned = { ...root, children: group } as ScopeNode
+  const task = projectTasksFromTrace(pruned, { ...options, mirrorProcessPairs: undefined })[0]
+  if (!task) return null
+  // 裁到单组后组号变成 1，合成 uuid 与全量投影里的组号不一致；以调用方给的 id 为准。
+  if (task.uuid !== taskExecutionId) task.uuid = taskExecutionId
+  return task
+}
+
 export const projectTasksFromTrace = (
   root: ScopeNode,
   options: ProjectTasksFromTraceOptions = {},
@@ -1495,7 +1558,8 @@ const toTaskSummaryFromTask = (task: TaskInfo): TaskSummary => ({
   entry_source: task.entry_source,
   process_id: task.process_id,
   process_ids: task.process_ids,
-  task_execution_id: task.task_execution_id ?? `task:${task.task_id}:seq${task._startEventIndex ?? 0}`,
+  task_execution_id:
+    task.task_execution_id ?? task.uuid ?? `task:${task.task_id}:seq${task._startEventIndex ?? 0}`,
   has_starting_event: task.has_starting_event,
   rotation_gap: task.rotation_gap,
   truncated_start: task.truncated_start,

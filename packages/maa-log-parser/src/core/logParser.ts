@@ -19,6 +19,7 @@ import {
 import type { ScopeNode } from '../trace/scopeTypes'
 import { buildTraceIndex, type TraceIndex } from '../query/traceIndex'
 import {
+  projectTaskFromTrace,
   projectTaskSummariesFromTrace,
   projectTasksFromTrace,
   type ProjectedTaskCacheEntry,
@@ -773,6 +774,30 @@ export class LogParser {
    */
   getTasksSnapshot(): TaskInfo[] {
     return this.projectTasksSnapshot(false)
+  }
+
+  /**
+   * 只投影一个任务（按 `TaskSummary.task_execution_id`）。
+   *
+   * 大日志上「整树投影」是首屏大头（实测 48.7s / 1.76GB），而多数交互只需要当前选中的任务。
+   * 该方法把作用域树裁到目标任务再投影，结果与 `consumeTasks()` 中对应任务逐字段一致。
+   */
+  projectTaskDetail(
+    taskExecutionId: string,
+    processIdsOverride?: readonly string[],
+  ): TaskInfo | null {
+    return projectTaskFromTrace(
+      this.traceReducer.getTrace(),
+      taskExecutionId,
+      {
+        sequencedEventsByTaskId: this.sequencedEventsByTaskId,
+        completedTaskCache: new Map(),
+        errorImages: this.errorImages,
+        visionImages: this.visionImages,
+        waitFreezesImages: this.waitFreezesImages,
+      },
+      processIdsOverride,
+    )
   }
 
   /**

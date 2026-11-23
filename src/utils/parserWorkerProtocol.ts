@@ -43,10 +43,18 @@ export interface LogParserWorkerTaskSummariesResponse {
   totalInputs: number
 }
 
+export interface LogParserWorkerTaskProjectedResponse {
+  type: 'task-projected'
+  requestId: number
+  /** 已完成投影的单个任务（按摘要顺序逐条回传，主线程可以边收边上屏）。 */
+  task: TaskInfo
+  index: number
+  total: number
+}
+
 export interface LogParserWorkerResultResponse {
   type: 'result'
   requestId: number
-  tasks: TaskInfo[]
 }
 
 export interface LogParserWorkerErrorResponse {
@@ -58,6 +66,7 @@ export interface LogParserWorkerErrorResponse {
 export type LogParserWorkerResponse =
   | LogParserWorkerProgressResponse
   | LogParserWorkerTaskSummariesResponse
+  | LogParserWorkerTaskProjectedResponse
   | LogParserWorkerResultResponse
   | LogParserWorkerErrorResponse
 

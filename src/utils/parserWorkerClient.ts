@@ -23,6 +23,8 @@ export interface ParseInWorkerParams {
     summaries: TaskSummary[],
     progress: { parsedInputs: number; totalInputs: number },
   ) => void
+  /** 每个任务投影完成即回调一次（按摘要顺序），用于边投影边上屏。 */
+  onTaskProjected?: (task: TaskInfo, progress: { index: number; total: number }) => void
 }
 
 export const isLogParserWorkerSupported = (): boolean => typeof Worker !== 'undefined'
@@ -42,6 +44,7 @@ export const parseLogsInWorker = ({
   waitFreezesImages,
   onProgress,
   onTaskSummaries,
+  onTaskProjected,
 }: ParseInWorkerParams): Promise<TaskInfo[]> => {
   if (!isLogParserWorkerSupported()) {
     return Promise.reject(new LogParserWorkerUnavailableError('当前环境不支持 Web Worker'))
@@ -57,6 +60,8 @@ export const parseLogsInWorker = ({
   }
 
   return new Promise<TaskInfo[]>((resolve, reject) => {
+    // Worker 逐个任务回传，这里按 index 归位；最后 'result' 只表示「投影结束」。
+    const projectedTasks: Array<TaskInfo | undefined> = []
     let settled = false
     const finish = (run: () => void) => {
       if (settled) return
@@ -78,8 +83,13 @@ export const parseLogsInWorker = ({
         })
         return
       }
+      if (message.type === 'task-projected') {
+        projectedTasks[message.index] = message.task
+        onTaskProjected?.(message.task, { index: message.index, total: message.total })
+        return
+      }
       if (message.type === 'result') {
-        finish(() => resolve(message.tasks))
+        finish(() => resolve(projectedTasks.filter((task): task is TaskInfo => task != null)))
         return
       }
       finish(() => reject(new Error(message.message)))

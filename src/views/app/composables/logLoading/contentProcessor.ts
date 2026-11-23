@@ -111,6 +111,32 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
         })
       }
 
+      // —— 流式上屏 ——
+      // Worker 会按摘要顺序逐个任务回传投影结果。第一个任务到达就说明这份日志确实解析出了
+      // 任务，此时才动旧数据（保持「解析失败不清旧日志」的约定）；之后每来一个就追加进列表，
+      // 用户不必等整棵树投影完（大日志上那一步要几十秒）。
+      let committed = false
+      const streamedTasks: TaskInfo[] = []
+
+      const commitParsedTasks = (tasksToApply: TaskInfo[], preserveSelection: boolean) => {
+        if (!committed) {
+          committed = true
+          options.resetParserDebugAssets(
+            params.errorImages,
+            params.visionImages,
+            params.waitFreezesImages,
+          )
+          options.setDeferredTextSearchTargets(
+            resolveDeferredTargets(params.content, params.loadedTargets, params.deferredTargets),
+            params.loadedDefaultTargetId,
+          )
+          options.resetAnalysisState()
+          // 任务列表已经开始出现：不再用阻塞式弹窗挡住它，剩下的投影在背后补齐。
+          options.showParsingModal.value = false
+        }
+        options.applyParsedTasks(tasksToApply, preserveSelection)
+      }
+
       const parseInline = async (): Promise<TaskInfo[]> => {
         if (params.parseInputs && params.parseInputs.length > 0) {
           const sources = await Promise.all(params.parseInputs.map(materializeWorkerParseInput))
@@ -136,20 +162,31 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
             params.parseInputs && params.parseInputs.length > 0
               ? await Promise.all(params.parseInputs.map(materializeWorkerParseInput))
               : [{ content: params.content }]
-          parsedTasks = reviveParsedTaskList(
-            await parseLogsInWorker({
-              inputs,
-              sortInputsByTimestamp: params.sortParseInputs,
-              errorImages: params.errorImages,
-              visionImages: params.visionImages,
-              waitFreezesImages: params.waitFreezesImages,
-              onProgress: (percentage) => onProgress({ percentage }),
-              onTaskSummaries: (summaries, progress) => {
-                if (requestId !== latestRequestId || !options.onTaskSummaries) return
-                options.onTaskSummaries(summaries, progress)
-              },
-            }),
-          )
+          const workerTasks = await parseLogsInWorker({
+            inputs,
+            sortInputsByTimestamp: params.sortParseInputs,
+            errorImages: params.errorImages,
+            visionImages: params.visionImages,
+            waitFreezesImages: params.waitFreezesImages,
+            onProgress: (percentage) => onProgress({ percentage }),
+            onTaskSummaries: (summaries, progress) => {
+              if (requestId !== latestRequestId || !options.onTaskSummaries) return
+              options.onTaskSummaries(summaries, progress)
+            },
+            onTaskProjected: (task, { index }) => {
+              if (requestId !== latestRequestId) return
+              const revived = reviveParsedTaskList([task])[0]
+              if (!revived) return
+              streamedTasks[index] = revived
+              commitParsedTasks(
+                streamedTasks.filter((item): item is TaskInfo => item != null),
+                true,
+              )
+            },
+          })
+          parsedTasks = committed
+            ? streamedTasks.filter((item): item is TaskInfo => item != null)
+            : reviveParsedTaskList(workerTasks)
         } catch (error) {
           if (!(error instanceof LogParserWorkerUnavailableError)) throw error
           parsedTasks = await parseInline()
@@ -165,18 +202,8 @@ export const createProcessLogContent = (options: LogLoadingPipelineOptions) => {
         return
       }
 
-      // 到这里才确认本次加载有效，可以安全替换旧数据。
-      options.resetParserDebugAssets(
-        params.errorImages,
-        params.visionImages,
-        params.waitFreezesImages,
-      )
-      options.setDeferredTextSearchTargets(
-        resolveDeferredTargets(params.content, params.loadedTargets, params.deferredTargets),
-        params.loadedDefaultTargetId,
-      )
-      options.resetAnalysisState()
-      options.applyParsedTasks(parsedTasks, false)
+      // 流式路径已经边收边上屏；这里只补一次最终列表（保留用户已做的选择）。
+      commitParsedTasks(parsedTasks, committed)
       // 完整任务树已上屏，瘦摘要完成使命；清空避免弹窗/调试面板里残留半份列表。
       options.onTaskSummaries?.([], { parsedInputs: 0, totalInputs: 0 })
       rememberLoadedTaskCount(parsedTasks.length)
