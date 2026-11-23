@@ -214,6 +214,14 @@ export class LogParser {
     timestampMs: number
   }> = []
   private dedupOccurrenceTimelineHead = 0
+  /**
+   * 已知互为「镜像」的进程对（`PxA|PxB`，字典序）。
+   *
+   * 只要有一次事件因跨源去重被丢弃，就说明这两个进程在并行写同一份事件流。
+   * 投影层用它判定「一个永不闭合的 0 节点任务」是不是另一次任务的镜像副本
+   * （进程重启复用 task_id 时不会产生任何跨源去重，因此不会被误合并）。
+   */
+  private mirroredProcessPairs = new Set<string>()
   private syntheticLineNumber = 1
   private errorImages = new Map<string, string>()
   private visionImages = new Map<string, string>()
@@ -267,6 +275,7 @@ export class LogParser {
     this.recentEventsBySignature.clear()
     this.dedupOccurrenceTimeline = []
     this.dedupOccurrenceTimelineHead = 0
+    this.mirroredProcessPairs.clear()
     this.eventTokenPool.clear()
     this.syntheticLineNumber = 1
   }
@@ -386,8 +395,10 @@ export class LogParser {
     // 整批解析期间不淘汰（boundDedupOccurrences），否则跨文件镜像同样会失效。
     const eventMs = event._timestampMs
     const sourceKey = dedupSourceKey(event.processId, event.threadId)
-    const duplicated = Number.isFinite(eventMs) ? this.isMirroredEvent(event, sourceKey) : false
-    if (duplicated) {
+    const mirroredSource =
+      Number.isFinite(eventMs) ? this.findMirroredSource(event, sourceKey) : null
+    if (mirroredSource != null) {
+      this.recordMirroredProcessPair(event.processId, mirroredSource)
       return
     }
 
@@ -452,21 +463,37 @@ export class LogParser {
    * 只看**别的来源**：单来源是绝大多数情况，整桶直接跳过，不随历史长度退化；
    * 多来源时对每个来源做一次二分，不扫描条目。
    */
-  private isMirroredEvent(
+  /**
+   * 找出与之镜像的那个来源；不是镜像则返回 null。
+   *
+   * 返回命中的来源（而不是布尔值），是因为上层还要据此记录「镜像进程对」：
+   * 投影层要靠它区分「同一次执行的镜像副本」与「进程重启后复用 task_id 的新执行」。
+   */
+  private findMirroredSource(
     event: { _dedupSignature: string; _timestampMs: number },
     sourceKey: string,
-  ): boolean {
+  ): string | null {
     const bucket = this.recentEventsBySignature.get(event._dedupSignature)
-    if (!bucket) return false
+    if (!bucket) return null
     // 桶里只有自己这一个来源 → 不可能有跨源重复
-    if (bucket.size === 1 && bucket.has(sourceKey)) return false
+    if (bucket.size === 1 && bucket.has(sourceKey)) return null
 
     const eventMs = event._timestampMs
     for (const [otherSourceKey, log] of bucket) {
       if (otherSourceKey === sourceKey) continue
-      if (sourceLogHasWithin(log, eventMs)) return true
+      if (sourceLogHasWithin(log, eventMs)) return otherSourceKey
     }
-    return false
+    return null
+  }
+
+  private recordMirroredProcessPair(processId: string, otherSourceKey: string): void {
+    const otherProcessId = otherSourceKey.split('\u0000', 1)[0]
+    if (!otherProcessId || otherProcessId === processId) return
+    const pair =
+      processId < otherProcessId
+        ? `${processId}|${otherProcessId}`
+        : `${otherProcessId}|${processId}`
+    this.mirroredProcessPairs.add(pair)
   }
 
   appendRealtimeLines(lines: string[]): void {
@@ -727,6 +754,7 @@ export class LogParser {
       errorImages: this.errorImages,
       visionImages: this.visionImages,
       waitFreezesImages: this.waitFreezesImages,
+      mirrorProcessPairs: this.mirroredProcessPairs,
     })
     for (const task of tasks) freezeSnapshotData(task)
 
@@ -761,6 +789,7 @@ export class LogParser {
       errorImages: this.errorImages,
       visionImages: this.visionImages,
       waitFreezesImages: this.waitFreezesImages,
+      mirrorProcessPairs: this.mirroredProcessPairs,
     })
   }
 

@@ -416,6 +416,73 @@ const findOpenTaskScopeByTaskId = (state: ReducerState, taskId: number): TraceSc
 }
 
 /**
+ * 找一个仍打开、`taskId` 相同的任务作用域，但**仅在唯一时**返回。
+ *
+ * 用于「节点事件声明的是 A 任务，但同源最近的作用域属于 B 任务」这种镜像混搭：
+ * 此时应当优先认领声明任务的 scope，而不是把节点挂到另一个任务下。
+ * 若同一 task_id 同时有多个打开的任务 scope（两个实例并发且都开着），无从判断归属，
+ * 返回 null 交回原路径，保持旧行为。
+ */
+const findUniqueOpenTaskScopeByTaskId = (
+  state: ReducerState,
+  taskId: number,
+): TraceScopeNode | null => {
+  let found: TraceScopeNode | null = null
+  for (let index = state.openScopes.length - 1; index >= 0; index -= 1) {
+    const scope = state.openScopes[index]
+    if (scope.kind !== 'task' || scope.taskId !== taskId) continue
+    if (found) return null
+    found = scope
+  }
+  return found
+}
+
+/** 节点类事件里代表「同一次执行」的业务 id（scopes 与 events 上用同一个字段名）。 */
+const readBusinessIdentity = (
+  value: Record<string, unknown>,
+): { field: 'nodeId' | 'recoId' | 'actionId' | 'wfId'; id: number } | null => {
+  for (const field of ['nodeId', 'recoId', 'actionId', 'wfId'] as const) {
+    const id = value[field]
+    if (typeof id === 'number') return { field, id }
+  }
+  return null
+}
+
+/**
+ * 跨进程认领「同一个节点」的打开作用域。
+ *
+ * 客户端 + agent 两份来源镜像写出时，事件覆盖并不总是一致：实测同一个节点的
+ * `PipelineNode.Starting` 只出现在 agent 侧（客户端只有 TRC 转发日志），而
+ * `PipelineNode.Succeeded` 两侧都有、去重后留下的是客户端那条。于是客户端关闭节点时
+ * 按自己的 key 找不到 Starting 建立的作用域，转而补建一个「只有终止事件」的合成节点 ——
+ * 同一个 node_id 因此出现两个 scope（一个 running、一个 success）。
+ *
+ * 这里在按 key 找不到时，回退到「同 task_id + 同 kind + 同业务 id、且**不是**本来源」的
+ * 打开作用域；同来源的情况按 key 一定已经命中，所以这一步只覆盖镜像混搭。
+ */
+const adoptMirroredScopeByBusinessIdentity = (
+  state: ReducerState,
+  event: ProtocolEvent,
+): TraceScopeNode | null => {
+  const taskId = readTaskId(event)
+  if (taskId == null) return null
+  const identity = readBusinessIdentity(event as unknown as Record<string, unknown>)
+  if (!identity) return null
+
+  for (let index = state.openScopes.length - 1; index >= 0; index -= 1) {
+    const scope = state.openScopes[index]
+    if (scope.kind !== event.kind || scope.taskId !== taskId) continue
+    if (matchesScopeSource(scope, event)) continue
+    const other = readBusinessIdentity(scope.payload as unknown as Record<string, unknown>)
+    if (!other || other.field !== identity.field || other.id !== identity.id) continue
+    // 它是按自己的 key 注册的，先整体摘掉，避免 finalizeScope 用事件的 key 找不到而留下悬挂索引
+    detachScopeFromIndexes(state, scope)
+    return scope
+  }
+  return null
+}
+
+/**
  * 与 `resolveParentScope` 相同，但补上两道兜底，避免节点与任务脱钩（会掉到 trace 根节点上）：
  *
  * 1. **认领同 `taskId` 的已打开任务。** 客户端 + agent 两份来源镜像写出时，去重是"谁先出现谁留下"，
@@ -435,8 +502,27 @@ const resolveOrCreateParent = (
   event: ProtocolEvent,
 ): TraceRootNode | TraceScopeNode => {
   const parent = resolveParentScope(state, event)
+  const declaredTaskId = readTaskId(event)
+
+  // 镜像混搭时，同源最近的作用域可能是**另一个任务**（上一条任务没闭合、镜像的
+  // Starting 又被去重掉，节点事件就只剩这条旧 scope 可挂）。事件自己声明的 task_id
+  // 才是事实，此时优先认领唯一一个声明任务的打开 scope，而不是错挂到别的任务下。
+  // `wait_freezes` 例外：它有意按「同源最近的作用域」嵌套（外层任务的等待可以挂进
+  // 正在执行的子流程），跨 task 是它的正常语义，不能按声明 task_id 重定向。
+  if (
+    parent !== state.root &&
+    declaredTaskId != null &&
+    event.kind !== 'wait_freezes' &&
+    TASK_CHILD_KINDS.has(event.kind) &&
+    parent.taskId != null &&
+    parent.taskId !== declaredTaskId
+  ) {
+    const declaredTaskScope = findUniqueOpenTaskScopeByTaskId(state, declaredTaskId)
+    if (declaredTaskScope) return declaredTaskScope
+  }
+
   if (parent !== state.root) return parent
-  const taskId = readTaskId(event)
+  const taskId = declaredTaskId
   if (taskId == null || !TASK_CHILD_KINDS.has(event.kind)) return parent
 
   const adopted = findOpenTaskScopeByTaskId(state, taskId)
@@ -600,7 +686,10 @@ const closeScope = (state: ReducerState, event: ProtocolEvent): TraceScopeNode =
             buildTaskIndexKey(event.processId, event.taskId),
           )
         : null) ??
-    (event.kind === 'task' && event.taskId != null ? adoptOpenTaskScope(state, event.taskId) : null)
+    (event.kind === 'task' && event.taskId != null ? adoptOpenTaskScope(state, event.taskId) : null) ??
+    // 镜像混搭：起始事件与终止事件落在不同进程，按 key 找不到自己的作用域时，
+    // 跨进程认领同一个节点，避免补建出「只有终止事件」的重复节点。
+    (event.kind !== 'task' ? adoptMirroredScopeByBusinessIdentity(state, event) : null)
 
   if (!scope) {
     return createSyntheticTerminalScope(state, event)

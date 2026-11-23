@@ -55,6 +55,14 @@ export interface ProjectTasksFromTraceOptions {
   errorImages?: Map<string, string>
   visionImages?: Map<string, string>
   waitFreezesImages?: Map<string, string>
+  /**
+   * 已知互为镜像的进程对（`PxA|PxB`，字典序）。
+   *
+   * 提供时，投影会合并「永不闭合的 0 节点任务」与它在另一个进程里的孪生任务 ——
+   * 这是客户端 + agent 双写同一份日志时，镜像的 `Tasker.Task.Starting` 超出
+   * 跨源去重窗口而产生的重复任务。不提供则该行为关闭（第三方直接调 projector 时保持旧输出）。
+   */
+  mirrorProcessPairs?: ReadonlySet<string>
 }
 
 interface InternalProjectTasksFromTraceOptions extends ProjectTasksFromTraceOptions {
@@ -1195,6 +1203,158 @@ const projectRootResourceTaskEntry = (
   }
 }
 
+/**
+ * 镜像孤儿任务的合并窗口：同一次执行的两侧 Starting 相差 1016ms 是实测值，
+ * 留足余量但远小于「两次真实执行」的间隔。
+ */
+const MIRROR_ORPHAN_MAX_START_GAP_MS = 5000
+
+const mirrorProcessPairKey = (left: string, right: string): string =>
+  left < right ? `${left}|${right}` : `${right}|${left}`
+
+/** 两个投影器（完整任务树 / 瘦摘要）共用的判定输入。 */
+interface MirrorOrphanTaskView {
+  task_id: number
+  entry: string
+  uuid?: string
+  hash?: string
+  status: TaskInfo['status']
+  start_time: string
+  process_id?: string
+  process_ids?: string[]
+  node_count: number
+}
+
+interface MirroredOrphanMergePlan {
+  /** 需要丢弃的索引（镜像副本）。 */
+  drop: Set<number>
+  /** 孪生任务索引 → 合并后的进程集合（副本的进程并入，保持「同一次执行两个进程都可见」）。 */
+  processIdsByTwin: Map<number, string[]>
+}
+
+/**
+ * 规划「镜像孤儿任务」的合并。
+ *
+ * 客户端 + agent 两侧各写一份事件流时，同一次任务的 `Tasker.Task.Starting` 可能相差超过
+ * 跨源去重窗口（实测 1016ms > 1000ms），于是被当成两个任务：副本收不到终止事件
+ * （两侧结束事件只差 1ms，被正常去重），永远是 `running`、0 节点。
+ *
+ * 判定条件刻意收紧，避免误伤「进程重启后复用 task_id 的真实执行」：
+ * 1. 候选是 `running` 且 **0 个节点**（没有真实执行内容）；
+ * 2. 存在已闭合的孪生任务（同 task_id/entry/uuid/hash），在**另一个进程**，启动相差 ≤5s；
+ * 3. 两个进程**确实发生过跨源去重**（`mirrorProcessPairs` 命中）——进程重启产生的新执行
+ *    其事件与上一轮不重叠，不会留下任何去重记录，因此不会被合并。
+ */
+const planMirroredOrphanMerge = (
+  views: readonly MirrorOrphanTaskView[],
+  pairs: ReadonlySet<string> | undefined,
+): MirroredOrphanMergePlan => {
+  const plan: MirroredOrphanMergePlan = { drop: new Set(), processIdsByTwin: new Map() }
+  if (!pairs || pairs.size === 0) return plan
+
+  const taskKey = (view: MirrorOrphanTaskView): string =>
+    `${view.task_id}\u0000${view.entry}\u0000${view.uuid ?? ''}\u0000${view.hash ?? ''}`
+
+  const closedByKey = new Map<string, number[]>()
+  for (let index = 0; index < views.length; index += 1) {
+    const view = views[index]
+    if (!view || view.status === 'running') continue
+    const key = taskKey(view)
+    const bucket = closedByKey.get(key)
+    if (bucket) bucket.push(index)
+    else closedByKey.set(key, [index])
+  }
+  if (closedByKey.size === 0) return plan
+
+  for (let index = 0; index < views.length; index += 1) {
+    const candidate = views[index]
+    if (!candidate || candidate.status !== 'running') continue
+    if (candidate.node_count > 0) continue
+    if (!candidate.process_id) continue
+
+    const twinIndexes = closedByKey.get(taskKey(candidate))
+    if (!twinIndexes) continue
+    const candidateStart = Date.parse(candidate.start_time)
+    if (!Number.isFinite(candidateStart)) continue
+
+    let twinIndex = -1
+    for (const possibleTwinIndex of twinIndexes) {
+      const twin = views[possibleTwinIndex]
+      if (!twin?.process_id || twin.process_id === candidate.process_id) continue
+      if (!pairs.has(mirrorProcessPairKey(twin.process_id, candidate.process_id))) continue
+      const twinStart = Date.parse(twin.start_time)
+      if (!Number.isFinite(twinStart)) continue
+      if (Math.abs(twinStart - candidateStart) > MIRROR_ORPHAN_MAX_START_GAP_MS) continue
+      twinIndex = possibleTwinIndex
+      break
+    }
+    if (twinIndex < 0) continue
+
+    const twin = views[twinIndex]!
+    const merged = new Set<string>()
+    for (const processId of twin.process_ids ?? []) merged.add(processId)
+    for (const processId of candidate.process_ids ?? []) merged.add(processId)
+    if (twin.process_id) merged.add(twin.process_id)
+    merged.add(candidate.process_id)
+    plan.processIdsByTwin.set(twinIndex, [...merged].sort())
+    plan.drop.add(index)
+  }
+
+  return plan
+}
+
+/** 把合并计划应用到完整任务树上。 */
+const applyMirroredOrphanMerge = (
+  tasks: TaskInfo[],
+  pairs: ReadonlySet<string> | undefined,
+): TaskInfo[] => {
+  const plan = planMirroredOrphanMerge(
+    tasks.map((task) => ({
+      task_id: task.task_id,
+      entry: task.entry,
+      uuid: task.uuid,
+      hash: task.hash,
+      status: task.status,
+      start_time: task.start_time,
+      process_id: task.process_id,
+      process_ids: task.process_ids,
+      node_count: task.nodes.length,
+    })),
+    pairs,
+  )
+  if (plan.drop.size === 0) return tasks
+  for (const [index, processIds] of plan.processIdsByTwin) {
+    const twin = tasks[index]
+    if (twin) twin.process_ids = processIds
+  }
+  return tasks.filter((_, index) => !plan.drop.has(index))
+}
+
+/** 把同一份合并计划应用到瘦摘要上，保证「摘要列表」与「完整任务树」任务集合一致。 */
+const applyMirroredOrphanMergeToSummaries = (
+  summaries: TaskSummary[],
+  pairs: ReadonlySet<string> | undefined,
+): TaskSummary[] => {
+  const plan = planMirroredOrphanMerge(
+    summaries.map((summary) => ({
+      task_id: summary.task_id,
+      entry: summary.entry,
+      status: summary.status,
+      start_time: summary.start_time,
+      process_id: summary.process_id,
+      process_ids: summary.process_ids,
+      node_count: summary.node_count,
+    })),
+    pairs,
+  )
+  if (plan.drop.size === 0) return summaries
+  for (const [index, processIds] of plan.processIdsByTwin) {
+    const twin = summaries[index]
+    if (twin) twin.process_ids = processIds
+  }
+  return summaries.filter((_, index) => !plan.drop.has(index))
+}
+
 export const projectTasksFromTrace = (
   root: ScopeNode,
   options: ProjectTasksFromTraceOptions = {},
@@ -1232,9 +1392,11 @@ export const projectTasksFromTrace = (
     )
     .filter((entry): entry is ProjectedTaskEntry => !!entry)
 
-  return mergeProjectedTaskEntries(projectedTaskEntries, rootResourceTaskEntries)
+  const projected = mergeProjectedTaskEntries(projectedTaskEntries, rootResourceTaskEntries)
     .map(({ task }) => task)
     .filter((task) => task.entry !== 'MaaTaskerPostStop')
+
+  return applyMirroredOrphanMerge(projected, options.mirrorProcessPairs)
 }
 
 /**
@@ -1283,9 +1445,11 @@ export const projectTaskSummariesFromTrace = (
     .filter((entry): entry is ProjectedTaskEntry => !!entry)
     .map((entry) => ({ seq: entry.seq, summary: toTaskSummaryFromTask(entry.task) }))
 
-  return mergeProjectedTaskEntries(summaryEntries, rootResourceEntries)
+  const projected = mergeProjectedTaskEntries(summaryEntries, rootResourceEntries)
     .map(({ summary }) => summary)
     .filter((summary) => summary.entry !== 'MaaTaskerPostStop')
+
+  return applyMirroredOrphanMergeToSummaries(projected, options.mirrorProcessPairs)
 }
 
 const summarizeTaskScope = (
