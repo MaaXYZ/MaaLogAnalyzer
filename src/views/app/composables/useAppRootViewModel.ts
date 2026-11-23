@@ -86,25 +86,79 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
   const parseTaskSummaries = shallowRef<TaskSummary[]>([])
   const parseInputsProgress = ref({ parsedInputs: 0, totalInputs: 0 })
 
+  // 每点开一个任务就把它换成完整 TaskInfo（含 node_flow/识别/动作）。大日志上单个任务
+  // 可达 300MB 级，来回切几个就会把主线程内存推回去，所以只缓存最近 N 个，其余降级回骨架。
+  const TASK_DETAIL_CACHE_LIMIT = 2
+  /** 已加载过详情的任务 → 它原来的骨架（降级时用来还原，避免为了省内存反而丢掉列表信息）。 */
+  const skeletonByTaskKey = new Map<string, TaskInfo>()
+  /** LRU：最近使用的任务 key 在最前。 */
+  const taskDetailLru: string[] = []
+
+  const taskKeyOf = (task: TaskInfo | null | undefined): string | null =>
+    task?.task_execution_id ?? null
+
+  const touchTaskDetail = (key: string) => {
+    const index = taskDetailLru.indexOf(key)
+    if (index >= 0) taskDetailLru.splice(index, 1)
+    taskDetailLru.unshift(key)
+  }
+
+  const replaceTaskInList = (key: string, nextTask: TaskInfo) => {
+    const index = tasks.value.findIndex((item) => taskKeyOf(item) === key)
+    if (index < 0) return
+    const next = tasks.value.slice()
+    next[index] = nextTask
+    tasks.value = next
+  }
+
+  /** 超出缓存上限时，把最久未用的非选中任务降级回骨架，释放它占的明细内存。 */
+  const enforceTaskDetailCacheLimit = () => {
+    while (taskDetailLru.length > TASK_DETAIL_CACHE_LIMIT) {
+      const evictKey = taskDetailLru[taskDetailLru.length - 1]
+      if (!evictKey) break
+      // 选中任务永不降级：详情面板/流程图正在用它。
+      if (taskKeyOf(selectedTask.value) === evictKey) break
+      const skeleton = skeletonByTaskKey.get(evictKey)
+      taskDetailLru.pop()
+      if (!skeleton) continue
+      skeletonByTaskKey.delete(evictKey)
+      replaceTaskInList(evictKey, skeleton)
+    }
+  }
+
   const ensureSelectedTaskDetail = async (task: TaskInfo | null) => {
-    if (!task?._skeleton) return
-    const key = task.task_execution_id
+    const key = taskKeyOf(task)
+    if (!key || !task) return
+
+    // 已完整加载的任务：只更新 LRU 顺序（可能在别的任务之后又被切回来）。
+    if (!task._skeleton) {
+      if (skeletonByTaskKey.has(key)) {
+        touchTaskDetail(key)
+        enforceTaskDetailCacheLimit()
+      }
+      return
+    }
+
     const loader = taskDetailLoader.value
-    if (!key || !loader || pendingTaskDetailKeys.has(key)) return
+    if (!loader || pendingTaskDetailKeys.has(key)) return
     pendingTaskDetailKeys.add(key)
     try {
       const detail = await loader(task)
       if (!detail) return
-      // 选中项与列表里的同一项都要换成完整任务（否则详情/流程图仍拿骨架）。
+      // 加载期间可能已经换了一份日志：确认这个 key 仍是当前列表里的骨架，避免把旧日志的
+      // 详情塞进新列表（scope id 由序号派生，跨日志有可能撞号）。
+      const stillCurrent = tasks.value.some(
+        (item) => taskKeyOf(item) === key && item._skeleton === true,
+      )
+      if (!stillCurrent) return
+      // 记下骨架，供之后超限时还原；再替换选中项与列表项。
+      skeletonByTaskKey.set(key, task)
       if (selectedTask.value?.task_execution_id === key) {
         selectedTask.value = detail
       }
-      const index = tasks.value.findIndex((item) => item.task_execution_id === key)
-      if (index >= 0) {
-        const next = tasks.value.slice()
-        next[index] = detail
-        tasks.value = next
-      }
+      replaceTaskInList(key, detail)
+      touchTaskDetail(key)
+      enforceTaskDetailCacheLimit()
     } catch (error) {
       // 详情取失败不影响已上屏的骨架；用户切换任务时会再试。
       console.warn('[log-loading] 任务详情加载失败:', error)
@@ -279,6 +333,12 @@ export const useAppRootViewModel = ({ propsIsDark, onToggleTheme }: UseAppRootVi
     },
     setTaskDetailLoader: (loader) => {
       taskDetailLoader.value = loader
+      if (!loader) {
+        // 换日志/解析失败：旧任务的骨架与 LRU 记录都不再有意义。
+        skeletonByTaskKey.clear()
+        taskDetailLru.length = 0
+        pendingTaskDetailKeys.clear()
+      }
     },
     handleFileLoadingStart,
     handleFileLoadingEnd,
