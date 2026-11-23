@@ -15,6 +15,7 @@ import {
   readNodeArchiveFileBytes,
   readNodeTextFileContent,
   readNodeTextFilesContent,
+  resolveLocalDirectoryLimits,
   resolveNodeDebugDirectory,
   selectPrimaryLogGroup,
 } from './nodeInput'
@@ -110,7 +111,11 @@ export const loadFrameworkLogSources = async (
       `Symbolic-link inputs are not allowed: ${targetPath}`,
     )
   }
-  if (targetStat.isDirectory()) return loadDirectorySources(targetPath, limits)
+  // 本机目录/文件不受"不可信压缩包"威胁模型约束：沿用目录读取的宽松上限，
+  // 否则 277MB 的轮转分卷会被旧的 256MB 默认上限直接拒掉。
+  if (targetStat.isDirectory()) {
+    return loadDirectorySources(targetPath, resolveLocalDirectoryLimits(options.archiveLimits))
+  }
   if (!targetStat.isFile()) {
     throw new InputFileError(
       'not-regular-file',
@@ -123,7 +128,9 @@ export const loadFrameworkLogSources = async (
     {
       path: toPosixPath(targetPath),
       name: path.basename(targetPath),
-      content: await readNodeTextFileContent(targetPath, { archiveLimits: limits }),
+      content: await readNodeTextFileContent(targetPath, {
+        archiveLimits: resolveLocalDirectoryLimits(options.archiveLimits),
+      }),
       reference: `file:${toPosixPath(targetPath)}`,
     },
   ]

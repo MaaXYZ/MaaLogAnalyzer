@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { analyzeLogSources, iterateTaskDetails, streamTaskDetails } from '../index'
+import {
+  analyzeLogSources,
+  iterateTaskDetails,
+  streamTaskDetails,
+  type TaskDetailStreamSummary,
+} from '../index'
 import type { TaskInfo } from '@windsland52/maa-log-kernel'
 
 const makeEventLine = (index: number, message: string, details: Record<string, unknown>): string => {
@@ -45,9 +50,11 @@ const chunkedSource = (content: string, size: number) => [
   },
 ]
 
+type SkeletonMarked = TaskInfo & { _skeleton?: boolean }
+
 const stripSkeletonFlags = (tasks: TaskInfo[]) =>
   tasks.map((task) => {
-    const { _skeleton: _ignored, ...rest } = task
+    const { _skeleton: _ignored, ...rest } = task as SkeletonMarked
     return rest
   })
 
@@ -58,12 +65,7 @@ describe('iterateTaskDetails (generator form)', () => {
     const kinds: string[] = []
     const streamed: TaskInfo[] = []
     const eventBatches: number[] = []
-    let summary: Awaited<ReturnType<typeof iterateTaskDetails>> extends AsyncGenerator<
-      never,
-      infer TReturn
-    >
-      ? TReturn
-      : never
+    let summary: TaskDetailStreamSummary | undefined
 
     while (true) {
       const next = await gen.next()
@@ -81,7 +83,7 @@ describe('iterateTaskDetails (generator form)', () => {
     const aggregated = await analyzeLogSources({ sources: contentSource(log) })
     expect(kinds[0]).toBe('skeletons')
     expect(kinds.filter((kind) => kind === 'events').length).toBeGreaterThan(1)
-    expect(kinds.at(-1)).toBe('task')
+    expect(kinds[kinds.length - 1]).toBe('task')
     expect(eventBatches.every((size) => size <= 4)).toBe(true)
     expect(summary!.totalEvents).toBe(aggregated.events.length)
     expect(JSON.stringify(stripSkeletonFlags(streamed))).toBe(
@@ -105,9 +107,9 @@ describe('streamTaskDetails', () => {
     const sources = contentSource(log)
 
     const summary = await streamTaskDetails({ sources }, ({ skeleton, task }) => {
-      expect(skeleton._skeleton).toBe(true)
+      expect((skeleton as SkeletonMarked)._skeleton).toBe(true)
       expect(skeleton.task_execution_id).toBeTruthy()
-      expect(task._skeleton).toBeFalsy()
+      expect((task as SkeletonMarked)._skeleton).toBeFalsy()
       expect(task.task_execution_id).toBe(skeleton.task_execution_id)
       streamed.push(task)
     })
@@ -151,7 +153,7 @@ describe('streamTaskDetails', () => {
   })
 
   it('streams the full event list in batches (task.events is only a subset)', async () => {
-    const log = buildLog().replaceAll('task_id":1', 'task_id":11')
+    const log = buildLog().split('task_id":1').join('task_id":11')
     const batches: number[] = []
     const streamedEvents: unknown[] = []
     const summary = await streamTaskDetails(
@@ -187,12 +189,14 @@ describe('streamTaskDetails', () => {
           order.push('chunk')
         },
       },
-      () => order.push('task'),
+      () => {
+        order.push('task')
+      },
     )
 
     expect(chunks.join('')).toBe(log)
     expect(order[0]).toBe('chunk')
-    expect(order.at(-1)).toBe('task')
+    expect(order[order.length - 1]).toBe('task')
     expect(summary.skeletons).toHaveLength(2)
 
     // 整段内容来源也应走同一条钩子（单块）
@@ -224,7 +228,7 @@ describe('streamTaskDetails', () => {
       },
     )
 
-    expect(progress.at(-1)).toBe(100)
+    expect(progress[progress.length - 1]).toBe(100)
     expect(eventCounts).toEqual([5, 4])
     expect(summary.totalEvents).toBe(9)
     expect(summary.taskEventCount).toBe(9)

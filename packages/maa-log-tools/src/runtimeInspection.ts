@@ -546,11 +546,42 @@ const createEvidenceFn =
   (index: RuntimeEvidenceIndex, timestamp?: string): RuntimeEvidencePosition =>
     enrichWithSource(evidence(index, timestamp), segments)
 
-export const buildRuntimeInspection = (
-  output: KernelOutput,
+/**
+ * 增量版 runtime 装配器。
+ *
+ * 为什么需要：`buildRuntimeInspection` 内部有两处「跨任务」逻辑——
+ * 1. `task-execution-<taskId>-<occurrence>` 的 occurrence 按**任务执行顺序**递增；
+ * 2. `failure-…` / `outcome-…` / `signal-…` 的 ID 取决于全局数组长度；sessions 最后统一分组。
+ *
+ * 流式逐任务消费时若每个任务单独调用原函数，这两处都会退化成「每个任务都从 1 开始」，
+ * ID 重复、引用全断。本 builder 把同样的逻辑按顺序喂进去，输出与整树调用逐字段一致，
+ * 调用方不需要改写任何 ID 或自行合并 sessions。
+ *
+ * 用法：
+ * ```ts
+ * const builder = createRuntimeInspectionBuilder(framework, sourceSegments)
+ * for await (const item of iterateTaskDetails({ sources })) {
+ *   if (item.type === 'task') builder.addTask(item.task)   // 必须按执行顺序
+ * }
+ * const inspection = builder.finish()
+ * ```
+ */
+export interface RuntimeInspectionBuilder {
+  /**
+   * 按**任务执行顺序**追加一个完整任务，返回该任务的 `RuntimeTaskExecution`。
+   *
+   * 顺序即骨架顺序（`iterateTaskDetails` 的就是这个顺序）；乱序会导致 executionId 的
+   * occurrence 与整树输出不一致。
+   */
+  addTask(task: TaskInfo): RuntimeTaskExecution
+  /** 装配 sessions/unscopedTasks/warnings；基于已追加的全部任务。 */
+  finish(): RuntimeInspection
+}
+
+export const createRuntimeInspectionBuilder = (
   framework: FrameworkSessionExtraction,
   sourceSegments: readonly SourceSegment[],
-): RuntimeInspection => {
+): RuntimeInspectionBuilder => {
   const failures: RuntimeFailure[] = []
   const outcomes: RuntimeOutcome[] = []
   const signals: RuntimeSignal[] = []
@@ -559,15 +590,6 @@ export const buildRuntimeInspection = (
   const sessionIds = new Map<TaskInfo, string | null>()
   const executionSessionIds = new Map<string, string | null>()
   const evidenceAt = createEvidenceFn(sourceSegments)
-  for (const task of output.tasks) {
-    const occurrence = (taskOccurrences.get(task.task_id) ?? 0) + 1
-    taskOccurrences.set(task.task_id, occurrence)
-    const executionId = `task-execution-${task.task_id}-${occurrence}`
-    const sessionId = sessionFor(task, framework.sessions)?.sessionId ?? null
-    executionIds.set(task, executionId)
-    sessionIds.set(task, sessionId)
-    executionSessionIds.set(executionId, sessionId)
-  }
 
   const buildTask = (task: TaskInfo): RuntimeTaskExecution => {
     const sessionId = sessionIds.get(task) ?? null
@@ -1069,50 +1091,86 @@ export const buildRuntimeInspection = (
     }
   }
 
-  const tasks = output.tasks.map(buildTask)
-  const sessions = framework.sessions.map((session): RuntimeSession => {
-    const scoped = tasks.filter(
-      (task) => executionSessionIds.get(task.executionId) === session.sessionId,
-    )
-    const ids = new Set(scoped.flatMap((task) => task.directFailureIds))
-    const scopedFailures = failures.filter((failure) => ids.has(failure.failureId))
-    return {
-      sessionId: session.sessionId,
-      startKind: session.startKind,
-      frameworkStatus: session.status,
-      frameworkVersion: session.version,
-      versions: [...session.versions],
-      start: session.start,
-      end: session.end,
-      tasks: scoped,
-      summary: {
-        taskExecutions: scoped.length,
-        succeededTasks: scoped.filter((task) => task.status === 'succeeded').length,
-        failedTasks: scoped.filter((task) => task.status === 'failed').length,
-        runningTasks: scoped.filter((task) => task.status === 'running').length,
-        directFailures: scopedFailures.length,
-        nextListTimeouts: scopedFailures.filter((failure) => failure.kind === 'next_list_timeout')
-          .length,
-        actionFailures: scopedFailures.filter((failure) => failure.kind === 'action_failed').length,
-        signals: scoped.reduce((count, task) => count + task.signalIds.length, 0),
-      },
-    }
-  })
-  const unscopedTasks = tasks.filter((task) => executionSessionIds.get(task.executionId) == null)
-  return {
-    schemaVersion: MLA_RUNTIME_INSPECTION_SCHEMA_VERSION,
-    sessions,
-    unscopedTasks,
-    failures,
-    outcomes,
-    signals,
-    warnings: [
-      ...framework.warnings,
-      ...(unscopedTasks.length
-        ? [
-            `${unscopedTasks.length} task execution(s) could not be assigned to one runtime session.`,
-          ]
-        : []),
-    ],
+  const addedTasks: TaskInfo[] = []
+  const builtTasks: RuntimeTaskExecution[] = []
+
+  const addTask = (task: TaskInfo): RuntimeTaskExecution => {
+    const occurrence = (taskOccurrences.get(task.task_id) ?? 0) + 1
+    taskOccurrences.set(task.task_id, occurrence)
+    const executionId = `task-execution-${task.task_id}-${occurrence}`
+    const sessionId = sessionFor(task, framework.sessions)?.sessionId ?? null
+    executionIds.set(task, executionId)
+    sessionIds.set(task, sessionId)
+    executionSessionIds.set(executionId, sessionId)
+    const execution = buildTask(task)
+    addedTasks.push(task)
+    builtTasks.push(execution)
+    return execution
   }
+
+  const finish = (): RuntimeInspection => {
+    const tasks = builtTasks
+    const sessions = framework.sessions.map((session): RuntimeSession => {
+      const scoped = tasks.filter(
+        (task) => executionSessionIds.get(task.executionId) === session.sessionId,
+      )
+      const ids = new Set(scoped.flatMap((task) => task.directFailureIds))
+      const scopedFailures = failures.filter((failure) => ids.has(failure.failureId))
+      return {
+        sessionId: session.sessionId,
+        startKind: session.startKind,
+        frameworkStatus: session.status,
+        frameworkVersion: session.version,
+        versions: [...session.versions],
+        start: session.start,
+        end: session.end,
+        tasks: scoped,
+        summary: {
+          taskExecutions: scoped.length,
+          succeededTasks: scoped.filter((task) => task.status === 'succeeded').length,
+          failedTasks: scoped.filter((task) => task.status === 'failed').length,
+          runningTasks: scoped.filter((task) => task.status === 'running').length,
+          directFailures: scopedFailures.length,
+          nextListTimeouts: scopedFailures.filter(
+            (failure) => failure.kind === 'next_list_timeout',
+          ).length,
+          actionFailures: scopedFailures.filter((failure) => failure.kind === 'action_failed')
+            .length,
+          signals: scoped.reduce((count, task) => count + task.signalIds.length, 0),
+        },
+      }
+    })
+    const unscopedTasks = tasks.filter((task) => executionSessionIds.get(task.executionId) == null)
+    return {
+      schemaVersion: MLA_RUNTIME_INSPECTION_SCHEMA_VERSION,
+      sessions,
+      unscopedTasks,
+      failures,
+      outcomes,
+      signals,
+      warnings: [
+        ...framework.warnings,
+        ...(unscopedTasks.length
+          ? [
+              `${unscopedTasks.length} task execution(s) could not be assigned to one runtime session.`,
+            ]
+          : []),
+      ],
+    }
+  }
+
+  return { addTask, finish }
+}
+
+/**
+ * 整树入口（保持原签名）：内部等价于按 `output.tasks` 顺序逐个 `addTask` 后 `finish()`。
+ */
+export const buildRuntimeInspection = (
+  output: KernelOutput,
+  framework: FrameworkSessionExtraction,
+  sourceSegments: readonly SourceSegment[],
+): RuntimeInspection => {
+  const builder = createRuntimeInspectionBuilder(framework, sourceSegments)
+  for (const task of output.tasks) builder.addTask(task)
+  return builder.finish()
 }

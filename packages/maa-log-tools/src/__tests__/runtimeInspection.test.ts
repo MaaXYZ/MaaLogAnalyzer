@@ -1,7 +1,11 @@
 import type { KernelOutput, NodeInfo, TaskInfo, UnifiedFlowItem } from '@windsland52/maa-log-kernel'
 import { describe, expect, it } from 'vitest'
 import type { FrameworkSessionExtraction } from '../frameworkVersion'
-import { buildRuntimeInspection, type SourceSegment } from '../runtimeInspection'
+import {
+  buildRuntimeInspection,
+  createRuntimeInspectionBuilder,
+  type SourceSegment,
+} from '../runtimeInspection'
 
 const position = (line: number, timestamp: string) => ({
   source: 'file:C:/logs/maafw.log',
@@ -590,5 +594,46 @@ describe('runtime inspection', () => {
       path: 'maa.log',
       localLine: 2,
     })
+  })
+})
+
+describe('runtime inspection builder (streaming)', () => {
+  it('matches the whole-tree inspection while keeping execution ids stable', () => {
+    const tasks = [
+      task({
+        task_id: 1,
+        nodes: [node(11, 'A', '2026-07-20 10:01:10.000')],
+        start_time: '2026-07-20 10:01:00.000',
+        end_time: '2026-07-20 10:02:00.000',
+      }),
+      // 同一 task_id 的第二次执行：occurrence 必须递增
+      task({
+        task_id: 1,
+        nodes: [node(11, 'A', '2026-07-20 10:03:10.000')],
+        start_time: '2026-07-20 10:03:00.000',
+        end_time: '2026-07-20 10:04:00.000',
+        status: 'succeeded',
+      }),
+      task({
+        task_id: 2,
+        entry: 'Other',
+        nodes: [],
+        start_time: '2026-07-20 10:05:00.000',
+        end_time: '2026-07-20 10:06:00.000',
+        status: 'succeeded',
+      }),
+    ]
+
+    const whole = buildRuntimeInspection(output(tasks), framework, sourceSegments)
+    const builder = createRuntimeInspectionBuilder(framework, sourceSegments)
+    const executions = tasks.map((item) => builder.addTask(item))
+    const incremental = builder.finish()
+
+    expect(executions.map((item) => item.executionId)).toEqual([
+      'task-execution-1-1',
+      'task-execution-1-2',
+      'task-execution-2-1',
+    ])
+    expect(JSON.stringify(incremental)).toBe(JSON.stringify(whole))
   })
 })

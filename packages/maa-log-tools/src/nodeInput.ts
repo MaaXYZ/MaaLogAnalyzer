@@ -87,7 +87,7 @@ const LOCAL_DIRECTORY_LIMIT_OVERRIDES: Partial<ArchiveLimits> = {
   maxCompressedBytes: 8 * 1024 ** 3,
 }
 
-const resolveLocalDirectoryLimits = (
+export const resolveLocalDirectoryLimits = (
   overrides?: Partial<ArchiveLimits>,
 ): Readonly<ArchiveLimits> => resolveArchiveLimits({ ...LOCAL_DIRECTORY_LIMIT_OVERRIDES, ...overrides })
 
