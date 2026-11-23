@@ -86,6 +86,20 @@ type BatchInput =
       size: number
       loadContent: () => Promise<string>
     })
+  | (Omit<ParseSourceInput, 'content'> & {
+      /** 解压后字符数（进度权重）；未知时可给压缩字节数的估算值。 */
+      size: number
+      /**
+       * 按块返回同一份日志的文本。
+       *
+       * 用于 2GB+ 的大日志：整段解码 + 整串喂入会让峰值也被单段大小拽高（实测 396MB 分卷
+       * 解码瞬态就能把 RSS 推到 1.6GB）。分块后每次只持有一块的字符串，峰值与块大小相关。
+       *
+       * 约束：块边界可以切在任意位置（包括行中间；多字节字符由调用方用流式 TextDecoder
+       * 解码后再切分，因此不会切坏字符）；换行符必须原样保留在块里。
+       */
+      loadChunks: () => AsyncIterable<string>
+    })
 
 const inputSize = (input: BatchInput) => ('content' in input ? input.content.length : input.size)
 
@@ -567,6 +581,122 @@ export class LogParser {
   }
 
   /**
+   * 解析单个来源的**分块**文本（与 `parseSourceContent` 等价，但边收边解析）。
+   *
+   * 与整串路径的差别只在输入形态：块边界任意、行号跨块连续；末尾不足一行的残留会在流结束时
+   * 作为最后一行处理。语义（去重、事件归并、source 标注、`storeRawLines`）与整串路径一致。
+   */
+  private async parseSourceChunks(
+    input: {
+      sourceKey?: string
+      sourcePath?: string
+      inputIndex?: number
+      size?: number
+    },
+    chunks: AsyncIterable<string>,
+    runtime: {
+      onProgress?: ((progress: ParseProgress) => void) | undefined
+      chunkLineCount: number
+      yieldControl: (() => Promise<void> | void) | null
+      progressOffset: number
+      progressWeight: number
+      totalChars: number
+      storeRawLines: boolean
+    },
+  ): Promise<number> {
+    const normalizedInputIndex = input.inputIndex ?? 0
+    const sourceKey = input.sourceKey ?? input.sourcePath ?? `input:${normalizedInputIndex}`
+    const sourceMeta = {
+      sourceKey,
+      sourcePath: input.sourcePath,
+      inputIndex: normalizedInputIndex,
+    }
+    const rawLines = runtime.storeRawLines ? ([] as string[]) : null
+    const chunkLineCount = runtime.chunkLineCount
+    // size 可能只是估算值（压缩字节 × 系数），进度最多推进到 99%，最后统一由 parseInputs 收尾。
+    const expectedChars = Math.max(1, input.size ?? 0)
+    let consumedChars = 0
+    let lineNum = 0
+    let pending = ''
+    let linesSinceYield = 0
+
+    const emitProgress = (): void => {
+      if (!runtime.onProgress) return
+      const ratio = Math.min(0.99, consumedChars / expectedChars)
+      const current = Math.min(
+        runtime.progressOffset + Math.round(runtime.progressWeight * ratio),
+        runtime.totalChars,
+      )
+      runtime.onProgress({
+        current,
+        total: runtime.totalChars,
+        percentage:
+          runtime.totalChars === 0 ? 100 : Math.round((current / runtime.totalChars) * 100),
+      })
+    }
+
+    const handleLine = (rawLine: string): void => {
+      if (rawLines) rawLines.push(rawLine)
+      lineNum += 1
+      if (!rawLine || !rawLine.includes('!!!OnEventNotify!!!')) return
+      try {
+        const event = this.parseEventLine(rawLine.trim(), lineNum)
+        if (!event) return
+        this.appendEvent(event, sourceMeta)
+      } catch (error) {
+        console.warn(`解析第 ${lineNum} 行失败:`, error)
+      }
+    }
+
+    /** 处理以换行结尾的一段文本（不含末尾残留的半行）。 */
+    const processText = async (text: string): Promise<void> => {
+      let start = 0
+      while (true) {
+        const end = text.indexOf('\n', start)
+        if (end < 0) return
+        handleLine(text.slice(start, end))
+        start = end + 1
+        linesSinceYield += 1
+        if (linesSinceYield >= chunkLineCount) {
+          linesSinceYield = 0
+          if (runtime.yieldControl) await runtime.yieldControl()
+          emitProgress()
+        }
+      }
+    }
+
+    for await (const chunk of chunks) {
+      if (!chunk) continue
+      consumedChars += chunk.length
+      const combined = pending.length > 0 ? pending + chunk : chunk
+      const lastNewline = combined.lastIndexOf('\n')
+      if (lastNewline < 0) {
+        pending = combined
+        continue
+      }
+      const head = combined.slice(0, lastNewline + 1)
+      pending = combined.slice(lastNewline + 1)
+      await processText(head)
+      if (runtime.yieldControl) await runtime.yieldControl()
+      emitProgress()
+    }
+
+    if (pending.length > 0) {
+      handleLine(pending)
+    }
+    emitProgress()
+
+    if (rawLines) {
+      adoptRawLineSource(this.ensureRawLineStore(), {
+        ...sourceMeta,
+        lines: rawLines,
+      })
+    }
+
+    return consumedChars
+  }
+
+  /**
    * 解析日志文件内容（异步分块处理）
    * 只处理包含 !!!OnEventNotify!!! 的行
    */
@@ -711,20 +841,22 @@ export class LogParser {
 
       let progressOffset = 0
       for (const [currentInputIndex, input] of normalizedInputs.entries()) {
-        const content = 'content' in input ? input.content : await input.loadContent()
         const weight = inputSize(input)
-        await this.parseSourceContent(
-          { ...input, content },
-          {
-            onProgress,
-            chunkLineCount,
-            yieldControl,
-            progressOffset,
-            progressWeight: weight,
-            totalChars,
-            storeRawLines,
-          },
-        )
+        const runtime = {
+          onProgress,
+          chunkLineCount,
+          yieldControl,
+          progressOffset,
+          progressWeight: weight,
+          totalChars,
+          storeRawLines,
+        }
+        if ('loadChunks' in input) {
+          await this.parseSourceChunks(input, input.loadChunks(), runtime)
+        } else {
+          const content = 'content' in input ? input.content : await input.loadContent()
+          await this.parseSourceContent({ ...input, content }, runtime)
+        }
         progressOffset += weight
         if (options?.onInputParsed) {
           try {
