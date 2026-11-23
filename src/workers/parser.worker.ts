@@ -87,6 +87,9 @@ self.onmessage = async (event: MessageEvent<LogParserWorkerRequest>) => {
 
     // 只回传骨架：几十 KB～几百 KB，主线程立即可用。完整任务在用户点开时按需投影。
     post({ type: 'task-skeletons', requestId, tasks: parser.getTaskSkeletons() })
+    // 骨架已产出、之后不再追加事件：释放解析期临时结构（去重历史/投影缓存），
+    // 实测大日志上约省 190MB，且不影响后续按任务投影详情。
+    parser.releaseParseScratch()
     // Worker 保持存活以响应后续 `project-task`；主线程换下一份日志时 terminate 它。
     retainedParser = parser
   } catch (error) {

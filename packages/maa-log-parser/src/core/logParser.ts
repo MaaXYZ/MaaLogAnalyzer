@@ -777,6 +777,20 @@ export class LogParser {
   }
 
   /**
+   * 释放**解析期**才需要的临时结构：跨源去重历史与投影缓存。
+   *
+   * 批量解析完成后（骨架已经产出、之后不再 append 事件）这些数据就没有用了：
+   * 实测 issue-7371（2.4GB / 13.5 万作用域）上能回收约 186MB heap。
+   * 注意：调用后不能再 `appendRealtimeLines`（实时路径不要调用）。
+   */
+  releaseParseScratch(): void {
+    this.recentEventsBySignature.clear()
+    this.dedupOccurrenceTimeline = []
+    this.dedupOccurrenceTimelineHead = 0
+    this.completedTaskCache.clear()
+  }
+
+  /**
    * 全部任务的**骨架**（列表/导航可用，不含 node_flow、识别/动作明细与事件）。
    *
    * 与 `consumeTasks()` 的任务集合、顺序、任务级字段一致，但 payload 从 GB 级降到 MB 级；
@@ -794,6 +808,8 @@ export class LogParser {
     })
     for (const task of tasks) {
       task._skeleton = true
+      // 根级资源伪任务没有作用域 id：用合成 uuid 充当执行 id，界面按它取详情时才能对上。
+      if (!task.task_execution_id && task.uuid) task.task_execution_id = task.uuid
       freezeSnapshotData(task)
     }
     return tasks
