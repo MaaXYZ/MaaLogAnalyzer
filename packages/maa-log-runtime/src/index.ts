@@ -36,7 +36,18 @@ export interface RuntimeLogSource {
   content?: string
   /** 解析进度权重（解压后字符数的估算）；未知时可给文件字节数。 */
   size?: number
+  /**
+   * 整段读取（旧路径）。与 `loadContent` 互斥；三者的优先级是
+   * `content` → `loadChunks` → `loadContent`。
+   */
   loadContent?: () => Promise<string>
+  /**
+   * 按块读取同一份日志（推荐用于 2GB+ 大日志）。
+   *
+   * 块边界可以落在任意位置（行中间也合法），parser 会跨块拼接行；
+   * 相比整段字符串，峰值内存只与块大小相关。
+   */
+  loadChunks?: () => AsyncIterable<string>
   sourceKey?: string
   sourcePath?: string
   inputIndex?: number

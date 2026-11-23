@@ -52,6 +52,10 @@ export const createMlaRuntimeAdapter = (): RuntimeExecutionAdapter<ParserTaskInf
         if (source.content != null) {
           return { ...metadata, content: source.content }
         }
+        // 分块优先于整段：大日志只有分块路径才能把解析峰值压下来。
+        if (source.loadChunks) {
+          return { ...metadata, size: source.size ?? 0, loadChunks: source.loadChunks }
+        }
         return {
           ...metadata,
           size: source.size ?? 0,

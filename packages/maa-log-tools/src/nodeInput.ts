@@ -1,4 +1,6 @@
+import { createReadStream } from 'node:fs'
 import { lstat, opendir, realpath, stat } from 'node:fs/promises'
+import { createGunzip } from 'node:zlib'
 import { expandGzipLog, expandSelectedGzipLogs, isGzipLog } from './gzipLog'
 import type { Stats } from 'node:fs'
 import path from 'node:path'
@@ -96,9 +98,17 @@ export interface NodeLogSource {
   /** 相对日志目录的 posix 路径，写进事件/节点的 `source.path`。 */
   sourcePath: string
   inputIndex: number
-  /** 解析进度权重（解压后字符数估算）。 */
+  /** 解析进度权重（解压后字符数估算；gz 按压缩字节 ×18 估算）。 */
   size: number
+  /** 整段读取（旧路径）。调用方若只需要解析，优先用 `loadChunks`。 */
   loadContent: () => Promise<string>
+  /**
+   * 按块读取日志文本（推荐；大日志的解析峰值只与块大小相关）。
+   *
+   * 与 `loadContent` 并存：需要整段内容的调用方（例如框架会话扫描）仍可用后者，
+   * 但解析路径应优先用本方法（`analyzeLogSources` 内部即如此）。
+   */
+  loadChunks?: () => AsyncIterable<string>
 }
 
 /**
@@ -139,6 +149,134 @@ const isHistoryLogName = (fileName: string): boolean => {
 const isCoreLogName = (fileName: string): boolean => {
   const lower = fileName.toLowerCase()
   return MAIN_LOG_NAME_SET.has(lower) || isHistoryLogName(lower)
+}
+
+/** 分块读取时每次交给 parser 的文本块大小（字符），与 Web 侧保持一致。 */
+export const NODE_TEXT_CHUNK_CHARS = 1 << 20
+
+/** 判定编码前至少缓冲这么多解压字节，避免小首块把 GBK 误判成 UTF-8。 */
+const ENCODING_SNIFF_BYTES = 64 * 1024
+
+const TEXT_ENCODINGS = ['utf-8', 'gbk', 'gb18030', 'gb2312'] as const
+
+const pickStreamingDecoder = (bytes: Uint8Array): TextDecoder => {
+  for (const encoding of TEXT_ENCODINGS) {
+    try {
+      const decoder = new TextDecoder(encoding, { fatal: true })
+      // 只是试解码，不消费；真正的流式解码用新 decoder（保留不完整的多字节尾巴）
+      decoder.decode(bytes, { stream: true })
+      return new TextDecoder(encoding, { fatal: false })
+    } catch {
+      // 换下一种编码
+    }
+  }
+  return new TextDecoder('utf-8')
+}
+
+export interface ReadNodeLogTextChunksOptions {
+  /** 是否按 gzip 解压（普通文本日志传 false）。 */
+  gzip?: boolean
+  /** 文本块大小（字符）。 */
+  chunkChars?: number
+  /** 每解压出一段字节回调一次（用于压缩比/总量上限检查）。 */
+  onDecompressedBytes?: (bytes: number) => void
+}
+
+/**
+ * 把本机日志文件**流式解码成文本块**（gz 自动解压）。
+ *
+ * 与 `readNodeTextFileWithinBudget` 的区别：不把解压结果整体物化成一个 Uint8Array 再解码成
+ * 大字符串，而是边解压边解码、每次只产出一块文本。2GB+ 日志的解析峰值因此只与块大小相关。
+ * 编码判定沿用 `decodeNodeBytes` 的回退顺序（utf-8 → gbk → gb18030 → gb2312）。
+ */
+export async function* readNodeLogTextChunks(
+  filePath: string,
+  options: ReadNodeLogTextChunksOptions = {},
+): AsyncGenerator<string> {
+  const limit = Math.max(1, Math.floor(options.chunkChars ?? NODE_TEXT_CHUNK_CHARS))
+  const source = createReadStream(filePath)
+  const gunzip = options.gzip ? createGunzip() : null
+  if (gunzip) source.pipe(gunzip)
+  const stream: AsyncIterable<Uint8Array> = gunzip ?? source
+
+  const sniffParts: Uint8Array[] = []
+  let sniffLength = 0
+  let decoder: TextDecoder | null = null
+  let textChunks: string[] = []
+  let pendingChars = 0
+
+  const pushBytes = (bytes: Uint8Array): void => {
+    options.onDecompressedBytes?.(bytes.byteLength)
+  }
+
+  const pushText = (text: string): void => {
+    if (!text) return
+    textChunks.push(text)
+    pendingChars += text.length
+  }
+
+  const drain = function* (): Generator<string> {
+    while (pendingChars >= limit) {
+      const joined = textChunks.join('')
+      textChunks = []
+      pendingChars = 0
+      let offset = 0
+      while (joined.length - offset >= limit) {
+        yield joined.slice(offset, offset + limit)
+        offset += limit
+      }
+      const rest = joined.slice(offset)
+      if (rest) {
+        textChunks.push(rest)
+        pendingChars = rest.length
+      }
+    }
+  }
+
+  try {
+    for await (const value of stream) {
+      if (!value || value.byteLength === 0) continue
+      pushBytes(value)
+
+      if (!decoder) {
+        sniffParts.push(value)
+        sniffLength += value.byteLength
+        if (sniffLength < ENCODING_SNIFF_BYTES) continue
+        const sniffed = new Uint8Array(sniffLength)
+        let offset = 0
+        for (const part of sniffParts) {
+          sniffed.set(part, offset)
+          offset += part.byteLength
+        }
+        sniffParts.length = 0
+        decoder = pickStreamingDecoder(sniffed)
+        pushText(decoder.decode(sniffed, { stream: true }))
+      } else {
+        pushText(decoder.decode(value, { stream: true }))
+      }
+
+      yield* drain()
+    }
+
+    if (!decoder) {
+      const sniffed = new Uint8Array(sniffLength)
+      let offset = 0
+      for (const part of sniffParts) {
+        sniffed.set(part, offset)
+        offset += part.byteLength
+      }
+      decoder = pickStreamingDecoder(sniffed)
+      pushText(decoder.decode(sniffed, { stream: true }))
+    }
+    pushText(decoder.decode())
+    yield* drain()
+    if (pendingChars > 0) {
+      const rest = textChunks.join('')
+      if (rest) yield rest
+    }
+  } finally {
+    source.destroy()
+  }
 }
 
 const decodeNodeBytes = (bytes: Uint8Array): string => {
@@ -1132,7 +1270,35 @@ export const loadNodeLogSources = async (
     const logPath = group.paths[index]!
     const relativePath = toPosixPath(path.relative(debugPath, logPath))
     const metadata = await stat(logPath).catch(() => null)
-    const size = metadata ? metadata.size * (isGzipLog(logPath) ? 8 : 1) : 0
+    const gzip = isGzipLog(logPath)
+    const compressedBytes = metadata?.size ?? 0
+    // 进度权重用解压后字符数估算（这类日志压缩比实测约 18×）
+    const size = gzip ? Math.max(1, compressedBytes * 18) : compressedBytes
+    let decompressedBytes = 0
+
+    /** 边读边检查压缩比 / 单文件 / 总量上限（与整段读取的口径一致）。 */
+    const assertChunkWithinLimits = (total: number): void => {
+      if (total > limits.maxFileBytes) {
+        throw new ArchiveLimitError('file-size', total, limits.maxFileBytes)
+      }
+      if (
+        gzip &&
+        compressedBytes > 0 &&
+        total >= limits.compressionRatioMinBytes &&
+        total / compressedBytes > limits.maxCompressionRatio
+      ) {
+        throw new ArchiveLimitError(
+          'compression-ratio',
+          total / compressedBytes,
+          limits.maxCompressionRatio,
+        )
+      }
+      const projected = context.extraction.extractedBytes + total
+      if (projected > limits.maxExtractedBytes) {
+        throw new ArchiveLimitError('extracted-size', projected, limits.maxExtractedBytes)
+      }
+    }
+
     sources.push({
       sourceKey: toFileReference(logPath),
       sourcePath: relativePath,
@@ -1142,6 +1308,33 @@ export const loadNodeLogSources = async (
         const content = await readNodeTextFileWithinBudget(logPath, context)
         lineCounts[index] = countNewlines(content) + 1
         return content
+      },
+      loadChunks: async function* () {
+        chargePath(context, logPath)
+        await assertPathInsideContext(context, logPath)
+        let newlines = 0
+        try {
+          for await (const chunk of readNodeLogTextChunks(logPath, {
+            gzip,
+            onDecompressedBytes: (bytes) => {
+              decompressedBytes += bytes
+              assertChunkWithinLimits(decompressedBytes)
+            },
+          })) {
+            newlines += countNewlines(chunk)
+            yield chunk
+          }
+        } finally {
+          lineCounts[index] = newlines + 1
+          if (decompressedBytes > 0) {
+            context.extraction = addSelectedEntry(
+              context.extraction,
+              createStoredFileMetadata(toPosixPath(logPath), decompressedBytes),
+              limits,
+              false,
+            )
+          }
+        }
       },
     })
   }
