@@ -1,4 +1,4 @@
-import { lstat, opendir, realpath } from 'node:fs/promises'
+import { lstat, opendir, realpath, stat } from 'node:fs/promises'
 import { expandGzipLog, expandSelectedGzipLogs, isGzipLog } from './gzipLog'
 import type { Stats } from 'node:fs'
 import path from 'node:path'
@@ -70,6 +70,52 @@ export interface ExtractZipContentOptions {
 export interface LoadNodeLogDirectoryOptions {
   focus?: LogBundleFocus
   archiveLimits?: Partial<ArchiveLimits>
+}
+
+/**
+ * 本机目录（用户自己选的日志文件夹）的读取限制。
+ *
+ * 这类文件不是「不可信压缩包」：不设单文件/总量硬上限，否则 2GB+ 的日志目录直接被拒
+ * （旧默认 maxFileBytes=256MB、maxExtractedBytes=512MB）。仍保留压缩比与图片大小限制，
+ * 用来挡 gzip 炸弹和异常图片。
+ */
+const LOCAL_DIRECTORY_LIMIT_OVERRIDES: Partial<ArchiveLimits> = {
+  maxFileBytes: 8 * 1024 ** 3,
+  maxExtractedBytes: 64 * 1024 ** 3,
+  maxCompressedBytes: 8 * 1024 ** 3,
+}
+
+const resolveLocalDirectoryLimits = (
+  overrides?: Partial<ArchiveLimits>,
+): Readonly<ArchiveLimits> => resolveArchiveLimits({ ...LOCAL_DIRECTORY_LIMIT_OVERRIDES, ...overrides })
+
+/** 多来源读取里的单个日志文件（惰性加载，绝不整包拼串）。 */
+export interface NodeLogSource {
+  /** 解析器内部去重键，形如 `file:<绝对路径>`。 */
+  sourceKey: string
+  /** 相对日志目录的 posix 路径，写进事件/节点的 `source.path`。 */
+  sourcePath: string
+  inputIndex: number
+  /** 解析进度权重（解压后字符数估算）。 */
+  size: number
+  loadContent: () => Promise<string>
+}
+
+/**
+ * `loadNodeLogSources` 的结果：与 `NodeExtractedLogContent` 同样的附属数据，
+ * 但日志正文保持「一个文件一个来源」，可由 runtime 逐文件惰性解析。
+ */
+export interface NodeLogSourcesResult {
+  sources: NodeLogSource[]
+  errorImages: Map<string, string>
+  visionImages: Map<string, string>
+  waitFreezesImages: Map<string, string>
+  textFiles: KernelTextFile[]
+  /**
+   * 解析完成后调用：按各来源实际读到的行数给出合并行号区间
+   * （与旧的「拼成一段字符串」口径一致）。
+   */
+  getSourceSegments: () => SourceSegment[]
 }
 
 export interface ReadNodeTextFileOptions {
@@ -235,7 +281,19 @@ const countNewlines = (content: string): number => {
   return count
 }
 
-const joinMergedWithSources = (chunks: TaggedChunk[]): MergedContent => {
+/**
+ * 旧路径（把多个文件拼成一整串）的字符数上限。
+ *
+ * V8 单个字符串上限约 512MB 字符，拼到那一步会直接抛 `Invalid string length`，
+ * 报错信息完全看不出「是输入太大」；这里提前抛出可诊断的错误，引导调用方改走
+ * `loadNodeLogSources` / `analyzeLogSources` 的多来源路径。
+ */
+const MAX_MERGED_CONTENT_CHARS = 400 * 1024 * 1024
+
+const joinMergedWithSources = (
+  chunks: TaggedChunk[],
+  maxChars: number = MAX_MERGED_CONTENT_CHARS,
+): MergedContent => {
   let content = ''
   let runningNewlines = 0
   const chunkStarts: { startLine: number; source: string; path: string }[] = []
@@ -255,6 +313,15 @@ const joinMergedWithSources = (chunks: TaggedChunk[]): MergedContent => {
     const startLine = runningNewlines + 1
     chunkStarts.push({ startLine, source: chunk.source, path: chunk.path })
     runningNewlines += countNewlines(chunk.content)
+
+    if (content.length > maxChars) {
+      throw new InputFileError(
+        'merged-content-too-large',
+        chunk.path,
+        `合并后的日志内容已超过 ${Math.round(maxChars / (1024 * 1024))}M 字符，超出单个 JS 字符串上限；` +
+          '请改用 loadNodeLogSources / analyzeLogSources 的多来源路径，不要先拼成一整串。',
+      )
+    }
   }
 
   if (chunkStarts.length === 0) {
@@ -618,7 +685,7 @@ export const readNodeTextFileContent = async (
   filePath: string,
   options: ReadNodeTextFileOptions = {},
 ): Promise<string> => {
-  const limits = resolveArchiveLimits(options.archiveLimits)
+  const limits = resolveLocalDirectoryLimits(options.archiveLimits)
   const context =
     options.budgetContext ??
     (await createNodeInputBudgetContext(path.dirname(path.resolve(filePath)), limits))
@@ -968,25 +1035,16 @@ const buildDefaultDirectoryContent = async (
   return joinMergedWithSources(chunks)
 }
 
-export const loadNodeLogDirectory = async (
-  inputDirectoryPath: string,
-  options: LoadNodeLogDirectoryOptions = {},
-): Promise<NodeExtractedLogContent | null> => {
-  const limits = resolveArchiveLimits(options.archiveLimits)
-  const context = await createNodeInputBudgetContext(inputDirectoryPath, limits)
-  const debugPath = await resolveNodeDebugDirectory(inputDirectoryPath, context)
-  if (!debugPath) return null
-
-  const allFiles = await collectFilesRecursively(debugPath, context)
-  const merged = options.focus
-    ? await collectFocusedFileContents(
-        allFiles.filter((filePath) => isCoreLogName(path.basename(filePath))),
-        options.focus,
-        context,
-      )
-    : await buildDefaultDirectoryContent(debugPath, allFiles, context)
-  if (!merged.content) return null
-
+const collectDirectoryAuxiliary = async (
+  allFiles: string[],
+  debugPath: string,
+  context: NodeInputBudgetContext,
+): Promise<{
+  errorImages: Map<string, string>
+  visionImages: Map<string, string>
+  waitFreezesImages: Map<string, string>
+  textFiles: KernelTextFile[]
+}> => {
   const errorImages = new Map<string, string>()
   const visionImages = new Map<string, string>()
   const waitFreezesImages = new Map<string, string>()
@@ -999,20 +1057,14 @@ export const loadNodeLogDirectory = async (
 
     if (isRelativeImagePath(lowerRelativePath, 'on_error', '.png')) {
       const key = parseErrorImageKey(fileName)
-      if (key) {
-        errorImages.set(key, toFileReference(absolutePath))
-      }
+      if (key) errorImages.set(key, toFileReference(absolutePath))
     }
 
     if (isRelativeImagePath(lowerRelativePath, 'vision', '.jpg')) {
       const visionKey = parseVisionImageKey(fileName)
-      if (visionKey) {
-        visionImages.set(visionKey, toFileReference(absolutePath))
-      }
+      if (visionKey) visionImages.set(visionKey, toFileReference(absolutePath))
       const waitKey = parseWaitFreezesKey(fileName)
-      if (waitKey) {
-        waitFreezesImages.set(waitKey, toFileReference(absolutePath))
-      }
+      if (waitKey) waitFreezesImages.set(waitKey, toFileReference(absolutePath))
     }
 
     if (!isSearchTextFile(relativePath)) continue
@@ -1027,13 +1079,117 @@ export const loadNodeLogDirectory = async (
   }
 
   textFiles.sort((a, b) => a.path.localeCompare(b.path))
+  return { errorImages, visionImages, waitFreezesImages, textFiles }
+}
+
+/**
+ * 读取本机日志目录，但**不把多个文件拼成一整串**：每个文件一个惰性来源。
+ *
+ * 这是 2GB+ 日志目录唯一可行的入口（V8 单字符串上限 ~512MB）。`focus` 模式需要
+ * 按关键词/时间窗过滤，必须读内容才能判断，因此仍合并成单个来源返回。
+ */
+export const loadNodeLogSources = async (
+  inputDirectoryPath: string,
+  options: LoadNodeLogDirectoryOptions = {},
+): Promise<NodeLogSourcesResult | null> => {
+  const limits = resolveLocalDirectoryLimits(options.archiveLimits)
+  const context = await createNodeInputBudgetContext(inputDirectoryPath, limits)
+  const debugPath = await resolveNodeDebugDirectory(inputDirectoryPath, context)
+  if (!debugPath) return null
+
+  const allFiles = await collectFilesRecursively(debugPath, context)
+  const auxiliary = await collectDirectoryAuxiliary(allFiles, debugPath, context)
+
+  if (options.focus) {
+    // 过滤型加载：必须读内容才能判断，退回「合并成单来源」。
+    const merged = await collectFocusedFileContents(
+      allFiles.filter((filePath) => isCoreLogName(path.basename(filePath))),
+      options.focus,
+      context,
+    )
+    if (!merged.content) return null
+    return {
+      sources: [
+        {
+          sourceKey: 'merged:focus',
+          sourcePath: '',
+          inputIndex: 0,
+          size: merged.content.length,
+          loadContent: async () => merged.content,
+        },
+      ],
+      ...auxiliary,
+      getSourceSegments: () => merged.segments,
+    }
+  }
+
+  const group = selectPrimaryLogGroup(allFiles)
+  if (!group) return null
+
+  const lineCounts: number[] = group.paths.map(() => 0)
+  const sources: NodeLogSource[] = []
+  for (let index = 0; index < group.paths.length; index += 1) {
+    const logPath = group.paths[index]!
+    const relativePath = toPosixPath(path.relative(debugPath, logPath))
+    const metadata = await stat(logPath).catch(() => null)
+    const size = metadata ? metadata.size * (isGzipLog(logPath) ? 8 : 1) : 0
+    sources.push({
+      sourceKey: toFileReference(logPath),
+      sourcePath: relativePath,
+      inputIndex: index,
+      size,
+      loadContent: async () => {
+        const content = await readNodeTextFileWithinBudget(logPath, context)
+        lineCounts[index] = countNewlines(content) + 1
+        return content
+      },
+    })
+  }
+
+  return {
+    sources,
+    ...auxiliary,
+    getSourceSegments: () => {
+      let startLine = 1
+      const segments: SourceSegment[] = []
+      sources.forEach((source, index) => {
+        const lineCount = lineCounts[index] ?? 0
+        if (lineCount <= 0) return
+        segments.push({
+          source: source.sourceKey,
+          path: source.sourcePath,
+          startLine,
+          lineCount,
+        })
+        startLine += lineCount
+      })
+      return segments
+    },
+  }
+}
+
+export const loadNodeLogDirectory = async (
+  inputDirectoryPath: string,
+  options: LoadNodeLogDirectoryOptions = {},
+): Promise<NodeExtractedLogContent | null> => {
+  const limits = resolveLocalDirectoryLimits(options.archiveLimits)
+  const context = await createNodeInputBudgetContext(inputDirectoryPath, limits)
+  const debugPath = await resolveNodeDebugDirectory(inputDirectoryPath, context)
+  if (!debugPath) return null
+
+  const allFiles = await collectFilesRecursively(debugPath, context)
+  const merged = options.focus
+    ? await collectFocusedFileContents(
+        allFiles.filter((filePath) => isCoreLogName(path.basename(filePath))),
+        options.focus,
+        context,
+      )
+    : await buildDefaultDirectoryContent(debugPath, allFiles, context)
+  if (!merged.content) return null
 
   return {
     content: merged.content,
     sourceSegments: merged.segments,
-    errorImages,
-    visionImages,
-    waitFreezesImages,
-    textFiles,
+    ...(await collectDirectoryAuxiliary(allFiles, debugPath, context)),
   }
 }

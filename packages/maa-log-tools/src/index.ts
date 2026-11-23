@@ -1,11 +1,16 @@
 import type { KernelOutput } from '@windsland52/maa-log-kernel'
-import { analyzeLogContentWith, DEFAULT_CORE_PARSE_OPTIONS } from '@windsland52/maa-log-runtime'
+import {
+  analyzeLogContentWith,
+  analyzeLogSourcesWith,
+  DEFAULT_CORE_PARSE_OPTIONS,
+  type AnalyzeLogSourcesInput,
+} from '@windsland52/maa-log-runtime'
 import { mlaRuntimeAdapter } from '@windsland52/maa-log-adapter'
 import type { AnalyzeLogContentInput, ParseFileOptions } from '@windsland52/maa-log-runtime'
 import {
   extractZipContentFromNodeBuffer,
   extractZipContentFromNodeFile,
-  loadNodeLogDirectory,
+  loadNodeLogSources,
   type ArchiveLimits,
   type LogBundleFocus,
 } from './nodeInput'
@@ -91,28 +96,52 @@ export const analyzeZipFile = async (input: AnalyzeZipFileInput): Promise<Kernel
   })
 }
 
+/**
+ * 多来源解析入口（不拼串）。
+ *
+ * 与 `analyzeLogContent` 的区别：输入是一组**惰性来源**而不是一整段字符串。
+ * 2GB+ 的日志目录只能走这里 —— 拼成单串会撞 V8 的字符串长度上限（~512MB）。
+ * `source` 标注会带上每个来源自己的 path，因此「这行属于哪个文件」比合并口径更准。
+ */
+export const analyzeLogSources = async (
+  input: AnalyzeLogSourcesInput,
+): Promise<KernelOutput> => {
+  return analyzeLogSourcesWith(mlaRuntimeAdapter, {
+    ...input,
+    parseOptions: input.parseOptions ?? DEFAULT_CORE_PARSE_OPTIONS,
+  })
+}
+
 export const analyzeDirectory = async (
   input: AnalyzeDirectoryInput,
 ): Promise<KernelOutput | null> => {
-  const extracted = await loadNodeLogDirectory(input.directoryPath, {
+  const loaded = await loadNodeLogSources(input.directoryPath, {
     focus: input.focus,
     archiveLimits: input.archiveLimits,
   })
-  if (!extracted) return null
+  if (!loaded) return null
 
-  return analyzeLogContent({
-    content: extracted.content,
-    errorImages: extracted.errorImages,
-    visionImages: extracted.visionImages,
-    waitFreezesImages: extracted.waitFreezesImages,
-    sourcePath: resolveSingleSourcePath(extracted.sourceSegments),
+  return analyzeLogSources({
+    sources: loaded.sources,
+    errorImages: loaded.errorImages,
+    visionImages: loaded.visionImages,
+    waitFreezesImages: loaded.waitFreezesImages,
     parseOptions: input.parseOptions,
     parserVersion: input.parserVersion,
   })
 }
 
-export { DEFAULT_CORE_PARSE_OPTIONS } from '@windsland52/maa-log-runtime'
-export type { AnalyzeLogContentInput, ParseFileOptions } from '@windsland52/maa-log-runtime'
+export {
+  analyzeLogSourcesWith,
+  DEFAULT_CORE_PARSE_OPTIONS,
+} from '@windsland52/maa-log-runtime'
+export type {
+  AnalyzeLogContentInput,
+  AnalyzeLogSourcesInput,
+  ParseFileOptions,
+  RuntimeLogSource,
+  RuntimeParseSourcesInput,
+} from '@windsland52/maa-log-runtime'
 export * from './nodeInput'
 export * from './frameworkInput'
 export * from './frameworkVersion'

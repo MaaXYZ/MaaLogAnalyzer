@@ -26,6 +26,34 @@ export interface AnalyzeLogContentInput {
   parserVersion?: string
 }
 
+/**
+ * 多来源解析里的单个输入。
+ *
+ * 与单来源 `content: string` 的区别：可以只给 `loadContent`（惰性读），这样上层不必
+ * 把 2GB+ 的多个文件拼成一整串（V8 单字符串上限约 512MB）。
+ */
+export interface RuntimeLogSource {
+  content?: string
+  /** 解析进度权重（解压后字符数的估算）；未知时可给文件字节数。 */
+  size?: number
+  loadContent?: () => Promise<string>
+  sourceKey?: string
+  sourcePath?: string
+  inputIndex?: number
+}
+
+export interface RuntimeParseSourcesInput {
+  sources: readonly RuntimeLogSource[]
+  errorImages?: Map<string, string>
+  visionImages?: Map<string, string>
+  waitFreezesImages?: Map<string, string>
+  parseOptions?: ParseFileOptions
+}
+
+export interface AnalyzeLogSourcesInput extends RuntimeParseSourcesInput {
+  parserVersion?: string
+}
+
 export interface RuntimeParseInput {
   content: string
   errorImages?: Map<string, string>
@@ -45,6 +73,10 @@ export interface RuntimeParseResult<TTask extends TaskInfo = TaskInfo> {
 export interface RuntimeExecutionAdapter<TTask extends TaskInfo = TaskInfo> {
   parserVersion?: string
   parse: (input: RuntimeParseInput) => Promise<RuntimeParseResult<TTask>>
+  /**
+   * 多来源解析（惰性逐文件加载）。adapter 不支持时可缺省，调用方回退到单字符串路径。
+   */
+  parseSources?: (input: RuntimeParseSourcesInput) => Promise<RuntimeParseResult<TTask>>
   buildStatistics: (tasks: TTask[]) => KernelStatistics
 }
 
@@ -69,6 +101,42 @@ export const analyzeLogContentWith = async <TTask extends TaskInfo = TaskInfo>(
 
   return buildKernelOutput<TTask>({
     content: input.content,
+    tasks: parseResult.tasks,
+    events: parseResult.events,
+    stats,
+    parserVersion: input.parserVersion || adapter.parserVersion,
+  })
+}
+
+/**
+ * 多来源版本的 `analyzeLogContentWith`：不要求把日志拼成一整串。
+ *
+ * 语义与单来源一致（同一个 parser、同一套去重/跨文件拼接），只是输入改成懒加载的
+ * 来源列表；`source` 标注用每个来源自己的 sourceKey/sourcePath，因此「这行属于哪个文件」
+ * 比合并成一段字符串时更准确。
+ */
+export const analyzeLogSourcesWith = async <TTask extends TaskInfo = TaskInfo>(
+  adapter: RuntimeExecutionAdapter<TTask>,
+  input: AnalyzeLogSourcesInput,
+): Promise<KernelOutput<TTask>> => {
+  if (!adapter.parseSources) {
+    throw new Error('当前运行时适配器不支持多来源解析（parseSources 缺失）')
+  }
+  const parseResult = await adapter.parseSources({
+    sources: input.sources,
+    errorImages: input.errorImages,
+    visionImages: input.visionImages,
+    waitFreezesImages: input.waitFreezesImages,
+    parseOptions: input.parseOptions ?? DEFAULT_CORE_PARSE_OPTIONS,
+  })
+  const stats = adapter.buildStatistics(parseResult.tasks)
+  const contentLength = input.sources.reduce(
+    (sum, source) => sum + (source.content?.length ?? source.size ?? 0),
+    0,
+  )
+
+  return buildKernelOutput<TTask>({
+    contentLength,
     tasks: parseResult.tasks,
     events: parseResult.events,
     stats,

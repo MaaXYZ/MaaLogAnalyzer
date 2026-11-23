@@ -9,6 +9,7 @@ export type InputFileErrorCode =
   | 'identity-changed'
   | 'content-changed'
   | 'size-changed'
+  | 'merged-content-too-large'
 
 export class InputFileError extends Error {
   readonly name = 'InputFileError'

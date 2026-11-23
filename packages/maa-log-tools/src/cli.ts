@@ -11,12 +11,12 @@ import {
   type FrameworkVersionSummary,
 } from './frameworkVersion'
 import {
-  loadNodeLogDirectory,
   extractZipContentFromNodeFile,
+  loadNodeLogSources,
   readNodeTextFileContent,
 } from './nodeInput'
 import type { SourceSegment } from './runtimeInspection'
-import { analyzeLogContent, buildRuntimeInspection } from './index'
+import { analyzeLogContent, analyzeLogSources, buildRuntimeInspection } from './index'
 
 const printUsage = (): void => {
   console.error(
@@ -175,15 +175,16 @@ export const main = async (): Promise<void> => {
   let sourceSegments: readonly SourceSegment[] = []
 
   if (targetStat.isDirectory()) {
-    const extracted = await loadNodeLogDirectory(resolvedPath)
-    if (extracted) {
-      sourceSegments = extracted.sourceSegments
-      result = await analyzeLogContent({
-        content: extracted.content,
-        errorImages: extracted.errorImages,
-        visionImages: extracted.visionImages,
-        waitFreezesImages: extracted.waitFreezesImages,
+    // 多来源路径：2GB+ 的日志目录不能拼成一整串（V8 字符串上限 ~512MB）。
+    const loaded = await loadNodeLogSources(resolvedPath)
+    if (loaded) {
+      result = await analyzeLogSources({
+        sources: loaded.sources,
+        errorImages: loaded.errorImages,
+        visionImages: loaded.visionImages,
+        waitFreezesImages: loaded.waitFreezesImages,
       })
+      sourceSegments = loaded.getSourceSegments()
     }
   } else if (resolvedPath.toLowerCase().endsWith('.zip')) {
     const extracted = await extractZipContentFromNodeFile(resolvedPath)
