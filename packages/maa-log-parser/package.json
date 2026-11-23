@@ -1,6 +1,6 @@
 {
   "name": "@windsland52/maa-log-parser",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "type": "module",
   "private": false,
   "types": "./dist/core/index.d.ts",
