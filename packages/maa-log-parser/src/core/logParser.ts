@@ -8,6 +8,7 @@
  * into helper modules under ./logParser/ whenever possible.
  */
 import type { EventNotification, EventSourceRef, TaskInfo, TaskSummary } from '../shared/types'
+import type { EventDetails } from '../shared/logEventDecoders'
 import { parseEventLine as parseMaaEventLine, type ParsedEventLine } from '../event/line'
 import { createProtocolEvent } from '../protocol/eventFactory'
 import type { ProtocolEvent } from '../protocol/types'
@@ -46,6 +47,15 @@ export interface ParseFileOptions {
   sourcePath?: string
   inputIndex?: number
   storeRawLines?: boolean
+  /**
+   * 是否共享重复的识别/动作明细对象（默认 true）。
+   *
+   * 同一次识别（`processId + reco_id`）的 `reco_details` 会被识别事件、识别节点事件、
+   * 流水线节点事件等重复携带，内容完全一致；共享后只保留一棵对象树。
+   * 实测一段 396MB 日志里约 22MB JSON 属于这类重复内容（7,994 次重复分配）。
+   * 关闭仅供 A/B 度量与排障，输出内容不受影响。
+   */
+  internDuplicateDetails?: boolean
   /**
    * 每个输入（一份日志文件/分卷）解析完成时回调一次。
    *
@@ -158,6 +168,12 @@ const CROSS_SOURCE_DUPLICATE_WINDOW_MS = 1000
 const MAX_DEDUP_OCCURRENCES = 16_384
 
 /**
+ * 共享明细表的容量上限。实时会话可能长时间追加，超过后退化成"不再共享"（清空表），
+ * 只影响去重收益，不影响正确性。
+ */
+const MAX_INTERNED_DETAILS = 200_000
+
+/**
  * 某个签名下、**单个来源**出现过的全部时间戳。
  *
  * 拆到「按来源」这一层是为了让查找不随历史长度退化：
@@ -223,6 +239,17 @@ export class LogParser {
    * （进程重启复用 task_id 时不会产生任何跨源去重，因此不会被误合并）。
    */
   private mirroredProcessPairs = new Set<string>()
+  /** 是否共享重复明细（见 ParseFileOptions.internDuplicateDetails）。 */
+  private internDuplicateDetails = true
+  /**
+   * 已共享的识别/动作明细：`processId|reco_id` / `processId|action_id` → 唯一对象。
+   *
+   * 日志里同一识别的 detail（matcher 调试树，往往几十 KB）会被多个事件重复携带，
+   * 且内容逐字节一致（实测同 key 0 例冲突）。共享后重复的那部分不再分配。
+   * 表本身只存引用与小字符串 key，实测 ~9k 条/段。
+   */
+  private internedRecoDetails = new Map<string, EventDetails>()
+  private internedActionDetails = new Map<string, EventDetails>()
   private syntheticLineNumber = 1
   private errorImages = new Map<string, string>()
   private visionImages = new Map<string, string>()
@@ -277,6 +304,8 @@ export class LogParser {
     this.dedupOccurrenceTimeline = []
     this.dedupOccurrenceTimelineHead = 0
     this.mirroredProcessPairs.clear()
+    this.internedRecoDetails.clear()
+    this.internedActionDetails.clear()
     this.eventTokenPool.clear()
     this.syntheticLineNumber = 1
   }
@@ -359,6 +388,18 @@ export class LogParser {
     if (bucket.size === 0) this.recentEventsBySignature.delete(signature)
   }
 
+  private internDetail(
+    cache: Map<string, EventDetails>,
+    key: string,
+    details: EventDetails,
+  ): EventDetails {
+    const existing = cache.get(key)
+    if (existing) return existing
+    if (cache.size >= MAX_INTERNED_DETAILS) cache.clear()
+    cache.set(key, details)
+    return details
+  }
+
   private internEventToken(raw: string): string {
     // 先查池再复制：池里命中的绝大多数串（msg / level / Px / Tx）都不必走 forceCopyString 的拷贝。
     const pooled = this.eventTokenPool.get(raw)
@@ -427,11 +468,20 @@ export class LogParser {
       process_id: event.processId,
       ...(hasSourceRef ? { source: sourceRef } : {}),
     }
+    const intern = this.internDuplicateDetails
     const protocolEvent = createProtocolEvent(event, {
       seq: this.protocolEvents.length + 1,
       sourceKey: sourceOptions?.sourceKey,
       sourcePath: sourceOptions?.sourcePath,
       inputIndex: sourceOptions?.inputIndex,
+      internRecoDetails: intern
+        ? (processId, recoId, details) =>
+            this.internDetail(this.internedRecoDetails, `${processId}|${recoId}`, details)
+        : undefined,
+      internActionDetails: intern
+        ? (processId, actionId, details) =>
+            this.internDetail(this.internedActionDetails, `${processId}|${actionId}`, details)
+        : undefined,
     })
     this.events.push(storedEvent)
     if (protocolEvent) {
@@ -640,6 +690,7 @@ export class LogParser {
     this.boundDedupOccurrences = false
     try {
       this.resetParsedEvents()
+      this.internDuplicateDetails = options?.internDuplicateDetails !== false
 
       const normalizedInputs = normalizeParseSourceInputs(inputs)
       const totalChars = normalizedInputs.reduce((sum, input) => sum + inputSize(input), 0)
@@ -742,6 +793,8 @@ export class LogParser {
     this.recentEventsBySignature.clear()
     this.dedupOccurrenceTimeline = []
     this.dedupOccurrenceTimelineHead = 0
+    this.internedRecoDetails.clear()
+    this.internedActionDetails.clear()
     console.log(`事件令牌池统计: ${this.eventTokenPool.size} 个唯一字符串`)
     this.eventTokenPool.clear()
     this.syntheticLineNumber = 1
@@ -788,6 +841,9 @@ export class LogParser {
     this.dedupOccurrenceTimeline = []
     this.dedupOccurrenceTimelineHead = 0
     this.completedTaskCache.clear()
+    // 共享表只在解析期有用：明细对象已被事件/payload 引用，清掉表只释放 key 与桶。
+    this.internedRecoDetails.clear()
+    this.internedActionDetails.clear()
   }
 
   /**

@@ -35,6 +35,24 @@ export interface CreateSourceRefOptions {
 
 export interface CreateProtocolEventOptions extends CreateSourceRefOptions {
   seq: number
+  /**
+   * 共享重复的识别明细对象。
+   *
+   * 同一次识别（`processId + reco_id`）的 `reco_details` 会被多个事件重复携带
+   * （识别事件、识别节点事件、流水线节点事件等），内容完全相同。提供该钩子后，
+   * 相同 key 的明细复用同一个对象，避免重复分配整棵 matcher 调试树。
+   */
+  internRecoDetails?: (
+    processId: string,
+    recoId: number,
+    details: EventDetails,
+  ) => EventDetails
+  /** 同 `internRecoDetails`，作用于 `action_details`（按 `processId + action_id`）。 */
+  internActionDetails?: (
+    processId: string,
+    actionId: number,
+    details: EventDetails,
+  ) => EventDetails
 }
 
 const toProtocolPhase = (phase: string): ProtocolPhase | null => {
@@ -78,6 +96,48 @@ const readNextList = (value: unknown): ProtocolNextListItem[] | undefined => {
 const readPositiveSafeIntegerField = (details: EventDetails, field: string): number | undefined => {
   const value = readNumberField(details, field)
   return value !== undefined && Number.isSafeInteger(value) && value > 0 ? value : undefined
+}
+
+/**
+ * 取出并（可选地）共享 `reco_details`，**同时把 `rawDetails.reco_details` 也指向共享对象**。
+ *
+ * 为什么必须回写：`rawDetails` 是整条事件的原始 JSON 对象，重复的 matcher 调试树主要就挂在
+ * 它的 `reco_details` 子对象上。只改事件上的 `recoDetails` 字段的话，rawDetails 里那棵树仍然
+ * 每事件一份，内存一点没省（实测 A/B 差值为 0）。
+ *
+ * `reco_id` 优先用事件自身字段；流水线节点事件没有 `reco_id` 时从明细里读。
+ * 同一 (processId, reco_id) 的明细在日志里内容一致（实测 0 例冲突），因此可以安全共享；
+ * 回写后 rawDetails 的 JSON 序列化结果不变（内容本来就相同）。
+ */
+const readRecoDetails = (
+  event: ParsedEventLine,
+  options: CreateProtocolEventOptions,
+  details: EventDetails,
+  eventRecoId?: number,
+): EventDetails | undefined => {
+  const record = readRecord(readUnknownField(details, 'reco_details'))
+  if (!record || !options.internRecoDetails) return record
+  const recoId = eventRecoId ?? readPositiveSafeIntegerField(record, 'reco_id')
+  if (recoId === undefined) return record
+  const shared = options.internRecoDetails(event.processId, recoId, record)
+  if (shared !== record) details.reco_details = shared
+  return shared
+}
+
+/** 取出并（可选地）共享 `action_details`（按 `processId + action_id`），同样回写 rawDetails。 */
+const readActionDetails = (
+  event: ParsedEventLine,
+  options: CreateProtocolEventOptions,
+  details: EventDetails,
+  eventActionId?: number,
+): EventDetails | undefined => {
+  const record = readRecord(readUnknownField(details, 'action_details'))
+  if (!record || !options.internActionDetails) return record
+  const actionId = eventActionId ?? readPositiveSafeIntegerField(record, 'action_id')
+  if (actionId === undefined) return record
+  const shared = options.internActionDetails(event.processId, actionId, record)
+  if (shared !== record) details.action_details = shared
+  return shared
 }
 
 const buildBase = <TKind extends ProtocolEvent['kind']>(
@@ -173,8 +233,8 @@ export const createProtocolEvent = (
         name: readStringField(details, 'name'),
         focus: readUnknownField(details, 'focus'),
         nodeDetails: readRecord(readUnknownField(details, 'node_details')),
-        recoDetails: readRecord(readUnknownField(details, 'reco_details')),
-        actionDetails: readRecord(readUnknownField(details, 'action_details')),
+        recoDetails: readRecoDetails(event, options, details),
+        actionDetails: readActionDetails(event, options, details),
       }
       return protocolEvent
     }
@@ -191,7 +251,12 @@ export const createProtocolEvent = (
         name: readStringField(details, 'name'),
         focus: readUnknownField(details, 'focus'),
         nodeDetails: readRecord(readUnknownField(details, 'node_details')),
-        recoDetails: readRecord(readUnknownField(details, 'reco_details')),
+        recoDetails: readRecoDetails(
+          event,
+          options,
+          details,
+          readPositiveSafeIntegerField(details, 'reco_id'),
+        ),
       }
       return protocolEvent
     }
@@ -208,7 +273,12 @@ export const createProtocolEvent = (
         name: readStringField(details, 'name'),
         focus: readUnknownField(details, 'focus'),
         nodeDetails: readRecord(readUnknownField(details, 'node_details')),
-        actionDetails: readRecord(readUnknownField(details, 'action_details')),
+        actionDetails: readActionDetails(
+          event,
+          options,
+          details,
+          readPositiveSafeIntegerField(details, 'action_id'),
+        ),
       }
       return protocolEvent
     }
@@ -237,7 +307,7 @@ export const createProtocolEvent = (
         name: readStringField(details, 'name'),
         focus: readUnknownField(details, 'focus'),
         anchor: readStringField(details, 'anchor'),
-        recoDetails: readRecord(readUnknownField(details, 'reco_details')),
+        recoDetails: readRecoDetails(event, options, details, recoId),
       }
       return protocolEvent
     }
@@ -252,7 +322,7 @@ export const createProtocolEvent = (
         actionId,
         name: readStringField(details, 'name'),
         focus: readUnknownField(details, 'focus'),
-        actionDetails: readRecord(readUnknownField(details, 'action_details')),
+        actionDetails: readActionDetails(event, options, details, actionId),
       }
       return protocolEvent
     }
