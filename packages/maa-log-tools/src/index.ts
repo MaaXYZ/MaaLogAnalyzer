@@ -143,6 +143,7 @@ export type {
   RuntimeParseSourcesInput,
 } from '@windsland52/maa-log-runtime'
 export * from './nodeInput'
+export * from './taskStream'
 export * from './frameworkInput'
 export * from './frameworkVersion'
 export * from './runtimeInspection'

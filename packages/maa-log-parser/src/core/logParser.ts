@@ -1045,6 +1045,22 @@ export class LogParser {
     })
   }
 
+  /**
+   * 逐批读取全部事件（不克隆、不物化整数组），供流式证据构建使用。
+   *
+   * 与 `getEventsSnapshot()` 的区别：后者会深拷贝整个事件数组（大日志上光这一步就会多出
+   * 数百 MB 峰值）；本方法按批交出内部事件对象的**引用**。
+   *
+   * 调用约定：不要修改、也不要长期持有拿到的对象——消费完一批即可丢弃，峰值才能保持在
+   * 「批量大小 + 常驻解析状态」的量级。
+   */
+  async *iterateEvents(batchSize = 5_000): AsyncGenerator<EventNotification[]> {
+    const size = Math.max(1, Math.floor(batchSize))
+    for (let start = 0; start < this.events.length; start += size) {
+      yield this.events.slice(start, start + size)
+    }
+  }
+
   getEventsSnapshot(): EventNotification[] {
     return cloneSnapshotData(this.events)
   }
