@@ -36,6 +36,126 @@ function gzipLogStream(blob: Blob) {
   return blob.stream().pipeThrough(new DecompressionStream('gzip'))
 }
 
+/** 解析时每次交给 parser 的文本块大小（字符数）。 */
+export const GZIP_TEXT_CHUNK_CHARS = 1 << 20
+
+/** 判定编码前至少缓冲这么多解压字节：太小的首块容易把 GBK 误判成 UTF-8。 */
+const ENCODING_SNIFF_BYTES = 64 * 1024
+
+const TEXT_ENCODINGS = ['utf-8', 'gbk', 'gb18030', 'gb2312'] as const
+
+const pickTextDecoder = (
+  firstBytes: Uint8Array,
+): { decoder: TextDecoder; text: string } => {
+  for (const encoding of TEXT_ENCODINGS) {
+    try {
+      const decoder = new TextDecoder(encoding, { fatal: true })
+      return { decoder, text: decoder.decode(firstBytes, { stream: true }) }
+    } catch {
+      // 换下一种编码
+    }
+  }
+  const decoder = new TextDecoder('utf-8')
+  return { decoder, text: decoder.decode(firstBytes, { stream: true }) }
+}
+
+/**
+ * 把 gzip 日志**流式解码成文本块**。
+ *
+ * 为什么需要它：2GB+ 的日志若整段解码成字符串，单段 396MB 的解码瞬态就能把 RSS 推到 1.6GB，
+ * 12 段串行解码会累积到 3.5–4.3GB（实测）。改为边解压边解码、每次只交一块文本给 parser 后，
+ * 峰值与块大小相关（1MB 块实测峰值 RSS ≈1.4GB，对比整串 ≈3.9GB）。
+ *
+ * 编码判定：先缓冲 64KB 解压字节，按 utf-8 → gbk → gb18030 → gb2312 顺序试（与
+ * `decodeFileContent` 的回退顺序一致），选定后用同一个流式 decoder 继续解码。
+ */
+export async function* readGzipTextChunks(
+  blob: Blob,
+  chunkChars: number = GZIP_TEXT_CHUNK_CHARS,
+): AsyncGenerator<string> {
+  const limit = Math.max(1, Math.floor(chunkChars))
+  const reader = gzipLogStream(blob).getReader()
+  const sniffParts: Uint8Array[] = []
+  let sniffLength = 0
+  let decoder: TextDecoder | null = null
+  let textChunks: string[] = []
+  let pendingChars = 0
+
+  const pushText = (text: string): void => {
+    if (!text) return
+    textChunks.push(text)
+    pendingChars += text.length
+  }
+
+  /** 把已积累文本切出不超过 limit 的块；剩余部分留到后续块。 */
+  const drain = function* (): Generator<string> {
+    while (pendingChars >= limit) {
+      const joined = textChunks.join('')
+      textChunks = []
+      pendingChars = 0
+      let offset = 0
+      while (joined.length - offset >= limit) {
+        yield joined.slice(offset, offset + limit)
+        offset += limit
+      }
+      const rest = joined.slice(offset)
+      if (rest) {
+        textChunks.push(rest)
+        pendingChars = rest.length
+      }
+    }
+  }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value || value.byteLength === 0) continue
+
+      if (!decoder) {
+        sniffParts.push(value)
+        sniffLength += value.byteLength
+        if (sniffLength < ENCODING_SNIFF_BYTES) continue
+        const sniffed = new Uint8Array(sniffLength)
+        let offset = 0
+        for (const part of sniffParts) {
+          sniffed.set(part, offset)
+          offset += part.byteLength
+        }
+        sniffParts.length = 0
+        const picked = pickTextDecoder(sniffed)
+        decoder = picked.decoder
+        pushText(picked.text)
+      } else {
+        pushText(decoder.decode(value, { stream: true }))
+      }
+
+      yield* drain()
+    }
+
+    if (!decoder) {
+      // 整段不超过 64KB：一次性判定
+      const sniffed = new Uint8Array(sniffLength)
+      let offset = 0
+      for (const part of sniffParts) {
+        sniffed.set(part, offset)
+        offset += part.byteLength
+      }
+      const picked = pickTextDecoder(sniffed)
+      decoder = picked.decoder
+      pushText(picked.text)
+    }
+    pushText(decoder.decode())
+    yield* drain()
+    if (pendingChars > 0) {
+      const rest = textChunks.join('')
+      if (rest) yield rest
+    }
+  } finally {
+    await reader.cancel().catch(() => {})
+  }
+}
+
 export async function readGzipLogHead(blob: Blob, length: number) {
   const reader = gzipLogStream(blob).getReader()
   const head = new Uint8Array(length)
