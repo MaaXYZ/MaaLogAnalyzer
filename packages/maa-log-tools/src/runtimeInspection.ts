@@ -1,4 +1,10 @@
-import type { KernelOutput, NodeInfo, TaskInfo, UnifiedFlowItem } from '@windsland52/maa-log-kernel'
+import type {
+  EventNotification,
+  KernelOutput,
+  NodeInfo,
+  TaskInfo,
+  UnifiedFlowItem,
+} from '@windsland52/maa-log-kernel'
 import type { FrameworkSession, FrameworkSessionExtraction } from './frameworkVersion'
 import { buildNodeExecutionTimeline } from './nodeExecutionTimeline'
 
@@ -244,14 +250,35 @@ interface RuntimeEvidenceIndex {
   ordered: { timestamp: number; line: number }[]
 }
 
-const buildEvidenceIndex = (task: TaskInfo): RuntimeEvidenceIndex => {
+/**
+ * A multi-source parse numbers `_lineNumber` from 1 in every file, so an event from a later source
+ * must be offset by that source's segment start. An event without a source key came from one merged
+ * string (single file or `focus`), where the line number is already the merged line.
+ */
+const eventMergedLine = (
+  event: EventNotification,
+  segments: readonly SourceSegment[],
+): number | null => {
+  const localLine = event._lineNumber ?? event.source?.line
+  if (localLine == null) return null
+  const sourceKey = event.source?.sourceKey
+  if (sourceKey == null) return localLine
+  const segment = segments.find((item) => item.source === sourceKey)
+  return segment ? segment.startLine + localLine - 1 : localLine
+}
+
+const buildEvidenceIndex = (
+  task: TaskInfo,
+  segments: readonly SourceSegment[],
+): RuntimeEvidenceIndex => {
   const exactLines = new Map<string, number>()
   const ordered: RuntimeEvidenceIndex['ordered'] = []
   for (const event of task.events) {
-    if (event._lineNumber == null) continue
-    if (!exactLines.has(event.timestamp)) exactLines.set(event.timestamp, event._lineNumber)
+    const line = eventMergedLine(event, segments)
+    if (line == null) continue
+    if (!exactLines.has(event.timestamp)) exactLines.set(event.timestamp, line)
     const timestamp = timestampMs(event.timestamp)
-    if (timestamp != null) ordered.push({ timestamp, line: event._lineNumber })
+    if (timestamp != null) ordered.push({ timestamp, line })
   }
   ordered.sort((left, right) => left.timestamp - right.timestamp)
   return { exactLines, ordered }
@@ -551,7 +578,7 @@ export const buildRuntimeInspection = (
     const outcomeIds: string[] = []
     const signalIds: string[] = []
     const recognitionOccurrences: RecognitionOccurrence[] = []
-    const evidenceIndex = buildEvidenceIndex(task)
+    const evidenceIndex = buildEvidenceIndex(task, sourceSegments)
     const timeline = buildNodeExecutionTimeline(task.nodes, { rootTaskId: task.task_id })
     const seenNestedTasks = new Set<string>()
     const seenNestedPipelines = new Set<string>()

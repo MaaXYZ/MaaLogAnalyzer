@@ -564,4 +564,31 @@ describe('runtime inspection', () => {
     expect(timeoutFailure?.evidence.path).toBe('maa.log')
     expect(timeoutFailure?.evidence.localLine).toBe(5)
   })
+
+  it('offsets per-source event lines by the segment that produced them', () => {
+    const segments: SourceSegment[] = [
+      { source: 'file:C:/logs/maa.bak.log', path: 'maa.bak.log', startLine: 1, lineCount: 2 },
+      { source: 'file:C:/logs/maa.log', path: 'maa.log', startLine: 3, lineCount: 2 },
+    ]
+    const laterSourceTask = task({
+      events: [
+        {
+          timestamp: '2026-07-20 10:01:10.000',
+          level: 'DBG',
+          message: 'action',
+          details: {},
+          _lineNumber: 2,
+          source: { sourceKey: 'file:C:/logs/maa.log', path: 'maa.log', line: 2 },
+        },
+      ],
+    })
+
+    const inspection = buildRuntimeInspection(output([laterSourceTask]), framework, segments)
+
+    expect(inspection.sessions[0]?.tasks[0]?.evidence.start).toMatchObject({
+      source: 'file:C:/logs/maa.log',
+      path: 'maa.log',
+      localLine: 2,
+    })
+  })
 })
