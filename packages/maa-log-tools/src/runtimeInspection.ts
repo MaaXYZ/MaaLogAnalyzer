@@ -586,15 +586,15 @@ export const createRuntimeInspectionBuilder = (
   const outcomes: RuntimeOutcome[] = []
   const signals: RuntimeSignal[] = []
   const taskOccurrences = new Map<number, number>()
-  const executionIds = new Map<TaskInfo, string>()
-  const sessionIds = new Map<TaskInfo, string | null>()
+  /** 只存 executionId → sessionId（字符串键，不持有 TaskInfo）。 */
   const executionSessionIds = new Map<string, string | null>()
   const evidenceAt = createEvidenceFn(sourceSegments)
 
-  const buildTask = (task: TaskInfo): RuntimeTaskExecution => {
-    const sessionId = sessionIds.get(task) ?? null
-    const executionId = executionIds.get(task)
-    if (!executionId) throw new Error('Task execution identity was not initialized.')
+  const buildTask = (
+    task: TaskInfo,
+    sessionId: string | null,
+    executionId: string,
+  ): RuntimeTaskExecution => {
     const scope = scopeFor(task, sessionId, executionId)
     const directFailureIds: string[] = []
     const outcomeIds: string[] = []
@@ -1091,7 +1091,6 @@ export const createRuntimeInspectionBuilder = (
     }
   }
 
-  const addedTasks: TaskInfo[] = []
   const builtTasks: RuntimeTaskExecution[] = []
 
   const addTask = (task: TaskInfo): RuntimeTaskExecution => {
@@ -1099,11 +1098,9 @@ export const createRuntimeInspectionBuilder = (
     taskOccurrences.set(task.task_id, occurrence)
     const executionId = `task-execution-${task.task_id}-${occurrence}`
     const sessionId = sessionFor(task, framework.sessions)?.sessionId ?? null
-    executionIds.set(task, executionId)
-    sessionIds.set(task, sessionId)
     executionSessionIds.set(executionId, sessionId)
-    const execution = buildTask(task)
-    addedTasks.push(task)
+    // 身份直接作为参数传入：builder 不持有 TaskInfo，逐任务消费完即可被回收。
+    const execution = buildTask(task, sessionId, executionId)
     builtTasks.push(execution)
     return execution
   }
