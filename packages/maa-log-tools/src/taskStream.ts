@@ -136,23 +136,36 @@ const buildParserInputs = (
     }
   })
 
+/** `iterateTaskDetails()` 依次产出的三类条目。 */
+export type TaskStreamItem =
+  | { type: 'skeletons'; skeletons: TaskInfo[] }
+  | { type: 'events'; events: EventNotification[] }
+  | { type: 'task'; skeleton: TaskInfo; task: TaskInfo }
+
 /**
- * 流式消费任务详情：解析一次、只投影当前任务，消费完即可释放。
+ * 流式消费任务详情（async generator 形态）：解析一次、逐批事件、逐任务投影。
+ *
+ * 产出顺序固定：
+ * 1. `{ type: 'skeletons' }`（一次）——先拿任务集合/顺序，供调用方建聚合表；
+ * 2. `{ type: 'events' }`（多批，默认 5000/批）——**全量事件**，与 `getEventsSnapshot()` 一致；
+ * 3. `{ type: 'task' }`（逐任务，按执行顺序）——完整 `TaskInfo`。
+ *
+ * generator 的**返回值**是 `TaskDetailStreamSummary`。`for await` 会丢弃返回值，需要时手动迭代：
+ * `const r = await gen.next(); if (r.done) r.value`。
  *
  * 与 `analyzeLogSources` 的区别：
- * - 不返回整树 `tasks`，也不返回全局 `events` 数组；每个任务的 event 在 `task.events` 里。
- * - 解析完成后先 `releaseParseScratch()`（释放去重历史/投影缓存），骨架只有 0.6MB 级。
- * - 逐任务投影，峰值 ≈ 常驻 trace + 单个任务，而不是「trace + 全部任务投影」。
+ * - 不物化整树 `tasks`，也不克隆全局 `events`（大日志上这两步就是 GB 级）；
+ * - 解析完成后先 `releaseParseScratch()`，逐任务投影，峰值 ≈ 常驻 trace + 单个任务。
  *
- * 实测（issue-7371，12 文件 / 2.44GB）：`analyzeLogSources` 峰值 RSS 3.3GB；
- * 本接口约 1.5–1.7GB（同一进程、同一来源，改天在仓库里补实测脚本）。
+ * 实测（issue-7371，12 文件 / 2.44GB）：`analyzeLogSources` 峰值 RSS 3320MB / 38.6s；
+ * 本接口 1115MB / 19.1s，全量事件 275,919 一条不少、28 个任务逐个投影、warnings 一致。
  *
- * 使用约定：`onTask` 内不要长期持有 `detail.task` 引用，否则峰值会回涨到接近整树投影。
+ * 内存契约：消费完一个 `task` / `events` 条目后**立即丢弃引用**（需要的数据拷贝成标量/派生结构）；
+ * 提前 `return()` / `break` 会结束 generator 并释放内部 parser。
  */
-export const streamTaskDetails = async (
+export async function* iterateTaskDetails(
   options: TaskDetailStreamOptions,
-  onTask: (detail: ProjectedTaskDetail) => void | Promise<void>,
-): Promise<TaskDetailStreamSummary> => {
+): AsyncGenerator<TaskStreamItem, TaskDetailStreamSummary> {
   const parser = new LogParser()
   parser.setErrorImages(options.errorImages ?? new Map())
   parser.setVisionImages(options.visionImages ?? new Map())
@@ -168,55 +181,75 @@ export const streamTaskDetails = async (
   // 解析期临时结构（去重历史/投影缓存）对详情投影没用，先释放掉。
   parser.releaseParseScratch()
 
-  // 先流式交出全量事件：不克隆整数组，调用方处理完一批即可丢弃。
-  let totalEvents = 0
-  if (options.onEvents) {
-    for await (const batch of parser.iterateEvents(options.eventBatchSize ?? 5_000)) {
-      totalEvents += batch.length
-      await options.onEvents(batch)
+  try {
+    const skeletons = parser.getTaskSkeletons()
+    yield { type: 'skeletons', skeletons }
+
+    let totalEvents = 0
+    for await (const events of parser.iterateEvents(options.eventBatchSize ?? 5_000)) {
+      totalEvents += events.length
+      yield { type: 'events', events }
     }
-  } else {
-    // 没提供回调时也要数出准确条数，供 warnings 与元信息使用。
-    for await (const batch of parser.iterateEvents(options.eventBatchSize ?? 5_000)) {
-      totalEvents += batch.length
+
+    const skipped: string[] = []
+    let taskEventCount = 0
+    for (const skeleton of skeletons) {
+      const taskExecutionId = skeleton.task_execution_id
+      if (!taskExecutionId) {
+        skipped.push(skeleton.uuid ?? skeleton.entry ?? '<unknown>')
+        continue
+      }
+      const task = parser.projectTaskDetail(taskExecutionId, skeleton.process_ids)
+      if (!task) {
+        skipped.push(taskExecutionId)
+        continue
+      }
+      taskEventCount += task.events.length
+      yield { type: 'task', skeleton, task }
     }
+
+    const contentLength = options.sources.reduce(
+      (sum, source) => sum + (source.content?.length ?? source.size ?? 0),
+      0,
+    )
+
+    return {
+      skeletons,
+      totalEvents,
+      taskEventCount,
+      skipped,
+      warnings: buildKernelWarningsFromLength(contentLength, totalEvents, skeletons.length),
+      meta: {
+        schemaVersion: MLA_KERNEL_SCHEMA_VERSION,
+        parserVersion: options.parserVersion ?? DEFAULT_KERNEL_PARSER_VERSION,
+        generatedAt: new Date().toISOString(),
+      },
+    }
+  } finally {
+    // 提前 return/break 时也要把解析状态放开（generator 结束后局部变量即可回收）。
+    parser.releaseParseScratch()
   }
+}
 
-  const skeletons = parser.getTaskSkeletons()
-  const skipped: string[] = []
-  let taskEventCount = 0
-
-  for (const skeleton of skeletons) {
-    const taskExecutionId = skeleton.task_execution_id
-    if (!taskExecutionId) {
-      skipped.push(skeleton.uuid ?? skeleton.entry ?? '<unknown>')
-      continue
+/**
+ * 回调形态的 `iterateTaskDetails`：解析一次、逐批事件、逐任务回调。
+ *
+ * 与 generator 版等价，只是把 `events` / `task` 条目改成回调，调用方更省样板。
+ * `onEvents` / `onTask` 内不要长期持有引用，否则峰值会回涨到接近整树投影。
+ */
+export const streamTaskDetails = async (
+  options: TaskDetailStreamOptions,
+  onTask: (detail: ProjectedTaskDetail) => void | Promise<void>,
+): Promise<TaskDetailStreamSummary> => {
+  const stream = iterateTaskDetails(options)
+  while (true) {
+    const next = await stream.next()
+    if (next.done) return next.value
+    const item = next.value
+    if (item.type === 'events') {
+      if (options.onEvents) await options.onEvents(item.events)
+    } else if (item.type === 'task') {
+      await onTask({ skeleton: item.skeleton, task: item.task })
     }
-    const task = parser.projectTaskDetail(taskExecutionId, skeleton.process_ids)
-    if (!task) {
-      skipped.push(taskExecutionId)
-      continue
-    }
-    taskEventCount += task.events.length
-    await onTask({ skeleton, task })
-    // 提示：这里无法强制调用方释放引用，契约靠文档约束。
-  }
-
-  const contentLength = options.sources.reduce(
-    (sum, source) => sum + (source.content?.length ?? source.size ?? 0),
-    0,
-  )
-
-  return {
-    skeletons,
-    totalEvents,
-    taskEventCount,
-    skipped,
-    warnings: buildKernelWarningsFromLength(contentLength, totalEvents, skeletons.length),
-    meta: {
-      schemaVersion: MLA_KERNEL_SCHEMA_VERSION,
-      parserVersion: options.parserVersion ?? DEFAULT_KERNEL_PARSER_VERSION,
-      generatedAt: new Date().toISOString(),
-    },
   }
 }

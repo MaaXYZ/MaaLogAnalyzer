@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { analyzeLogSources, streamTaskDetails } from '../index'
+import { analyzeLogSources, iterateTaskDetails, streamTaskDetails } from '../index'
 import type { TaskInfo } from '@windsland52/maa-log-kernel'
 
 const makeEventLine = (index: number, message: string, details: Record<string, unknown>): string => {
@@ -50,6 +50,53 @@ const stripSkeletonFlags = (tasks: TaskInfo[]) =>
     const { _skeleton: _ignored, ...rest } = task
     return rest
   })
+
+describe('iterateTaskDetails (generator form)', () => {
+  it('yields skeletons, event batches, then tasks in order and returns the summary', async () => {
+    const log = buildLog()
+    const gen = iterateTaskDetails({ sources: chunkedSource(log, 33), eventBatchSize: 4 })
+    const kinds: string[] = []
+    const streamed: TaskInfo[] = []
+    const eventBatches: number[] = []
+    let summary: Awaited<ReturnType<typeof iterateTaskDetails>> extends AsyncGenerator<
+      never,
+      infer TReturn
+    >
+      ? TReturn
+      : never
+
+    while (true) {
+      const next = await gen.next()
+      if (next.done) {
+        summary = next.value
+        break
+      }
+      const item = next.value
+      kinds.push(item.type)
+      if (item.type === 'skeletons') expect(item.skeletons).toHaveLength(2)
+      else if (item.type === 'events') eventBatches.push(item.events.length)
+      else streamed.push(item.task)
+    }
+
+    const aggregated = await analyzeLogSources({ sources: contentSource(log) })
+    expect(kinds[0]).toBe('skeletons')
+    expect(kinds.filter((kind) => kind === 'events').length).toBeGreaterThan(1)
+    expect(kinds.at(-1)).toBe('task')
+    expect(eventBatches.every((size) => size <= 4)).toBe(true)
+    expect(summary!.totalEvents).toBe(aggregated.events.length)
+    expect(JSON.stringify(stripSkeletonFlags(streamed))).toBe(
+      JSON.stringify(stripSkeletonFlags(aggregated.tasks)),
+    )
+  })
+
+  it('can be closed early without throwing', async () => {
+    const gen = iterateTaskDetails({ sources: contentSource(buildLog()) })
+    await gen.next()
+    await gen.next()
+    const closed = await gen.return(undefined as never)
+    expect(closed.done).toBe(true)
+  })
+})
 
 describe('streamTaskDetails', () => {
   it('streams every task detail in execution order and matches the aggregated output', async () => {
