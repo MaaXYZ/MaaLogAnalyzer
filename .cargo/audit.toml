@@ -1,0 +1,10 @@
+# cargo audit 配置（CI：pr-check.yml 的「Rust 依赖漏洞审计」）
+#
+# 只忽略无法在本仓库内修复的公告；每条都要写清楚原因和解除条件。
+[advisories]
+ignore = [
+  # glib 0.18.5 的 VariantStrIter Iterator 实现被标记 unsound。
+  # glib 由 Linux 端 GTK 3 绑定（gtk 0.18 → glib 0.18）引入，版本由 Tauri 2 的 GTK 栈锁定；
+  # 单独升 glib 到 0.19+ 会与 gtk 0.18 的 trait 实现不兼容。等 Tauri 升级到新 GTK 栈后移除本条。
+  "RUSTSEC-2024-0429",
+]

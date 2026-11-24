@@ -4,6 +4,39 @@ MaaLogAnalyzer 的重要更改记录。格式参考 [Keep a Changelog](https://k
 
 > 维护方式：条目由人工精炼（合并同类项、以用户视角描述），可用 `pnpm run changelog:draft` 生成 git-cliff 草稿作为参考；完整逐提交历史见 git log。
 
+## [3.12.0] - 2026-11-24
+
+### 新增
+
+- 支持 `.log.gz` 日志：文件/文件夹选择会识别压缩分卷（含 `*.bak.<时间戳>.log.gz` 轮转片段），不必先手动解压
+- 解析过程中实时显示已发现的任务列表：大日志不必等整批解析完就能看到任务
+- 大日志目录按来源逐个读取解析：2GB+ 的多分卷 / 压缩日志目录不再因为「先拼成一个字符串」而失败
+
+### 性能优化
+
+- 大日志首屏改为「骨架 + 按需详情」：任务列表先回传骨架（约 0.6MB），选中任务时才投影完整详情，主线程最多缓存 2 个完整任务。2.44GB 语料首屏从「等整树投影 ~48.7s」变为秒级，Worker 常驻约 1.19GB → 810MB
+- gzip 日志改为流式分块解码：2.44GB 语料解析峰值 RSS 从 3.5–4.3GB 降到约 1.4GB
+- 同一次识别/动作的明细对象在重复出现时共享一份：2.44GB 语料 live heap 再降约 376MB
+- 解析收尾去掉一次整树二次遍历：5.8MB 日志收尾 3.18s → 1.34s
+- 解析完成后释放只服务于解析的去重历史与投影缓存：常驻再降约 186MB
+
+### 修复
+
+- 客户端 + agent 同时写日志（镜像）导致任务/节点错挂：出现幽灵重复任务、节点被拆到另一个任务下；现在任务数与运行中任务数都正确
+- 桌面端（Tauri）流程图不显示：ELK worker 的 blob URL 被 CSP 拦截，已放行 `worker-src blob:`
+- 识别详情恢复完整候选数组：此前的裁剪会丢失原始识别数据，已撤销
+- 多来源解析时事件/证据的合并行号指向错误文件（按来源段偏移还原行号）
+
+### npm 包
+
+- `@windsland52/maa-log-parser` 2.3.0：新增 `loadChunks` 分块输入与 `iterateEvents`；任务瘦摘要、按需任务投影、重复明细共享
+- `@windsland52/maa-log-runtime` 1.3.0 / `@windsland52/maa-log-adapter` 1.3.0：多来源分块解析透传
+- `@windsland52/maa-log-tools` 2.5.0：多来源惰性/分块解析（2GB+ 目录不再拼串）、流式任务/事件消费、runtime inspection 增量装配器、流式框架版本提取（2.4GB 目录峰值 5.1GB → 186MB）
+
+### 构建与发布
+
+- Rust 依赖审计：`tokio` 1.52.4 → 1.54.1（修 RUSTSEC-2026-0386）；`glib` 公告因 Tauri 的 GTK 0.18 栈锁定无法单独升级，加入带原因的忽略项（解除条件已注明）
+
 ## [3.11.0] - 2026-11-08
 
 ### 新增
@@ -297,6 +330,10 @@ MaaLogAnalyzer 的重要更改记录。格式参考 [Keep a Changelog](https://k
 - **v1.1.0** - 2025-12-11：便携式 exe 与 deb 包；格式错误提示
 - **v1.0.0** - 2025-12-11：初版发布
 
+[3.12.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.11.0...v3.12.0
+[3.11.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.10.0...v3.11.0
+[3.10.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.9.0...v3.10.0
+[3.9.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.8.0...v3.9.0
 [3.8.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.7.0...v3.8.0
 [3.7.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.6.0...v3.7.0
 [3.6.0]: https://github.com/MaaXYZ/MaaLogAnalyzer/compare/v3.5.0...v3.6.0
