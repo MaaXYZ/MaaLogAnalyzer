@@ -128,9 +128,11 @@ describe('chunked source input', () => {
     const tasks = chunked.getTasksSnapshot()
     expect(tasks.map((task) => task.entry)).toEqual(['主任务🎯', 'Second'])
     expect(tasks[0]?.events[0]?.source?.line).toBe(1)
-    expect(tasks[0]?.events.at(-1)?.source?.line).toBe(6)
+    const firstTaskEvents = tasks[0]?.events ?? []
+    expect(firstTaskEvents[firstTaskEvents.length - 1]?.source?.line).toBe(6)
     expect(tasks[1]?.events[0]?.source?.line).toBe(7)
-    expect(tasks[2 - 1]?.events.at(-1)?.source?.line).toBe(10)
+    const secondTaskEvents = tasks[1]?.events ?? []
+    expect(secondTaskEvents[secondTaskEvents.length - 1]?.source?.line).toBe(10)
   })
 
   it('handles empty chunk streams and empty lines', async () => {
@@ -148,7 +150,7 @@ describe('chunked source input', () => {
 
   it('mixes chunked and whole inputs in one batch', async () => {
     const first = buildLog()
-    const second = buildLog().replaceAll('task_id":1', 'task_id":11')
+    const second = buildLog().split('task_id":1').join('task_id":11')
     const whole = new LogParser()
     await whole.parseInputs([
       { content: first, sourceKey: 'a.log', sourcePath: 'a.log', inputIndex: 0 },
