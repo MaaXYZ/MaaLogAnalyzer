@@ -3,9 +3,8 @@ import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { KernelOutput } from '@windsland52/maa-log-kernel/protocol'
-import { loadFrameworkLogSources } from './frameworkInput'
+import { extractFrameworkSessionsFromPath } from './frameworkInput'
 import {
-  extractFrameworkSessions,
   type FrameworkSession,
   type FrameworkSessionExtraction,
   type FrameworkVersionSummary,
@@ -166,9 +165,10 @@ export const main = async (): Promise<void> => {
 
   const resolvedPath = path.resolve(targetPath)
   const targetStat = await stat(resolvedPath)
+  // 流式提取：大目录不再把全部分卷内容同时留在内存里（2.4GB 目录旧路径峰值 ~5GB）。
   const framework =
     preflight || runtimeInspection
-      ? extractFrameworkSessions(await loadFrameworkLogSources(resolvedPath))
+      ? await extractFrameworkSessionsFromPath(resolvedPath)
       : EMPTY_FRAMEWORK_EXTRACTION
 
   let result: KernelOutput | null = null
